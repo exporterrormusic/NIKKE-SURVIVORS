@@ -1,0 +1,62 @@
+[gd_scene load_steps=4 format=3 uid="uid://c36jut6irdiuc"]
+
+[ext_resource type="Script" uid="uid://dnn6gqcej31la" path="res://src/projectiles/visuals/weapons/sniper_bullet_visual.gd" id="1"]
+
+[sub_resource type="Image" id="Image_plh6w"]
+data = {
+"data": PackedByteArray(255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255),
+"format": "RGBA8",
+"height": 2,
+"mipmaps": false,
+"width": 2
+}
+
+[sub_resource type="ImageTexture" id="ImageTexture_sx3ns"]
+image = SubResource("Image_plh6w")
+
+[node name="SniperBulletVisual" type="Node2D"]
+script = ExtResource("1")
+
+[node name="OutlinePolygon" type="Polygon2D" parent="."]
+position = Vector2(243.01869, 0.5207424)
+scale = Vector2(7.278428, -2.9265678)
+color = Color(0.43649998, 0.5366, 0.67, 1)
+antialiased = true
+polygon = PackedVector2Array(-18, 4.62, 14.59, 4.62, 15.247495, 4.5729747, 15.891604, 4.4328575, 16.509218, 4.2024994, 17.08776, 3.8865912, 17.615456, 3.491563, 18.081564, 3.0254564, 18.476591, 2.4977605, 18.7925, 1.9192173, 19.022858, 1.3016044, 19.162975, 0.65749454, 19.21, 0, 19.162975, -0.65749454, 19.022858, -1.3016044, 18.7925, -1.9192173, 18.476591, -2.4977605, 18.081564, -3.0254564, 17.615456, -3.491563, 17.08776, -3.8865912, 16.509218, -4.2024994, 15.891604, -4.4328575, 15.247495, -4.5729747, 14.59, -4.62, -18, -4.62)
+
+[node name="BodyPolygon" type="Polygon2D" parent="."]
+position = Vector2(243.01869, 0.5207424)
+scale = Vector2(7.278428, -2.9265678)
+color = Color(0.905, 0.96000004, 1, 1)
+antialiased = true
+polygon = PackedVector2Array(-17.1046, 3.41, 13.8398, 3.41, 14.325093, 3.375291, 14.800508, 3.271871, 15.256365, 3.101845, 15.683385, 2.8686745, 16.072876, 2.5771062, 16.416906, 2.2330751, 16.708475, 1.8435853, 16.941645, 1.4165653, 17.111671, 0.960708, 17.215092, 0.4852936, 17.2498, 0, 17.215092, -0.4852936, 17.111671, -0.960708, 16.941645, -1.4165653, 16.708475, -1.8435853, 16.416906, -2.2330751, 16.072876, -2.5771062, 15.683385, -2.8686745, 15.256365, -3.101845, 14.800508, -3.271871, 14.325093, -3.375291, 13.8398, -3.41, -17.1046, -3.41)
+
+[node name="TailCorePolygon" type="Polygon2D" parent="."]
+position = Vector2(243.01869, 0.5207424)
+scale = Vector2(7.278428, -2.9265678)
+color = Color(0.7916, 0.932, 1, 1)
+antialiased = true
+polygon = PackedVector2Array(-18, -1.8414, -15.459, -1.8414, -15.459, 1.8414, -18, 1.8414)
+
+[node name="HighlightPolygon" type="Polygon2D" parent="."]
+position = Vector2(243.01869, 0.5207424)
+scale = Vector2(7.278428, -2.9265678)
+color = Color(1, 1, 1, 0.82)
+antialiased = true
+polygon = PackedVector2Array(13.419688, -1.2276, 13.8398, -1.2276, 13.8398, 1.2276, 13.419688, 1.2276)
+
+[node name="GlowSprite" type="Sprite2D" parent="."]
+modulate = Color(0.74, 0.908, 1, 0.86)
+z_index = -1
+texture_filter = 2
+position = Vector2(247.57518, 0.5207424)
+scale = Vector2(150.66345, -7.983675)
+texture = SubResource("ImageTexture_sx3ns")
+
+[node name="TrailGlowSprite" type="Sprite2D" parent="."]
+modulate = Color(0.5405, 0.73300004, 1, 0.6)
+z_index = -2
+texture_filter = 2
+position = Vector2(210.61871, 0.5207424)
+scale = Vector2(209.6187, -5.488778)
+texture = SubResource("ImageTexture_sx3ns")

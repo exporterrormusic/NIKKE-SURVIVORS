@@ -1,0 +1,17 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource path="res://src/world/environment/time_of_day_definition.gd" type="Script" id=1]
+
+[resource]
+script = ExtResource(1)
+time_id = &"twilight"
+display_name = "Twilight"
+ambient_tint = Color(0.75, 0.7, 0.8, 1)
+ambient_intensity = 0.85
+sky_tint = Color(0.4, 0.3, 0.5, 1)
+fog_color = Color(0.35, 0.3, 0.45, 1)
+fog_alpha = 0.1
+light_color = Color(0.85, 0.7, 0.85, 1)
+light_energy = 0.7
+light_angle_degrees = -60.0
+vignette_strength = 0.2

@@ -1,0 +1,27 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource path="res://scripts/ScarletWave.gd" type="Script" id=1]
+[ext_resource path="res://scripts/SwordSlashVisual.gd" type="Script" id=2]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_0"]
+size = Vector2(200, 150)
+
+[node name="ScarletWave" type="Area2D"]
+script = ExtResource(1)
+collision_layer = 4
+collision_mask = 2
+monitoring = true
+monitorable = true
+
+[node name="SwordSlashVisual" type="Node2D" parent="."]
+script = ExtResource(2)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_0")
+position = Vector2(100, 0)
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+# Sprite is optional placeholder if you want a texture
+visible = false
+
+

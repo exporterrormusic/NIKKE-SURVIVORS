@@ -1,0 +1,123 @@
+[gd_scene load_steps=3 format=3 uid="uid://b8q8q8q8q8q8"]
+
+[ext_resource type="Script" uid="uid://bhbba7qa716nu" path="res://scripts/MapSelector.gd" id="1"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_MapSelector"]
+bg_color = Color(0.1, 0.1, 0.15, 0.95)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.3, 0.6, 0.9, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[node name="MapSelector" type="PanelContainer"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -250.0
+offset_right = 200.0
+offset_bottom = 250.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_MapSelector")
+script = ExtResource("1")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="Title" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.9, 0.7, 1)
+theme_override_font_sizes/font_size = 24
+text = "Environment Settings"
+horizontal_alignment = 1
+
+[node name="BiomeSection" type="VBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="BiomeLabel" type="Label" parent="VBoxContainer/BiomeSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.85, 1, 1)
+theme_override_font_sizes/font_size = 16
+text = "Biome / Map Style"
+horizontal_alignment = 1
+
+[node name="GridContainer" type="GridContainer" parent="VBoxContainer/BiomeSection"]
+layout_mode = 2
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+columns = 2
+
+[node name="AshenSandsButton" type="Button" parent="VBoxContainer/BiomeSection/GridContainer"]
+custom_minimum_size = Vector2(170, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "🏜️ Ashen Sands"
+
+[node name="EmeraldFieldsButton" type="Button" parent="VBoxContainer/BiomeSection/GridContainer"]
+custom_minimum_size = Vector2(170, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "🌿 Emerald Fields"
+
+[node name="PolarFrontButton" type="Button" parent="VBoxContainer/BiomeSection/GridContainer"]
+custom_minimum_size = Vector2(170, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "❄️ Polar Front"
+
+[node name="SakuraGroveButton" type="Button" parent="VBoxContainer/BiomeSection/GridContainer"]
+custom_minimum_size = Vector2(170, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "🌸 Sakura Grove"
+
+[node name="HSeparator" type="HSeparator" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="TimeSection" type="VBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TimeLabel" type="Label" parent="VBoxContainer/TimeSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.6, 1)
+theme_override_font_sizes/font_size = 16
+text = "Time of Day"
+horizontal_alignment = 1
+
+[node name="TimeGrid" type="GridContainer" parent="VBoxContainer/TimeSection"]
+layout_mode = 2
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+columns = 2
+
+[node name="DayButton" type="Button" parent="VBoxContainer/TimeSection/TimeGrid"]
+custom_minimum_size = Vector2(170, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "☀️ Day"
+
+[node name="NightButton" type="Button" parent="VBoxContainer/TimeSection/TimeGrid"]
+custom_minimum_size = Vector2(170, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "🌙 Night"
+
+[node name="HSeparator2" type="HSeparator" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="CloseButton" type="Button" parent="VBoxContainer"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+text = "Close"

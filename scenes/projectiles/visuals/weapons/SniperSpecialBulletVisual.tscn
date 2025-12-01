@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://c2mqb8xgj8c5p"]
+
+[ext_resource type="Script" uid="uid://bto8vwig047h4" path="res://src/projectiles/visuals/weapons/sniper_special_bullet_visual.gd" id="1"]
+
+[node name="SniperSpecialBulletVisual" type="Node2D"]
+script = ExtResource("1")

@@ -1,0 +1,33 @@
+[gd_scene load_steps=6 format=3 uid="uid://bdug5n4j3gcxq"]
+
+[ext_resource type="Script" uid="uid://bgh1v1xyxo5bp" path="res://scripts/Player.gd" id="1"]
+[ext_resource type="PackedScene" uid="uid://w5nroosjr4a3" path="res://scenes/ui/PlayerOverheadHud.tscn" id="4"]
+[ext_resource type="Script" uid="uid://xs7mcymvsl5g" path="res://scripts/character_sprite_animator.gd" id="5"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_abc"]
+radius = 32.0
+
+[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_7n8ao"]
+light_mode = 1
+
+[node name="Player" type="CharacterBody2D" groups=["player"]]
+z_index = 10
+collision_mask = 5
+script = ExtResource("1")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, 1)
+scale = Vector2(1, 2.0400007)
+shape = SubResource("CircleShape2D_abc")
+
+[node name="Sprite2D" type="AnimatedSprite2D" parent="."]
+z_index = 10
+script = ExtResource("5")
+
+[node name="PlayerOverheadHud" parent="." instance=ExtResource("4")]
+light_mask = 0
+z_as_relative = false
+material = SubResource("CanvasItemMaterial_7n8ao")
+position = Vector2(0, -19)
+
+[node name="Camera2D" type="Camera2D" parent="."]

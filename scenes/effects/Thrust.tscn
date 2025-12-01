@@ -1,0 +1,24 @@
+[gd_scene load_steps=5 format=3 uid="uid://cawanvprevb3q"]
+
+[ext_resource type="Script" uid="uid://c13ix1ve4mw83" path="res://scripts/Thrust.gd" id="2"]
+[ext_resource type="Script" uid="uid://dwpt83bqltro6" path="res://scripts/SwordBeamVisual.gd" id="3"]
+
+[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_bfvwp"]
+blend_mode = 1
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_abc"]
+size = Vector2(365, 60)
+
+[node name="Thrust" type="Area2D"]
+position = Vector2(37, 0)
+collision_layer = 4
+collision_mask = 2
+script = ExtResource("2")
+
+[node name="SwordBeamVisual" type="Node2D" parent="."]
+material = SubResource("CanvasItemMaterial_bfvwp")
+script = ExtResource("3")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(166.5, 1)
+shape = SubResource("RectangleShape2D_abc")

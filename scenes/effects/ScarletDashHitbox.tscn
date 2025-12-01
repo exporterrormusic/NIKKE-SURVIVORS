@@ -1,0 +1,19 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource path="res://scripts/ScarletDashHitbox.gd" type="Script" id=1]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_0"]
+radius = 48.0
+
+[node name="ScarletDashHitbox" type="Area2D"]
+script = ExtResource(1)
+collision_layer = 4
+collision_mask = 2
+monitoring = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_0")
+
+[node name="DebugSprite" type="Sprite2D" parent="."]
+visible = false
+texture = null

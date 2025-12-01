@@ -1,0 +1,23 @@
+[gd_scene load_steps=5 format=3 uid="uid://dpicgq4nuf7px"]
+
+[ext_resource type="Script" uid="uid://cr2uid0rwtk8o" path="res://scripts/Slash.gd" id="2"]
+[ext_resource type="Script" uid="uid://b7ameik0e64wh" path="res://scripts/SwordSlashVisual.gd" id="3"]
+
+[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_8303g"]
+blend_mode = 1
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_abc"]
+size = Vector2(260, 260)
+
+[node name="Slash" type="Area2D"]
+collision_layer = 4
+collision_mask = 2
+script = ExtResource("2")
+
+[node name="SwordSlashVisual" type="Node2D" parent="."]
+material = SubResource("CanvasItemMaterial_8303g")
+script = ExtResource("3")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(130, 0)
+shape = SubResource("RectangleShape2D_abc")

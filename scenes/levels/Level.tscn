@@ -1,0 +1,108 @@
+[gd_scene load_steps=10 format=3 uid="uid://csklapofi0uhi"]
+
+[ext_resource type="PackedScene" uid="uid://bdug5n4j3gcxq" path="res://scenes/characters/Player.tscn" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/ui/PlayerHudCluster.tscn" id="2"]
+[ext_resource type="Script" uid="uid://ckxicel8oxu42" path="res://scripts/Level.gd" id="3"]
+[ext_resource type="PackedScene" uid="uid://ck8b1el5tevdn" path="res://scenes/ui/XPUI.tscn" id="4"]
+[ext_resource type="PackedScene" path="res://scenes/world/Environment.tscn" id="5"]
+[ext_resource type="PackedScene" uid="uid://b8q8q8q8q8q8" path="res://scenes/ui/MapSelector.tscn" id="6"]
+[ext_resource type="PackedScene" uid="uid://screenflash001" path="res://scenes/ui/ScreenFlash.tscn" id="7"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_boundary"]
+size = Vector2(200, 200)
+
+[sub_resource type="Environment" id="Environment_bloom"]
+background_mode = 3
+glow_enabled = true
+glow_intensity = 0.4
+glow_strength = 0.8
+glow_bloom = 0.1
+glow_blend_mode = 0
+glow_hdr_threshold = 1.2
+glow_hdr_scale = 1.5
+glow_hdr_luminance_cap = 8.0
+
+[node name="Level" type="Node2D"]
+script = ExtResource("3")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_bloom")
+
+[node name="Environment" parent="." instance=ExtResource("5")]
+unique_name_in_owner = true
+
+[node name="Ground" type="StaticBody2D" parent="."]
+
+[node name="Player" parent="." instance=ExtResource("1")]
+position = Vector2(960, 508)
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="PlayerHudCluster" parent="CanvasLayer" instance=ExtResource("2")]
+offset_left = 20.0
+offset_top = 43.0
+offset_right = 380.0
+offset_bottom = 173.0
+
+[node name="XPUI" parent="CanvasLayer" instance=ExtResource("4")]
+
+[node name="WaveDisplay" type="Label" parent="CanvasLayer"]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -100.0
+offset_top = 35.0
+offset_right = 100.0
+offset_bottom = 65.0
+grow_horizontal = 2
+theme_override_colors/font_color = Color(1, 0.9, 0.7, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.5)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 24
+text = "Wave: 1"
+horizontal_alignment = 1
+
+[node name="MapSelector" parent="CanvasLayer" instance=ExtResource("6")]
+visible = false
+
+[node name="ScreenFlashLayer" type="CanvasLayer" parent="."]
+layer = 100
+
+[node name="ScreenFlash" parent="ScreenFlashLayer" instance=ExtResource("7")]
+
+[node name="Boundary0" type="StaticBody2D" parent="."]
+collision_layer = 4
+collision_mask = 0
+position = Vector2(-2020, -1080)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Boundary0"]
+shape = SubResource("RectangleShape2D_boundary")
+
+
+[node name="Boundary1" type="StaticBody2D" parent="."]
+collision_layer = 4
+collision_mask = 0
+position = Vector2(2020, -1080)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Boundary1"]
+shape = SubResource("RectangleShape2D_boundary")
+
+
+[node name="Boundary2" type="StaticBody2D" parent="."]
+collision_layer = 4
+collision_mask = 0
+position = Vector2(-2020, 1080)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Boundary2"]
+shape = SubResource("RectangleShape2D_boundary")
+
+
+[node name="Boundary3" type="StaticBody2D" parent="."]
+collision_layer = 4
+collision_mask = 0
+position = Vector2(2020, 1080)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Boundary3"]
+shape = SubResource("RectangleShape2D_boundary")
+

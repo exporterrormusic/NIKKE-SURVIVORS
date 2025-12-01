@@ -1,0 +1,130 @@
+extends Area2D
+
+@onready var visual = $SwordSlashVisual
+@onready var collision_shape = $CollisionShape2D
+
+var velocity := Vector2.ZERO
+var lifetime := 0.0
+var owner_node: Node = null
+
+@export var pierce_all: bool = true
+@export var pierce_count: int = 0
+@export var damage: int = 6
+@export var base_damage: int = 6  # Starting damage at spawn
+@export var min_damage: int = 1   # Minimum damage at max range
+@export var max_distance: float = 800.0  # Distance at which damage is minimum
+
+# Vampiric Slash healing mode
+var heal_mode: bool = false  # When true, heals owner per hit instead of damaging enemies
+var heal_percent: float = 0.0  # Percent of owner's max HP to heal per enemy hit (e.g. 0.05 = 5%)
+
+# Critical hit settings
+const CRIT_CHANCE := 0.15  # 15% chance to crit
+const CRIT_MULTIPLIER := 2.0  # 2x damage on crit
+
+var _hit_nodes: Array = []
+var _spawn_position: Vector2 = Vector2.ZERO
+var _initial_scale: float = 1.0
+
+func _ready():
+	# Ensure monitoring is enabled
+	monitoring = true
+	monitorable = true
+	collision_layer = 4
+	collision_mask = 2
+	
+	# Connect signal
+	if not body_entered.is_connected(_on_body_entered):
+		body_entered.connect(_on_body_entered)
+	
+	# Note: _spawn_position will be set in first _physics_process since
+	# global_position may not be set yet when _ready runs
+	base_damage = damage
+	_initial_scale = scale.x
+	
+	# Ensure collision shape is enabled
+	if collision_shape:
+		collision_shape.disabled = false
+	
+	# Configure a wide, less-curved, thin wave
+	# - Smaller arc_degrees for flatter curve
+	# - Larger radius for wider coverage
+	# - High inner_ratio for thin line
+	visual.update_visual({
+		"radius": 140.0,
+		"arc_degrees": 90.0,
+		"inner_ratio": 0.88,
+		"core_color": Color(0.62, 0.36, 0.95, 0.9),
+		"edge_color": Color(0.9, 0.82, 1.0, 1.0),
+		"glow_color": Color(0.4, 0.2, 0.7, 0.6),
+		"fade": 1.0,
+		"wipe_progress": 1.0,
+		"sparkle_count": 4,
+		"sparkle_seed": randi()
+	})
+
+func _physics_process(delta):
+	# Set spawn position on first frame (after global_position is properly set)
+	if _spawn_position == Vector2.ZERO and global_position != Vector2.ZERO:
+		_spawn_position = global_position
+	
+	global_position += velocity * delta
+	lifetime += delta
+	
+	# Manual collision check as backup (in case signal doesn't fire)
+	var bodies = get_overlapping_bodies()
+	for body in bodies:
+		if body not in _hit_nodes:
+			_on_body_entered(body)
+	
+	# Calculate distance from spawn point
+	var distance_traveled := global_position.distance_to(_spawn_position)
+	var distance_ratio := clampf(distance_traveled / max_distance, 0.0, 1.0)
+	
+	# Expand size as it travels (1.0 to 2.0 scale)
+	var new_scale := _initial_scale * (1.0 + distance_ratio * 1.0)
+	scale = Vector2(new_scale, new_scale)
+	
+	# Reduce damage as it travels (base_damage down to min_damage)
+	damage = int(lerpf(float(base_damage), float(min_damage), distance_ratio))
+	
+	# Lifespan safety
+	if lifetime > 3.5:
+		queue_free()
+
+func _on_body_entered(body: Node) -> void:
+	if body == owner_node:
+		return
+	if not body.has_method("take_damage"):
+		return
+	if _hit_nodes.has(body):
+		return
+	
+	_hit_nodes.append(body)
+	
+	# Roll for critical hit
+	var is_crit := randf() < CRIT_CHANCE
+	var final_damage := damage
+	if is_crit:
+		final_damage = int(damage * CRIT_MULTIPLIER)
+	
+	# Apply damage to enemy
+	body.take_damage(final_damage, is_crit)
+	
+	# Vampiric Slash: also heal owner per enemy hit
+	if heal_mode and owner_node and owner_node.has_method("heal"):
+		var owner_max_hp := 10  # Default fallback
+		if "max_hp" in owner_node:
+			owner_max_hp = owner_node.max_hp
+		# Use ceili to ensure at least 1 HP healed per hit
+		var heal_amount := maxi(1, ceili(owner_max_hp * heal_percent))
+		owner_node.heal(heal_amount)
+	
+	# Piercing behavior
+	if not pierce_all:
+		queue_free()
+		return
+	if pierce_count > 0:
+		pierce_count -= 1
+		if pierce_count <= 0:
+			queue_free()

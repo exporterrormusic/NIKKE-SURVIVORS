@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="BiomeDefinition" load_steps=2 format=3 uid="uid://wvi5n7va17cx"]
+
+[ext_resource type="Script" uid="uid://lrv1l15dptrj" path="res://src/world/environment/biome_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+biome_id = &"grasslands"
+display_name = "Emerald Grasslands"
+base_color = Color(0.09, 0.58, 0.26, 1)
+secondary_color = Color(0.07, 0.48, 0.22, 1)
+accent_color = Color(0.14, 0.73, 0.33, 1)
+noise_scale = 7.0
+detail_strength = 0.42
+wave_strength = 0.24
+wave_speed = 0.7
+patchwork_strength = 0.48
+color_variation = 0.35
+sky_color = Color(0.305882, 0.470588, 0.305882, 1)
+horizon_color = Color(0.266667, 0.419608, 0.266667, 1)
+decoration_count = 0
+decoration_min_scale = 0.45
+decoration_max_scale = 1.2
+decoration_alpha = 0.78
+decoration_spawn_radius = 640.0
+decoration_variation = 0.65
+wind_strength = 0.75

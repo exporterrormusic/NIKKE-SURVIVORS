@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/EnemyLaser.gd" id="1"]
+
+[node name="EnemyLaser" type="Area2D"]
+collision_layer = 8
+collision_mask = 1
+monitoring = true
+monitorable = false
+script = ExtResource("1")

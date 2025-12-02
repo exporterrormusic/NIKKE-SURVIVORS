@@ -28,12 +28,8 @@ func _setup_combat_juice() -> void:
 		_combat_juice.name = "CombatJuice"
 		add_child(_combat_juice)
 		
-		# Register camera
-		var player = get_node_or_null("Player")
-		if player:
-			var camera = player.get_node_or_null("Camera2D")
-			if camera and _combat_juice.has_method("register_camera"):
-				_combat_juice.register_camera(camera)
+		# Register camera - use call_deferred to ensure Player is ready
+		call_deferred("_register_combat_juice_camera")
 		
 		# Add chromatic aberration overlay to CanvasLayer
 		var canvas_layer = get_node_or_null("ScreenFlashLayer")
@@ -41,6 +37,18 @@ func _setup_combat_juice() -> void:
 			var overlay = _combat_juice.get_chromatic_overlay()
 			if overlay:
 				canvas_layer.add_child(overlay)
+
+func _register_combat_juice_camera() -> void:
+	var player = get_node_or_null("Player")
+	if player:
+		var camera = player.get_node_or_null("Camera2D")
+		if camera and _combat_juice and _combat_juice.has_method("register_camera"):
+			_combat_juice.register_camera(camera)
+			print("[Level] Camera registered with CombatJuice")
+		else:
+			push_warning("[Level] Could not register camera - camera: ", camera, " combat_juice: ", _combat_juice)
+	else:
+		push_warning("[Level] Player not found for camera registration")
 
 func _load_map_definition(map_id: StringName) -> void:
 	var map_path := MAP_DEFINITIONS_DIR + String(map_id) + ".tres"

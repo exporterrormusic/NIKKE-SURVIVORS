@@ -103,17 +103,13 @@ func _apply_cone_damage() -> void:
 			enemy_hp_before = enemy.hp
 		
 		if enemy.has_method("take_damage"):
-			enemy.take_damage(damage, false, hit_direction)
+			enemy.take_damage(damage, false, hit_direction, true)  # from_burst = true
 		elif enemy.has_method("apply_damage"):
 			enemy.apply_damage(damage)
 		
 		# Check if enemy was killed
 		if "hp" in enemy and enemy.hp <= 0 and enemy_hp_before > 0:
 			_enemies_killed += 1
-		
-		# Register burst hit for points
-		if owner_node and owner_node.has_method("register_burst_hit"):
-			owner_node.register_burst_hit(enemy, true)  # from_burst = true
 	
 	# Apply frostburn DOT to surviving enemies if talent is unlocked
 	if burn_level > 0:

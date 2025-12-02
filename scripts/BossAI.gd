@@ -82,11 +82,11 @@ func _fire_missile_barrage() -> void:
 	
 	# Spawn missiles on both sides
 	for side in [-1, 1]:
-		var side_offset := perpendicular * side * MISSILE_SPAWN_OFFSET * _boss.scale.x
+		var side_offset: Vector2 = perpendicular * float(side) * MISSILE_SPAWN_OFFSET * _boss.scale.x
 		
 		for i in range(MISSILES_PER_SIDE):
 			# Stagger spawn positions along the side
-			var height_offset := to_player * (i - MISSILES_PER_SIDE / 2.0) * 50.0 * _boss.scale.x
+			var height_offset: Vector2 = to_player * (i - MISSILES_PER_SIDE / 2.0) * 50.0 * _boss.scale.x
 			var spawn_pos := _boss.global_position + side_offset + height_offset
 			
 			# Create missile
@@ -118,9 +118,12 @@ func _fire_beam() -> void:
 	_current_beam.set_script(BossBeamScene)
 	_current_beam.name = "BossBeam"
 	
+	# Check if this is a true boss (not an elite)
+	var is_true_boss: bool = _boss.has_meta("enemy_tier") and _boss.get_meta("enemy_tier") == "boss"
+	
 	# Initialize beam with boss reference and timing
 	if _current_beam.has_method("initialize"):
-		_current_beam.initialize(_boss, _player, BEAM_CHARGE_TIME, BEAM_FIRE_TIME, BEAM_FADE_TIME)
+		_current_beam.initialize(_boss, _player, BEAM_CHARGE_TIME, BEAM_FIRE_TIME, BEAM_FADE_TIME, is_true_boss)
 	
 	# Connect beam finished signal
 	if _current_beam.has_signal("beam_finished"):

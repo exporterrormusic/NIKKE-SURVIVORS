@@ -38,7 +38,7 @@ var _max_ammo: int = 7
 var _is_reloading: bool = false
 var _reload_progress: float = 0.0  # 0 to 1, fills up during reload
 var _reload_time: float = 1.5  # Total reload time
-var _current_character: int = 1  # 0=Scarlet, 1=Snow White, 2=Rapunzel
+var _current_character: int = 1  # 0=Scarlet, 1=Snow White, 2=Rapunzel, 3=Kilo
 var _current_burst: float = 50.0
 var _max_burst: float = 100.0
 var _burst_ready: bool = false
@@ -48,7 +48,7 @@ var _glow_time: float = 0.0
 var _initialized: bool = false
 
 # Per-character reload progress tracking to prevent reset on swap
-var _reload_progress_per_char: Array = [0.0, 0.0, 0.0]  # Scarlet, Snow White, Rapunzel
+var _reload_progress_per_char: Array = [0.0, 0.0, 0.0, 0.0]  # Scarlet, Snow White, Rapunzel, Kilo
 
 # Special ability cooldown tracking
 var _special_cooldown_progress: float = 0.0  # 0 = on cooldown, 1 = ready
@@ -57,6 +57,17 @@ var _special_unlocked: bool = false  # Is the special ability unlocked for curre
 const SPECIAL_INDICATOR_SIZE := 35.0
 const SPECIAL_INDICATOR_GAP := 6.0  # Gap between bars and indicator
 const SPECIAL_INDICATOR_CORNER_RADIUS := 4.0
+
+# Skill points / Level up indicator (left side, matches special ability style)
+var _skill_points_available: bool = false
+var _level_up_glow_time: float = 0.0
+const LEVEL_UP_INDICATOR_SIZE := 35.0  # Match special indicator size
+const LEVEL_UP_INDICATOR_GAP := 6.0
+const LEVEL_UP_INDICATOR_CORNER_RADIUS := 4.0
+# Golden colors for level up
+const LEVEL_UP_GOLD := Color(1.0, 0.85, 0.3, 1.0)
+const LEVEL_UP_GOLD_GLOW := Color(1.0, 0.9, 0.4, 0.5)
+const LEVEL_UP_GOLD_DARK := Color(0.8, 0.65, 0.15, 1.0)
 
 func _ready() -> void:
 	top_level = true
@@ -83,15 +94,27 @@ func _process(delta: float) -> void:
 	global_position = player_node2d.global_position.round()
 	visible = true
 	
+	# Counter-scale to compensate for camera zoom (keeps HUD crisp)
+	var viewport := get_viewport()
+	if viewport:
+		var camera := viewport.get_camera_2d()
+		if camera and camera.zoom.x > 0:
+			# Inverse of camera zoom to maintain constant screen size
+			scale = Vector2.ONE / camera.zoom
+	
 	# Always animate glow time for effects
 	_glow_time += delta * 3.0
+	
+	# Animate level up indicator glow
+	if _skill_points_available:
+		_level_up_glow_time += delta * 3.0
 	
 	# Animate reload progress for current character
 	if _is_reloading and _reload_time > 0:
 		_reload_progress += delta / _reload_time
 		_reload_progress = minf(_reload_progress, 1.0)
 		# Store in per-character array
-		if _current_character >= 0 and _current_character < 3:
+		if _current_character >= 0 and _current_character < 4:
 			_reload_progress_per_char[_current_character] = _reload_progress
 	
 	queue_redraw()
@@ -257,6 +280,79 @@ func _draw() -> void:
 	
 	# Draw special ability cooldown indicator (right side of HUD)
 	_draw_special_indicator()
+	
+	# Draw level up / skill points available indicator (left side of HUD)
+	_draw_level_up_indicator()
+
+func _draw_level_up_indicator() -> void:
+	## Draws a golden level-up indicator matching the special ability indicator style
+	## Shows when skill points are available
+	if not _skill_points_available:
+		return
+	
+	# Position to the left of the bars (mirror of special indicator on right)
+	var indicator_x := -HEALTH_BAR_WIDTH * 0.5 - LEVEL_UP_INDICATOR_GAP - LEVEL_UP_INDICATOR_SIZE
+	var indicator_rect := Rect2(
+		Vector2(indicator_x, TOP_OFFSET_Y),
+		Vector2(LEVEL_UP_INDICATOR_SIZE, LEVEL_UP_INDICATOR_SIZE)
+	)
+	var center := indicator_rect.position + indicator_rect.size * 0.5
+	
+	# Pulsing glow effect (always active since skill points are available)
+	var pulse := sin(_level_up_glow_time * 2.0) * 0.15 + 0.85
+	var glow_color := Color(LEVEL_UP_GOLD_GLOW.r * 1.2, LEVEL_UP_GOLD_GLOW.g * 1.2, LEVEL_UP_GOLD_GLOW.b, 0.5 * pulse)
+	_draw_rounded_rect(indicator_rect.grow(5.0), LEVEL_UP_INDICATOR_CORNER_RADIUS + 2.0, glow_color)
+	
+	# Background with rounded corners
+	var bg_color := Color(0.15, 0.12, 0.05, 0.95)  # Dark golden-brown bg
+	_draw_rounded_rect(indicator_rect.grow(2.0), LEVEL_UP_INDICATOR_CORNER_RADIUS + 1.0, bg_color)
+	
+	# Golden fill
+	var fill_color := Color(LEVEL_UP_GOLD.r * pulse, LEVEL_UP_GOLD.g * pulse, LEVEL_UP_GOLD.b, 1.0)
+	_draw_rounded_rect(indicator_rect, LEVEL_UP_INDICATOR_CORNER_RADIUS, fill_color)
+	
+	# Bright border
+	var border_color := Color(1.0, 0.95, 0.7, 0.9)
+	_draw_rounded_rect_outline(indicator_rect, LEVEL_UP_INDICATOR_CORNER_RADIUS, border_color, BORDER_THICKNESS)
+	
+	# Draw arrow-up icon in center
+	_draw_level_up_arrow_icon(center)
+
+func _draw_level_up_arrow_icon(center: Vector2) -> void:
+	## Draws an upward arrow icon (chevron with stem) in the level up indicator
+	var icon_color := Color(0.15, 0.1, 0.02, 1.0)  # Dark brown for contrast
+	var highlight_color := Color(1.0, 1.0, 0.9, 0.8)  # Light highlight
+	
+	# Arrow dimensions
+	var arrow_height := 16.0
+	var arrow_width := 14.0
+	var stem_width := 5.0
+	var chevron_thickness := 4.0
+	
+	# Chevron (V shape pointing up)
+	var chevron_top := center + Vector2(0, -arrow_height * 0.4)
+	var chevron_left := center + Vector2(-arrow_width * 0.5, -arrow_height * 0.1)
+	var chevron_right := center + Vector2(arrow_width * 0.5, -arrow_height * 0.1)
+	
+	# Draw chevron as thick lines
+	draw_line(chevron_left, chevron_top, icon_color, chevron_thickness + 1.0)
+	draw_line(chevron_top, chevron_right, icon_color, chevron_thickness + 1.0)
+	draw_line(chevron_left, chevron_top, highlight_color, chevron_thickness - 1.0)
+	draw_line(chevron_top, chevron_right, highlight_color, chevron_thickness - 1.0)
+	
+	# Stem (rectangle going down from center)
+	var stem_top := center.y - arrow_height * 0.05
+	var stem_bottom := center.y + arrow_height * 0.4
+	var stem_rect := Rect2(
+		Vector2(center.x - stem_width * 0.5, stem_top),
+		Vector2(stem_width, stem_bottom - stem_top)
+	)
+	draw_rect(stem_rect, icon_color, true)
+	
+	# Lighter inner stem
+	var inner_rect := stem_rect.grow(-1.0)
+	if inner_rect.size.x > 0 and inner_rect.size.y > 0:
+		draw_rect(inner_rect, highlight_color, true)
 
 func _draw_special_indicator() -> void:
 	# Only show if special is unlocked for this character
@@ -473,6 +569,8 @@ func _get_special_ready_color() -> Color:
 			return Color(0.4, 0.7, 1.0, 1.0)
 		2:  # Rapunzel - Golden
 			return Color(1.0, 0.85, 0.3, 1.0)
+		3:  # Kilo - Orange
+			return Color(1.0, 0.5, 0.2, 1.0)
 		_:
 			return Color(0.7, 0.7, 0.7, 1.0)
 
@@ -484,10 +582,20 @@ func _draw_special_icon(center: Vector2) -> void:
 	match _current_character:
 		0:  # Scarlet - Sword icon
 			_draw_sword_icon(center, icon_color)
-		1:  # Snow White - Turret icon
-			_draw_turret_icon(center, icon_color)
+		1:  # Commander - Clock icon (time freeze)
+			_draw_clock_icon(center, icon_color)
 		2:  # Rapunzel - Cross icon
 			_draw_cross_icon(center, icon_color)
+		3:  # Kilo - Shotgun shell icon
+			_draw_shotgun_icon(center, icon_color)
+		4:  # Marian - Mind control/charm icon (blue tint)
+			_draw_mind_control_icon(center, icon_color)
+		5:  # Crown - Horse/cavalry icon
+			_draw_horse_icon(center, icon_color)
+		6:  # Snow White - Turret icon
+			_draw_turret_icon(center, icon_color)
+		7:  # Sin - Mind control/charm icon
+			_draw_mind_control_icon(center, icon_color)
 
 func _draw_sword_icon(center: Vector2, color: Color) -> void:
 	# Simple sword shape - scaled for 35px indicator
@@ -502,6 +610,45 @@ func _draw_sword_icon(center: Vector2, color: Color) -> void:
 	draw_line(center + Vector2(-hilt_width * 0.5, blade_length * 0.1), center + Vector2(hilt_width * 0.5, blade_length * 0.1), color, hilt_height)
 	# Handle
 	draw_line(center + Vector2(0, blade_length * 0.3), center + Vector2(0, blade_length * 0.6), color, blade_width * 0.8)
+
+func _draw_clock_icon(center: Vector2, color: Color) -> void:
+	# Clock icon for Commander's time freeze ability
+	var radius := 10.0
+	var accent := Color(color.r * 0.7, color.g * 0.7, color.b * 0.7, color.a)
+	var gold_tint := Color(1.0, 0.85, 0.3, color.a)  # Commander's golden theme
+	
+	# Outer ring
+	var ring_points := PackedVector2Array()
+	for i in range(24):
+		var angle := TAU * float(i) / 24.0 - PI / 2.0
+		ring_points.append(center + Vector2(cos(angle), sin(angle)) * radius)
+	draw_polyline(ring_points, gold_tint, 2.0)
+	# Close the ring
+	draw_line(ring_points[ring_points.size() - 1], ring_points[0], gold_tint, 2.0)
+	
+	# Inner circle
+	draw_circle(center, radius - 2.0, accent)
+	draw_circle(center, radius - 3.0, color)
+	
+	# Hour markers (12, 3, 6, 9)
+	for i in range(4):
+		var angle := TAU * float(i) / 4.0 - PI / 2.0
+		var marker_start := center + Vector2(cos(angle), sin(angle)) * (radius - 4.0)
+		var marker_end := center + Vector2(cos(angle), sin(angle)) * (radius - 2.0)
+		draw_line(marker_start, marker_end, gold_tint, 1.5)
+	
+	# Hour hand (pointing to ~10)
+	var hour_angle := -PI / 3.0
+	var hour_length := 5.0
+	draw_line(center, center + Vector2(cos(hour_angle), sin(hour_angle)) * hour_length, color, 2.0)
+	
+	# Minute hand (pointing to 12)
+	var minute_angle := -PI / 2.0
+	var minute_length := 7.0
+	draw_line(center, center + Vector2(cos(minute_angle), sin(minute_angle)) * minute_length, color, 1.5)
+	
+	# Center dot
+	draw_circle(center, 1.5, gold_tint)
 
 func _draw_turret_icon(center: Vector2, color: Color) -> void:
 	# Turret icon matching actual in-game turret: hexagonal base with triple barrels
@@ -560,6 +707,124 @@ func _draw_cross_icon(center: Vector2, color: Color) -> void:
 	draw_line(center + Vector2(0, -arm_length), center + Vector2(0, arm_length), color, arm_width)
 	# Horizontal arm
 	draw_line(center + Vector2(-arm_length, 0), center + Vector2(arm_length, 0), color, arm_width)
+
+func _draw_shotgun_icon(center: Vector2, color: Color) -> void:
+	# Shotgun blast icon - shell with spread lines
+	var accent := Color(color.r * 0.75, color.g * 0.75, color.b * 0.75, color.a)
+	
+	# Shell body (rounded rectangle shape)
+	var shell_width := 6.0
+	var shell_height := 14.0
+	var shell_top := center.y - shell_height * 0.5
+	var shell_bottom := center.y + shell_height * 0.5
+	
+	# Shell rectangle
+	var shell_points := PackedVector2Array([
+		Vector2(center.x - shell_width * 0.5, shell_top + 2),
+		Vector2(center.x + shell_width * 0.5, shell_top + 2),
+		Vector2(center.x + shell_width * 0.5, shell_bottom),
+		Vector2(center.x - shell_width * 0.5, shell_bottom)
+	])
+	draw_colored_polygon(shell_points, accent)
+	
+	# Shell brass base (bottom portion)
+	var brass_points := PackedVector2Array([
+		Vector2(center.x - shell_width * 0.5, shell_bottom - 4),
+		Vector2(center.x + shell_width * 0.5, shell_bottom - 4),
+		Vector2(center.x + shell_width * 0.5, shell_bottom),
+		Vector2(center.x - shell_width * 0.5, shell_bottom)
+	])
+	draw_colored_polygon(brass_points, Color(0.85, 0.65, 0.3, color.a))
+	
+	# Spread lines (blast pattern emanating upward)
+	var spread_base := center + Vector2(0, shell_top - 1)
+	var spread_length := 8.0
+	var angles := [-0.4, -0.15, 0.0, 0.15, 0.4]  # 5 pellets spread
+	
+	for angle in angles:
+		var dir := Vector2(sin(angle), -cos(angle))
+		draw_line(spread_base, spread_base + dir * spread_length, color, 1.5)
+
+func _draw_mind_control_icon(center: Vector2, color: Color) -> void:
+	# Mind control icon - stylized eye with swirl/hypnotic pattern
+	var accent := Color(color.r * 0.7, color.g * 0.7, color.b * 0.7, color.a)
+	var purple_tint := Color(0.8, 0.5, 1.0, color.a)  # Sin's purple theme
+	
+	# Outer eye shape (almond)
+	var eye_width := 14.0
+	var eye_height := 8.0
+	var eye_points := PackedVector2Array()
+	var segments := 16
+	
+	# Top curve
+	for i in range(segments + 1):
+		var t := float(i) / float(segments)
+		var x: float = lerpf(-eye_width * 0.5, eye_width * 0.5, t)
+		var curve := 1.0 - pow(2.0 * t - 1.0, 2.0)  # Parabolic curve
+		var y := -eye_height * 0.5 * curve
+		eye_points.append(center + Vector2(x, y))
+	
+	# Bottom curve (reverse)
+	for i in range(segments, -1, -1):
+		var t := float(i) / float(segments)
+		var x: float = lerpf(-eye_width * 0.5, eye_width * 0.5, t)
+		var curve := 1.0 - pow(2.0 * t - 1.0, 2.0)
+		var y := eye_height * 0.5 * curve
+		eye_points.append(center + Vector2(x, y))
+	
+	draw_colored_polygon(eye_points, accent)
+	
+	# Inner iris circle
+	draw_circle(center, 5.0, purple_tint if _special_cooldown_progress >= 1.0 else color)
+	
+	# Pupil
+	draw_circle(center, 2.5, Color(0.1, 0.05, 0.15, color.a))
+	
+	# Hypnotic swirl in pupil (small spiral lines)
+	var swirl_color := Color(0.9, 0.6, 1.0, color.a * 0.8)
+	var spiral_radius := 1.8
+	draw_arc(center + Vector2(0.5, -0.5), spiral_radius, 0, PI * 0.8, 8, swirl_color, 1.0)
+	draw_arc(center + Vector2(-0.3, 0.3), spiral_radius * 0.6, PI, PI * 1.8, 6, swirl_color, 1.0)
+	
+	# Eye highlight
+	draw_circle(center + Vector2(-1.5, -1.5), 1.0, Color(1.0, 1.0, 1.0, 0.6))
+
+func _draw_horse_icon(center: Vector2, color: Color) -> void:
+	# Horse head icon for Crown's cavalry charge
+	var accent := Color(color.r * 0.7, color.g * 0.7, color.b * 0.7, color.a)
+	var gold_tint := Color(1.0, 0.85, 0.3, color.a)  # Crown's golden theme
+	
+	# Horse head silhouette (simplified)
+	var head_points := PackedVector2Array()
+	
+	# Build horse head shape - facing right
+	head_points.append(center + Vector2(8, -2))   # Nose tip
+	head_points.append(center + Vector2(6, -6))   # Nose bridge
+	head_points.append(center + Vector2(2, -8))   # Forehead
+	head_points.append(center + Vector2(-2, -10)) # Ear tip
+	head_points.append(center + Vector2(-4, -6))  # Behind ear
+	head_points.append(center + Vector2(-6, -2))  # Top of neck
+	head_points.append(center + Vector2(-8, 4))   # Back of neck
+	head_points.append(center + Vector2(-4, 8))   # Bottom of neck
+	head_points.append(center + Vector2(2, 6))    # Jaw
+	head_points.append(center + Vector2(6, 2))    # Chin
+	
+	# Draw filled horse head
+	var fill_color := gold_tint if _special_cooldown_progress >= 1.0 else color
+	draw_colored_polygon(head_points, fill_color)
+	
+	# Eye
+	draw_circle(center + Vector2(0, -4), 2.0, accent)
+	draw_circle(center + Vector2(0, -4), 1.0, Color(0.1, 0.1, 0.1, color.a))
+	
+	# Nostril
+	draw_circle(center + Vector2(6, 0), 1.0, accent)
+	
+	# Mane lines
+	var mane_color := Color(fill_color.r * 1.2, fill_color.g * 1.1, fill_color.b, color.a)
+	draw_line(center + Vector2(-2, -8), center + Vector2(-6, -4), mane_color, 1.5)
+	draw_line(center + Vector2(-4, -6), center + Vector2(-7, -1), mane_color, 1.5)
+	draw_line(center + Vector2(-5, -4), center + Vector2(-8, 2), mane_color, 1.5)
 
 func _draw_bar_text(text: String, center_pos: Vector2, font_size: int) -> void:
 	var font := ThemeDB.fallback_font
@@ -641,6 +906,13 @@ func _update_ammo_from_player() -> void:
 				_max_ammo = int(_player.rapunzel_max_ammo)
 			if "rapunzel_reloading" in _player:
 				_is_reloading = bool(_player.rapunzel_reloading)
+		3:  # Kilo
+			if "kilo_ammo" in _player:
+				_current_ammo = int(_player.kilo_ammo)
+			if "kilo_max_ammo" in _player:
+				_max_ammo = int(_player.kilo_max_ammo)
+			if "kilo_reloading" in _player:
+				_is_reloading = bool(_player.kilo_reloading)
 
 func _connect_player_signals() -> void:
 	if not is_instance_valid(_player):
@@ -704,7 +976,7 @@ func update_ammo(current: int, maximum: int, is_reloading: bool, reload_time: fl
 		# If we weren't reloading before but now we are, check stored progress
 		if not _is_reloading:
 			# Starting reload - use stored progress for this character (could be mid-reload from swap)
-			if _current_character >= 0 and _current_character < 3:
+			if _current_character >= 0 and _current_character < 4:
 				_reload_progress = _reload_progress_per_char[_current_character]
 			else:
 				_reload_progress = 0.0
@@ -712,7 +984,7 @@ func update_ammo(current: int, maximum: int, is_reloading: bool, reload_time: fl
 	else:
 		# Not reloading - reset progress for this character
 		_reload_progress = 0.0
-		if _current_character >= 0 and _current_character < 3:
+		if _current_character >= 0 and _current_character < 4:
 			_reload_progress_per_char[_current_character] = 0.0
 	
 	_is_reloading = is_reloading
@@ -720,7 +992,7 @@ func update_ammo(current: int, maximum: int, is_reloading: bool, reload_time: fl
 
 func update_character(character_index: int) -> void:
 	# Store current character's reload progress before switching
-	if _current_character >= 0 and _current_character < 3:
+	if _current_character >= 0 and _current_character < 4:
 		_reload_progress_per_char[_current_character] = _reload_progress
 	
 	_current_character = character_index
@@ -730,4 +1002,10 @@ func update_character(character_index: int) -> void:
 		_reload_progress = _reload_progress_per_char[character_index]
 	
 	_update_ammo_from_player()
+	queue_redraw()
+
+func update_skill_points_available(available: bool) -> void:
+	_skill_points_available = available
+	if not available:
+		_level_up_glow_time = 0.0
 	queue_redraw()

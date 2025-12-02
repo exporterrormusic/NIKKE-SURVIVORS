@@ -11,6 +11,7 @@ const BATTLE_MUSIC_DIR := "res://assets/sounds/music"
 const WEAPON_FILE_MAP := {
 	"Assault Rifle": "AR",
 	"assault_rifle": "AR",
+	"assault": "AR",
 	"AR": "AR",
 	"Rocket Launcher": "rocket",
 	"rocket_launcher": "rocket",
@@ -22,7 +23,9 @@ const WEAPON_FILE_MAP := {
 	"Sniper": "sniper",
 	"sniper": "sniper",
 	"Sword": "sword",
-	"sword": "sword"
+	"sword": "sword",
+	"Minigun": "minigun",
+	"minigun": "minigun"
 }
 
 var _music_player: AudioStreamPlayer
@@ -37,6 +40,8 @@ var _sfx_volume := 1.0
 var _current_music_path: String = ""
 var _ambient_player: AudioStreamPlayer = null
 var _current_ambient_path: String = ""
+var _explosion_player: AudioStreamPlayer = null  # Dedicated explosion player to prevent overlap
+var _burst_voice_player: AudioStreamPlayer = null  # Dedicated burst voice player - immune to time scale
 
 func _ready() -> void:
 	initialize()
@@ -112,6 +117,28 @@ func play_sfx_by_path(path: String, pitch_scale: float = 1.0, volume_db: float =
 	player.volume_db = volume_db
 	player.play()
 
+## Play burst voice with dedicated player that ignores time scale
+func play_burst_voice(sound: AudioStream) -> void:
+	if sound == null:
+		return
+	
+	# Create or reuse dedicated burst voice player
+	if _burst_voice_player == null or not is_instance_valid(_burst_voice_player):
+		_burst_voice_player = AudioStreamPlayer.new()
+		_burst_voice_player.name = "BurstVoicePlayer"
+		_burst_voice_player.bus = "Master"
+		_burst_voice_player.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(_burst_voice_player)
+	
+	# Stop any currently playing burst voice
+	if _burst_voice_player.playing:
+		_burst_voice_player.stop()
+	
+	_burst_voice_player.stream = sound
+	_burst_voice_player.volume_db = 6.0  # Louder to cut through combat
+	_burst_voice_player.pitch_scale = 1.0
+	_burst_voice_player.play()
+
 func play_weapon_fire_sound(weapon_name: String, is_special_attack: bool = false) -> void:
 	var key := _resolve_weapon_key(weapon_name)
 	if key == "":
@@ -157,7 +184,23 @@ func stop_rocket_flight_sound(handle: int) -> void:
 	stop_looping_sfx(handle)
 
 func play_rocket_explosion_sound() -> void:
-	play_sfx_by_path("res://assets/sounds/sfx/weapons/rocket/rocket_explosion.mp3", 1.0, -6.02)
+	# Use dedicated explosion player to prevent overlapping explosion sounds
+	# Only play if not already playing an explosion
+	if _explosion_player == null:
+		_explosion_player = AudioStreamPlayer.new()
+		_explosion_player.bus = SFX_BUS
+		add_child(_explosion_player)
+		var stream := _load_stream("res://assets/sounds/sfx/weapons/rocket/rocket_explosion.mp3")
+		if stream:
+			_explosion_player.stream = stream
+	
+	# Skip if explosion is already playing (prevents overlap)
+	if _explosion_player.playing:
+		return
+	
+	_explosion_player.pitch_scale = 1.0
+	_explosion_player.volume_db = -12.0  # Reduced volume (was -6.02)
+	_explosion_player.play()
 
 func play_weapon_reload_sound(weapon_name: String) -> void:
 	var key := _resolve_weapon_key(weapon_name)

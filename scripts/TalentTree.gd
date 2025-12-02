@@ -26,13 +26,15 @@ const UNLOCKED_COLOR := Color(0.3, 0.9, 0.4, 1.0)
 const TITLE_COLOR := Color(1.0, 1.0, 1.0, 1.0)
 const DESC_COLOR := Color(0.7, 0.7, 0.75, 1.0)
 
-# Character data
-const CHARACTER_NAMES: Array[String] = ["Scarlet", "Snow White", "Rapunzel"]
-const PORTRAIT_PATHS: Array[String] = [
-	"res://assets/characters/scarlet/portrait-sq.png",
-	"res://assets/characters/snow-white/portrait-sq.png",
-	"res://assets/characters/rapunzel/portrait-sq.png"
-]
+# Character data - loaded from CharacterRegistry
+var CHARACTER_NAMES: Array[String] = []
+var PORTRAIT_PATHS: Array[String] = []
+var _character_registry = null
+var _game_state = null
+
+# Which characters to show in shop cards (indices into CHARACTER_NAMES/TALENT_DATA)
+# This is now loaded from GameState to sync with character selection
+var _shop_character_order: Array[int] = [5, 1, 4]  # Default: Crown, Commander, Marian
 
 # Talent definitions - Simplified: 3 main abilities + 4 upgrades (2 per special/burst)
 # Layout: UNLOCK (row 0) -> SPECIAL (row 1) -> BURST (row 2)
@@ -54,21 +56,21 @@ var TALENT_DATA := {
 		{"id": "burst_vuln", "name": "Expose Weakness", "desc": "Targets take 50% more damage", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
 		 "tooltip": "Marked enemies take +50% damage from all sources."},
 	],
-	1: [  # Snow White - Ranged with Turret
-		{"id": "unlock", "name": "Snow White", "desc": "Already in your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 0, "unlock": true, "default": true,
-		 "tooltip": "Sniper with piercing shots. 7 ammo, 1.5s reload."},
-		{"id": "special", "name": "Auto-Turret", "desc": "Deploy auto-targeting turrets", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
-		 "tooltip": "Deploys turret with 4 missiles. 1 charge, 8s recharge."},
-		{"id": "special_capacity", "name": "Ammo Cache", "desc": "+2 turret missile capacity", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "+2 missiles per turret. Max: 10 missiles."},
-		{"id": "special_count", "name": "More Turrets", "desc": "+2 max turret charges", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "+2 charges per level. Max: 7 turrets."},
-		{"id": "burst", "name": "Blizzard", "desc": "BURST: Freezing storm", "col": 1, "row": 2, "requires": ["special"], "max": 1, "cost": 1, "burst": true,
-		 "tooltip": "90° ice beam dealing 50 damage. Massive range."},
-		{"id": "burst_burn", "name": "Frostburn", "desc": "Burns enemies for 10/25/33% max HP/s", "col": 0, "row": 2, "requires": ["burst"], "max": 3, "cost": 1,
-		 "tooltip": "3s burn. Elites/bosses take 4/8/12% instead."},
-		{"id": "burst_gauge", "name": "Soul Harvest", "desc": "Kills during burst refill gauge", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
-		 "tooltip": "Burst kills generate burst gauge for chaining."},
+	1: [  # Commander - Assault Rifle with Time Freeze & Ally Summons
+		{"id": "unlock", "name": "Commander", "desc": "Already in your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 0, "unlock": true, "default": true,
+		 "tooltip": "Leader with assault rifle. Freezes time and summons allies."},
+		{"id": "special", "name": "Time Freeze", "desc": "Freeze all enemies in time", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
+		 "tooltip": "Freezes all enemies on screen for 3s. 12s cooldown."},
+		{"id": "special_duration", "name": "Extended Freeze", "desc": "+1s freeze duration", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
+		 "tooltip": "+1s duration per level. Max: 6s freeze."},
+		{"id": "special_cooldown", "name": "Time Mastery", "desc": "-2s special cooldown", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
+		 "tooltip": "-2s cooldown per level. Min: 6s cooldown."},
+		{"id": "burst", "name": "Rally Allies", "desc": "BURST: Summon AI allies", "col": 1, "row": 2, "requires": ["special"], "max": 1, "cost": 1, "burst": true,
+		 "tooltip": "Summons 1 random ally (Scarlet/Snow White/Rapunzel) for 10s."},
+		{"id": "burst_left", "name": "Reinforcements I", "desc": "Summon +1 ally", "col": 0, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
+		 "tooltip": "Summons 2 allies instead of 1."},
+		{"id": "burst_right", "name": "Reinforcements II", "desc": "Summon +1 ally", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
+		 "tooltip": "Summons 3 allies instead of 2. All 3 types available."},
 	],
 	2: [  # Rapunzel - Support Healer
 		{"id": "unlock", "name": "Unlock Rapunzel", "desc": "Add Rapunzel to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
@@ -85,14 +87,99 @@ var TALENT_DATA := {
 		 "tooltip": "Doubles stun from 4s to 8s."},
 		{"id": "burst_invuln", "name": "Divine Protection", "desc": "8 seconds of invincibility", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
 		 "tooltip": "Grants 8s invincibility on burst."},
+	],
+	3: [  # Kilo - Shotgun DPS
+		{"id": "unlock", "name": "Unlock Kilo", "desc": "Add Kilo to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
+		 "tooltip": "Shotgun wielder. 8 ammo, 5 pellets per shot. Pilot of T.A.L.O.S."},
+		{"id": "special", "name": "Penetrating Blast", "desc": "Pellets create explosive beams", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
+		 "tooltip": "Pellet hits trigger V-shaped explosions behind enemies. 3s cooldown."},
+		{"id": "special_burn", "name": "Searing Beams", "desc": "Beams burn for 15/25/35% HP/s", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
+		 "tooltip": "3s burn. Elites/bosses take 5/10/15% instead."},
+		{"id": "special_size", "name": "Amplified Blast", "desc": "Explosion +50/100/200% size & +30/60/100% dmg", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
+		 "tooltip": "Bigger and more damaging explosions."},
+		{"id": "burst", "name": "Assign Priority", "desc": "BURST: Rapid fire frenzy", "col": 1, "row": 2, "requires": ["special"], "max": 1, "cost": 1, "burst": true,
+		 "tooltip": "Infinite ammo, rapid fire, 2.2x damage for 5s."},
+		{"id": "burst_duration", "name": "Extended Assault", "desc": "Burst lasts 10 seconds", "col": 0, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
+		 "tooltip": "Doubles burst duration from 5s to 10s."},
+		{"id": "burst_invuln", "name": "T.A.L.O.S. Shield", "desc": "Invincible during burst", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
+		 "tooltip": "Grants invincibility for burst duration."},
+	],
+	4: [  # Marian - Minigun with Charm & Epic Beam
+		{"id": "unlock", "name": "Unlock Marian", "desc": "Add Marian to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
+		 "tooltip": "Minigun user. 100 ammo, high fire rate. Charms enemies and fires epic beams."},
+		{"id": "special", "name": "Blue Charm", "desc": "AoE charm converts enemies", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
+		 "tooltip": "Charms normal enemies in area (turns red to blue). 10s cooldown."},
+		{"id": "special_size", "name": "Allure", "desc": "Charm AoE +50/100/200%", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
+		 "tooltip": "Increases charm area of effect."},
+		{"id": "special_cooldown", "name": "Captivating", "desc": "-2s special cooldown", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
+		 "tooltip": "-2s cooldown per level. At max: 4s cooldown."},
+		{"id": "burst", "name": "Purple Beam", "desc": "BURST: Epic 5s laser beam", "col": 1, "row": 2, "requires": ["special"], "max": 1, "cost": 1, "burst": true,
+		 "tooltip": "5 second aimable purple laser beam. Follow mouse to aim."},
+		{"id": "burst_left", "name": "Missile Barrage", "desc": "Fire 4 homing missiles every 2.5s", "col": 0, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
+		 "tooltip": "During burst, fires 4 homing missiles at random enemies twice."},
+		{"id": "burst_right", "name": "Burning Trail", "desc": "Beam leaves purple fire", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
+		 "tooltip": "Beam leaves a 5s burning trail that damages enemies."},
+	],
+	5: [  # Crown - Minigun with Cavalry Charge & Golden Nova
+		{"id": "unlock", "name": "Unlock Crown", "desc": "Add Crown to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
+		 "tooltip": "Minigun user. 100 ammo, high fire rate. Cavalry charge and golden nova."},
+		{"id": "special", "name": "Cavalry Charge", "desc": "Summon horse, charge forward", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
+		 "tooltip": "Summon ethereal horse, charge forward with V-damage. Invincible. 2.5s duration, 10s cooldown."},
+		{"id": "special_cooldown", "name": "Swift Steed", "desc": "-2s charge cooldown", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
+		 "tooltip": "-2s cooldown per level. At max: 4s cooldown."},
+		{"id": "special_explosion", "name": "Golden Mark", "desc": "Survivors explode after 1.5s", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
+		 "tooltip": "Enemies hit but not killed glow gold, explode for 2x ATK. +50% dmg, +20% range per level."},
+		{"id": "burst", "name": "Golden Nova", "desc": "BURST: Screen-wide blast", "col": 1, "row": 2, "requires": ["special"], "max": 1, "cost": 1, "burst": true,
+		 "tooltip": "Massive golden AoE blast fills the screen for massive damage."},
+		{"id": "burst_charge", "name": "Radiant Power", "desc": "Burst generates burst gauge", "col": 0, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
+		 "tooltip": "Burst damage now contributes to burst gauge charging."},
+		{"id": "burst_beam", "name": "Solar Lance", "desc": "Adds 3s forward beam", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
+		 "tooltip": "Adds massive golden frontal beam lasting 3s dealing huge damage."},
+	],
+	6: [  # Snow White - Ranged with Turret (moved to end)
+		{"id": "unlock", "name": "Unlock Snow White", "desc": "Add Snow White to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
+		 "tooltip": "Sniper with piercing shots. 7 ammo, 1.5s reload."},
+		{"id": "special", "name": "Auto-Turret", "desc": "Deploy auto-targeting turrets", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
+		 "tooltip": "Deploys turret with 4 missiles. 1 charge, 8s recharge."},
+		{"id": "special_capacity", "name": "Ammo Cache", "desc": "+2 turret missile capacity", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
+		 "tooltip": "+2 missiles per turret. Max: 10 missiles."},
+		{"id": "special_count", "name": "More Turrets", "desc": "+2 max turret charges", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
+		 "tooltip": "+2 charges per level. Max: 7 turrets."},
+		{"id": "burst", "name": "Blizzard", "desc": "BURST: Freezing storm", "col": 1, "row": 2, "requires": ["special"], "max": 1, "cost": 1, "burst": true,
+		 "tooltip": "90° ice beam dealing 50 damage. Massive range."},
+		{"id": "burst_burn", "name": "Frostburn", "desc": "Burns enemies for 10/25/33% max HP/s", "col": 0, "row": 2, "requires": ["burst"], "max": 3, "cost": 1,
+		 "tooltip": "3s burn. Elites/bosses take 4/8/12% instead."},
+		{"id": "burst_gauge", "name": "Soul Harvest", "desc": "Kills during burst refill gauge", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
+		 "tooltip": "Burst kills generate burst gauge for chaining."},
+	],
+	7: [  # Sin - SMG with Charm & Life Drain
+		{"id": "unlock", "name": "Unlock Sin", "desc": "Add Sin to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
+		 "tooltip": "SMG user. 45 ammo, high fire rate. Charms enemies and drains life."},
+		{"id": "special", "name": "Seduction", "desc": "AoE charm converts enemies", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
+		 "tooltip": "Charms normal enemies in area to fight for you. 10s cooldown."},
+		{"id": "special_size", "name": "Allure", "desc": "Charm AoE +50/100/200%", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
+		 "tooltip": "Increases charm area of effect."},
+		{"id": "special_cooldown", "name": "Captivating", "desc": "-2s special cooldown", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
+		 "tooltip": "-2s cooldown per level. At max: 4s cooldown."},
+		{"id": "burst", "name": "Life Drain", "desc": "BURST: DOT that heals you", "col": 1, "row": 2, "requires": ["special"], "max": 1, "cost": 1, "burst": true,
+		 "tooltip": "8s DOT on all visible enemies. Heals 5% max HP per 4s per enemy."},
+		{"id": "burst_charge", "name": "Soul Siphon", "desc": "Kills during burst charge gauge", "col": 0, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
+		 "tooltip": "Enemy kills during burst contribute to burst gauge."},
+		{"id": "burst_explode", "name": "Death Blossom", "desc": "Enemies explode on death", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
+		 "tooltip": "Enemies dying during burst explode for 4 damage. Scales with ATK."},
 	]
 }
 
 # Tooltip UI reference
 var _tooltip: PanelContainer = null
 
+# Stats panel reference
+var _stats_panel: PanelContainer = null
+var _player_ref: Node = null  # Reference to player for stats
+var _hovered_character: int = -1  # Which character card is being hovered (-1 = none/current)
+
 # Player's unlocked talents
-var _unlocked_talents: Dictionary = {0: {}, 1: {}, 2: {}}
+var _unlocked_talents: Dictionary = {0: {}, 1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}}
 var _skill_points: int = 0
 var _talent_buttons: Array = []
 var _lines_control: Control = null
@@ -102,6 +189,9 @@ func _ready() -> void:
 	# Ensure TalentTree is rendered above all other UI
 	z_index = 100
 	
+	# Load character data from registry
+	_load_character_data()
+	
 	# Preload all portraits
 	for path in PORTRAIT_PATHS:
 		var tex = load(path)
@@ -110,6 +200,42 @@ func _ready() -> void:
 	_build_ui()
 	visible = false
 	_apply_default_talents()
+
+func _load_character_data() -> void:
+	# Get registry
+	var CharacterRegistryClass = load("res://scripts/characters/CharacterRegistry.gd")
+	if CharacterRegistryClass:
+		_character_registry = CharacterRegistryClass.get_instance()
+	
+	# Get GameState for shop character order (it's an autoload singleton)
+	var game_state_node = get_node_or_null("/root/GameState")
+	if game_state_node:
+		_game_state = game_state_node
+		_shop_character_order = _game_state.get_shop_character_order()
+	
+	# Load character names and portrait paths from registry
+	if _character_registry:
+		var char_ids: Array = _character_registry.get_all_character_ids()
+		for id in char_ids:
+			var char_data = _character_registry.get_character(id)
+			if char_data:
+				CHARACTER_NAMES.append(char_data.display_name)
+				# Build portrait path from id
+				var folder_name: String = id.replace("_", "-")
+				PORTRAIT_PATHS.append("res://assets/characters/%s/portrait-sq.png" % folder_name)
+	else:
+		# Fallback if registry not available
+		CHARACTER_NAMES = ["Scarlet", "Legendary Commander", "Rapunzel", "Kilo", "Marian", "Crown", "Snow White", "Sin"]
+		PORTRAIT_PATHS = [
+			"res://assets/characters/scarlet/portrait-sq.png",
+			"res://assets/characters/commander/portrait-sq.png",
+			"res://assets/characters/rapunzel/portrait-sq.png",
+			"res://assets/characters/kilo/portrait-sq.png",
+			"res://assets/characters/marian/portrait-sq.png",
+			"res://assets/characters/crown/portrait-sq.png",
+			"res://assets/characters/snow-white/portrait-sq.png",
+			"res://assets/characters/sin/portrait-sq.png"
+		]
 
 func _build_ui() -> void:
 	# Full screen dark overlay
@@ -124,9 +250,18 @@ func _build_ui() -> void:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 	
+	# Outer HBox to hold stats panel + main panel
+	var outer_hbox := HBoxContainer.new()
+	outer_hbox.add_theme_constant_override("separation", 15)
+	center.add_child(outer_hbox)
+	
+	# Stats panel on the left (HoloCure style)
+	_stats_panel = _build_stats_panel()
+	outer_hbox.add_child(_stats_panel)
+	
 	# Main panel with border
 	_main_panel = PanelContainer.new()
-	_main_panel.custom_minimum_size = Vector2(1000, 700)
+	_main_panel.custom_minimum_size = Vector2(1000, 580)
 	var panel_style := StyleBoxFlat.new()
 	panel_style.bg_color = PANEL_BG
 	panel_style.border_color = BORDER_COLOR
@@ -134,7 +269,7 @@ func _build_ui() -> void:
 	panel_style.set_corner_radius_all(12)
 	panel_style.set_content_margin_all(20)
 	_main_panel.add_theme_stylebox_override("panel", panel_style)
-	center.add_child(_main_panel)
+	outer_hbox.add_child(_main_panel)
 	
 	# Content container (switches between character select and tree view)
 	var content := Control.new()
@@ -158,26 +293,194 @@ func _build_ui() -> void:
 	# Create tooltip (added last so it renders on top)
 	_create_tooltip()
 
-func _build_character_panel() -> void:
+func _build_stats_panel() -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(220, 700)
+	
+	var style := StyleBoxFlat.new()
+	style.bg_color = PANEL_BG
+	style.border_color = BORDER_COLOR
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(12)
+	style.set_content_margin_all(15)
+	panel.add_theme_stylebox_override("panel", style)
+	
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	panel.add_child(vbox)
+	
 	# Title
 	var title := Label.new()
-	title.text = "TALENT TREES"
+	title.text = "STATS"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 48)
+	title.add_theme_font_size_override("font_size", 32)
 	title.add_theme_color_override("font_color", TITLE_COLOR)
-	_character_panel.add_child(title)
+	vbox.add_child(title)
 	
-	# Skill points
+	# Separator
+	var sep := HSeparator.new()
+	sep.add_theme_constant_override("separation", 8)
+	vbox.add_child(sep)
+	
+	# Character name display (shows which character stats are for)
+	var char_label := Label.new()
+	char_label.name = "CharLabel"
+	char_label.text = "Current"
+	char_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	char_label.add_theme_font_size_override("font_size", 16)
+	char_label.add_theme_color_override("font_color", HOVER_BORDER)
+	vbox.add_child(char_label)
+	
+	# Small spacer
+	var spacer1 := Control.new()
+	spacer1.custom_minimum_size = Vector2(0, 5)
+	vbox.add_child(spacer1)
+	
+	# Level display
+	var level_row := _create_stat_row("LVL", "1", Color(1.0, 0.85, 0.3))
+	level_row.name = "LevelRow"
+	vbox.add_child(level_row)
+	
+	# Small spacer
+	var spacer2 := Control.new()
+	spacer2.custom_minimum_size = Vector2(0, 10)
+	vbox.add_child(spacer2)
+	
+	# ATK stat (multiplier based on level)
+	var atk_row := _create_stat_row("ATK", "1x", Color(1.0, 0.4, 0.4))
+	atk_row.name = "AtkRow"
+	vbox.add_child(atk_row)
+	
+	# HP stat
+	var hp_row := _create_stat_row("HP", "10", Color(0.4, 1.0, 0.4))
+	hp_row.name = "HpRow"
+	vbox.add_child(hp_row)
+	
+	# Burst Gen Rate stat (% per hit)
+	var burst_row := _create_stat_row("BURST GEN", "5%", Color(0.4, 0.7, 1.0))
+	burst_row.name = "BurstRow"
+	vbox.add_child(burst_row)
+	
+	# Speed stat (actual value)
+	var speed_row := _create_stat_row("SPEED", "400", Color(0.9, 0.7, 1.0))
+	speed_row.name = "SpeedRow"
+	vbox.add_child(speed_row)
+	
+	# Crit Rate stat
+	var crit_row := _create_stat_row("CRIT RATE", "20%", Color(1.0, 0.6, 0.2))
+	crit_row.name = "CritRow"
+	vbox.add_child(crit_row)
+	
+	# Fill remaining space
+	var filler := Control.new()
+	filler.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(filler)
+	
+	return panel
+
+func _create_stat_row(label_text: String, value_text: String, value_color: Color) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 5)
+	
+	# Stat name
+	var name_label := Label.new()
+	name_label.text = label_text
+	name_label.add_theme_font_size_override("font_size", 18)
+	name_label.add_theme_color_override("font_color", DESC_COLOR)
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(name_label)
+	
+	# Stat value
+	var value_label := Label.new()
+	value_label.name = "Value"
+	value_label.text = value_text
+	value_label.add_theme_font_size_override("font_size", 20)
+	value_label.add_theme_color_override("font_color", value_color)
+	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(value_label)
+	
+	return row
+
+func _update_stats_panel(char_id: int = -1) -> void:
+	if _stats_panel == null or _player_ref == null:
+		return
+	
+	# Determine which character to show stats for
+	var display_char: int = char_id if char_id >= 0 else _player_ref.current_character
+	
+	# Update character label
+	var char_name: String = CHARACTER_NAMES[display_char] if display_char >= 0 and display_char < CHARACTER_NAMES.size() else "Current"
+	_set_char_label(char_name)
+	
+	# Get current stats from player
+	var current_level: int = _player_ref.level
+	var current_hp: int = _player_ref.max_hp
+	var current_speed: float = _player_ref.speed
+	var current_burst: float = _player_ref.burst_per_hit  # This is % per hit (e.g., 5.0 = 5%)
+	var current_crit: float = _player_ref.crit_rate if "crit_rate" in _player_ref else 0.2  # Default 20%
+	
+	# ATK multiplier scales with level (1x at level 1, +0.5x per level)
+	var atk_multiplier: float = 1.0 + (current_level - 1) * 0.5
+	
+	# Update labels
+	_set_stat_value("LevelRow", str(current_level))
+	_set_stat_value("AtkRow", "%.1fx" % atk_multiplier)
+	_set_stat_value("HpRow", str(current_hp))
+	_set_stat_value("BurstRow", "%.0f%%" % current_burst)
+	_set_stat_value("SpeedRow", str(int(current_speed)))
+	_set_stat_value("CritRow", "%.0f%%" % (current_crit * 100.0))
+
+func _set_char_label(char_name: String) -> void:
+	if _stats_panel == null:
+		return
+	var vbox := _stats_panel.get_child(0)
+	var char_label := vbox.get_node_or_null("CharLabel")
+	if char_label != null:
+		char_label.text = char_name
+
+func _set_stat_value(row_name: String, value: String) -> void:
+	if _stats_panel == null:
+		return
+	var vbox := _stats_panel.get_child(0)
+	var row := vbox.get_node_or_null(row_name)
+	if row != null:
+		var value_label := row.get_node_or_null("Value")
+		if value_label != null:
+			value_label.text = value
+
+func _build_character_panel() -> void:
+	# Skill points display - enhanced and prominent
+	var points_container := HBoxContainer.new()
+	points_container.name = "PointsContainer"
+	points_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	_character_panel.add_child(points_container)
+	
+	# Decorative left element
+	var deco_left := Label.new()
+	deco_left.text = "◆ ─────"
+	deco_left.add_theme_font_size_override("font_size", 20)
+	deco_left.add_theme_color_override("font_color", Color(0.5, 0.5, 0.6, 0.6))
+	points_container.add_child(deco_left)
+	
+	# Main skill points label
 	var points := Label.new()
 	points.name = "SkillPoints"
+	points.text = "   AVAILABLE SKILL POINTS: %d   " % _skill_points
 	points.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	points.add_theme_font_size_override("font_size", 24)
+	points.add_theme_font_size_override("font_size", 32)
 	points.add_theme_color_override("font_color", HOVER_BORDER)
-	_character_panel.add_child(points)
+	points_container.add_child(points)
 	
-	# Spacer
+	# Decorative right element
+	var deco_right := Label.new()
+	deco_right.text = "───── ◆"
+	deco_right.add_theme_font_size_override("font_size", 20)
+	deco_right.add_theme_color_override("font_color", Color(0.5, 0.5, 0.6, 0.6))
+	points_container.add_child(deco_right)
+	
+	# Small spacer
 	var spacer1 := Control.new()
-	spacer1.custom_minimum_size = Vector2(0, 20)
+	spacer1.custom_minimum_size = Vector2(0, 15)
 	_character_panel.add_child(spacer1)
 	
 	# Character cards row
@@ -187,7 +490,8 @@ func _build_character_panel() -> void:
 	_character_panel.add_child(cards_row)
 	
 	for i in range(3):
-		var card := _create_character_card(i)
+		var char_id: int = _shop_character_order[i]
+		var card := _create_character_card(char_id)
 		cards_row.add_child(card)
 	
 	# Spacer
@@ -211,6 +515,11 @@ func _build_character_panel() -> void:
 func _create_character_card(char_id: int) -> PanelContainer:
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(280, 380)
+	card.mouse_filter = Control.MOUSE_FILTER_STOP  # Enable mouse events
+	
+	# Connect mouse hover signals for stats panel update
+	card.mouse_entered.connect(_on_card_mouse_entered.bind(char_id))
+	card.mouse_exited.connect(_on_card_mouse_exited)
 	
 	var card_style := StyleBoxFlat.new()
 	card_style.bg_color = Color(0.04, 0.04, 0.06, 1.0)
@@ -245,12 +554,16 @@ func _create_character_card(char_id: int) -> PanelContainer:
 		portrait_rect.texture = _portraits[char_id]
 	portrait_panel.add_child(portrait_rect)
 	
-	# Character name
+	# Character name - use smaller font for long names
 	var name_label := Label.new()
-	name_label.text = CHARACTER_NAMES[char_id]
+	var char_name: String = CHARACTER_NAMES[char_id]
+	name_label.text = char_name
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_label.add_theme_font_size_override("font_size", 28)
+	# Use smaller font for long names to prevent card stretching
+	var font_size: int = 28 if char_name.length() <= 12 else 22
+	name_label.add_theme_font_size_override("font_size", font_size)
 	name_label.add_theme_color_override("font_color", TITLE_COLOR)
+	name_label.custom_minimum_size = Vector2(250, 35)  # Fixed height for consistency
 	vbox.add_child(name_label)
 	
 	# Unlock count
@@ -704,7 +1017,7 @@ func _on_talent_clicked(btn: Button) -> void:
 func _refresh_tree() -> void:
 	var points := _tree_panel.get_node_or_null("TreeSkillPoints")
 	if points:
-		points.text = "Skill Points: %d" % _skill_points
+		points.text = "   AVAILABLE SKILL POINTS: %d   " % _skill_points
 	
 	for btn in _talent_buttons:
 		if is_instance_valid(btn):
@@ -713,6 +1026,9 @@ func _refresh_tree() -> void:
 	# Redraw lines
 	if _lines_control:
 		_lines_control.queue_redraw()
+	
+	# Update stats (talents may modify player stats)
+	_update_stats_panel()
 
 func _on_back_to_characters() -> void:
 	_tree_panel.visible = false
@@ -726,23 +1042,35 @@ func _refresh_character_cards() -> void:
 		return
 	
 	for i in range(cards_row.get_child_count()):
+		var char_id: int = _shop_character_order[i] if i < _shop_character_order.size() else i
 		var card: PanelContainer = cards_row.get_child(i)
 		var vbox := card.get_child(0) as VBoxContainer
 		if vbox:
 			var count_label := vbox.get_node_or_null("CountLabel")
 			if count_label:
-				_update_card_count(count_label, i)
+				_update_card_count(count_label, char_id)
 			var status_label := vbox.get_node_or_null("StatusLabel")
 			if status_label:
-				_update_card_status(status_label, i)
+				_update_card_status(status_label, char_id)
 	
-	var char_points := _character_panel.get_node_or_null("SkillPoints")
-	if char_points:
-		char_points.text = "Skill Points: %d" % _skill_points
+	var points_container := _character_panel.get_node_or_null("PointsContainer")
+	if points_container:
+		var char_points := points_container.get_node_or_null("SkillPoints")
+		if char_points:
+			char_points.text = "   AVAILABLE SKILL POINTS: %d   " % _skill_points
 
 func _on_close() -> void:
 	visible = false
+	_hovered_character = -1
 	emit_signal("tree_closed")
+
+func _on_card_mouse_entered(char_id: int) -> void:
+	_hovered_character = char_id
+	_update_stats_panel(char_id)
+
+func _on_card_mouse_exited() -> void:
+	_hovered_character = -1
+	_update_stats_panel(-1)  # Show current character stats
 
 func _input(event: InputEvent) -> void:
 	if not visible:
@@ -756,11 +1084,20 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 # Public API
-func show_tree() -> void:
+func show_tree(player: Node = null) -> void:
+	if player != null:
+		_player_ref = player
+	else:
+		# Try to find player automatically
+		_player_ref = get_tree().get_first_node_in_group("player")
+		if _player_ref == null:
+			_player_ref = get_node_or_null("/root/Level/Player")
+	
 	visible = true
 	_character_panel.visible = true
 	_tree_panel.visible = false
 	_refresh_character_cards()
+	_update_stats_panel()
 
 func add_skill_points(amount: int) -> void:
 	_skill_points += amount

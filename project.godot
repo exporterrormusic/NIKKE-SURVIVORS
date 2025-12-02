@@ -15,10 +15,22 @@ run/main_scene="res://scenes/levels/Level.tscn"
 config/features=PackedStringArray("4.5", "Forward Plus")
 config/icon="res://icon.svg"
 
+[autoload]
+
+GameState="*res://scripts/GameState.gd"
+
 [display]
 
 window/size/viewport_width=1920
 window/size/viewport_height=1080
+
+[editor_plugins]
+
+enabled=PackedStringArray()
+
+[filesystem]
+
+import/skip_folders=PackedStringArray("NIKKE-GODOT - Copy")
 
 [input]
 

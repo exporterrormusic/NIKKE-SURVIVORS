@@ -1,8 +1,9 @@
-[gd_scene load_steps=6 format=3 uid="uid://bdug5n4j3gcxq"]
+[gd_scene load_steps=7 format=3 uid="uid://bdug5n4j3gcxq"]
 
-[ext_resource type="Script" uid="uid://bgh1v1xyxo5bp" path="res://scripts/Player.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/PlayerCore.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://w5nroosjr4a3" path="res://scenes/ui/PlayerOverheadHud.tscn" id="4"]
 [ext_resource type="Script" uid="uid://xs7mcymvsl5g" path="res://scripts/character_sprite_animator.gd" id="5"]
+[ext_resource type="Script" path="res://scripts/SmoothCamera.gd" id="6"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_abc"]
 radius = 32.0
@@ -31,3 +32,6 @@ material = SubResource("CanvasItemMaterial_7n8ao")
 position = Vector2(0, -19)
 
 [node name="Camera2D" type="Camera2D" parent="."]
+script = ExtResource("6")
+follow_smoothing = 30.0
+dash_smoothing = 10.0

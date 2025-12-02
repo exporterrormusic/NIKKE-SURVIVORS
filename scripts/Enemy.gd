@@ -20,6 +20,11 @@ var _damage_timer := 0.0
 var is_stunned = false
 var stun_timer = 0.0
 
+# Charmed state (Sin's special ability)
+var _is_charmed := false
+var _charm_owner: Node = null
+var _charm_target: Node = null  # Current enemy target when charmed
+
 # Laser shooting parameters
 const LASER_RANGE := 500.0           # Distance at which enemy can shoot
 const LASER_FIRE_INTERVAL := 3.0     # Seconds between shots
@@ -120,6 +125,11 @@ func _physics_process(delta: float) -> void:
 			# Stunned: don't move
 			velocity = Vector2.ZERO
 			return
+	
+	# Charmed enemies attack other enemies
+	if _is_charmed:
+		_process_charmed_behavior(delta)
+		return
 	
 	if not player or not is_instance_valid(player):
 		return
@@ -238,7 +248,7 @@ var _death_anticipation_timer: float = 0.0
 var _overkill_damage: int = 0  # Track excess damage for overkill effect
 const DEATH_ANTICIPATION_TIME := 0.12  # Longer freeze before death (MORE NOTICEABLE)
 
-func take_damage(dmg, is_crit: bool = false, hit_direction: Vector2 = Vector2.ZERO):
+func take_damage(dmg, is_crit: bool = false, hit_direction: Vector2 = Vector2.ZERO, from_burst: bool = false):
 	# Apply vulnerability debuff if present (from Scarlet's Expose Weakness talent)
 	var actual_dmg: int = dmg
 	if has_meta("damage_vulnerability"):
@@ -263,10 +273,11 @@ func take_damage(dmg, is_crit: bool = false, hit_direction: Vector2 = Vector2.ZE
 		else:
 			HitSparkScript.spawn_normal(get_parent(), global_position, _last_hit_direction)
 	
-	# Camera punch toward hit direction - MORE NOTICEABLE
-	var combat_juice_script = load("res://scripts/CombatJuice.gd")
-	if combat_juice_script and combat_juice_script.instance:
-		combat_juice_script.camera_punch(-_last_hit_direction, 8.0 if is_crit else 4.0)
+	# Camera punch only on critical hits
+	if is_crit:
+		var combat_juice_script = load("res://scripts/CombatJuice.gd")
+		if combat_juice_script and combat_juice_script.instance:
+			combat_juice_script.camera_punch(-_last_hit_direction, 4.0)
 	
 	# Spawn floating damage number (higher up to avoid sprite/HP bar)
 	var FloatingNumber = preload("res://scripts/FloatingDamageNumber.gd")
@@ -280,15 +291,13 @@ func take_damage(dmg, is_crit: bool = false, hit_direction: Vector2 = Vector2.ZE
 		# Calculate overkill (excess damage beyond what was needed)
 		_overkill_damage = -hp  # hp is negative, so negate it
 		
-		if player and player.has_method("register_burst_hit"):
+		# Only grant burst gauge if kill wasn't from a burst ability
+		if not from_burst and player and player.has_method("register_burst_hit"):
 			player.register_burst_hit()
 		
 		# Death anticipation - brief freeze before exploding
 		_death_anticipation = true
 		_death_anticipation_timer = DEATH_ANTICIPATION_TIME
-		# White flash during anticipation
-		if _animator:
-			_animator.modulate = Color(2.0, 2.0, 2.0, 1.0)  # Bright white
 
 func _process_death_anticipation(delta: float) -> void:
 	if not _death_anticipation:
@@ -353,3 +362,98 @@ func die():
 		get_parent().add_child(orb)
 		orb.global_position = global_position + Vector2(randf_range(-20, 20), randf_range(-20, 20))
 	call_deferred("queue_free")
+
+# --- Charm system ---
+func set_charmed(charm_owner: Node, charmed: bool = true) -> void:
+	"""Set this enemy as charmed (fighting for player) or uncharm."""
+	# Only normal enemies can be charmed (not elite, boss, tank)
+	if has_meta("enemy_tier"):
+		var tier: String = get_meta("enemy_tier")
+		if tier in ["elite", "boss", "tank"]:
+			return
+	
+	_is_charmed = charmed
+	_charm_owner = charm_owner if charmed else null
+	_charm_target = null
+	
+	if charmed:
+		# Add charm visual effect
+		if not has_node("CharmEffect"):
+			var charm_fx := Node2D.new()
+			charm_fx.name = "CharmEffect"
+			charm_fx.set_script(preload("res://scripts/SinCharmEffect.gd"))
+			charm_fx.z_index = 10
+			add_child(charm_fx)
+		# Apply purple tint to sprite
+		if _animator:
+			_animator.modulate = Color(0.8, 0.5, 1.0, 1.0)
+	else:
+		# Remove charm visual
+		if has_node("CharmEffect"):
+			get_node("CharmEffect").queue_free()
+		# Restore normal tint
+		if _animator:
+			_animator.modulate = Color.WHITE
+
+func is_charmed() -> bool:
+	return _is_charmed
+
+func _process_charmed_behavior(delta: float) -> void:
+	"""Charmed enemies seek and attack other non-charmed enemies."""
+	_damage_timer -= delta
+	
+	# Find a target enemy if we don't have one or it's invalid
+	if _charm_target == null or not is_instance_valid(_charm_target) or _charm_target._is_charmed:
+		_charm_target = _find_nearest_enemy()
+	
+	if _charm_target == null:
+		# No valid targets, just idle
+		velocity = Vector2.ZERO
+		if _animator:
+			_animator.update_state(Vector2.ZERO, Vector2.RIGHT)
+		return
+	
+	var to_target: Vector2 = _charm_target.global_position - global_position
+	var dist: float = to_target.length()
+	var dir: Vector2 = to_target.normalized() if dist > 0 else Vector2.ZERO
+	
+	# Chase the target
+	if dist > STOP_DISTANCE:
+		global_position += dir * speed * delta
+	
+	# Deal damage when close
+	if dist < DAMAGE_DISTANCE and _damage_timer <= 0:
+		if _charm_target.has_method("take_damage"):
+			_charm_target.take_damage(1)
+		_damage_timer = DAMAGE_COOLDOWN
+	
+	# Animation
+	velocity = dir * speed if dist > STOP_DISTANCE else Vector2.ZERO
+	if _animator:
+		_animator.update_state(velocity, dir)
+
+func _find_nearest_enemy() -> Node:
+	"""Find the nearest non-charmed enemy."""
+	var nearest: Node = null
+	var nearest_dist: float = INF
+	
+	var parent := get_parent()
+	if parent == null:
+		return null
+	
+	for child in parent.get_children():
+		if child == self:
+			continue
+		if not child.is_in_group("enemies"):
+			continue
+		if child.get("_is_charmed") == true:
+			continue
+		if child.get("hp") != null and child.hp <= 0:
+			continue
+		
+		var dist: float = global_position.distance_to(child.global_position)
+		if dist < nearest_dist:
+			nearest_dist = dist
+			nearest = child
+	
+	return nearest

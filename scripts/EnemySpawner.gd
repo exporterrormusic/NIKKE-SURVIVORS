@@ -26,21 +26,21 @@ func set_map_bounds(bounds: Rect2) -> void:
 	_map_bounds = bounds
 
 # Elite visual settings - 5x size, gold glow, has boss abilities
-const ELITE_SCALE := 5.0
+const ELITE_SCALE := 2.5
 const ELITE_HP_MULT := 10.0
 const ELITE_DAMAGE_MULT := 2.0
 const ELITE_SPEED_MULT := 0.8
 const ELITE_GLOW_COLOR := Color(1.0, 0.85, 0.2, 1.0)  # Gold glow
 
-# Tank settings - 2.5x size, red glow
-const TANK_SCALE := 2.5
+# Tank settings - 1.5x size, red glow
+const TANK_SCALE := 1.5
 const TANK_HP_MULT := 8.0
 const TANK_SPEED_MULT := 0.5
 const TANK_DAMAGE_MULT := 2.0
 const TANK_GLOW_COLOR := Color(1.0, 0.2, 0.1, 1.0)  # Red glow
 
-# Boss settings - 7.5x size, purple glow
-const BOSS_SCALE := 7.5
+# Boss settings - 4.5x size, purple glow
+const BOSS_SCALE := 4.5
 const BOSS_HP_MULT := 60.0
 const BOSS_SPEED_MULT := 1.5  # 1.5x normal speed
 const BOSS_DAMAGE_MULT := 5.0

@@ -88,7 +88,7 @@ func _execute_burst() -> void:
 		var hit_direction := (enemy_position - global_position).normalized()
 		var dealt := false
 		if enemy.has_method("take_damage"):
-			enemy.take_damage(damage_amount, false, hit_direction)
+			enemy.take_damage(damage_amount, false, hit_direction, true)  # from_burst = true
 			dealt = true
 		elif enemy.has_method("apply_damage"):
 			enemy.apply_damage(damage_amount)

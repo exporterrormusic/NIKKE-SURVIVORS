@@ -12,7 +12,7 @@ const BADGE_BORDER_COLOR := Color(1.0, 1.0, 1.0, 0.9)
 const TEXT_COLOR := Color(1.0, 1.0, 1.0, 1.0)
 
 # Sizing
-const BAR_HEIGHT := 24.0
+const BAR_HEIGHT := 30.0  # Must match scene's offset_bottom
 const BORDER_WIDTH := 4.0
 const BADGE_WIDTH := 60.0
 const BADGE_PADDING := 8.0
@@ -60,9 +60,9 @@ func _style_progress_bar():
 
 func _create_level_badge():
 	_level_badge = Control.new()
-	_level_badge.custom_minimum_size = Vector2(BADGE_WIDTH, BAR_HEIGHT)
-	_level_badge.size = Vector2(BADGE_WIDTH, BAR_HEIGHT)
-	_level_badge.position = Vector2(0, 0)
+	# Use anchors to match parent height
+	_level_badge.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	_level_badge.offset_right = BADGE_WIDTH
 	add_child(_level_badge)
 	
 	# Connect draw signal

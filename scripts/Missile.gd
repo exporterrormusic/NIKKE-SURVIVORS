@@ -98,6 +98,10 @@ func _draw():
         draw_circle(local_pos, size, smoke_col)
 
 func _physics_process(delta):
+    # Update target_pos if we have a valid target_node (for homing)
+    if target_node and is_instance_valid(target_node) and target_node is Node2D:
+        target_pos = target_node.global_position
+    
     var dir = (target_pos - global_position).normalized()
     velocity += dir * acceleration * delta
     if velocity.length() > max_speed:
@@ -151,8 +155,16 @@ func _spawn_burning_ground():
         fire.ember_color = Color(1.0, 0.8, 0.3, 0.8)
 
 func _on_body_entered(body):
-    if body != get_parent().get_node_or_null("Player"):
-        # Ignore other projectiles
-        if body.is_in_group("projectiles"):
-            return
-        call_deferred("explode")
+    # Ignore owner and allies
+    if body == owner_node:
+        return
+    if body.is_in_group("summoned_allies"):
+        return
+    if body.is_in_group("player_allies"):
+        return
+    if body == get_parent().get_node_or_null("Player"):
+        return
+    # Ignore other projectiles
+    if body.is_in_group("projectiles"):
+        return
+    call_deferred("explode")

@@ -1,5 +1,8 @@
 # Godot 4+ specific ignores
 .godot/
+
+# Reference project (not part of this game)
+NIKKE-GODOT - Copy/
 /android/
 
 NIKKE-GODOT - Copy/

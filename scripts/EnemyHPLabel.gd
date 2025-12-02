@@ -18,10 +18,17 @@ func update_values(current: int, maximum: int) -> void:
 	_max_hp = maximum
 	queue_redraw()
 
+func _process(_delta: float) -> void:
+	# Counter-scale to compensate for parent enemy scaling (keeps text crisp for elites/bosses)
+	if _enemy and is_instance_valid(_enemy):
+		var parent_scale: Vector2 = _enemy.scale
+		if parent_scale.x > 0 and parent_scale.y > 0:
+			scale = Vector2.ONE / parent_scale
+
 func _draw() -> void:
 	var text := "%d/%d" % [_current_hp, _max_hp]
 	var font := ThemeDB.fallback_font
-	var font_size := 12  # Larger font for readability
+	var font_size := 12  # Base font size
 	
 	# Get text size for centering
 	var text_size := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)

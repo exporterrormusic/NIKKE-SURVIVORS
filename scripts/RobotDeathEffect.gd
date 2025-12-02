@@ -70,15 +70,7 @@ func _ready() -> void:
 	_spawn_spark_burst()
 	_spawn_smoke_burst()
 	
-	# Trigger screen shake - stronger for overkill
-	var shake_strength := 12.0 if _is_overkill else 8.0
-	if on_screen_shake.is_valid():
-		on_screen_shake.call(0.15, shake_strength)
-	
-	# Also use CombatJuice for camera shake
-	var combat_juice_script = load("res://scripts/CombatJuice.gd")
-	if combat_juice_script and combat_juice_script.instance:
-		combat_juice_script.camera_shake(shake_strength)
+	# Camera shake removed - only crits trigger shake now
 	
 	set_process(true)
 

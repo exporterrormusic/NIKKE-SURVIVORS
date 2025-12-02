@@ -60,6 +60,7 @@ void fragment() {
 
 func _physics_process(delta):
 	global_position += velocity * delta
+	
 	lifetime += delta
 	if lifetime > 5.0:
 		queue_free()

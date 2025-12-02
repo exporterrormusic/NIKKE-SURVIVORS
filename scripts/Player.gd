@@ -25,6 +25,7 @@ const CharacterSwapEffectScript = preload("res://scripts/CharacterSwapEffect.gd"
 @export var attack_cooldown = 0.3
 @export var burst_max = 100.0
 @export var burst_per_hit = 5.0
+@export var crit_rate: float = 0.2  # 20% default crit rate
 
 @export var debug_upgrade_shop: bool = false
 @export var debug_movement: bool = false
@@ -59,8 +60,11 @@ var scarlet_special_unlocked = false
 var scarlet_burst_unlocked = false
 var rapunzel_special_unlocked = false
 var rapunzel_burst_unlocked = false
-var unlocked_characters = [1]  # Start with Snow White (index 1)
-var current_character = 1  # Start with Snow White
+var kilo_unlocked = false
+var kilo_special_unlocked = false
+var kilo_burst_unlocked = false
+var unlocked_characters = [1]  # Start with Commander (index 1)
+var current_character = 1  # Start with Commander
 var character_sprites = []
 var hp = 10
 var max_hp = 10
@@ -106,6 +110,21 @@ var snow_white_turret_recharging = false  # True when recharging after using tur
 var rapunzel_cross_cooldown = 10.0  # Seconds between cross spawns
 var rapunzel_cross_timer = 0.0  # Current cooldown timer (0 = ready)
 
+# Kilo ammo and special attack system
+var kilo_ammo = 6
+var kilo_max_ammo = 6
+var kilo_reload_time = 2.5
+var kilo_reloading = false
+var kilo_reload_timer = 0.0
+var kilo_special_cooldown = 3.0  # Seconds between Penetrating Blast uses
+var kilo_special_timer = 0.0  # Current cooldown timer (0 = ready)
+
+# Kilo burst state
+var kilo_burst_active = false
+var kilo_burst_timer = 0.0
+var kilo_burst_duration = 4.0  # Base duration 4s, upgraded to 8s
+var kilo_burst_invincible = false
+
 # Skill points notification UI reference
 var _skill_points_notify: Control = null
 
@@ -136,7 +155,8 @@ func _ready():
 	_burst_sounds = [
 		load("res://assets/characters/scarlet/burst.mp3"),
 		load("res://assets/characters/snow-white/burst.mp3"),
-		load("res://assets/characters/rapunzel/burst.mp3")
+		load("res://assets/characters/rapunzel/burst.mp3"),
+		load("res://assets/characters/kilo/burst.mp3")
 	]
 	
 	# Initialize overhead HUD with current values
@@ -150,7 +170,8 @@ func _ready():
 	character_sprites = [
 		{"texture": load("res://assets/characters/scarlet-sprite.png"), "fps": 12.5},
 		{"texture": load("res://assets/characters/snow-white-sprite.png"), "fps": 4.5},
-		{"texture": load("res://assets/characters/rapunzel-sprite.png"), "fps": 5.0}
+		{"texture": load("res://assets/characters/rapunzel-sprite.png"), "fps": 5.0},
+		{"texture": load("res://assets/characters/kilo-sprite.png"), "fps": 6.0}
 	]
 	
 	update_sprite()
@@ -180,6 +201,8 @@ func _is_current_character_burst_unlocked() -> bool:
 			return snow_burst_unlocked
 		2:  # Rapunzel
 			return rapunzel_burst_unlocked
+		3:  # Kilo
+			return kilo_burst_unlocked
 	return false
 
 func _get_talent_tree() -> Control:
@@ -316,6 +339,8 @@ func _attempt_burst_activation():
 		return
 	if current_character == 2 and not rapunzel_burst_unlocked:
 		return
+	if current_character == 3 and not kilo_burst_unlocked:
+		return
 
 	if use_burst():
 		_play_burst_voice()
@@ -323,7 +348,7 @@ func _attempt_burst_activation():
 
 func _update_burst_visibility():
 	# Unlock burst bar if ANY character has burst unlocked
-	var any_burst := snow_burst_unlocked or scarlet_burst_unlocked or rapunzel_burst_unlocked
+	var any_burst := snow_burst_unlocked or scarlet_burst_unlocked or rapunzel_burst_unlocked or kilo_burst_unlocked
 	if player_hud and player_hud.has_method("set_burst_unlocked"):
 		player_hud.set_burst_unlocked(any_burst)
 	if overhead_hud and overhead_hud.has_method("update_burst_unlocked"):
@@ -350,14 +375,22 @@ func _play_burst_voice():
 	var sound = _burst_sounds[current_character]
 	if sound == null:
 		return
-	var player = AudioStreamPlayer.new()
-	player.stream = sound
-	player.volume_db = 0.0
-	player.bus = "Master"
-	# Add to scene root so it doesn't get cut off if player moves/teleports
-	get_tree().root.add_child(player)
-	player.play()
-	player.finished.connect(player.queue_free)
+	
+	# Create completely independent audio player at scene root
+	# Use unique name with timestamp to avoid any conflicts
+	var root = get_tree().root
+	
+	var audio_player = AudioStreamPlayer.new()
+	audio_player.name = "BurstVoice_%d" % Time.get_ticks_msec()
+	audio_player.stream = sound
+	audio_player.volume_db = 10.0  # Very loud and clear
+	audio_player.bus = "Master"
+	audio_player.process_mode = Node.PROCESS_MODE_ALWAYS
+	root.add_child(audio_player)
+	audio_player.play()
+	
+	# Clean up when finished
+	audio_player.finished.connect(audio_player.queue_free)
 
 func _trigger_character_burst():
 	var aim_direction = (get_global_mouse_position() - global_position).normalized()
@@ -376,6 +409,8 @@ func _trigger_character_burst():
 			_activate_snow_white_burst(aim_direction)
 		2:  # Rapunzel
 			_activate_rapunzel_burst()
+		3:  # Kilo
+			_activate_kilo_burst()
 
 func _activate_scarlet_burst():
 	# Scarlet burst costs 50% of current HP
@@ -431,6 +466,34 @@ func _activate_rapunzel_burst():
 	get_parent().add_child(effect)
 	effect.global_position = global_position
 
+func _activate_kilo_burst():
+	# Kilo burst: Assign Priority - infinite ammo, rapid fire, invincibility
+	kilo_burst_active = true
+	
+	# Check for duration upgrade (8s instead of 4s)
+	var duration_level := get_talent_level(3, "burst_duration")
+	kilo_burst_duration = 8.0 if duration_level > 0 else 4.0
+	kilo_burst_timer = kilo_burst_duration
+	
+	# Always grant invincibility during burst
+	invincible = true
+	kilo_burst_invincible = true
+	
+	# Refill ammo during burst
+	kilo_ammo = kilo_max_ammo
+	_update_overhead_ammo()
+	
+	# Play shotgun sound to signal burst start
+	if audio_director:
+		audio_director.play_weapon_fire_sound("shotgun")
+
+func _end_kilo_burst():
+	kilo_burst_active = false
+	kilo_burst_timer = 0.0
+	# Always remove invincibility when burst ends
+	invincible = false
+	kilo_burst_invincible = false
+
 func add_xp(amount):
 	xp += amount
 	var leveled_up := false
@@ -444,8 +507,15 @@ func add_xp(amount):
 	if leveled_up:
 		if xp_ui and xp_ui.has_method("flash_level_up"):
 			xp_ui.flash_level_up()
-		if screen_flash and screen_flash.has_method("flash_level_up"):
-			screen_flash.flash_level_up()
+		# Spawn WoW-style golden glow effect around player
+		_spawn_level_up_glow()
+
+func _spawn_level_up_glow() -> void:
+	## Spawns the golden level-up glow effect around the player
+	var LevelUpGlowScript = preload("res://scripts/LevelUpGlow.gd")
+	var glow = LevelUpGlowScript.new()
+	get_parent().add_child(glow)
+	glow.attach_to_player(self)
 
 func update_xp_bar():
 	if xp_ui and xp_ui.has_method("set_xp"):
@@ -484,6 +554,10 @@ func _update_skill_points_notification(points: int):
 	var canvas := get_parent().get_node_or_null("CanvasLayer")
 	if canvas == null:
 		canvas = get_tree().root
+	
+	# Update overhead HUD arrow indicator
+	if overhead_hud:
+		overhead_hud.update_skill_points_available(points > 0)
 	
 	if points <= 0:
 		# Hide/remove notification if no points
@@ -597,7 +671,7 @@ func _show_talent_tree(add_point: bool = false):
 	if existing:
 		if add_point:
 			existing.add_skill_points(1)  # Add point for leveling up
-		existing.show_tree()
+		existing.show_tree(self)
 		shop_open = true
 		if get_parent().has_method("set_game_paused"):
 			get_parent().call_deferred("set_game_paused", true)
@@ -619,7 +693,7 @@ func _show_talent_tree(add_point: bool = false):
 	tree.tree_closed.connect(_on_talent_tree_closed)
 	
 	# Show the tree
-	tree.show_tree()
+	tree.show_tree(self)
 	shop_open = true
 	if get_parent().has_method("set_game_paused"):
 		get_parent().call_deferred("set_game_paused", true)
@@ -646,6 +720,8 @@ func _on_talent_unlocked(char_id: int, talent_id: String):
 			_apply_snow_talent(talent_id)
 		2:  # Rapunzel
 			_apply_rapunzel_talent(talent_id)
+		3:  # Kilo
+			_apply_kilo_talent(talent_id)
 	
 	# Update HUD to reflect any changes
 	if player_hud:
@@ -761,6 +837,38 @@ func _apply_rapunzel_talent(talent_id: String):
 			burst_current = burst_max
 			_update_burst_bar()
 		"burst_stun":
+			# Refresh burst gauge
+			burst_current = burst_max
+			_update_burst_bar()
+		"burst_invuln":
+			# Refresh burst gauge
+			burst_current = burst_max
+			_update_burst_bar()
+
+func _apply_kilo_talent(talent_id: String):
+	match talent_id:
+		"unlock":
+			kilo_unlocked = true
+			if not (3 in unlocked_characters):
+				unlocked_characters.append(3)
+				unlocked_characters.sort()
+		"special":
+			kilo_special_unlocked = true
+			# Refresh special cooldown
+			kilo_special_timer = 0
+		"special_burn":
+			# Refresh special cooldown
+			kilo_special_timer = 0
+		"special_size":
+			# Refresh special cooldown
+			kilo_special_timer = 0
+		"burst":
+			kilo_burst_unlocked = true
+			_update_burst_visibility()
+			# Refresh burst gauge
+			burst_current = burst_max
+			_update_burst_bar()
+		"burst_duration":
 			# Refresh burst gauge
 			burst_current = burst_max
 			_update_burst_bar()
@@ -918,8 +1026,27 @@ func _physics_process(_delta):
 	if attack_timer > 0:
 		attack_timer -= _delta
 
-	if Input.is_action_just_pressed("attack") and attack_timer <= 0 and stamina >= attack_stamina_cost:
-		stamina -= attack_stamina_cost
+	# Determine if we should fire
+	# Kilo burst mode: continuous fire while holding attack button
+	# Sin SMG / Crown Minigun / Commander AR: always continuous fire
+	var wants_attack := false
+	var is_kilo_burst := current_character == 3 and kilo_burst_active
+	var is_auto_fire: bool = current_character == 1 or current_character == 4 or current_character == 5  # Commander AR, Sin SMG, or Crown Minigun
+	if is_kilo_burst or is_auto_fire:
+		# Automatic fire during Kilo burst or auto-fire weapons - fires while button is held
+		wants_attack = Input.is_action_pressed("attack")
+	else:
+		# Normal semi-auto - only fires on press
+		wants_attack = Input.is_action_just_pressed("attack")
+
+	# During Kilo burst or auto-fire: no stamina requirement, free infinite attacks
+	var can_fire: bool = wants_attack and attack_timer <= 0
+	if not is_kilo_burst and not is_auto_fire:
+		can_fire = can_fire and stamina >= attack_stamina_cost
+	
+	if can_fire:
+		if not is_kilo_burst and not is_auto_fire:
+			stamina -= attack_stamina_cost
 		
 		# Bullet rhythm pulse for combat juice
 		var combat_juice_script = load("res://scripts/CombatJuice.gd")
@@ -987,7 +1114,31 @@ func _physics_process(_delta):
 				# Auto-reload when empty
 				if rapunzel_ammo <= 0:
 					_start_rapunzel_reload()
-		attack_timer = attack_cooldown
+		elif current_character == 3:  # Kilo
+			# During burst: infinite ammo, no reload needed
+			if kilo_burst_active:
+				# Burst mode: rapid fire with infinite ammo
+				_fire_kilo_shotgun(aim_direction, false)
+				if audio_director:
+					audio_director.play_weapon_fire_sound("shotgun")
+			elif kilo_reloading or kilo_ammo <= 0:
+				if not kilo_reloading and kilo_ammo <= 0:
+					_start_kilo_reload()
+			else:
+				kilo_ammo -= 1
+				_update_overhead_ammo()
+				# Fire shotgun pellets in a spread pattern
+				_fire_kilo_shotgun(aim_direction, false)
+				if audio_director:
+					audio_director.play_weapon_fire_sound("shotgun")
+				# Auto-reload when empty
+				if kilo_ammo <= 0:
+					_start_kilo_reload()
+		# Apply faster attack cooldown during Kilo's burst
+		if current_character == 3 and kilo_burst_active:
+			attack_timer = attack_cooldown * 0.3  # Much faster fire rate during burst
+		else:
+			attack_timer = attack_cooldown
 
 	if Input.is_action_just_pressed("thrust") and attack_timer <= 0 and stamina >= attack_stamina_cost:
 		stamina -= attack_stamina_cost
@@ -1070,6 +1221,21 @@ func _physics_process(_delta):
 					cross.global_position = global_position + aim_direction * 60
 					# Start cooldown
 					rapunzel_cross_timer = rapunzel_cross_cooldown
+		elif current_character == 3:  # Kilo
+			if kilo_special_unlocked and kilo_special_timer <= 0:
+				# Penetrating Blast: fire special shotgun with explosive beams
+				if kilo_ammo > 0 or kilo_burst_active:
+					if not kilo_burst_active:
+						kilo_ammo -= 1
+						_update_overhead_ammo()
+					_fire_kilo_shotgun(aim_direction, true)  # true = special attack
+					if audio_director:
+						audio_director.play_weapon_fire_sound("shotgun")
+					# Start cooldown
+					kilo_special_timer = kilo_special_cooldown
+					# Auto-reload if empty
+					if kilo_ammo <= 0 and not kilo_burst_active:
+						_start_kilo_reload()
 		attack_timer = attack_cooldown
 
 	if Input.is_action_just_pressed("dash") and input_vector != Vector2.ZERO and not dashing and not running and stamina >= dash_stamina_cost:
@@ -1082,6 +1248,12 @@ func _physics_process(_delta):
 		# transition into running when the dash ends.
 		_dash_press_timer = dash_press_grace
 		wants_running = Input.is_action_pressed("dash")
+		
+		# Notify camera for juicy lag effect
+		var camera = get_node_or_null("Camera2D")
+		if camera and camera.has_method("notify_dash"):
+			camera.notify_dash()
+		
 		# Scarlet special: if unlocked AND ammo available, dash lasts twice as long and spawns
 		# two special helpers: a forward piercing wave and a short-lived
 		# damage hitbox attached to the player to remove nearby enemies.
@@ -1375,6 +1547,55 @@ func _start_rapunzel_reload() -> void:
 		audio_director.play_weapon_reload_sound("rocket")
 
 
+func _start_kilo_reload() -> void:
+	if kilo_reloading:
+		return
+	kilo_reloading = true
+	kilo_reload_timer = kilo_reload_time
+	_update_overhead_ammo()
+	if audio_director:
+		audio_director.play_weapon_reload_sound("shotgun")
+
+
+func _fire_kilo_shotgun(aim_direction: Vector2, is_special: bool) -> void:
+	# Fire 5 pellets in a 15-degree spread pattern
+	var pellet_count := 5
+	var spread_angle := 15.0  # degrees
+	var half_spread := deg_to_rad(spread_angle / 2.0)
+	var base_angle := aim_direction.angle()
+	
+	# Get damage multiplier from burst
+	var damage_mult := 1.0
+	if kilo_burst_active:
+		damage_mult = 2.2
+	
+	# Calculate spawn offset
+	var spawn_offset := 60.0
+	
+	for i in range(pellet_count):
+		# Calculate pellet angle - evenly distributed across spread
+		var t := float(i) / float(pellet_count - 1) if pellet_count > 1 else 0.5
+		var pellet_angle := base_angle - half_spread + (t * deg_to_rad(spread_angle))
+		var pellet_dir := Vector2(cos(pellet_angle), sin(pellet_angle))
+		
+		# Create pellet (using bullet for now, will create proper pellet later)
+		var bullet_scene = preload("res://scenes/effects/Bullet.tscn")
+		var pellet = bullet_scene.instantiate()
+		get_parent().add_child(pellet)
+		pellet.global_position = global_position + pellet_dir * spawn_offset
+		pellet.rotation = pellet_angle
+		pellet.velocity = pellet_dir * 850  # Shotgun bullet speed
+		pellet.owner_node = self
+		pellet.pierce_all = false  # Pellets don't pierce by default
+		pellet.base_damage = int(35 * damage_mult)  # Shotgun damage per pellet
+		
+		# If special attack, enable penetrating blast effect
+		if is_special and kilo_special_unlocked:
+			pellet.set_meta("kilo_special", true)
+			pellet.set_meta("burn_level", get_talent_level(3, "special_burn"))
+			pellet.set_meta("size_level", get_talent_level(3, "special_size"))
+
+
 func _start_scarlet_special_reload() -> void:
 	if scarlet_special_reloading:
 		return
@@ -1407,6 +1628,22 @@ func _update_reloads(delta: float) -> void:
 			scarlet_special_reloading = false
 			scarlet_special_ammo = scarlet_special_max_ammo
 			_update_overhead_ammo()
+	
+	if kilo_reloading:
+		kilo_reload_timer -= delta
+		if kilo_reload_timer <= 0:
+			kilo_reloading = false
+			kilo_ammo = kilo_max_ammo
+			_update_overhead_ammo()
+	
+	if kilo_special_timer > 0:
+		kilo_special_timer -= delta
+	
+	# Update Kilo burst timer
+	if kilo_burst_active:
+		kilo_burst_timer -= delta
+		if kilo_burst_timer <= 0:
+			_end_kilo_burst()
 	
 	# Special ability cooldown timers
 	# Snow White turret recharge - when timer completes, refill ALL charges
@@ -1464,3 +1701,8 @@ func _update_overhead_ammo() -> void:
 			overhead_hud.update_ammo(snow_white_ammo, snow_white_max_ammo, snow_white_reloading, snow_white_reload_time)
 		2:  # Rapunzel
 			overhead_hud.update_ammo(rapunzel_ammo, rapunzel_max_ammo, rapunzel_reloading, rapunzel_reload_time)
+		3:  # Kilo
+			if kilo_burst_active:
+				overhead_hud.update_ammo(999, 999, false, 0.0)  # Infinite ammo during burst
+			else:
+				overhead_hud.update_ammo(kilo_ammo, kilo_max_ammo, kilo_reloading, kilo_reload_time)

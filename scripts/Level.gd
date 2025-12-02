@@ -13,9 +13,13 @@ var _wave_director: Node = null
 var _enemy_spawner: Node2D = null
 var _wave_ui: CanvasLayer = null
 var _enemy_container: Node2D = null
+var _combat_juice: Node = null
 
 func _ready():
 	_rng.randomize()
+	
+	# Setup CombatJuice system for camera effects
+	_setup_combat_juice()
 	
 	# Setup enemy container
 	_enemy_container = Node2D.new()
@@ -73,6 +77,37 @@ func _setup_night_glow() -> void:
 	# Disabled - environment CanvasModulate handles night tinting already
 	# Adding extra overlays makes it too dark
 	pass
+
+func _setup_combat_juice() -> void:
+	# Create CombatJuice system for camera effects
+	var CombatJuiceScript = load("res://scripts/CombatJuice.gd")
+	if CombatJuiceScript:
+		_combat_juice = Node.new()
+		_combat_juice.set_script(CombatJuiceScript)
+		_combat_juice.name = "CombatJuice"
+		add_child(_combat_juice)
+		print("[Level] CombatJuice system created")
+		
+		# Register camera - use call_deferred to ensure Player is ready
+		call_deferred("_register_combat_juice_camera")
+		
+		# Add chromatic aberration overlay to CanvasLayer
+		var canvas_layer = get_node_or_null("ScreenFlashLayer")
+		if canvas_layer and _combat_juice.has_method("get_chromatic_overlay"):
+			var overlay = _combat_juice.get_chromatic_overlay()
+			if overlay:
+				canvas_layer.add_child(overlay)
+
+func _register_combat_juice_camera() -> void:
+	if player:
+		var camera = player.get_node_or_null("Camera2D")
+		if camera and _combat_juice and _combat_juice.has_method("register_camera"):
+			_combat_juice.register_camera(camera)
+			print("[Level] Camera registered with CombatJuice")
+		else:
+			push_warning("[Level] Could not register camera - camera: ", camera, " combat_juice: ", _combat_juice)
+	else:
+		push_warning("[Level] Player not found for camera registration")
 
 func _initialize_random_environment() -> void:
 	if not environment or not environment.has_method("initialize_environment"):
@@ -304,9 +339,12 @@ func _on_wave_changed(wave_number: int) -> void:
 		var health_mult: float = _wave_director.get_health_multiplier()
 		print("[Level] Setting health multiplier to: ", health_mult)
 		_enemy_spawner.set_health_multiplier(health_mult)
-	# Update UI wave display
-	if _wave_ui and _wave_ui.has_method("update_wave"):
-		_wave_ui.update_wave(wave_number)
+	# Update the WaveDisplay label in the scene
+	var canvas := get_node_or_null("CanvasLayer")
+	if canvas:
+		var wave_display := canvas.get_node_or_null("WaveDisplay") as Label
+		if wave_display:
+			wave_display.text = "WAVE %d" % wave_number
 
 func _on_enemy_died(_enemy: Node2D) -> void:
 	pass  # Tracking handled automatically by container child count

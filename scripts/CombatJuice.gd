@@ -48,40 +48,47 @@ func _ready() -> void:
 	_setup_chromatic_overlay()
 	print("[CombatJuice] Initialized successfully!")
 
-func _process(delta: float) -> void:
+func _process(_delta: float) -> void:
+	# Use unscaled delta for hitstop/time dilation recovery
+	var real_delta = get_process_delta_time()
+	# When time_scale is 0, delta becomes 0 too, so calculate from real time
+	if Engine.time_scale < 0.01:
+		real_delta = 1.0 / 60.0  # Assume 60 FPS during complete freeze
+	
 	# Handle hitstop (freezes gameplay but not this node)
 	if _hitstop_remaining > 0:
-		_hitstop_remaining -= delta
+		_hitstop_remaining -= real_delta
 		if _hitstop_remaining <= 0:
 			Engine.time_scale = _time_scale_target
 	
 	# Recover time scale smoothly
 	if Engine.time_scale < _time_scale_target and _hitstop_remaining <= 0:
-		Engine.time_scale = move_toward(Engine.time_scale, _time_scale_target, delta * _time_scale_recovery_speed)
+		Engine.time_scale = move_toward(Engine.time_scale, _time_scale_target, real_delta * _time_scale_recovery_speed)
 	
 	# Recover time scale target back to 1.0
 	if _time_scale_target < 1.0:
-		_time_scale_target = move_toward(_time_scale_target, 1.0, delta * 2.0)
+		_time_scale_target = move_toward(_time_scale_target, 1.0, real_delta * 2.0)
 	
 	# Update chromatic aberration
-	_update_chromatic(delta)
+	_update_chromatic(real_delta)
 	
 	# Update camera effects
-	_update_camera(delta)
+	_update_camera(real_delta)
 	
 	# Update kill momentum
-	_update_kill_momentum(delta)
+	_update_kill_momentum(real_delta)
 	
 	# Update rhythm pulse
 	if _rhythm_pulse > 0:
-		_rhythm_pulse = move_toward(_rhythm_pulse, 0.0, delta * RHYTHM_DECAY)
+		_rhythm_pulse = move_toward(_rhythm_pulse, 0.0, real_delta * RHYTHM_DECAY)
 
 func _setup_chromatic_overlay() -> void:
-	# Create chromatic aberration shader
+	# Create chromatic aberration shader (Godot 4.x compatible)
 	var shader = Shader.new()
 	shader.code = """
 shader_type canvas_item;
 
+uniform sampler2D SCREEN_TEXTURE : hint_screen_texture, filter_linear_mipmap;
 uniform float aberration_strength : hint_range(0.0, 0.05) = 0.0;
 uniform vec2 aberration_direction = vec2(1.0, 0.0);
 
@@ -186,35 +193,61 @@ static func chromatic_pulse(strength: float = 0.02) -> void:
 static func camera_punch(direction: Vector2, strength: float = 10.0) -> void:
 	if instance:
 		instance._do_camera_punch(direction, strength)
+	else:
+		push_warning("[CombatJuice] camera_punch called but no instance!")
 
 func _do_camera_punch(direction: Vector2, strength: float) -> void:
+	if not _camera:
+		push_warning("[CombatJuice] camera_punch: no camera registered!")
+		return
 	_punch_velocity = direction.normalized() * strength
 
 ## Random camera shake - good for explosions
 static func camera_shake(strength: float = 5.0) -> void:
 	if instance:
-		instance._shake_offset = Vector2(
-			randf_range(-strength, strength),
-			randf_range(-strength, strength)
-		)
+		instance._do_camera_shake(strength)
+	else:
+		push_warning("[CombatJuice] camera_shake called but no instance!")
+
+func _do_camera_shake(strength: float) -> void:
+	if not _camera:
+		push_warning("[CombatJuice] camera_shake: no camera registered!")
+		return
+	_shake_offset = Vector2(
+		randf_range(-strength, strength),
+		randf_range(-strength, strength)
+	)
 
 ## Register a kill for momentum system
 static func register_kill(overkill_multiplier: float = 1.0) -> void:
 	if instance:
 		instance._do_register_kill(overkill_multiplier)
 
-func _do_register_kill(overkill_multiplier: float) -> void:
+func _do_register_kill(_overkill_multiplier: float) -> void:
 	_kill_count += 1
-	_kill_decay_timer = KILL_MOMENTUM_DECAY_DELAY
-	
-	# Add momentum based on overkill
-	var momentum_add = KILL_MOMENTUM_PER_KILL * overkill_multiplier
-	_kill_momentum = minf(_kill_momentum + momentum_add, KILL_MOMENTUM_MAX)
+	# Kill momentum (zoom out) disabled
+	# _kill_decay_timer = KILL_MOMENTUM_DECAY_DELAY
+	# var momentum_add = KILL_MOMENTUM_PER_KILL * overkill_multiplier
+	# _kill_momentum = minf(_kill_momentum + momentum_add, KILL_MOMENTUM_MAX)
 
 ## Trigger bullet rhythm pulse - call when firing
 static func bullet_rhythm_pulse() -> void:
 	if instance:
 		instance._rhythm_pulse = 1.0
+
+## Subtle running camera sway - call every frame while running
+static func running_sway(delta: float, move_direction: Vector2) -> void:
+	if instance:
+		instance._do_running_sway(delta, move_direction)
+
+func _do_running_sway(delta: float, move_direction: Vector2) -> void:
+	if not _camera:
+		return
+	# Subtle camera sway perpendicular to movement direction
+	var time = Time.get_ticks_msec() / 1000.0
+	var sway_amount = sin(time * 8.0) * 1.5  # Gentle oscillation
+	var perp = Vector2(-move_direction.y, move_direction.x).normalized()
+	_shake_offset = _shake_offset.lerp(perp * sway_amount, delta * 5.0)
 
 ## Full burst effect combo - hitstop + chromatic + time dilation
 static func burst_effect() -> void:

@@ -23,6 +23,11 @@ var _fade_time := 0.5
 var _timer := 0.0
 var _damage_timer := 0.0
 
+# Tracking behavior
+var track_during_charge: bool = true  # Lock direction at end of charge (elite) vs track during charge (boss)
+var track_during_fire: bool = false   # Slow tracking during firing (boss only)
+var tracking_speed: float = 0.3       # How fast beam rotates during firing (radians per second)
+
 # Direction locked when charging completes
 var _locked_direction := Vector2.RIGHT
 var _current_width := PREVIEW_WIDTH
@@ -31,12 +36,28 @@ var _current_width := PREVIEW_WIDTH
 var _beam_color := Color(1.0, 0.2, 0.1, 1.0)
 var _preview_color := Color(1.0, 0.3, 0.1, 0.4)
 
-func initialize(boss: Node2D, player: Node2D, charge_time: float, fire_time: float, fade_time: float) -> void:
+func initialize(boss: Node2D, player: Node2D, charge_time: float, fire_time: float, fade_time: float, is_boss: bool = true) -> void:
 	_boss = boss
 	_player = player
 	_charge_time = charge_time
 	_fire_time = fire_time
 	_fade_time = fade_time
+	
+	# Boss beams track during charge and slowly during fire
+	# Elite beams lock direction at start of charge, no tracking
+	if is_boss:
+		track_during_charge = true
+		track_during_fire = true
+		tracking_speed = 0.5  # Slow rotation during fire
+	else:
+		# Elite: lock direction immediately when beam starts charging
+		track_during_charge = false
+		track_during_fire = false
+		# Lock direction now
+		if _player and is_instance_valid(_player):
+			_locked_direction = (_player.global_position - _boss.global_position).normalized()
+			if _locked_direction == Vector2.ZERO:
+				_locked_direction = Vector2.RIGHT
 
 func _ready() -> void:
 	z_index = 100  # Draw on top
@@ -61,8 +82,8 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 func _process_charging(_delta: float) -> void:
-	# Track player during charge
-	if _player and is_instance_valid(_player):
+	# Track player during charge (only if enabled)
+	if track_during_charge and _player and is_instance_valid(_player):
 		_locked_direction = (_player.global_position - _boss.global_position).normalized()
 		if _locked_direction == Vector2.ZERO:
 			_locked_direction = Vector2.RIGHT
@@ -78,6 +99,18 @@ func _process_charging(_delta: float) -> void:
 		_current_width = BEAM_WIDTH
 
 func _process_firing(delta: float) -> void:
+	# Slow tracking during fire (boss only)
+	if track_during_fire and _player and is_instance_valid(_player):
+		var target_dir := (_player.global_position - _boss.global_position).normalized()
+		if target_dir != Vector2.ZERO:
+			# Slowly rotate toward player
+			var current_angle := _locked_direction.angle()
+			var target_angle := target_dir.angle()
+			var angle_diff := wrapf(target_angle - current_angle, -PI, PI)
+			var max_rotation := tracking_speed * delta
+			var rotation_amount := clampf(angle_diff, -max_rotation, max_rotation)
+			_locked_direction = _locked_direction.rotated(rotation_amount)
+	
 	# Maintain full width beam
 	_current_width = BEAM_WIDTH
 	

@@ -274,4 +274,4 @@ func hide_all() -> void:
 		_boss_warning.visible = false
 
 func update_wave(_wave_number: int) -> void:
-	pass  # Wave display removed
+	pass  # Wave display is handled by Level.gd via WaveDisplay label in scene

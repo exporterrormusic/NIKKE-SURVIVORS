@@ -1,0 +1,153 @@
+extends "res://scripts/characters/CharacterController.gd"
+class_name ScarletController
+## Scarlet - Melee fighter with sword attacks and dash abilities
+
+# Scarlet-specific state
+var special_ammo: int = 1
+var special_max_ammo: int = 1
+var special_reloading: bool = false
+var special_reload_timer: float = 0.0
+var special_reload_time: float = 4.0
+
+var damage_accumulator: float = 0.0  # Tracks fractional self-damage
+
+# Talent states
+var special_heal_level: int = 0
+var burst_execute_unlocked: bool = false
+var burst_vuln_unlocked: bool = false
+
+# Scripts for effects
+const ScarletBurstEffectScript = preload("res://scripts/ScarletBurstEffect.gd")
+
+func _on_initialize() -> void:
+	# Scarlet has unlimited basic attacks (melee)
+	max_ammo = -1
+	ammo = -1
+	special_ammo = special_max_ammo
+
+func _on_process(delta: float) -> void:
+	# Update special reload
+	if special_reloading:
+		special_reload_timer -= delta
+		if special_reload_timer <= 0:
+			special_reloading = false
+			special_ammo = special_max_ammo
+
+func _can_attack() -> bool:
+	return true  # Scarlet can always attack (melee)
+
+func _perform_attack(direction: Vector2) -> void:
+	# Fire sword slash (melee attack attached to player)
+	var slash_scene = load("res://scenes/effects/Slash.tscn")
+	if slash_scene:
+		var slash = slash_scene.instantiate()
+		slash.rotation = direction.angle()
+		player.add_child(slash)  # Attach to player, not parent
+		slash.position = Vector2.ZERO  # Centered on player
+	
+	# Play sword sound
+	_play_sound("sword")
+	
+	# Apply self-damage (3% of max HP per attack)
+	_apply_self_damage()
+
+func _can_use_special() -> bool:
+	return special_ammo > 0 and not special_reloading
+
+func _perform_special(direction: Vector2) -> void:
+	# Consume special ammo
+	special_ammo -= 1
+	_start_special_reload()
+	
+	# Spawn forward piercing wave
+	var wave_scene = load("res://scenes/effects/ScarletWave.tscn")
+	if wave_scene:
+		var w = wave_scene.instantiate()
+		w.rotation = direction.angle()
+		w.owner_node = player
+		w.pierce_all = true
+		w.damage = 8
+		if special_heal_level > 0:
+			w.heal_mode = true
+			var heal_percents := [0.0, 0.05, 0.15, 0.25]
+			w.heal_percent = heal_percents[special_heal_level]
+		player.get_parent().add_child(w)
+		w.global_position = player.global_position + direction * 36
+		w.velocity = direction.normalized() * 2400
+	
+	_play_sound("sword")
+	_apply_self_damage()
+
+func _start_special_reload() -> void:
+	special_reloading = true
+	special_reload_timer = special_reload_time
+
+func _on_burst_start() -> void:
+	# Scarlet burst costs 50% of current HP
+	var hp_cost = int(player.hp * 0.5)
+	player.hp = max(player.hp - hp_cost, 1)
+	player._update_health_display(-hp_cost, true)
+	
+	# Create burst effect
+	var effect = ScarletBurstEffectScript.new()
+	effect.owner_node = player
+	effect.execute_talent = burst_execute_unlocked
+	effect.vuln_talent = burst_vuln_unlocked
+	player.get_parent().add_child(effect)
+	effect.global_position = player.global_position
+	effect.burst_complete.connect(_on_burst_complete)
+	
+	_play_sound("sword")
+
+func _on_burst_complete(teleport_position: Vector2) -> void:
+	if teleport_position != Vector2.ZERO:
+		player.global_position = teleport_position
+	burst_active = false
+	burst_ended.emit()
+
+func _apply_self_damage() -> void:
+	# 3% of max HP per attack (accumulate fractions)
+	var damage_raw: float = player.max_hp * 0.03
+	damage_accumulator += damage_raw
+	
+	if damage_accumulator >= 1.0:
+		var int_damage: int = int(damage_accumulator)
+		damage_accumulator -= int_damage
+		
+		# Never reduce HP below 1
+		var old_hp: int = player.hp
+		player.hp = max(player.hp - int_damage, 1)
+		var actual_damage: int = old_hp - player.hp
+		
+		if actual_damage > 0:
+			player._update_health_display(-actual_damage, true)
+
+func _play_sound(weapon_type: String) -> void:
+	if player.audio_director:
+		player.audio_director.play_weapon_fire_sound(weapon_type)
+
+## Get weapon type name for audio
+func _get_weapon_type_name() -> String:
+	return "sword"
+
+## Apply talent upgrade
+func apply_talent(talent_id: String) -> void:
+	match talent_id:
+		"special":
+			special_unlocked = true
+			special_reloading = false  # Refresh cooldown
+			special_reload_timer = 0.0
+		"special_heal":
+			special_heal_level = mini(special_heal_level + 1, 3)
+			special_reloading = false  # Refresh cooldown
+			special_reload_timer = 0.0
+		"burst_execute":
+			burst_execute_unlocked = true
+		"burst_vuln":
+			burst_vuln_unlocked = true
+
+## Get special cooldown progress
+func get_special_cooldown_progress() -> float:
+	if special_reloading:
+		return 1.0 - (special_reload_timer / special_reload_time)
+	return 1.0

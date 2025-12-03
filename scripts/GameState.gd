@@ -11,11 +11,11 @@ extends Node
 ## Access via autoload: GameState.set_selected_characters([...])
 
 # Selected characters for the current run (character registry indices)
-# Default: Crown (5), Commander (1), Marian (4)
-var selected_character_indices: Array[int] = [5, 1, 4]
+# Default: Cecil (8), Nayuta (9), Marian (4)
+var selected_character_indices: Array[int] = [8, 9, 4]
 
 # The character the player controls (index into selected_character_indices, or registry index)
-var player_character_index: int = 1  # Default to Commander
+var player_character_index: int = 9  # Default to Nayuta
 
 # Character registry reference (loaded lazily)
 var _character_registry = null
@@ -30,8 +30,19 @@ func set_selected_characters(indices: Array[int]) -> void:
 	print("GameState: Selected characters set to indices: ", selected_character_indices)
 
 ## Get the 3 selected character indices for shop display
+## Returns order: [Support1, Main, Support2] for left, center, right display
 func get_shop_character_order() -> Array[int]:
+	# selected_character_indices is [Main, Support1, Support2]
+	# Shop wants: [Support1, Main, Support2] = left, center, right
+	if selected_character_indices.size() >= 3:
+		return [selected_character_indices[1], selected_character_indices[0], selected_character_indices[2]]
 	return selected_character_indices.duplicate()
+
+## Get the main character index (first selected, center in shop)
+func get_main_character() -> int:
+	if selected_character_indices.size() > 0:
+		return selected_character_indices[0]
+	return 0
 
 ## Set which character the player controls
 ## @param index: Character registry index
@@ -82,5 +93,5 @@ func _ensure_registry() -> void:
 
 ## Reset to default character selection
 func reset_selection() -> void:
-	selected_character_indices = [5, 1, 4]  # Crown, Commander, Marian
-	player_character_index = 1  # Commander
+	selected_character_indices = [8, 9, 4]  # Cecil, Nayuta, Marian
+	player_character_index = 9  # Nayuta

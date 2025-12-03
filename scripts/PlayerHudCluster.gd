@@ -78,14 +78,12 @@ var _current_stamina: float = 100.0
 var _burst_ready_state: bool = false
 var _burst_unlocked: bool = false  # Whether burst ability is unlocked
 
-# Character portraits - indices match Player.gd character indices
-var _character_portraits: Array[String] = [
-	"res://assets/characters/scarlet/portrait-sq.png",
-	"res://assets/characters/snow-white/portrait-sq.png",
-	"res://assets/characters/rapunzel/portrait-sq.png"
-]
+# Character portraits - dynamically loaded from GameState/CharacterRegistry
+var _character_portraits: Array[String] = []
+var _portrait_indices: Array[int] = []  # Map slot index to registry index
 
 func _ready() -> void:
+	_load_character_portraits()
 	_portrait_origin = _portrait_slot.position
 	_default_portrait_modulate = _portrait_texture.modulate
 	if auto_apply_styles:
@@ -98,6 +96,46 @@ func _ready() -> void:
 	set_burst_unlocked(false)
 	# Default to first character
 	set_character(0)
+
+func _load_character_portraits() -> void:
+	# Load portraits from GameState's selected characters
+	# Order: [Main, Support1, Support2] - same as selected_character_indices
+	_character_portraits.clear()
+	_portrait_indices.clear()
+	
+	# Try to get from GameState autoload
+	var game_state = Engine.get_singleton("GameState") if Engine.has_singleton("GameState") else null
+	if not game_state:
+		# Try loading via get_node
+		game_state = get_node_or_null("/root/GameState")
+	
+	if game_state:
+		# Use selected_character_indices directly (Main, Support1, Support2 order)
+		var selected: Array[int] = game_state.selected_character_indices.duplicate()
+		_portrait_indices = selected.duplicate()
+		
+		# Get CharacterRegistry to map indices to portrait paths
+		var CharacterRegistryClass = load("res://scripts/characters/CharacterRegistry.gd")
+		if CharacterRegistryClass:
+			var registry = CharacterRegistryClass.get_instance()
+			if registry:
+				var all_ids: Array[String] = registry.get_all_character_ids()
+				for idx in selected:
+					if idx >= 0 and idx < all_ids.size():
+						var char_id: String = all_ids[idx]
+						var folder_name: String = char_id.replace("_", "-")
+						_character_portraits.append("res://assets/characters/%s/portrait-sq.png" % folder_name)
+					else:
+						_character_portraits.append("")
+	
+	# Fallback if nothing loaded
+	if _character_portraits.is_empty():
+		_character_portraits = [
+			"res://assets/characters/scarlet/portrait-sq.png",
+			"res://assets/characters/commander/portrait-sq.png",
+			"res://assets/characters/marian/portrait-sq.png"
+		]
+		_portrait_indices = [0, 1, 4]
 
 func _setup_bar_value_labels() -> void:
 	# Create HP value label inside HP bar
@@ -133,11 +171,26 @@ func _update_bar_value_labels() -> void:
 		var burst_percent := int((_current_burst / _max_burst) * 100.0) if _max_burst > 0 else 0
 		_burst_value_label.text = "%d%%" % burst_percent
 
-func set_character(character_index: int, burst_unlocked: bool = true) -> void:
+func set_character(character_slot: int, burst_unlocked: bool = true) -> void:
 	if not is_inside_tree():
 		return
-	var index = clampi(character_index, 0, _character_portraits.size() - 1)
-	var portrait_path = _character_portraits[index]
+	
+	# Guard against empty portraits array
+	if _character_portraits.is_empty():
+		_load_character_portraits()
+	
+	if _character_portraits.is_empty():
+		return  # Still empty, can't set portrait
+	
+	# character_slot is the slot in the squad (0=Main, 1=Support1, 2=Support2)
+	# _character_portraits is in the same order, so use directly
+	if character_slot < 0 or character_slot >= _character_portraits.size():
+		character_slot = 0
+	
+	var portrait_path = _character_portraits[character_slot]
+	if portrait_path.is_empty():
+		return
+	
 	var texture = load(portrait_path) as Texture2D
 	if texture and _portrait_texture:
 		_portrait_texture.texture = texture

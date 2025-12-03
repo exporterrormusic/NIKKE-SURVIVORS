@@ -212,8 +212,65 @@ func _create_boundary_walls() -> void:
 		marker.position = corners[i] - Vector2(marker_size/2, marker_size/2)
 		add_child(marker)
 
-# Allow toggling map selector with a key (for testing)
+# Pause menu
+var _pause_menu: CanvasLayer = null
+
 func _input(event):
+	# Don't process if game is paused and pause menu is handling it
+	if _pause_menu and _pause_menu.visible:
+		return
+	
 	if event.is_action_pressed("ui_cancel"):  # ESC key
-		if map_selector:
-			map_selector.visible = !map_selector.visible
+		print("[Level] ESC pressed - toggling pause menu")
+		_toggle_pause_menu()
+		get_viewport().set_input_as_handled()
+
+func _toggle_pause_menu() -> void:
+	if not _pause_menu:
+		_setup_pause_menu()
+	
+	if _pause_menu.visible:
+		_pause_menu.hide_menu()
+	else:
+		_pause_menu.show_pause()
+
+func _setup_pause_menu() -> void:
+	var PauseMenuScript = load("res://scripts/ui/PauseMenu.gd")
+	_pause_menu = CanvasLayer.new()
+	_pause_menu.set_script(PauseMenuScript)
+	_pause_menu.name = "PauseMenu"
+	add_child(_pause_menu)
+	
+	# Connect signals
+	_pause_menu.restart_requested.connect(_on_restart_requested)
+	_pause_menu.resume_requested.connect(_on_resume_requested)
+	_pause_menu.settings_requested.connect(_on_settings_requested)
+	_pause_menu.character_select_requested.connect(_on_character_select_requested)
+	_pause_menu.quit_requested.connect(_on_quit_requested)
+
+func _on_restart_requested() -> void:
+	get_tree().paused = false
+	get_tree().reload_current_scene()
+
+func _on_resume_requested() -> void:
+	pass  # Already handled by hide_menu
+
+func _on_settings_requested() -> void:
+	var settings_scene = load("res://scenes/ui/SettingsMenu.tscn")
+	if settings_scene:
+		var settings = settings_scene.instantiate()
+		add_child(settings)
+
+func _on_character_select_requested() -> void:
+	get_tree().paused = false
+	get_tree().change_scene_to_file("res://scenes/ui/CharacterSelectMenuNew.tscn")
+
+func _on_quit_requested() -> void:
+	get_tree().paused = false
+	get_tree().change_scene_to_file("res://scenes/ui/MainMenu.tscn")
+
+func show_defeat_menu() -> void:
+	## Called when player dies to show the defeat screen
+	if not _pause_menu:
+		_setup_pause_menu()
+	_pause_menu.show_defeat()

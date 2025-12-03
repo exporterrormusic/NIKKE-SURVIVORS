@@ -1,0 +1,507 @@
+[gd_scene load_steps=9 format=3 uid="uid://settings_menu_scene"]
+
+[ext_resource type="Script" path="res://scripts/ui/SettingsMenu.gd" id="1"]
+[ext_resource type="FontFile" path="res://resources/fonts/futura_condensed_extra_bold.tres" id="2"]
+[ext_resource type="FontFile" path="res://resources/fonts/pretendard_bold.tres" id="3"]
+[ext_resource type="Script" path="res://scripts/ui/components/VenetianBlindsBackground.gd" id="4"]
+
+[sub_resource type="StyleBoxFlat" id="panel_style"]
+bg_color = Color(0.04, 0.055, 0.08, 0.97)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+border_color = Color(0.95, 0.95, 0.98, 0.9)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_left = 12
+corner_radius_bottom_right = 12
+shadow_color = Color(0, 0, 0, 0.5)
+shadow_size = 6
+shadow_offset = Vector2(3, 3)
+
+[sub_resource type="StyleBoxFlat" id="tab_active_style"]
+bg_color = Color(0.95, 0.95, 0.98, 1.0)
+border_width_bottom = 4
+border_color = Color(1.0, 1.0, 1.0, 1.0)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+
+[sub_resource type="StyleBoxFlat" id="tab_inactive_style"]
+bg_color = Color(0.082, 0.11, 0.157, 0.95)
+border_width_bottom = 2
+border_color = Color(0.4, 0.4, 0.45, 0.8)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+
+[sub_resource type="StyleBoxFlat" id="letterbox_style"]
+bg_color = Color(0.04, 0.055, 0.08, 0.95)
+border_width_top = 3
+border_width_bottom = 3
+border_color = Color(0.75, 0.75, 0.8, 0.8)
+shadow_color = Color(0, 0, 0, 0.35)
+shadow_size = 3
+shadow_offset = Vector2(2, 2)
+
+[node name="SettingsMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="Background" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("4")
+
+[node name="Overlay" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 0.35)
+
+[node name="TopBar" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+offset_top = 24.0
+offset_bottom = 184.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("letterbox_style")
+
+[node name="TitleLabel" type="Label" parent="TopBar"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_right = -24.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
+theme_override_colors/font_outline_color = Color(0.1, 0.1, 0.15, 1)
+theme_override_constants/outline_size = 3
+theme_override_fonts/font = ExtResource("2")
+theme_override_font_sizes/font_size = 90
+text = "SETTINGS"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ContentPanel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.25
+anchor_top = 0.25
+anchor_right = 0.75
+anchor_bottom = 0.9
+offset_top = 0.0
+offset_bottom = 0.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("panel_style")
+
+[node name="VBox" type="VBoxContainer" parent="ContentPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 32.0
+offset_top = 28.0
+offset_right = -32.0
+offset_bottom = -28.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 20
+
+[node name="TabBar" type="HBoxContainer" parent="ContentPanel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 0
+alignment = 1
+
+[node name="AudioTab" type="Button" parent="ContentPanel/VBox/TabBar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 50)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
+theme_override_colors/font_pressed_color = Color(0.1, 0.1, 0.12, 1)
+theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("tab_inactive_style")
+theme_override_styles/hover = SubResource("tab_inactive_style")
+theme_override_styles/pressed = SubResource("tab_active_style")
+text = "AUDIO"
+
+[node name="VideoTab" type="Button" parent="ContentPanel/VBox/TabBar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 50)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
+theme_override_colors/font_pressed_color = Color(0.1, 0.1, 0.12, 1)
+theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("tab_inactive_style")
+theme_override_styles/hover = SubResource("tab_inactive_style")
+theme_override_styles/pressed = SubResource("tab_active_style")
+text = "VIDEO"
+
+[node name="ControlsTab" type="Button" parent="ContentPanel/VBox/TabBar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 50)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
+theme_override_colors/font_pressed_color = Color(0.1, 0.1, 0.12, 1)
+theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("tab_inactive_style")
+theme_override_styles/hover = SubResource("tab_inactive_style")
+theme_override_styles/pressed = SubResource("tab_active_style")
+text = "CONTROLS"
+
+[node name="ContentSeparator" type="ColorRect" parent="ContentPanel/VBox"]
+custom_minimum_size = Vector2(0, 2)
+layout_mode = 2
+color = Color(0.75, 0.75, 0.8, 0.4)
+
+[node name="PanelContainer" type="Control" parent="ContentPanel/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="AudioPanel" type="VBoxContainer" parent="ContentPanel/VBox/PanelContainer"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 32
+alignment = 1
+
+[node name="MusicRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/AudioPanel"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="Label" type="Label" parent="ContentPanel/VBox/PanelContainer/AudioPanel/MusicRow"]
+custom_minimum_size = Vector2(160, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 26
+text = "MUSIC"
+
+[node name="MusicSlider" type="HSlider" parent="ContentPanel/VBox/PanelContainer/AudioPanel/MusicRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 1
+min_value = 0.0
+max_value = 1.0
+step = 0.01
+value = 1.0
+
+[node name="MusicValue" type="Label" parent="ContentPanel/VBox/PanelContainer/AudioPanel/MusicRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 24
+text = "100%"
+horizontal_alignment = 2
+
+[node name="SfxRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/AudioPanel"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="Label" type="Label" parent="ContentPanel/VBox/PanelContainer/AudioPanel/SfxRow"]
+custom_minimum_size = Vector2(160, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 26
+text = "SFX"
+
+[node name="SfxSlider" type="HSlider" parent="ContentPanel/VBox/PanelContainer/AudioPanel/SfxRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 1
+min_value = 0.0
+max_value = 1.0
+step = 0.01
+value = 1.0
+
+[node name="SfxValue" type="Label" parent="ContentPanel/VBox/PanelContainer/AudioPanel/SfxRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 24
+text = "100%"
+horizontal_alignment = 2
+
+[node name="VideoPanel" type="VBoxContainer" parent="ContentPanel/VBox/PanelContainer"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 32
+alignment = 1
+
+[node name="ResolutionRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/VideoPanel"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="Label" type="Label" parent="ContentPanel/VBox/PanelContainer/VideoPanel/ResolutionRow"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 26
+text = "RESOLUTION"
+
+[node name="ResolutionOptions" type="OptionButton" parent="ContentPanel/VBox/PanelContainer/VideoPanel/ResolutionRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 44)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 20
+
+[node name="FullscreenRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/VideoPanel"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="Label" type="Label" parent="ContentPanel/VBox/PanelContainer/VideoPanel/FullscreenRow"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 26
+text = "FULLSCREEN"
+
+[node name="FullscreenOptions" type="OptionButton" parent="ContentPanel/VBox/PanelContainer/VideoPanel/FullscreenRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 44)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 20
+
+[node name="ControlsPanel" type="VBoxContainer" parent="ContentPanel/VBox/PanelContainer"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="MoveUpRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/ControlsPanel"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="Label" type="Label" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/MoveUpRow"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 22
+text = "MOVE UP"
+
+[node name="MoveUpButton" type="Button" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/MoveUpRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
+theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 20
+text = "W"
+
+[node name="MoveDownRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/ControlsPanel"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="Label" type="Label" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/MoveDownRow"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 22
+text = "MOVE DOWN"
+
+[node name="MoveDownButton" type="Button" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/MoveDownRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
+theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 20
+text = "S"
+
+[node name="MoveLeftRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/ControlsPanel"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="Label" type="Label" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/MoveLeftRow"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 22
+text = "MOVE LEFT"
+
+[node name="MoveLeftButton" type="Button" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/MoveLeftRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
+theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 20
+text = "A"
+
+[node name="MoveRightRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/ControlsPanel"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="Label" type="Label" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/MoveRightRow"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 22
+text = "MOVE RIGHT"
+
+[node name="MoveRightButton" type="Button" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/MoveRightRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
+theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 20
+text = "D"
+
+[node name="DashRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/ControlsPanel"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="Label" type="Label" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/DashRow"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 22
+text = "DASH"
+
+[node name="DashButton" type="Button" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/DashRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
+theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 20
+text = "SPACE"
+
+[node name="BurstRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/ControlsPanel"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="Label" type="Label" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/BurstRow"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 22
+text = "BURST"
+
+[node name="BurstButton" type="Button" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/BurstRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
+theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 20
+text = "Q"
+
+[node name="SpecialAttackRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/ControlsPanel"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="Label" type="Label" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/SpecialAttackRow"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 22
+text = "SPECIAL ATTACK"
+
+[node name="SpecialAttackButton" type="Button" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/SpecialAttackRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
+theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 20
+text = "E"
+
+[node name="PauseRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/ControlsPanel"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="Label" type="Label" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/PauseRow"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 22
+text = "PAUSE"
+
+[node name="PauseButton" type="Button" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/PauseRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
+theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 20
+text = "ESCAPE"

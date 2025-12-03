@@ -2,6 +2,7 @@ extends Control
 
 ## HoloCure-style XP Bar UI
 ## Clean red fill, white border, level badge, smooth fill animations
+## Uses custom drawing to ensure border is always on top of fill
 
 # Colors - HoloCure style flat colors
 const BAR_FILL_COLOR := Color(0.9, 0.15, 0.15, 1.0)  # Bright red
@@ -12,79 +13,61 @@ const BADGE_BORDER_COLOR := Color(1.0, 1.0, 1.0, 0.9)
 const TEXT_COLOR := Color(1.0, 1.0, 1.0, 1.0)
 
 # Sizing
-const BAR_HEIGHT := 30.0  # Must match scene's offset_bottom
+const BAR_HEIGHT := 30.0
 const BORDER_WIDTH := 4.0
 const BADGE_WIDTH := 60.0
 const BADGE_PADDING := 8.0
 const CORNER_RADIUS := 4
 
-var _progress_bar: ProgressBar = null
-var _level_badge: Control = null
 var _current_level: int = 1
 var _display_value: float = 0.0
 var _target_value: float = 0.0
+var _max_value: float = 100.0
 var _fill_tween: Tween = null
 
 func _ready():
-	_progress_bar = get_node_or_null("ProgressBar")
-	if _progress_bar:
-		_style_progress_bar()
+	# Hide the ProgressBar child - we'll draw manually
+	var progress_bar = get_node_or_null("ProgressBar")
+	if progress_bar:
+		progress_bar.visible = false
 	
-	# Create level badge
-	_create_level_badge()
+	queue_redraw()
 
-func _style_progress_bar():
-	# Background style
-	var bg_style := StyleBoxFlat.new()
-	bg_style.bg_color = BAR_BG_COLOR
-	bg_style.border_color = BAR_BORDER_COLOR
-	bg_style.set_border_width_all(int(BORDER_WIDTH))
-	bg_style.set_corner_radius_all(CORNER_RADIUS)
+func _draw():
+	var bar_left := BADGE_WIDTH + BADGE_PADDING
+	var bar_width := size.x - bar_left
+	var bar_rect := Rect2(bar_left, 0, bar_width, size.y)
 	
-	# Fill style
-	var fill_style := StyleBoxFlat.new()
-	fill_style.bg_color = BAR_FILL_COLOR
-	fill_style.set_corner_radius_all(CORNER_RADIUS - 1)
-	# Add slight expand margin so fill looks good inside border
-	fill_style.expand_margin_left = -1
-	fill_style.expand_margin_right = -1
-	fill_style.expand_margin_top = -1
-	fill_style.expand_margin_bottom = -1
+	# 1. Draw bar background
+	_draw_rounded_rect(bar_rect, BAR_BG_COLOR, CORNER_RADIUS)
 	
-	_progress_bar.add_theme_stylebox_override("background", bg_style)
-	_progress_bar.add_theme_stylebox_override("fill", fill_style)
+	# 2. Draw fill (inset by border width)
+	var fill_inset := BORDER_WIDTH
+	var fill_rect := Rect2(
+		bar_rect.position.x + fill_inset,
+		bar_rect.position.y + fill_inset,
+		bar_rect.size.x - fill_inset * 2,
+		bar_rect.size.y - fill_inset * 2
+	)
 	
-	# Adjust bar position to make room for badge
-	_progress_bar.offset_left = BADGE_WIDTH + BADGE_PADDING
-	_progress_bar.custom_minimum_size.y = BAR_HEIGHT
-
-func _create_level_badge():
-	_level_badge = Control.new()
-	# Use anchors to match parent height
-	_level_badge.set_anchors_preset(Control.PRESET_LEFT_WIDE)
-	_level_badge.offset_right = BADGE_WIDTH
-	add_child(_level_badge)
+	var fill_percent := _display_value / _max_value if _max_value > 0 else 0.0
+	fill_percent = clampf(fill_percent, 0.0, 1.0)
 	
-	# Connect draw signal
-	_level_badge.draw.connect(_on_badge_draw)
-	_level_badge.queue_redraw()
-
-func _on_badge_draw():
-	if not _level_badge:
-		return
+	if fill_percent > 0.0:
+		var filled_width := fill_rect.size.x * fill_percent
+		var filled_rect := Rect2(fill_rect.position, Vector2(filled_width, fill_rect.size.y))
+		_draw_rounded_rect(filled_rect, BAR_FILL_COLOR, maxi(1, CORNER_RADIUS - 2))
 	
-	var rect := Rect2(Vector2.ZERO, _level_badge.size)
+	# 3. Draw border ON TOP of everything
+	_draw_rounded_border(bar_rect, BAR_BORDER_COLOR, CORNER_RADIUS, BORDER_WIDTH)
 	
-	# Draw background
-	var style := StyleBoxFlat.new()
-	style.bg_color = BADGE_BG_COLOR
-	style.border_color = BADGE_BORDER_COLOR
-	style.set_border_width_all(int(BORDER_WIDTH))
-	style.set_corner_radius_all(CORNER_RADIUS)
-	_level_badge.draw_style_box(style, rect)
+	# 4. Draw level badge
+	var badge_rect := Rect2(0, 0, BADGE_WIDTH, size.y)
+	_draw_rounded_rect(badge_rect, BADGE_BG_COLOR, CORNER_RADIUS)
+	_draw_rounded_border(badge_rect, BADGE_BORDER_COLOR, CORNER_RADIUS, BORDER_WIDTH)
 	
-	# Draw level text
-	var font := _level_badge.get_theme_font("font")
+	# 5. Draw level text
+	var font := get_theme_font("font")
 	if font == null:
 		font = ThemeDB.fallback_font
 	
@@ -92,21 +75,56 @@ func _on_badge_draw():
 	var font_size := 14
 	var text_size := font.get_string_size(level_text, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size)
 	var text_pos := Vector2(
-		(rect.size.x - text_size.x) / 2,
-		(rect.size.y + text_size.y) / 2 - 2
+		(badge_rect.size.x - text_size.x) / 2,
+		(badge_rect.size.y + text_size.y) / 2 - 2
 	)
-	_level_badge.draw_string(font, text_pos, level_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, TEXT_COLOR)
+	draw_string(font, text_pos, level_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, TEXT_COLOR)
+
+func _draw_rounded_rect(rect: Rect2, color: Color, radius: int) -> void:
+	# Simple rounded rectangle using polygon
+	var points := _get_rounded_rect_points(rect, radius)
+	draw_colored_polygon(points, color)
+
+func _draw_rounded_border(rect: Rect2, color: Color, radius: int, width: float) -> void:
+	# Draw border as lines
+	var points := _get_rounded_rect_points(rect, radius)
+	points.append(points[0])  # Close the loop
+	for i in range(points.size() - 1):
+		draw_line(points[i], points[i + 1], color, width, true)
+
+func _get_rounded_rect_points(rect: Rect2, radius: int) -> PackedVector2Array:
+	var points := PackedVector2Array()
+	var r := float(mini(radius, int(min(rect.size.x, rect.size.y) / 2)))
+	var segments_per_corner := 4
+	
+	# Top-left corner
+	for i in range(segments_per_corner + 1):
+		var angle := PI + (PI / 2.0) * float(i) / float(segments_per_corner)
+		points.append(Vector2(rect.position.x + r + cos(angle) * r, rect.position.y + r + sin(angle) * r))
+	
+	# Top-right corner
+	for i in range(segments_per_corner + 1):
+		var angle := PI * 1.5 + (PI / 2.0) * float(i) / float(segments_per_corner)
+		points.append(Vector2(rect.position.x + rect.size.x - r + cos(angle) * r, rect.position.y + r + sin(angle) * r))
+	
+	# Bottom-right corner
+	for i in range(segments_per_corner + 1):
+		var angle := 0.0 + (PI / 2.0) * float(i) / float(segments_per_corner)
+		points.append(Vector2(rect.position.x + rect.size.x - r + cos(angle) * r, rect.position.y + rect.size.y - r + sin(angle) * r))
+	
+	# Bottom-left corner
+	for i in range(segments_per_corner + 1):
+		var angle := PI / 2.0 + (PI / 2.0) * float(i) / float(segments_per_corner)
+		points.append(Vector2(rect.position.x + r + cos(angle) * r, rect.position.y + rect.size.y - r + sin(angle) * r))
+	
+	return points
 
 func set_level(level: int):
 	_current_level = level
-	if _level_badge:
-		_level_badge.queue_redraw()
+	queue_redraw()
 
 func set_xp(current: float, max_value: float, animate: bool = true):
-	if not _progress_bar:
-		return
-	
-	_progress_bar.max_value = max_value
+	_max_value = max_value
 	_target_value = current
 	
 	if animate and abs(_target_value - _display_value) > 0.1:
@@ -120,18 +138,14 @@ func set_xp(current: float, max_value: float, animate: bool = true):
 		_fill_tween.tween_method(_update_display_value, _display_value, _target_value, 0.3)
 	else:
 		_display_value = _target_value
-		_progress_bar.value = _display_value
+		queue_redraw()
 
 func _update_display_value(value: float):
 	_display_value = value
-	if _progress_bar:
-		_progress_bar.value = _display_value
+	queue_redraw()
 
 func flash_level_up():
-	# Quick flash effect on the badge when leveling up
-	if not _level_badge:
-		return
-	
+	# Quick flash effect
 	var tween := create_tween()
-	tween.tween_property(_level_badge, "modulate", Color(1.5, 1.5, 0.8, 1.0), 0.1)
-	tween.tween_property(_level_badge, "modulate", Color.WHITE, 0.2)
+	tween.tween_property(self, "modulate", Color(1.5, 1.5, 0.8, 1.0), 0.1)
+	tween.tween_property(self, "modulate", Color.WHITE, 0.2)

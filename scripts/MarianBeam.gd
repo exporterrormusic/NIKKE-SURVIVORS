@@ -242,6 +242,7 @@ func _create_burn_area() -> void:
 	_burn_area = Node2D.new()
 	_burn_area.set_script(_get_burn_area_script())
 	_burn_area.z_index = 5
+	_burn_area.global_position = Vector2.ZERO  # Keep at origin, use global coords
 	get_parent().add_child(_burn_area)
 
 func _get_burn_area_script() -> GDScript:
@@ -337,42 +338,123 @@ func _deal_damage() -> void:
 			if age >= point_lifespan:
 				continue
 			if _point_in_rect(epos, br.corners):
-				var fade: float = 1.0 - (age / point_lifespan)
-				var dmg := int(4.0 * fade)
+				var time_left: float = point_lifespan - age
+				var dmg := 4
+				if time_left < 1.0:
+					dmg = int(4.0 * time_left)
 				if dmg > 0 and enemy.has_method("take_damage"):
 					enemy.take_damage(dmg, false, Vector2.ZERO)
 				break
 
 func _point_in_rect(p: Vector2, corners: Array) -> bool:
-	# Check if point is inside the quad using cross products
-	for i in range(4):
-		var a: Vector2 = corners[i]
-		var b: Vector2 = corners[(i + 1) % 4]
-		var edge: Vector2 = b - a
-		var to_point: Vector2 = p - a
-		if edge.cross(to_point) > 0:
-			return false
-	return true
+	# Check if point is inside the quad - use expanded bounds for damage
+	var c0: Vector2 = corners[0]
+	var c1: Vector2 = corners[1]
+	var c2: Vector2 = corners[2]
+	var c3: Vector2 = corners[3]
+	
+	# Get the center and axes of the rectangle
+	var center: Vector2 = (c0 + c2) * 0.5
+	var axis1: Vector2 = (c1 - c0).normalized()
+	var axis2: Vector2 = (c3 - c0).normalized()
+	var half_len1: float = (c1 - c0).length() * 0.5
+	var half_len2: float = (c3 - c0).length() * 0.5
+	
+	# Project point onto axes
+	var local: Vector2 = p - center
+	var proj1: float = abs(local.dot(axis1))
+	var proj2: float = abs(local.dot(axis2))
+	
+	return proj1 <= half_len1 and proj2 <= half_len2
 
 func _draw() -> void:
 	for br in burn_rects:
 		var age: float = _current_time - br.time
-		var fade: float = 1.0 - (age / point_lifespan)
-		if fade <= 0.0:
+		var time_left: float = point_lifespan - age
+		# Only fade in last 1 second
+		var alpha: float = 1.0
+		if time_left < 1.0:
+			alpha = time_left
+		if alpha <= 0.0:
 			continue
 		
-		# Convert corners to local coordinates
+		# Convert corners to local coordinates and create wavy organic shape
 		var local_corners: PackedVector2Array = PackedVector2Array()
 		for c in br.corners:
 			local_corners.append(c - global_position)
 		
-		# Draw the burn rectangle with shader-like coloring
-		var base_color := Color(0.08, 0.02, 0.02, 0.9 * fade)
-		draw_colored_polygon(local_corners, base_color)
+		# Create organic wavy polygon with many points along edges
+		var organic_shape: PackedVector2Array = _make_organic_polygon(local_corners, _current_time, age)
 		
-		# Draw ember overlay
-		var ember_color := Color(0.4, 0.08, 0.0, 0.5 * fade)
-		draw_colored_polygon(local_corners, ember_color)
+		# Draw multiple soft blur layers from outside in
+		var blur5: PackedVector2Array = _expand_organic(organic_shape, 50.0)
+		draw_colored_polygon(blur5, Color(0.08, 0.015, 0.0, 0.12 * alpha))
+		
+		var blur4: PackedVector2Array = _expand_organic(organic_shape, 35.0)
+		draw_colored_polygon(blur4, Color(0.1, 0.02, 0.0, 0.18 * alpha))
+		
+		var blur3: PackedVector2Array = _expand_organic(organic_shape, 22.0)
+		draw_colored_polygon(blur3, Color(0.12, 0.025, 0.0, 0.25 * alpha))
+		
+		var blur2: PackedVector2Array = _expand_organic(organic_shape, 12.0)
+		draw_colored_polygon(blur2, Color(0.1, 0.02, 0.01, 0.4 * alpha))
+		
+		var blur1: PackedVector2Array = _expand_organic(organic_shape, 5.0)
+		draw_colored_polygon(blur1, Color(0.09, 0.02, 0.01, 0.6 * alpha))
+		
+		# Draw the burn core
+		var base_color := Color(0.07, 0.015, 0.015, 0.8 * alpha)
+		draw_colored_polygon(organic_shape, base_color)
+		
+		# Draw ember glow overlay
+		var ember_color := Color(0.35, 0.07, 0.0, 0.35 * alpha)
+		draw_colored_polygon(organic_shape, ember_color)
+
+func _make_organic_polygon(corners: PackedVector2Array, time: float, age: float) -> PackedVector2Array:
+	# Create organic wavy shape by subdividing edges and adding noise
+	var result := PackedVector2Array()
+	var num_corners := corners.size()
+	var points_per_edge := 8  # More points = smoother waves
+	
+	for i in range(num_corners):
+		var start: Vector2 = corners[i]
+		var end: Vector2 = corners[(i + 1) % num_corners]
+		var edge_dir: Vector2 = (end - start).normalized()
+		var edge_normal: Vector2 = Vector2(-edge_dir.y, edge_dir.x)
+		var edge_len: float = (end - start).length()
+		
+		for j in range(points_per_edge):
+			var t: float = float(j) / float(points_per_edge)
+			var pos: Vector2 = start.lerp(end, t)
+			
+			# Add wavy displacement using multiple sine waves
+			var wave_seed: float = pos.x * 0.02 + pos.y * 0.015 + time * 0.5
+			var wave1: float = sin(wave_seed * 3.0 + age * 0.3) * 8.0
+			var wave2: float = sin(wave_seed * 7.0 - time * 0.8) * 4.0
+			var wave3: float = sin(wave_seed * 13.0 + age * 0.5) * 2.0
+			var displacement: float = wave1 + wave2 + wave3
+			
+			# Reduce displacement near corners for smoother transitions
+			var corner_blend: float = min(t, 1.0 - t) * 4.0
+			corner_blend = clamp(corner_blend, 0.0, 1.0)
+			displacement *= corner_blend
+			
+			result.append(pos + edge_normal * displacement)
+	
+	return result
+
+func _expand_organic(corners: PackedVector2Array, amount: float) -> PackedVector2Array:
+	# Expand polygon outward for blur layers
+	var center := Vector2.ZERO
+	for c in corners:
+		center += c
+	center /= corners.size()
+	
+	var expanded := PackedVector2Array()
+	for c in corners:
+		var dir: Vector2 = (c - center).normalized()
+		expanded.append(c + dir * amount)
+	return expanded
 '
 	script.reload()
 	return script

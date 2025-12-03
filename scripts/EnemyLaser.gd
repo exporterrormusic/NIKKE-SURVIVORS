@@ -59,7 +59,7 @@ func _ready() -> void:
 	
 	# Setup collision
 	collision_layer = 8   # Enemy projectile layer
-	collision_mask = 1    # Hit player layer
+	collision_mask = 1 | 8   # Hit player layer (1) and ally layer (8)
 	monitoring = true
 	monitorable = false
 	

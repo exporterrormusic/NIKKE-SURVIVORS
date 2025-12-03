@@ -48,7 +48,8 @@ var _glow_time: float = 0.0
 var _initialized: bool = false
 
 # Per-character reload progress tracking to prevent reset on swap
-var _reload_progress_per_char: Array = [0.0, 0.0, 0.0, 0.0]  # Scarlet, Snow White, Rapunzel, Kilo
+# Supports all 10 characters: Scarlet, Commander, Rapunzel, Kilo, Marian, Crown, Snow White, Sin, Cecil, Nayuta
+var _reload_progress_per_char: Array = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
 # Special ability cooldown tracking
 var _special_cooldown_progress: float = 0.0  # 0 = on cooldown, 1 = ready
@@ -114,7 +115,7 @@ func _process(delta: float) -> void:
 		_reload_progress += delta / _reload_time
 		_reload_progress = minf(_reload_progress, 1.0)
 		# Store in per-character array
-		if _current_character >= 0 and _current_character < 4:
+		if _current_character >= 0 and _current_character < 10:
 			_reload_progress_per_char[_current_character] = _reload_progress
 	
 	queue_redraw()
@@ -145,102 +146,45 @@ func _draw() -> void:
 	var ammo_top := TOP_OFFSET_Y + HEALTH_BAR_HEIGHT + BAR_SPACING
 	var ammo_rect := Rect2(Vector2(left_x, ammo_top), Vector2(HEALTH_BAR_WIDTH, AMMO_BAR_HEIGHT))
 	
-	if _current_character == 0:
-		# Scarlet - special attack has 1 ammo with cooldown when unlocked
-		if _is_reloading:
-			# Draw reload animation - bar fills up from left to right (same as other characters)
-			draw_rect(ammo_rect, ammo_background_color, true)
-			
-			# Draw the filling progress bar with pulsing effect (red-tinted for Scarlet)
-			var pulse := sin(_glow_time * 4.0) * 0.15 + 0.85
-			var reload_fill_color := Color(
-				1.0 * pulse,  # Red-tinted for Scarlet
-				0.4 * pulse,
-				0.4 * pulse,
-				0.8
+	# Show ammo count or reload animation for all characters
+	if _is_reloading:
+		# Draw reload animation - bar fills up from left to right
+		draw_rect(ammo_rect, ammo_background_color, true)
+		
+		# Draw the filling progress bar with pulsing effect
+		var pulse := sin(_glow_time * 4.0) * 0.15 + 0.85
+		var reload_fill_color := Color(
+			ammo_reloading_color.r * pulse + 0.2,
+			ammo_reloading_color.g * pulse + 0.1,
+			ammo_reloading_color.b * pulse,
+			ammo_reloading_color.a
+		)
+		var fill_width := HEALTH_BAR_WIDTH * _reload_progress
+		if fill_width > 0:
+			var fill_rect := Rect2(ammo_rect.position, Vector2(fill_width, AMMO_BAR_HEIGHT))
+			draw_rect(fill_rect, reload_fill_color, true)
+		
+		# Draw moving highlight line at the fill edge
+		if _reload_progress > 0.02 and _reload_progress < 0.98:
+			var line_x := left_x + fill_width
+			var highlight_color := Color(1.0, 1.0, 1.0, 0.6)
+			draw_line(
+				Vector2(line_x, ammo_top + 1),
+				Vector2(line_x, ammo_top + AMMO_BAR_HEIGHT - 1),
+				highlight_color, 2.0
 			)
-			var fill_width := HEALTH_BAR_WIDTH * _reload_progress
-			if fill_width > 0:
-				var fill_rect := Rect2(ammo_rect.position, Vector2(fill_width, AMMO_BAR_HEIGHT))
-				draw_rect(fill_rect, reload_fill_color, true)
-			
-			# Draw moving highlight line at the fill edge
-			if _reload_progress > 0.02 and _reload_progress < 0.98:
-				var line_x := left_x + fill_width
-				var highlight_color := Color(1.0, 1.0, 1.0, 0.6)
-				draw_line(
-					Vector2(line_x, ammo_top + 1),
-					Vector2(line_x, ammo_top + AMMO_BAR_HEIGHT - 1),
-					highlight_color, 2.0
-				)
-			
-			draw_rect(ammo_rect, ammo_border_color, false, BORDER_THICKNESS)
-			
-			# Show reload text
-			var ammo_center := Vector2(0, ammo_top + AMMO_BAR_HEIGHT * 0.5)
-			_draw_bar_text("RELOAD", ammo_center, 7)
-		elif _scarlet_special_unlocked and _current_ammo > 0:
-			# Has ammo - show full bar with "READY"
-			draw_rect(ammo_rect, ammo_background_color, true)
-			var scarlet_fill := Color(1.0, 0.4, 0.4, 1.0)  # Red for Scarlet
-			draw_rect(ammo_rect, scarlet_fill, true)
-			draw_rect(ammo_rect, ammo_border_color, false, BORDER_THICKNESS)
-			var ammo_center := Vector2(0, ammo_top + AMMO_BAR_HEIGHT * 0.5)
-			_draw_bar_text("READY", ammo_center, 8)
-		elif not _scarlet_special_unlocked:
-			# Special not unlocked - show locked state (grey)
-			var locked_bg := Color(0.15, 0.15, 0.18, 0.92)
-			var locked_border := Color(0.35, 0.35, 0.4, 1.0)
-			draw_rect(ammo_rect, locked_bg, true)
-			draw_rect(ammo_rect, locked_border, false, BORDER_THICKNESS)
-			var ammo_center := Vector2(0, ammo_top + AMMO_BAR_HEIGHT * 0.5)
-			_draw_bar_text("LOCKED", ammo_center, 7)
-		else:
-			# No ammo, not reloading (shouldn't happen normally)
-			draw_rect(ammo_rect, ammo_background_color, true)
-			draw_rect(ammo_rect, ammo_border_color, false, BORDER_THICKNESS)
-			var ammo_center := Vector2(0, ammo_top + AMMO_BAR_HEIGHT * 0.5)
-			_draw_bar_text("0/1", ammo_center, 8)
+		
+		draw_rect(ammo_rect, ammo_border_color, false, BORDER_THICKNESS)
+		
+		# Show reload text
+		var ammo_center := Vector2(0, ammo_top + AMMO_BAR_HEIGHT * 0.5)
+		_draw_bar_text("RELOAD", ammo_center, 7)
 	else:
-		# Snow White or Rapunzel - show ammo count or reload animation
-		if _is_reloading:
-			# Draw reload animation - bar fills up from left to right
-			draw_rect(ammo_rect, ammo_background_color, true)
-			
-			# Draw the filling progress bar with pulsing effect
-			var pulse := sin(_glow_time * 4.0) * 0.15 + 0.85
-			var reload_fill_color := Color(
-				ammo_reloading_color.r * pulse + 0.2,
-				ammo_reloading_color.g * pulse + 0.1,
-				ammo_reloading_color.b * pulse,
-				ammo_reloading_color.a
-			)
-			var fill_width := HEALTH_BAR_WIDTH * _reload_progress
-			if fill_width > 0:
-				var fill_rect := Rect2(ammo_rect.position, Vector2(fill_width, AMMO_BAR_HEIGHT))
-				draw_rect(fill_rect, reload_fill_color, true)
-			
-			# Draw moving highlight line at the fill edge
-			if _reload_progress > 0.02 and _reload_progress < 0.98:
-				var line_x := left_x + fill_width
-				var highlight_color := Color(1.0, 1.0, 1.0, 0.6)
-				draw_line(
-					Vector2(line_x, ammo_top + 1),
-					Vector2(line_x, ammo_top + AMMO_BAR_HEIGHT - 1),
-					highlight_color, 2.0
-				)
-			
-			draw_rect(ammo_rect, ammo_border_color, false, BORDER_THICKNESS)
-			
-			# Show reload text
-			var ammo_center := Vector2(0, ammo_top + AMMO_BAR_HEIGHT * 0.5)
-			_draw_bar_text("RELOAD", ammo_center, 7)
-		else:
-			# Normal ammo display
-			_draw_bar(ammo_rect, float(_current_ammo), float(_max_ammo), ammo_background_color, ammo_fill_color, ammo_border_color)
-			var ammo_text := "%d/%d" % [_current_ammo, _max_ammo]
-			var ammo_center := Vector2(0, ammo_top + AMMO_BAR_HEIGHT * 0.5)
-			_draw_bar_text(ammo_text, ammo_center, 8)
+		# Normal ammo display
+		_draw_bar(ammo_rect, float(_current_ammo), float(_max_ammo), ammo_background_color, ammo_fill_color, ammo_border_color)
+		var ammo_text := "%d/%d" % [_current_ammo, _max_ammo]
+		var ammo_center := Vector2(0, ammo_top + AMMO_BAR_HEIGHT * 0.5)
+		_draw_bar_text(ammo_text, ammo_center, 8)
 	
 	# Draw burst bar
 	var burst_top := ammo_top + AMMO_BAR_HEIGHT + BAR_SPACING
@@ -596,6 +540,8 @@ func _draw_special_icon(center: Vector2) -> void:
 			_draw_turret_icon(center, icon_color)
 		7:  # Sin - Mind control/charm icon
 			_draw_mind_control_icon(center, icon_color)
+		8:  # Cecil - Drone icon
+			_draw_drone_icon(center, icon_color)
 
 func _draw_sword_icon(center: Vector2, color: Color) -> void:
 	# Simple sword shape - scaled for 35px indicator
@@ -826,6 +772,34 @@ func _draw_horse_icon(center: Vector2, color: Color) -> void:
 	draw_line(center + Vector2(-4, -6), center + Vector2(-7, -1), mane_color, 1.5)
 	draw_line(center + Vector2(-5, -4), center + Vector2(-8, 2), mane_color, 1.5)
 
+func _draw_drone_icon(center: Vector2, color: Color) -> void:
+	# Drone/robot icon for Cecil's drone companions
+	var accent := Color(color.r * 0.7, color.g * 0.7, color.b * 0.7, color.a)
+	var blue_tint := Color(0.3, 0.7, 1.0, color.a)  # Cecil's blue theme
+	
+	# Main drone body (circular)
+	var body_color := blue_tint if _special_cooldown_progress >= 1.0 else color
+	draw_circle(center, 7.0, body_color)
+	draw_circle(center, 5.0, accent)
+	
+	# Central eye/lens
+	draw_circle(center, 2.5, Color(0.2, 0.5, 0.9, color.a))
+	draw_circle(center + Vector2(-0.5, -0.5), 1.0, Color(1.0, 1.0, 1.0, 0.7))
+	
+	# Propeller arms (4 directions)
+	var arm_color := body_color
+	for i in range(4):
+		var angle := i * PI * 0.5 + PI * 0.25  # 45 degree offset
+		var arm_start := center + Vector2(cos(angle), sin(angle)) * 6
+		var arm_end := center + Vector2(cos(angle), sin(angle)) * 11
+		draw_line(arm_start, arm_end, arm_color, 2.0)
+		# Small propeller circle at end
+		draw_circle(arm_end, 2.5, accent)
+	
+	# Antenna on top
+	draw_line(center + Vector2(0, -7), center + Vector2(0, -11), arm_color, 1.5)
+	draw_circle(center + Vector2(0, -11), 1.5, blue_tint)
+
 func _draw_bar_text(text: String, center_pos: Vector2, font_size: int) -> void:
 	var font := ThemeDB.fallback_font
 	# Get text size for proper centering
@@ -885,34 +859,15 @@ func _process_initial_owner() -> void:
 	queue_redraw()
 
 func _update_ammo_from_player() -> void:
+	# Ammo is now updated via update_ammo() calls from PlayerCore
+	# This function serves as a fallback for initial setup
 	if not is_instance_valid(_player):
 		return
-	match _current_character:
-		0:  # Scarlet - unlimited
-			_current_ammo = 1
-			_max_ammo = 1
-			_is_reloading = false
-		1:  # Snow White
-			if "snow_white_ammo" in _player:
-				_current_ammo = int(_player.snow_white_ammo)
-			if "snow_white_max_ammo" in _player:
-				_max_ammo = int(_player.snow_white_max_ammo)
-			if "snow_white_reloading" in _player:
-				_is_reloading = bool(_player.snow_white_reloading)
-		2:  # Rapunzel
-			if "rapunzel_ammo" in _player:
-				_current_ammo = int(_player.rapunzel_ammo)
-			if "rapunzel_max_ammo" in _player:
-				_max_ammo = int(_player.rapunzel_max_ammo)
-			if "rapunzel_reloading" in _player:
-				_is_reloading = bool(_player.rapunzel_reloading)
-		3:  # Kilo
-			if "kilo_ammo" in _player:
-				_current_ammo = int(_player.kilo_ammo)
-			if "kilo_max_ammo" in _player:
-				_max_ammo = int(_player.kilo_max_ammo)
-			if "kilo_reloading" in _player:
-				_is_reloading = bool(_player.kilo_reloading)
+	# Default to showing "full ammo" if no controller has updated us yet
+	if _max_ammo <= 0:
+		_current_ammo = 1
+		_max_ammo = 1
+		_is_reloading = false
 
 func _connect_player_signals() -> void:
 	if not is_instance_valid(_player):
@@ -976,7 +931,7 @@ func update_ammo(current: int, maximum: int, is_reloading: bool, reload_time: fl
 		# If we weren't reloading before but now we are, check stored progress
 		if not _is_reloading:
 			# Starting reload - use stored progress for this character (could be mid-reload from swap)
-			if _current_character >= 0 and _current_character < 4:
+			if _current_character >= 0 and _current_character < 10:
 				_reload_progress = _reload_progress_per_char[_current_character]
 			else:
 				_reload_progress = 0.0
@@ -984,7 +939,7 @@ func update_ammo(current: int, maximum: int, is_reloading: bool, reload_time: fl
 	else:
 		# Not reloading - reset progress for this character
 		_reload_progress = 0.0
-		if _current_character >= 0 and _current_character < 4:
+		if _current_character >= 0 and _current_character < 10:
 			_reload_progress_per_char[_current_character] = 0.0
 	
 	_is_reloading = is_reloading
@@ -992,13 +947,13 @@ func update_ammo(current: int, maximum: int, is_reloading: bool, reload_time: fl
 
 func update_character(character_index: int) -> void:
 	# Store current character's reload progress before switching
-	if _current_character >= 0 and _current_character < 4:
+	if _current_character >= 0 and _current_character < 10:
 		_reload_progress_per_char[_current_character] = _reload_progress
 	
 	_current_character = character_index
 	
 	# Restore new character's reload progress
-	if character_index >= 0 and character_index < 3:
+	if character_index >= 0 and character_index < 10:
 		_reload_progress = _reload_progress_per_char[character_index]
 	
 	_update_ammo_from_player()

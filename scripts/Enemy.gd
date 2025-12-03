@@ -15,7 +15,9 @@ var _hp_overlay: Node2D = null
 const STOP_DISTANCE := 45.0
 const DAMAGE_DISTANCE := 50.0
 const DAMAGE_COOLDOWN := 1.0
+const CLONE_AGGRO_RANGE := 300.0  # Range at which enemies will target clones instead of player
 var _damage_timer := 0.0
+var _current_target: Node2D = null  # Current attack target (player or clone)
 
 var is_stunned = false
 var stun_timer = 0.0
@@ -137,14 +139,20 @@ func _physics_process(delta: float) -> void:
 	_damage_timer -= delta
 	_laser_cooldown -= delta
 	
-	var to_player: Vector2 = player.global_position - global_position
-	var dist: float = to_player.length()
-	var dir: Vector2 = to_player.normalized() if dist > 0 else Vector2.ZERO
+	# Find best target (clone if nearby, otherwise player)
+	_current_target = _find_best_target()
+	
+	if not _current_target or not is_instance_valid(_current_target):
+		_current_target = player
+	
+	var to_target: Vector2 = _current_target.global_position - global_position
+	var dist: float = to_target.length()
+	var dir: Vector2 = to_target.normalized() if dist > 0 else Vector2.ZERO
 	
 	# Handle charging state
 	if _is_charging:
 		_charge_timer += delta
-		# Update charge direction to track player
+		# Update charge direction to track target
 		_charge_direction = dir
 		# Update charge effect position and direction
 		_update_charge_effect()
@@ -156,17 +164,17 @@ func _physics_process(delta: float) -> void:
 		# Don't move while charging
 		velocity = Vector2.ZERO
 	else:
-		# Chase player, but stop at STOP_DISTANCE
+		# Chase target, but stop at STOP_DISTANCE
 		if dist > STOP_DISTANCE:
 			global_position += dir * speed * delta
 		
 		# Deal damage when close
 		if dist < DAMAGE_DISTANCE and _damage_timer <= 0:
-			if player and player.has_method("take_damage"):
-				player.take_damage(1)
+			if _current_target and _current_target.has_method("take_damage"):
+				_current_target.take_damage(1)
 			_damage_timer = DAMAGE_COOLDOWN
 		
-		# Attempt to start charging laser at player
+		# Attempt to start charging laser at target
 		if _can_shoot:
 			_attempt_laser_attack(dist, dir)
 	
@@ -174,6 +182,35 @@ func _physics_process(delta: float) -> void:
 	velocity = dir * speed if dist > STOP_DISTANCE else Vector2.ZERO
 	if _animator:
 		_animator.update_state(velocity, dir)
+
+func _find_best_target() -> Node2D:
+	"""Find the best target to attack. Prioritize nearby clones, otherwise target player."""
+	# Check for nearby clones first
+	var tree := get_tree()
+	if tree:
+		var clones := tree.get_nodes_in_group("nayuta_clones")
+		var nearest_clone: Node2D = null
+		var nearest_dist: float = CLONE_AGGRO_RANGE
+		
+		for clone in clones:
+			if not is_instance_valid(clone) or not clone is Node2D:
+				continue
+			# Skip dying clones
+			if clone.get("_is_dying") == true:
+				continue
+			if clone.get("current_hp") != null and clone.get("current_hp") <= 0:
+				continue
+			
+			var dist := global_position.distance_to((clone as Node2D).global_position)
+			if dist < nearest_dist:
+				nearest_dist = dist
+				nearest_clone = clone as Node2D
+		
+		if nearest_clone:
+			return nearest_clone
+	
+	# Default to player
+	return player
 
 func _attempt_laser_attack(distance: float, direction: Vector2) -> void:
 	# Check if we can start charging

@@ -47,8 +47,9 @@ var audio_director = null
 var _registry: RefCounted = null  # CharacterRegistry
 var _controllers: Array = []  # CharacterController instances
 var _current_controller: RefCounted = null  # Current CharacterController
-var current_character: int = 1  # Start with Snow White
-var unlocked_characters: Array[int] = [1]
+var _selected_char_indices: Array[int] = []  # Selected characters from GameState
+var current_character: int = 0  # Slot index (0=Main, 1=Support1, 2=Support2)
+var unlocked_characters: Array[int] = [0]  # Start with Main character unlocked
 
 # Burst sounds
 var _burst_sounds: Array = []
@@ -106,27 +107,54 @@ func _init_audio() -> void:
 func _init_character_system() -> void:
 	_registry = CharacterRegistryScript.get_instance()
 	
-	# Pre-create controllers for all characters
-	for i in range(_registry.get_character_count()):
-		var char_id = _registry.get_all_character_ids()[i]
-		var controller = _registry.create_controller(char_id, self)
-		_controllers.append(controller)
+	# Load selected characters from GameState
+	var game_state = get_node_or_null("/root/GameState")
+	if game_state:
+		_selected_char_indices = game_state.selected_character_indices.duplicate()
+		print("[PlayerCore] Loaded selected characters: ", _selected_char_indices)
+	else:
+		# Fallback defaults
+		_selected_char_indices = [0, 1, 4]  # Scarlet, Commander, Marian
+		print("[PlayerCore] Using fallback characters: ", _selected_char_indices)
+	
+	# Create controllers only for selected characters
+	_controllers.clear()
+	var all_ids = _registry.get_all_character_ids()
+	for char_idx in _selected_char_indices:
+		if char_idx >= 0 and char_idx < all_ids.size():
+			var char_id = all_ids[char_idx]
+			var controller = _registry.create_controller(char_id, self)
+			_controllers.append(controller)
+			print("[PlayerCore] Created controller for %s (index %d)" % [char_id, char_idx])
+		else:
+			_controllers.append(null)
+			push_warning("[PlayerCore] Invalid character index: %d" % char_idx)
+	
+	# Start with Main character (slot 0)
+	current_character = 0
+	unlocked_characters = [0]
 	
 	# Set initial controller
-	if current_character < _controllers.size():
+	if current_character < _controllers.size() and _controllers[current_character] != null:
 		_current_controller = _controllers[current_character]
 	
-	# Load burst sounds
+	# Load burst sounds for selected characters
 	_burst_sounds = []
-	for char_id in _registry.get_all_character_ids():
-		var sound = _registry.get_burst_sound(char_id)
-		_burst_sounds.append(sound)
+	for char_idx in _selected_char_indices:
+		if char_idx >= 0 and char_idx < all_ids.size():
+			var char_id = all_ids[char_idx]
+			var sound = _registry.get_burst_sound(char_id)
+			_burst_sounds.append(sound)
+		else:
+			_burst_sounds.append(null)
 
 func _init_ui() -> void:
 	if overhead_hud:
 		overhead_hud.update_health(hp, max_hp)
 		overhead_hud.update_burst(burst_current, burst_max)
-		overhead_hud.update_character(current_character)
+		# Pass registry index (not slot index) for proper ammo display
+		var registry_idx: int = _selected_char_indices[current_character] if current_character < _selected_char_indices.size() else 0
+		overhead_hud.update_character(registry_idx)
 		_update_overhead_ammo()
 	update_xp_bar()
 
@@ -140,16 +168,24 @@ func update_sprite() -> void:
 		push_warning("[PlayerCore] update_sprite: animator or registry missing")
 		return
 	
-	var char_data = _registry.get_character_by_index(current_character)
+	# current_character is slot index (0, 1, 2)
+	# _selected_char_indices maps slot to registry index
+	if current_character < 0 or current_character >= _selected_char_indices.size():
+		push_warning("[PlayerCore] update_sprite: current_character %d out of bounds" % current_character)
+		return
+	
+	var registry_idx: int = _selected_char_indices[current_character]
+	var char_data = _registry.get_character_by_index(registry_idx)
 	if char_data:
 		var texture = char_data.get_sprite()
 		if texture:
 			# Default animation settings - could be in CharacterData
 			_animator.configure(texture, 3, 4, 6.0, 0.2)
+			print("[PlayerCore] Loaded sprite for slot %d (registry %d)" % [current_character, registry_idx])
 		else:
-			push_warning("[PlayerCore] update_sprite: No texture for character %d" % current_character)
+			push_warning("[PlayerCore] update_sprite: No texture for character %d" % registry_idx)
 	else:
-		push_warning("[PlayerCore] update_sprite: No char_data for index %d" % current_character)
+		push_warning("[PlayerCore] update_sprite: No char_data for index %d" % registry_idx)
 	
 	if player_hud and player_hud.is_inside_tree():
 		player_hud.set_character(current_character, is_burst_unlocked())
@@ -157,7 +193,9 @@ func update_sprite() -> void:
 func is_burst_unlocked() -> bool:
 	if _current_controller:
 		# Check if burst talent is unlocked for this character
-		return _get_talent_level(current_character, "burst") > 0
+		# Use registry index for talent lookup
+		var registry_idx: int = _selected_char_indices[current_character] if current_character < _selected_char_indices.size() else 0
+		return _get_talent_level(registry_idx, "burst") > 0
 	return false
 
 func _get_talent_tree() -> Control:
@@ -207,6 +245,13 @@ func take_damage(dmg: int) -> void:
 	if _current_controller and _current_controller.is_invincible():
 		return
 	
+	# Check if Cecil's shield can absorb the hit
+	if _current_controller is CecilController:
+		var cecil_ctrl := _current_controller as CecilController
+		if cecil_ctrl.try_absorb_damage():
+			# Shield absorbed the hit
+			return
+	
 	var prev_hp = hp
 	hp -= dmg
 	
@@ -230,7 +275,18 @@ func take_damage(dmg: int) -> void:
 	_update_health_display(hp - prev_hp, true)
 	
 	if hp <= 0:
-		pass  # Game over
+		_on_player_death()
+
+func _on_player_death() -> void:
+	# Find the Level node and trigger defeat menu
+	var level_node = get_parent()
+	if level_node and level_node.has_method("show_defeat_menu"):
+		level_node.show_defeat_menu()
+	else:
+		# Fallback: try to find Level in tree
+		var root = get_tree().current_scene
+		if root and root.has_method("show_defeat_menu"):
+			root.show_defeat_menu()
 
 func heal(amount: int) -> void:
 	var prev_hp = hp
@@ -369,15 +425,20 @@ func _add_skill_point() -> void:
 	_update_skill_points_notification(existing.get_skill_points())
 
 func _on_talent_unlocked(char_id: int, talent_id: String) -> void:
+	# char_id is a registry index, we need to convert to slot index
+	var slot_idx: int = _selected_char_indices.find(char_id)
+	
 	# Unlock character if this is an unlock talent
 	if talent_id == "unlock":
-		if char_id not in unlocked_characters:
-			unlocked_characters.append(char_id)
+		# Find which slot this registry index corresponds to
+		if slot_idx >= 0 and slot_idx not in unlocked_characters:
+			unlocked_characters.append(slot_idx)
 			unlocked_characters.sort()
+			print("[PlayerCore] Unlocked character slot %d (registry %d)" % [slot_idx, char_id])
 	
-	# Forward talent to controller
-	if char_id < _controllers.size():
-		var controller = _controllers[char_id]
+	# Forward talent to controller - use slot index
+	if slot_idx >= 0 and slot_idx < _controllers.size():
+		var controller = _controllers[slot_idx]
 		if controller and controller.has_method("apply_talent"):
 			controller.apply_talent(talent_id)
 	
@@ -497,7 +558,9 @@ func _animate_skill_points_notification() -> void:
 
 func _update_burst_visibility() -> void:
 	# Burst bar should only be visible for the CURRENT character if they have burst unlocked
-	var current_has_burst := _get_talent_level(current_character, "burst") > 0
+	# Use registry index for talent lookup
+	var registry_idx: int = _selected_char_indices[current_character] if current_character < _selected_char_indices.size() else 0
+	var current_has_burst := _get_talent_level(registry_idx, "burst") > 0
 	
 	if player_hud and player_hud.has_method("set_burst_unlocked"):
 		player_hud.set_burst_unlocked(current_has_burst)
@@ -531,7 +594,9 @@ func switch_character(direction: int) -> void:
 	_update_burst_visibility()  # Update burst bar for new character
 	
 	if overhead_hud:
-		overhead_hud.update_character(current_character)
+		# Pass registry index (not slot index) for proper ammo display
+		var registry_idx: int = _selected_char_indices[current_character] if current_character < _selected_char_indices.size() else 0
+		overhead_hud.update_character(registry_idx)
 
 func _trigger_swap_effect() -> void:
 	if not is_instance_valid(_swap_effect):
@@ -652,8 +717,8 @@ func _handle_attacks(aim_direction: Vector2, _delta: float) -> void:
 	# Check if Kilo burst mode is active for automatic fire
 	var is_kilo_burst: bool = _current_controller is KiloController and _current_controller.burst_active
 	
-	# Check if Commander (AR), Sin (SMG), Crown (Minigun), or Marian (Minigun) - always auto-fire
-	var is_auto_fire: bool = _current_controller is CommanderController or _current_controller is SinController or _current_controller is CrownController or _current_controller is MarianController
+	# Check if Commander (AR), Sin (SMG), Cecil (SMG), Crown (Minigun), Marian (Minigun), or Nayuta (SMG) - always auto-fire
+	var is_auto_fire: bool = _current_controller is CommanderController or _current_controller is SinController or _current_controller is CecilController or _current_controller is CrownController or _current_controller is MarianController or _current_controller is NayutaController
 	
 	# Primary attack - during Kilo burst or auto-fire weapons: continuous while holding, no stamina cost
 	var wants_attack := false
@@ -785,7 +850,9 @@ func _select_character_by_index(index: int) -> void:
 		_update_burst_visibility()  # Update burst bar for new character
 		
 		if overhead_hud:
-			overhead_hud.update_character(current_character)
+			# Pass registry index (not slot index) for proper ammo display
+			var registry_idx: int = _selected_char_indices[current_character] if current_character < _selected_char_indices.size() else 0
+			overhead_hud.update_character(registry_idx)
 
 func _try_manual_reload() -> void:
 	# Allow player to manually reload with R key

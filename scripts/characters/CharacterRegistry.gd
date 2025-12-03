@@ -26,6 +26,8 @@ const CONTROLLER_SCRIPTS = {
 	"crown": preload("res://scripts/characters/CrownController.gd"),
 	"commander": preload("res://scripts/characters/CommanderController.gd"),
 	"marian": preload("res://scripts/characters/MarianController.gd"),
+	"cecil": preload("res://scripts/characters/CecilController.gd"),
+	"nayuta": preload("res://scripts/characters/NayutaController.gd"),
 }
 
 ## Get the singleton instance
@@ -182,6 +184,44 @@ func _load_all_characters() -> void:
 		"burst_color": Color(0.85, 0.4, 0.95),
 		"base_speed": 160.0,
 		"base_hp": 8,
+		"base_damage": 2.0,
+		"weapon_type": 4,  # Dual SMG
+		"ammo_capacity": 45,
+		"reload_time": 2.0,
+		"attack_cooldown": 0.08,
+		"projectile_speed": 900.0,
+	})
+	
+	_register_character("cecil", {
+		"display_name": "Cecil",
+		"description": "SMG with drone robots and hacking burst",
+		"sprite_path": "cecil-sprite.png",
+		"portrait_path": "portrait-sq.png",
+		"burst_sound_path": "burst.mp3",
+		"primary_color": Color(0.2, 0.6, 1.0),
+		"secondary_color": Color(0.1, 0.4, 0.8),
+		"burst_color": Color(0.4, 0.8, 1.0),
+		"base_speed": 155.0,
+		"base_hp": 9,
+		"base_damage": 2.0,
+		"weapon_type": 4,  # Dual SMG
+		"ammo_capacity": 45,
+		"reload_time": 2.0,
+		"attack_cooldown": 0.08,
+		"projectile_speed": 900.0,
+	})
+	
+	_register_character("nayuta", {
+		"display_name": "Nayuta",
+		"description": "SMG with clone summoning and galaxy burst",
+		"sprite_path": "nayuta-sprite.png",
+		"portrait_path": "portrait-sq.png",
+		"burst_sound_path": "burst.mp3",
+		"primary_color": Color(0.6, 0.3, 0.9),
+		"secondary_color": Color(0.4, 0.15, 0.7),
+		"burst_color": Color(0.7, 0.4, 1.0),
+		"base_speed": 160.0,
+		"base_hp": 10,
 		"base_damage": 2.0,
 		"weapon_type": 4,  # Dual SMG
 		"ammo_capacity": 45,

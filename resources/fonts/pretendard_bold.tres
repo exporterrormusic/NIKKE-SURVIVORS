@@ -1,0 +1,6 @@
+[gd_resource type="FontFile" load_steps=2 format=3 uid="uid://pretendard_bold_main"]
+
+[ext_resource type="FontFile" path="res://assets/fonts/pretendard/Pretendard-Bold.otf" id="1"]
+
+[resource]
+fallbacks = Array[Font]([ExtResource("1")])

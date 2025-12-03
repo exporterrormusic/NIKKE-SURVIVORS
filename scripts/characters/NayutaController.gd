@@ -1,0 +1,396 @@
+extends "res://scripts/characters/CharacterController.gd"
+class_name NayutaController
+## Nayuta - SMG with clone summoning and galaxy burst
+## Special: Summon a clone that fights alongside (8s cooldown, clone lives until killed)
+## Burst: Galaxy explosion that damages all enemies on screen
+
+# Preload scripts
+const NayutaCloneScript = preload("res://scripts/NayutaClone.gd")
+
+# SMG config (same as Sin/Cecil)
+var bullet_speed: float = 900.0
+
+# Clone state
+var _active_clones: Array = []  # Array of WeakRef to active clones
+var _weapon_pool: Array[String] = ["smg"]  # Available weapons for clones
+
+# Clone upgrade levels (heal on death)
+var clone_heal_level: int = 0  # 0=none, 1=20%, 2=35%, 3=50%
+var _heal_percentages: Array[float] = [0.0, 0.20, 0.35, 0.50]
+
+# Clone weapon upgrades (adds to pool)
+var clone_weapon_level: int = 0  # 0=smg only, 1=+sword, 2=+rocket, 3=+sniper
+
+# Burst config
+var burst_damage: int = 50  # Base burst damage
+
+# Burst upgrades
+var burst_stun_bosses: bool = false  # Stun bosses/elites for 8s
+var burst_debuff_bosses: bool = false  # Bosses/elites take 50% more damage
+const BURST_STUN_DURATION := 8.0
+const BURST_DEBUFF_MULTIPLIER := 1.5
+
+func _on_initialize() -> void:
+	# Nayuta uses dual SMGs like Sin
+	max_ammo = 45
+	ammo = max_ammo
+	
+	# Set timings
+	data.reload_time = 2.0
+	data.attack_cooldown = 0.08  # Fast SMG fire rate
+	data.special_cooldown = 8.0  # Clone summon cooldown
+
+func _on_process(_delta: float) -> void:
+	# Clean up dead clone references
+	_cleanup_clones()
+
+func _cleanup_clones() -> void:
+	for i in range(_active_clones.size() - 1, -1, -1):
+		var ref: WeakRef = _active_clones[i]
+		var clone: Node = ref.get_ref() if ref else null
+		if clone == null or not is_instance_valid(clone):
+			_active_clones.remove_at(i)
+
+func _can_attack() -> bool:
+	return not is_reloading and ammo > 0
+
+func _perform_attack(direction: Vector2) -> void:
+	# Fire dual SMG bullets (same as Sin/Cecil)
+	var bullet_scene = preload("res://scenes/effects/SMGBullet.tscn")
+	
+	var perp := Vector2(-direction.y, direction.x).normalized()
+	var gun_offset := 18.0
+	
+	# Left gun bullet
+	var bullet_left = bullet_scene.instantiate()
+	player.get_parent().add_child(bullet_left)
+	bullet_left.global_position = player.global_position + direction * 45 - perp * gun_offset
+	bullet_left.velocity = direction * bullet_speed
+	bullet_left.rotation = direction.angle()
+	bullet_left.owner_node = player
+	bullet_left.base_damage = 1
+	
+	# Right gun bullet
+	var bullet_right = bullet_scene.instantiate()
+	player.get_parent().add_child(bullet_right)
+	bullet_right.global_position = player.global_position + direction * 45 + perp * gun_offset
+	bullet_right.velocity = direction * bullet_speed
+	bullet_right.rotation = direction.angle()
+	bullet_right.owner_node = player
+	bullet_right.base_damage = 1
+	
+	_play_sound("smg")
+
+func _can_use_special() -> bool:
+	return special_timer <= 0
+
+func _perform_special(_direction: Vector2) -> void:
+	# Summon a clone
+	_summon_clone()
+	
+	# Set cooldown
+	special_timer = data.special_cooldown
+
+func _summon_clone() -> void:
+	if not player or not is_instance_valid(player):
+		return
+	
+	var parent = player.get_parent()
+	if not parent:
+		return
+	
+	# Pick random weapon from pool
+	var weapon: String = _weapon_pool[randi() % _weapon_pool.size()]
+	
+	# Calculate clone stats (25% HP, 1/5 attack)
+	var clone_hp: int = maxi(1, player.max_hp / 4)
+	var clone_attack: float = 0.2  # 1/5 damage multiplier
+	
+	# Create clone (CharacterBody2D required for NayutaClone)
+	var clone = CharacterBody2D.new()
+	clone.name = "NayutaClone_%d" % Time.get_ticks_msec()
+	clone.set_script(NayutaCloneScript)
+	
+	# Spawn with Commander-style visual effect
+	var spawn_offset := Vector2(randf_range(-60, 60), randf_range(-60, 60))
+	
+	parent.add_child(clone)
+	clone.global_position = player.global_position + spawn_offset
+	
+	# Initialize clone with weapon from pool
+	clone.initialize(player, weapon, clone_hp, clone_attack, clone_heal_level > 0)
+	
+	# Debug print weapon pool
+	print("[NayutaController] Summoned clone with weapon: %s (pool: %s)" % [weapon, _weapon_pool])
+	
+	# Connect signals
+	clone.clone_died.connect(_on_clone_died.bind(clone))
+	
+	_active_clones.append(weakref(clone))
+	
+	# Play summon sound (use Commander's ally spawn effect)
+	_play_sound("smg")
+
+func _on_clone_died(clone: Node2D) -> void:
+	# Handle clone death healing
+	if clone_heal_level > 0 and player and is_instance_valid(player):
+		var heal_percent := _heal_percentages[mini(clone_heal_level, 3)]
+		var heal_amount := int(player.max_hp * heal_percent)
+		
+		# The clone handles the sparkle travel effect
+		# We just need to heal when sparkles arrive
+		clone.set_meta("heal_owner_amount", heal_amount)
+		clone.set_meta("heal_owner_ref", weakref(player))
+
+func _on_burst_start() -> void:
+	# Galaxy explosion - damages all enemies on screen
+	_perform_galaxy_burst()
+
+func _perform_galaxy_burst() -> void:
+	var tree := player.get_tree()
+	if not tree:
+		return
+	
+	var viewport := player.get_viewport()
+	if not viewport:
+		return
+	
+	# Get view rect
+	var camera := viewport.get_camera_2d()
+	var view_rect: Rect2
+	if camera:
+		var viewport_size := viewport.get_visible_rect().size
+		var cam_pos := camera.global_position
+		var half_size := viewport_size / (2.0 * camera.zoom)
+		view_rect = Rect2(cam_pos - half_size, half_size * 2.0)
+	else:
+		view_rect = Rect2(Vector2.ZERO, Vector2(1920, 1080))
+	
+	# Calculate damage based on player level/attack
+	var damage: int = burst_damage
+	if "level" in player:
+		damage = int(damage * (1.0 + (player.level - 1) * 0.5))
+	
+	# Damage all enemies on screen
+	var enemies := tree.get_nodes_in_group("enemies")
+	for enemy in enemies:
+		if not is_instance_valid(enemy) or not enemy is Node2D:
+			continue
+		
+		var enemy_node := enemy as Node2D
+		if not view_rect.has_point(enemy_node.global_position):
+			continue
+		
+		# Check if elite/boss
+		var is_elite := _is_elite_or_boss(enemy_node)
+		
+		# Deal damage
+		if enemy.has_method("take_damage"):
+			enemy.take_damage(damage, false, Vector2.ZERO, true)
+		
+		# Apply boss/elite effects
+		if is_elite:
+			if burst_stun_bosses:
+				_apply_stun(enemy_node, BURST_STUN_DURATION)
+			
+			if burst_debuff_bosses:
+				_apply_galaxy_debuff(enemy_node)
+	
+	# Create galaxy explosion visual
+	_spawn_galaxy_explosion()
+	
+	# Screen flash
+	if player.screen_flash and player.screen_flash.has_method("flash"):
+		player.screen_flash.flash(Color(0.4, 0.2, 0.8, 0.5), 0.4)
+
+func _is_elite_or_boss(enemy: Node) -> bool:
+	if enemy.has_meta("enemy_tier"):
+		var tier = enemy.get_meta("enemy_tier")
+		if tier in ["elite", "boss", "tank"]:
+			return true
+	if enemy.is_in_group("elite") or enemy.is_in_group("boss"):
+		return true
+	return false
+
+func _apply_stun(enemy: Node2D, duration: float) -> void:
+	if enemy.has_method("apply_stun"):
+		enemy.apply_stun(duration)
+	else:
+		# Manual stun
+		enemy.set_meta("nayuta_stunned", true)
+		enemy.set_meta("nayuta_stun_end", Time.get_ticks_msec() * 0.001 + duration)
+		if "velocity" in enemy:
+			enemy.set_meta("pre_stun_velocity", enemy.velocity)
+			enemy.velocity = Vector2.ZERO
+
+func _apply_galaxy_debuff(enemy: Node2D) -> void:
+	# Mark enemy as taking 50% more damage
+	enemy.set_meta("nayuta_debuffed", true)
+	enemy.set_meta("damage_multiplier_incoming", BURST_DEBUFF_MULTIPLIER)
+	
+	# Add visual effect
+	var effect := Node2D.new()
+	effect.name = "GalaxyDebuffEffect"
+	effect.set_script(_get_galaxy_debuff_script())
+	enemy.add_child(effect)
+
+func _spawn_galaxy_explosion() -> void:
+	# Create the galaxy explosion visual at player position
+	var explosion := Node2D.new()
+	explosion.name = "GalaxyExplosion"
+	explosion.set_script(_get_galaxy_explosion_script())
+	explosion.global_position = player.global_position
+	player.get_parent().add_child(explosion)
+
+func _get_galaxy_explosion_script() -> GDScript:
+	var script := GDScript.new()
+	script.source_code = """
+extends Node2D
+
+var _time: float = 0.0
+var _duration: float = 1.5
+var _max_radius: float = 800.0
+
+func _ready() -> void:
+	z_index = 100
+
+func _process(delta: float) -> void:
+	_time += delta
+	if _time >= _duration:
+		queue_free()
+		return
+	queue_redraw()
+
+func _draw() -> void:
+	var progress := _time / _duration
+	var radius := _max_radius * ease(progress, 0.3)
+	var alpha := 1.0 - progress
+	
+	# Deep purple galaxy colors
+	var inner_color := Color(0.6, 0.2, 1.0, alpha * 0.8)
+	var mid_color := Color(0.4, 0.1, 0.8, alpha * 0.5)
+	var outer_color := Color(0.2, 0.05, 0.5, alpha * 0.3)
+	
+	# Draw expanding circles
+	draw_circle(Vector2.ZERO, radius * 0.3, inner_color)
+	draw_circle(Vector2.ZERO, radius * 0.6, mid_color)
+	draw_circle(Vector2.ZERO, radius, outer_color)
+	
+	# Draw swirling stars
+	var num_stars := 30
+	for i in range(num_stars):
+		var angle := (TAU / num_stars) * i + _time * 3.0 + i * 0.2
+		var star_dist := radius * (0.3 + 0.6 * (float(i) / num_stars))
+		var star_pos := Vector2(cos(angle), sin(angle)) * star_dist
+		var star_size := 3.0 + sin(_time * 5.0 + i) * 2.0
+		var star_alpha := alpha * (0.5 + 0.5 * sin(_time * 4.0 + i * 0.5))
+		draw_circle(star_pos, star_size, Color(1.0, 0.8, 1.0, star_alpha))
+	
+	# Draw spiral arms
+	for arm in range(3):
+		var arm_base_angle := (TAU / 3.0) * arm + _time * 2.0
+		for seg in range(20):
+			var seg_progress := float(seg) / 20.0
+			var spiral_angle := arm_base_angle + seg_progress * PI
+			var spiral_radius := radius * seg_progress * 0.9
+			var pos := Vector2(cos(spiral_angle), sin(spiral_angle)) * spiral_radius
+			var seg_alpha := alpha * (1.0 - seg_progress) * 0.6
+			draw_circle(pos, 4.0 - seg_progress * 2.0, Color(0.8, 0.5, 1.0, seg_alpha))
+"""
+	script.reload()
+	return script
+
+func _get_galaxy_debuff_script() -> GDScript:
+	var script := GDScript.new()
+	script.source_code = """
+extends Node2D
+
+var _time: float = 0.0
+
+func _ready() -> void:
+	z_index = 50
+
+func _process(delta: float) -> void:
+	_time += delta
+	queue_redraw()
+
+func _draw() -> void:
+	# Purple galaxy star effect around debuffed enemy
+	var num_stars := 6
+	for i in range(num_stars):
+		var angle := (TAU / num_stars) * i + _time * 2.0
+		var radius := 25.0 + sin(_time * 3.0 + i) * 5.0
+		var pos := Vector2(cos(angle), sin(angle)) * radius
+		var star_alpha := 0.6 + 0.3 * sin(_time * 4.0 + i * 0.7)
+		
+		# Draw star shape
+		var star_size := 4.0
+		draw_circle(pos, star_size, Color(0.7, 0.3, 1.0, star_alpha))
+		
+		# Add twinkle lines
+		var line_len := star_size * 1.5
+		draw_line(pos - Vector2(line_len, 0), pos + Vector2(line_len, 0), Color(1.0, 0.8, 1.0, star_alpha * 0.5), 1.0)
+		draw_line(pos - Vector2(0, line_len), pos + Vector2(0, line_len), Color(1.0, 0.8, 1.0, star_alpha * 0.5), 1.0)
+	
+	# Outer ring
+	var ring_alpha := 0.3 + 0.1 * sin(_time * 2.0)
+	draw_arc(Vector2.ZERO, 35.0, 0, TAU, 32, Color(0.5, 0.2, 0.8, ring_alpha), 2.0)
+"""
+	script.reload()
+	return script
+
+func _on_burst_end() -> void:
+	pass
+
+func _on_cleanup() -> void:
+	# Clean up clones
+	for ref in _active_clones:
+		var clone: Node = ref.get_ref() if ref is WeakRef else null
+		if clone and is_instance_valid(clone):
+			clone.queue_free()
+	_active_clones.clear()
+
+func _play_sound(weapon_type: String) -> void:
+	if player.audio_director:
+		player.audio_director.play_weapon_fire_sound(weapon_type)
+
+func get_attack_cooldown() -> float:
+	return data.attack_cooldown
+
+func apply_talent(talent_id: String) -> void:
+	match talent_id:
+		"special":
+			special_unlocked = true
+			special_timer = 0.0
+		"special_heal":
+			clone_heal_level = mini(clone_heal_level + 1, 3)
+		"special_weapon":
+			clone_weapon_level = mini(clone_weapon_level + 1, 3)
+			_update_weapon_pool()
+		"burst_stun":
+			burst_stun_bosses = true
+		"burst_debuff":
+			burst_debuff_bosses = true
+
+func _update_weapon_pool() -> void:
+	# Reset pool
+	_weapon_pool = ["smg"]
+	
+	# Add weapons based on level
+	if clone_weapon_level >= 1:
+		_weapon_pool.append("sword")
+	if clone_weapon_level >= 2:
+		_weapon_pool.append("rocket")
+	if clone_weapon_level >= 3:
+		_weapon_pool.append("sniper")
+
+func is_invincible() -> bool:
+	return false
+
+func _get_weapon_type_name() -> String:
+	return "SMG"
+
+## Get active clone count for UI
+func get_clone_count() -> int:
+	_cleanup_clones()
+	return _active_clones.size()

@@ -1,0 +1,23 @@
+{
+	"name": "Nayuta",
+	"display_name": "Nayuta",
+	"description": "High mobility operative specializing in sustained suppression fire with her SMG.",
+	"weapon_name": "Nirvana",
+	"weapon_type": "SMG",
+	"stats": {
+		"speed": 175,
+		"hp": 65,
+		"burst_multiplier": 5
+	},
+	"sprite_info": {
+		"filename": "Nayuta.png",
+		"frame_width": null,
+		"frame_height": null,
+		"animation_speed": 0.15
+	},
+	"burst_ability": {
+		"name": "Asceticism",
+		"description": "Summons 4 clones that move autonomously in cardinal directions, attacking enemies and bouncing off map edges for 10 seconds.",
+		"damage_multiplier": 1.0
+	}
+}

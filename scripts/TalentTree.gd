@@ -34,7 +34,7 @@ var _game_state = null
 
 # Which characters to show in shop cards (indices into CHARACTER_NAMES/TALENT_DATA)
 # This is now loaded from GameState to sync with character selection
-var _shop_character_order: Array[int] = [5, 1, 4]  # Default: Crown, Commander, Marian
+var _shop_character_order: Array[int] = [8, 9, 4]  # Default: Cecil, Nayuta, Marian
 
 # Talent definitions - Simplified: 3 main abilities + 4 upgrades (2 per special/burst)
 # Layout: UNLOCK (row 0) -> SPECIAL (row 1) -> BURST (row 2)
@@ -167,6 +167,38 @@ var TALENT_DATA := {
 		 "tooltip": "Enemy kills during burst contribute to burst gauge."},
 		{"id": "burst_explode", "name": "Death Blossom", "desc": "Enemies explode on death", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
 		 "tooltip": "Enemies dying during burst explode for 4 damage. Scales with ATK."},
+	],
+	8: [  # Cecil - SMG with Drones & Hacking Burst
+		{"id": "unlock", "name": "Unlock Cecil", "desc": "Add Cecil to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
+		 "tooltip": "SMG user. 45 ammo, high fire rate. Drone robots and hacking burst."},
+		{"id": "special", "name": "Drone Deploy", "desc": "Deploy 2 companion drones", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
+		 "tooltip": "Deploys 2 invincible drones. Right-click toggles Hunt/Shield modes."},
+		{"id": "special_speed", "name": "Overclock", "desc": "Drone speed +50/100/200%", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
+		 "tooltip": "Drones move and attack faster per level."},
+		{"id": "special_shield", "name": "Barrier Protocol", "desc": "Shield absorbs +1 hit", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
+		 "tooltip": "Shield mode absorbs +1 hit per level. Max: 4 hits."},
+		{"id": "burst", "name": "System Hack", "desc": "BURST: Freeze & convert enemies", "col": 1, "row": 2, "requires": ["special"], "max": 1, "cost": 1, "burst": true,
+		 "tooltip": "Freeze all enemies 1.5s. Non-elite/boss become permanent allies."},
+		{"id": "burst_damage", "name": "Malware", "desc": "Hacked allies +50% damage", "col": 0, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
+		 "tooltip": "Converted enemies deal 50% more damage."},
+		{"id": "burst_boss", "name": "Exploit", "desc": "25% max HP to elites/bosses", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
+		 "tooltip": "Elites and bosses take 25% of their max HP as damage after stun."},
+	],
+	9: [  # Nayuta - SMG with Clone Summoning & Galaxy Burst
+		{"id": "unlock", "name": "Nayuta", "desc": "Already in your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 0, "unlock": true, "default": true,
+		 "tooltip": "SMG user. 45 ammo, high fire rate. Summons clones and galaxy burst."},
+		{"id": "special", "name": "Clone Summon", "desc": "Summon a fighting clone", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
+		 "tooltip": "Summons clone with 1/2 HP/attack. Lives until killed. 8s cooldown."},
+		{"id": "special_heal", "name": "Soul Return", "desc": "Clone death heals 20/35/50%", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
+		 "tooltip": "When clone dies, gold sparkles travel to you and heal % max HP."},
+		{"id": "special_weapon", "name": "Weapon Pool", "desc": "Clones can use +sword/rocket/sniper", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
+		 "tooltip": "Adds new weapons to clone pool. Random selection on summon."},
+		{"id": "burst", "name": "Galaxy Nova", "desc": "BURST: Massive space explosion", "col": 1, "row": 2, "requires": ["special"], "max": 1, "cost": 1, "burst": true,
+		 "tooltip": "Purple galaxy explosion damages all enemies on screen."},
+		{"id": "burst_stun", "name": "Cosmic Freeze", "desc": "Stun bosses/elites 8s", "col": 0, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
+		 "tooltip": "Bosses and elites hit by burst are stunned for 8 seconds."},
+		{"id": "burst_debuff", "name": "Star Mark", "desc": "Bosses/elites take 50% more damage", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
+		 "tooltip": "Marked enemies take +50% damage. Purple star effect shows debuff."},
 	]
 }
 
@@ -179,7 +211,7 @@ var _player_ref: Node = null  # Reference to player for stats
 var _hovered_character: int = -1  # Which character card is being hovered (-1 = none/current)
 
 # Player's unlocked talents
-var _unlocked_talents: Dictionary = {0: {}, 1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}}
+var _unlocked_talents: Dictionary = {0: {}, 1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}}
 var _skill_points: int = 0
 var _talent_buttons: Array = []
 var _lines_control: Control = null
@@ -225,7 +257,7 @@ func _load_character_data() -> void:
 				PORTRAIT_PATHS.append("res://assets/characters/%s/portrait-sq.png" % folder_name)
 	else:
 		# Fallback if registry not available
-		CHARACTER_NAMES = ["Scarlet", "Legendary Commander", "Rapunzel", "Kilo", "Marian", "Crown", "Snow White", "Sin"]
+		CHARACTER_NAMES = ["Scarlet", "Legendary Commander", "Rapunzel", "Kilo", "Marian", "Crown", "Snow White", "Sin", "Cecil"]
 		PORTRAIT_PATHS = [
 			"res://assets/characters/scarlet/portrait-sq.png",
 			"res://assets/characters/commander/portrait-sq.png",
@@ -234,7 +266,8 @@ func _load_character_data() -> void:
 			"res://assets/characters/marian/portrait-sq.png",
 			"res://assets/characters/crown/portrait-sq.png",
 			"res://assets/characters/snow-white/portrait-sq.png",
-			"res://assets/characters/sin/portrait-sq.png"
+			"res://assets/characters/sin/portrait-sq.png",
+			"res://assets/characters/cecil/portrait-sq.png"
 		]
 
 func _build_ui() -> void:
@@ -1126,7 +1159,8 @@ func get_unlocked_for_char(char_id: int) -> Dictionary:
 	return _unlocked_talents.get(char_id, {})
 
 func _apply_default_talents() -> void:
-	for char_id in range(3):
+	# Apply defaults to all characters with 'default': true talents
+	for char_id in TALENT_DATA.keys():
 		var talents: Array = TALENT_DATA[char_id]
 		for talent in talents:
 			if talent.get("default", false):
@@ -1135,3 +1169,17 @@ func _apply_default_talents() -> void:
 				var talent_id: String = talent["id"]
 				if not _unlocked_talents[char_id].has(talent_id):
 					_unlocked_talents[char_id][talent_id] = 1
+	
+	# Auto-unlock only the MAIN character from GameState (slot 0)
+	# Support characters (slots 1 and 2) must be unlocked by spending skill points
+	if _game_state:
+		var selected: Array[int] = _game_state.selected_character_indices.duplicate()
+		if selected.size() > 0:
+			var main_char_idx: int = selected[0]  # Only unlock main character
+			if TALENT_DATA.has(main_char_idx):
+				if not _unlocked_talents.has(main_char_idx):
+					_unlocked_talents[main_char_idx] = {}
+				# Apply the "unlock" talent for main character only
+				if not _unlocked_talents[main_char_idx].has("unlock"):
+					_unlocked_talents[main_char_idx]["unlock"] = 1
+					print("[TalentTree] Auto-unlocked main character %d" % main_char_idx)

@@ -63,8 +63,8 @@ var rapunzel_burst_unlocked = false
 var kilo_unlocked = false
 var kilo_special_unlocked = false
 var kilo_burst_unlocked = false
-var unlocked_characters = [1]  # Start with Commander (index 1)
-var current_character = 1  # Start with Commander
+var unlocked_characters = [0]  # Start with Main character (slot 0)
+var current_character = 0  # Start with Main character (slot 0)
 var character_sprites = []
 var hp = 10
 var max_hp = 10
@@ -128,9 +128,132 @@ var kilo_burst_invincible = false
 # Skill points notification UI reference
 var _skill_points_notify: Control = null
 
+# Selected characters from GameState (registry indices)
+var _selected_char_indices: Array[int] = []
+var _character_registry = null
+
+# Default FPS values for character sprites (indexed by registry index)
+const CHARACTER_FPS := {
+	0: 12.5,  # scarlet
+	1: 6.0,   # commander
+	2: 5.0,   # rapunzel
+	3: 6.0,   # kilo
+	4: 6.0,   # marian
+	5: 6.0,   # crown
+	6: 4.5,   # snow_white
+	7: 6.0,   # sin
+	8: 6.0,   # cecil
+	9: 6.0,   # nayuta
+}
+
+func _init_from_gamestate() -> void:
+	# Load CharacterRegistry
+	var CharacterRegistryClass = load("res://scripts/characters/CharacterRegistry.gd")
+	if CharacterRegistryClass:
+		_character_registry = CharacterRegistryClass.get_instance()
+	
+	# Load selected characters from GameState
+	var game_state = get_node_or_null("/root/GameState")
+	if game_state and game_state.has_method("get_shop_character_order"):
+		# get_shop_character_order returns [Support1, Main, Support2] for display
+		# But we want the original order [Main, Support1, Support2]
+		# So we get selected_character_indices directly
+		_selected_char_indices = game_state.selected_character_indices.duplicate()
+		print("[Player] Loaded selected characters: ", _selected_char_indices)
+	else:
+		# Fallback defaults
+		_selected_char_indices = [0, 1, 4]  # Scarlet, Commander, Marian
+	
+	# Build character_sprites from selected characters
+	_build_character_sprites()
+	
+	# Start with Main character (slot 0)
+	current_character = 0
+	unlocked_characters = [0]
+
+func _build_character_sprites() -> void:
+	"""Build the character_sprites array from selected character indices."""
+	character_sprites.clear()
+	
+	if _character_registry == null:
+		push_warning("[Player] CharacterRegistry not loaded, using fallback sprites")
+		# Fallback to old hardcoded sprites
+		character_sprites = [
+			{"texture": load("res://assets/characters/scarlet-sprite.png"), "fps": 12.5},
+			{"texture": load("res://assets/characters/snow-white-sprite.png"), "fps": 4.5},
+			{"texture": load("res://assets/characters/rapunzel-sprite.png"), "fps": 5.0},
+			{"texture": load("res://assets/characters/kilo-sprite.png"), "fps": 6.0}
+		]
+		return
+	
+	var all_ids: Array[String] = _character_registry.get_all_character_ids()
+	
+	for char_idx in _selected_char_indices:
+		if char_idx >= 0 and char_idx < all_ids.size():
+			var char_id: String = all_ids[char_idx]
+			var folder_name: String = char_id.replace("_", "-")
+			# Sprites are inside character folders: characters/scarlet/scarlet-sprite.png
+			var sprite_path: String = "res://assets/characters/%s/%s-sprite.png" % [folder_name, folder_name]
+			var texture = load(sprite_path)
+			var fps: float = CHARACTER_FPS.get(char_idx, 6.0)
+			
+			if texture:
+				character_sprites.append({"texture": texture, "fps": fps})
+				print("[Player] Loaded sprite for %s (index %d)" % [char_id, char_idx])
+			else:
+				push_warning("[Player] Could not load sprite: %s" % sprite_path)
+				# Add placeholder
+				character_sprites.append({"texture": null, "fps": 6.0})
+		else:
+			push_warning("[Player] Invalid character index: %d" % char_idx)
+			character_sprites.append({"texture": null, "fps": 6.0})
+	
+	print("[Player] Built %d character sprites" % character_sprites.size())
+
+func _build_burst_sounds() -> void:
+	"""Build the _burst_sounds array from selected character indices."""
+	_burst_sounds.clear()
+	
+	if _character_registry == null:
+		push_warning("[Player] CharacterRegistry not loaded, using fallback burst sounds")
+		# Fallback to old hardcoded sounds
+		_burst_sounds = [
+			load("res://assets/characters/scarlet/burst.mp3"),
+			load("res://assets/characters/snow-white/burst.mp3"),
+			load("res://assets/characters/rapunzel/burst.mp3"),
+			load("res://assets/characters/kilo/burst.mp3")
+		]
+		return
+	
+	var all_ids: Array[String] = _character_registry.get_all_character_ids()
+	
+	for char_idx in _selected_char_indices:
+		if char_idx >= 0 and char_idx < all_ids.size():
+			var char_id: String = all_ids[char_idx]
+			var folder_name: String = char_id.replace("_", "-")
+			# Try mp3 first, then wav
+			var sound_path: String = "res://assets/characters/%s/burst.mp3" % folder_name
+			var sound = load(sound_path)
+			if sound == null:
+				sound_path = "res://assets/characters/%s/burst.wav" % folder_name
+				sound = load(sound_path)
+			
+			_burst_sounds.append(sound)
+			if sound:
+				print("[Player] Loaded burst sound for %s" % char_id)
+			else:
+				push_warning("[Player] Could not load burst sound for %s" % char_id)
+		else:
+			_burst_sounds.append(null)
+	
+	print("[Player] Built %d burst sounds" % _burst_sounds.size())
+
 func _ready():
 	# Add to player group so enemies/XP orbs can find us
 	add_to_group("player")
+	
+	# Initialize from GameState selected characters
+	_init_from_gamestate()
 	
 	# Create shadow under player
 	_create_shadow()
@@ -148,16 +271,17 @@ func _ready():
 	movement_effects.name = "MovementEffects"
 	add_child(movement_effects)
 	
+	# Stop menu music if MenuManager exists (autoload)
+	if has_node("/root/MenuManager"):
+		var menu_manager = get_node("/root/MenuManager")
+		if menu_manager.has_method("stop_menu_music"):
+			menu_manager.stop_menu_music()
+	
 	# Start battle music
 	audio_director.play_random_battle_track()
 	
-	# Load burst voice sounds for each character
-	_burst_sounds = [
-		load("res://assets/characters/scarlet/burst.mp3"),
-		load("res://assets/characters/snow-white/burst.mp3"),
-		load("res://assets/characters/rapunzel/burst.mp3"),
-		load("res://assets/characters/kilo/burst.mp3")
-	]
+	# Load burst voice sounds for selected characters (built dynamically)
+	_build_burst_sounds()
 	
 	# Initialize overhead HUD with current values
 	if overhead_hud:
@@ -167,12 +291,7 @@ func _ready():
 		_update_overhead_ammo()
 	
 	update_xp_bar()
-	character_sprites = [
-		{"texture": load("res://assets/characters/scarlet-sprite.png"), "fps": 12.5},
-		{"texture": load("res://assets/characters/snow-white-sprite.png"), "fps": 4.5},
-		{"texture": load("res://assets/characters/rapunzel-sprite.png"), "fps": 5.0},
-		{"texture": load("res://assets/characters/kilo-sprite.png"), "fps": 6.0}
-	]
+	# character_sprites is now built in _init_from_gamestate() via _build_character_sprites()
 	
 	update_sprite()
 	# Defer HUD update to ensure it's ready
@@ -186,7 +305,13 @@ func _update_hud():
 func update_sprite():
 	if not _animator:
 		return
+	if current_character < 0 or current_character >= character_sprites.size():
+		push_warning("[Player] current_character %d out of bounds (sprites: %d)" % [current_character, character_sprites.size()])
+		return
 	var sprite_data = character_sprites[current_character]
+	if sprite_data == null or sprite_data.get("texture") == null:
+		push_warning("[Player] No texture for character slot %d" % current_character)
+		return
 	var texture = sprite_data["texture"]
 	var fps = sprite_data["fps"]
 	_animator.configure(texture, 3, 4, fps, 0.2)

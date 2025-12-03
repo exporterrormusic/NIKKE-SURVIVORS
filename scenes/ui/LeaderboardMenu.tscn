@@ -1,0 +1,174 @@
+[gd_scene load_steps=7 format=3 uid="uid://leaderboard_menu_scene"]
+
+[ext_resource type="Script" path="res://scripts/ui/LeaderboardMenu.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/ui/components/VenetianBlindsBackground.gd" id="2"]
+[ext_resource type="FontFile" path="res://resources/fonts/futura_condensed_extra_bold.tres" id="3"]
+[ext_resource type="FontFile" path="res://resources/fonts/pretendard_bold.tres" id="4"]
+
+[sub_resource type="StyleBoxFlat" id="letterbox_style"]
+bg_color = Color(0.04, 0.055, 0.08, 0.95)
+border_width_top = 3
+border_width_bottom = 3
+border_color = Color(0.75, 0.75, 0.8, 0.8)
+shadow_color = Color(0, 0, 0, 0.35)
+shadow_size = 3
+shadow_offset = Vector2(2, 2)
+
+[sub_resource type="StyleBoxFlat" id="panel_style"]
+bg_color = Color(0.04, 0.055, 0.08, 0.97)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+border_color = Color(0.95, 0.95, 0.98, 0.9)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_left = 12
+corner_radius_bottom_right = 12
+shadow_color = Color(0, 0, 0, 0.5)
+shadow_size = 6
+shadow_offset = Vector2(3, 3)
+
+[node name="LeaderboardMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="Background" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("2")
+
+[node name="Overlay" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 0.25)
+
+[node name="TopBar" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+offset_top = 24.0
+offset_bottom = 184.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("letterbox_style")
+
+[node name="TitleLabel" type="Label" parent="TopBar"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_right = -24.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
+theme_override_colors/font_outline_color = Color(0.1, 0.1, 0.15, 1)
+theme_override_constants/outline_size = 3
+theme_override_fonts/font = ExtResource("3")
+theme_override_font_sizes/font_size = 90
+text = "LEADERBOARDS"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ContentPanel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 48.0
+offset_top = 200.0
+offset_right = -48.0
+offset_bottom = -48.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("panel_style")
+
+[node name="ContentMargin" type="MarginContainer" parent="ContentPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = 24.0
+offset_right = -24.0
+offset_bottom = -24.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ContentVBox" type="VBoxContainer" parent="ContentPanel/ContentMargin"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 24
+
+[node name="InfoRow" type="HBoxContainer" parent="ContentPanel/ContentMargin/ContentVBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="InfoSpacer" type="Control" parent="ContentPanel/ContentMargin/ContentVBox/InfoRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="TotalScoreLabel" type="Label" parent="ContentPanel/ContentMargin/ContentVBox/InfoRow"]
+unique_name_in_owner = true
+modulate = Color(0.784314, 0.792157, 0.878431, 1)
+layout_mode = 2
+theme_override_fonts/font = ExtResource("4")
+theme_override_font_sizes/font_size = 24
+text = "Total Score: 0"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="ColumnsScroll" type="ScrollContainer" parent="ContentPanel/ContentMargin/ContentVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="ColumnsContainer" type="HBoxContainer" parent="ContentPanel/ContentMargin/ContentVBox/ColumnsScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 2
+theme_override_constants/separation = 32
+
+[node name="LeftColumn" type="VBoxContainer" parent="ContentPanel/ContentMargin/ContentVBox/ColumnsScroll/ColumnsContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="RightColumn" type="VBoxContainer" parent="ContentPanel/ContentMargin/ContentVBox/ColumnsScroll/ColumnsContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="EmptyStateLabel" type="Label" parent="ContentPanel/ContentMargin/ContentVBox"]
+unique_name_in_owner = true
+visible = false
+modulate = Color(0.784314, 0.792157, 0.878431, 1)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_fonts/font = ExtResource("4")
+theme_override_font_sizes/font_size = 28
+text = "No leaderboard data available. Complete runs to populate this screen."
+horizontal_alignment = 1
+vertical_alignment = 1

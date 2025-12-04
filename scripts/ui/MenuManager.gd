@@ -10,6 +10,7 @@ const SettingsMenuScene = preload("res://scenes/ui/SettingsMenu.tscn")
 const CharacterSelectScene = preload("res://scenes/ui/CharacterSelectMenu.tscn")
 const AchievementsScene = preload("res://scenes/ui/AchievementsMenu.tscn")
 const LeaderboardScene = preload("res://scenes/ui/LeaderboardMenu.tscn")
+const ShopScene = preload("res://scenes/ui/ShopMenu.tscn")
 
 # Current menu stack (for back navigation)
 var _menu_stack: Array[Control] = []
@@ -53,6 +54,14 @@ func _setup_music() -> void:
 	_music_player.volume_db = -8.0
 	_music_player.autoplay = false
 	
+	# Ensure music loops - check stream type and set loop
+	if music_stream is AudioStreamMP3:
+		(music_stream as AudioStreamMP3).loop = true
+	elif music_stream is AudioStreamOggVorbis:
+		(music_stream as AudioStreamOggVorbis).loop = true
+	elif music_stream is AudioStreamWAV:
+		(music_stream as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_FORWARD
+	
 	# Start playing
 	_music_player.play()
 	
@@ -74,6 +83,45 @@ func start_menu_music() -> void:
 	if _music_player and not _music_player.playing:
 		print("[MenuManager] Starting menu music")
 		_music_player.play()
+
+
+## Return to main menu from game - clears everything and shows main menu
+func return_to_main_menu() -> void:
+	print("[MenuManager] return_to_main_menu called")
+	
+	# First change scene to remove the Level/game scene
+	get_tree().change_scene_to_file("res://scenes/ui/MainMenu.tscn")
+	
+	# Wait for scene change, then set up MenuManager's menu properly
+	await get_tree().process_frame
+	await get_tree().process_frame
+	
+	# Get the new MainMenu that was loaded
+	var root := get_tree().current_scene
+	if root and root is MainMenu:
+		print("[MenuManager] Found MainMenu scene, connecting signals")
+		# Clear our internal state
+		_clear_stack()
+		_current_menu = root
+		
+		# Connect signals to make buttons work
+		if root.has_signal("play_selected"):
+			root.play_selected.connect(_on_play_selected)
+		if root.has_signal("settings_selected"):
+			root.settings_selected.connect(_on_settings_selected)
+		if root.has_signal("achievements_selected"):
+			root.achievements_selected.connect(_on_achievements_selected)
+		if root.has_signal("quit_selected"):
+			root.quit_selected.connect(_on_quit_selected)
+		if root.has_signal("leaderboards_selected"):
+			root.leaderboards_selected.connect(_on_leaderboards_selected)
+		if root.has_signal("shop_selected"):
+			root.shop_selected.connect(_on_shop_selected)
+		
+		# Start menu music
+		start_menu_music()
+	else:
+		push_warning("[MenuManager] Could not find MainMenu scene after return")
 
 
 func show_main_menu() -> void:
@@ -98,6 +146,9 @@ func show_main_menu() -> void:
 	if menu.has_signal("leaderboards_selected"):
 		menu.leaderboards_selected.connect(_on_leaderboards_selected)
 		print("[MenuManager] Connected leaderboards_selected signal")
+	if menu.has_signal("shop_selected"):
+		menu.shop_selected.connect(_on_shop_selected)
+		print("[MenuManager] Connected shop_selected signal")
 
 
 func show_settings_menu() -> void:
@@ -140,6 +191,14 @@ func show_leaderboard_menu() -> void:
 		menu.back_requested.connect(_on_back_requested)
 
 
+func show_shop_menu() -> void:
+	var menu := ShopScene.instantiate() as Control
+	_push_menu(menu)
+	
+	if menu.has_signal("back_requested"):
+		menu.back_requested.connect(_on_back_requested)
+
+
 func _show_menu(menu: Control) -> void:
 	if _current_menu:
 		_current_menu.queue_free()
@@ -169,12 +228,13 @@ func _pop_menu() -> void:
 
 func _clear_stack() -> void:
 	for menu in _menu_stack:
-		menu.queue_free()
+		if is_instance_valid(menu):
+			menu.queue_free()
 	_menu_stack.clear()
 	
-	if _current_menu:
+	if is_instance_valid(_current_menu):
 		_current_menu.queue_free()
-		_current_menu = null
+	_current_menu = null
 
 
 func _on_play_selected() -> void:
@@ -195,6 +255,11 @@ func _on_achievements_selected() -> void:
 func _on_leaderboards_selected() -> void:
 	print("[MenuManager] _on_leaderboards_selected")
 	show_leaderboard_menu()
+
+
+func _on_shop_selected() -> void:
+	print("[MenuManager] _on_shop_selected")
+	show_shop_menu()
 
 
 func _on_quit_selected() -> void:

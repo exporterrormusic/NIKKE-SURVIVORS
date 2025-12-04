@@ -55,6 +55,8 @@ func _execute_burst() -> void:
 	var view_rect := _get_camera_view_rect()
 	var filter_by_view := view_rect.size.x > 0.0 and view_rect.size.y > 0.0
 	
+	var execution_kill_count: int = 0  # Track kills for healing
+	
 	# Kill all enemies on screen
 	for node in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(node):
@@ -76,9 +78,11 @@ func _execute_burst() -> void:
 		
 		# Determine damage amount
 		var damage_amount := 99999
+		var will_execute := false
 		if execute_talent and not is_elite_or_boss:
 			# Execution talent: instant kill for non-elite/boss
 			damage_amount = 999999
+			will_execute = true
 		
 		# Apply vulnerability debuff if talent is active
 		if vuln_talent:
@@ -96,9 +100,20 @@ func _execute_burst() -> void:
 		
 		if dealt:
 			_killed_positions.append(enemy_position)
+			# Count execution kills for healing
+			if will_execute:
+				execution_kill_count += 1
 			# Register burst hit
 			if owner_node and owner_node.has_method("register_burst_hit"):
 				owner_node.register_burst_hit(enemy, true)  # from_burst = true
+	
+	# Heal 15% max HP per execution kill
+	if execute_talent and execution_kill_count > 0 and owner_node:
+		var heal_amount := int(owner_node.max_hp * 0.15 * execution_kill_count)
+		if heal_amount > 0:
+			owner_node.hp = mini(owner_node.hp + heal_amount, owner_node.max_hp)
+			if owner_node.has_method("_update_health_display"):
+				owner_node._update_health_display(heal_amount, false)
 	
 	# Choose random teleport target from killed enemies and teleport immediately
 	if _killed_positions.size() > 0:
@@ -110,12 +125,31 @@ func _execute_burst() -> void:
 			owner_node.global_position = teleport_target
 
 func _apply_vulnerability(enemy: Node2D) -> void:
-	"""Apply 50% increased damage taken debuff to enemy."""
+	"""Apply 50% increased damage taken debuff to enemy with purple cracked visual."""
 	if not is_instance_valid(enemy):
 		return
 	
 	# Set a meta flag that Enemy.gd can check
 	enemy.set_meta("damage_vulnerability", 1.5)  # 50% more damage = 1.5x multiplier
+	
+	# Apply visual shader effect
+	var sprite: Node = null
+	if enemy.has_node("AnimatedSprite2D"):
+		sprite = enemy.get_node("AnimatedSprite2D")
+	elif enemy.has_node("Sprite2D"):
+		sprite = enemy.get_node("Sprite2D")
+	
+	var original_material: Material = null
+	if sprite and sprite is CanvasItem:
+		original_material = sprite.material
+		var vuln_shader = load("res://resources/shaders/vulnerability_debuff.gdshader")
+		if vuln_shader:
+			var shader_mat = ShaderMaterial.new()
+			shader_mat.shader = vuln_shader
+			shader_mat.set_shader_parameter("intensity", 1.0)
+			shader_mat.set_shader_parameter("pulse_speed", 1.5)
+			shader_mat.set_shader_parameter("crack_density", 4.0)
+			sprite.material = shader_mat
 	
 	# Create a timer to remove the debuff after 8 seconds
 	var debuff_timer := Timer.new()
@@ -123,9 +157,13 @@ func _apply_vulnerability(enemy: Node2D) -> void:
 	debuff_timer.one_shot = true
 	debuff_timer.autostart = true
 	var enemy_ref := enemy
+	var sprite_ref := sprite
+	var orig_mat_ref := original_material
 	debuff_timer.timeout.connect(func():
 		if is_instance_valid(enemy_ref):
 			enemy_ref.remove_meta("damage_vulnerability")
+		if is_instance_valid(sprite_ref) and sprite_ref is CanvasItem:
+			sprite_ref.material = orig_mat_ref
 		debuff_timer.queue_free()
 	)
 	enemy.add_child(debuff_timer)

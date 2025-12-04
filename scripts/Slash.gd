@@ -49,6 +49,9 @@ func _on_body_entered(body):
 		return
 	if body in _hit_bodies:
 		return
+	# Skip charmed enemies (they're friendly now)
+	if body.is_in_group("charmed_allies"):
+		return
 	if body.has_method("take_damage"):
 		# Roll for critical hit
 		var is_crit := randf() < CRIT_CHANCE

@@ -30,6 +30,11 @@ func _ready() -> void:
 	_update_preview()
 	_start_pulse_animation()
 
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		back_requested.emit()
+		get_viewport().set_input_as_handled()
+
 func _build_ui() -> void:
 	var main := HBoxContainer.new()
 	main.set_anchors_preset(Control.PRESET_FULL_RECT)

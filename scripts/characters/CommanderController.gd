@@ -69,7 +69,8 @@ func _fire_bullet(direction: Vector2) -> void:
 	bullet.velocity = direction * bullet_speed
 	bullet.rotation = direction.angle()
 	bullet.owner_node = player
-	bullet.base_damage = int(data.base_damage)
+	# Use character's base damage with level scaling
+	bullet.base_damage = player.calc_damage()
 	
 	_play_sound("assault")
 

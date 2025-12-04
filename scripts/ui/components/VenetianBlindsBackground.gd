@@ -2,52 +2,112 @@ extends Control
 class_name VenetianBlindsBackground
 ## Animated background with venetian blind effect.
 ## Displays a carousel of background images with angled blind strips.
+## Images are tinted with a monochrome blue cyberpunk aesthetic.
 
 @export var background_textures: PackedStringArray = []
 @export var blind_base_width: float = 540.0
 @export var blind_angle_degrees: float = 15.0
 @export var carousel_speed: float = 100.0
-@export var overlay_color: Color = Color(0, 0, 0, 0.24)
+@export var overlay_color: Color = Color(0.02, 0.05, 0.1, 0.25)  # Very light overlay
+
+# Monochrome tint - convert to grayscale then apply blue
+# This creates a unified look where all images have similar color tone
+const MONOCHROME_HUE := Color(0.75, 0.9, 1.0, 1.0)  # Brighter, lighter blue
+const DESATURATION := 0.6  # Lower = more original color shows through
 
 const SUPPORTED_EXTENSIONS := [".png", ".jpg", ".jpeg", ".webp"]
 const BACKGROUNDS_DIRECTORY := "res://assets/backgrounds"
 
 static var _prepared_cache: Dictionary = {}
 static var _default_texture_paths_cache: PackedStringArray = PackedStringArray()
+static var _shared_textures: Array[Texture2D] = []
+static var _textures_loaded: bool = false
+static var _shared_animation_offset: float = 0.0  # Persists across menu instances
+static var _last_process_frame: int = -1  # Prevents double-updating when multiple instances exist
 
 var _textures: Array[Texture2D] = []
 var _prepared_textures: Array[Dictionary] = []
-var _animation_offset: float = 0.0
+var _hex_overlay: ColorRect = null
+
+
+## Clear the static texture cache (call when changing visual settings)
+static func clear_cache() -> void:
+	_prepared_cache.clear()
+	_default_texture_paths_cache.clear()
+	_shared_textures.clear()
+	_textures_loaded = false
+
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_process(true)
+	# Don't clear cache - reuse processed textures across menu transitions
+	_setup_hex_overlay()
 	_load_textures()
 	_prepare_textures()
 	queue_redraw()
 
 
+func _setup_hex_overlay() -> void:
+	# Create a separate overlay for digital screen effects
+	# This sits on top of the blinds and applies CRT/LCD effects
+	_hex_overlay = ColorRect.new()
+	_hex_overlay.name = "ScreenEffectOverlay"
+	_hex_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hex_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_hex_overlay.color = Color(0, 0, 0, 0)  # Transparent base
+	add_child(_hex_overlay)
+	
+	# Load and apply digital screen shader to the overlay
+	var screen_shader = load("res://resources/shaders/hexagon_grid_overlay.gdshader")
+	if screen_shader:
+		var screen_material = ShaderMaterial.new()
+		screen_material.shader = screen_shader
+		# Visible but not distracting effects
+		screen_material.set_shader_parameter("scanline_intensity", 0.2)
+		screen_material.set_shader_parameter("scanline_count", 140.0)  # Fewer = bigger/thicker
+		screen_material.set_shader_parameter("brightness_wave_speed", 0.5)
+		screen_material.set_shader_parameter("brightness_wave_intensity", 0.08)
+		screen_material.set_shader_parameter("vignette_strength", 0.2)
+		screen_material.set_shader_parameter("refresh_line_speed", 0.4)  # Slower
+		screen_material.set_shader_parameter("refresh_line_intensity", 0.18)
+		screen_material.set_shader_parameter("refresh_line_width", 0.08)  # Thicker
+		screen_material.set_shader_parameter("screen_size", size)
+		_hex_overlay.material = screen_material
+
+
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
 		_prepare_textures()
+		# Update shader screen size
+		if _hex_overlay and _hex_overlay.material:
+			_hex_overlay.material.set_shader_parameter("screen_size", size)
 		queue_redraw()
 
 
 func _process(delta: float) -> void:
+	# Only update animation once per frame, even if multiple instances exist
+	var current_frame = Engine.get_process_frames()
+	if _last_process_frame == current_frame:
+		queue_redraw()
+		return
+	_last_process_frame = current_frame
+	
 	var textures = _get_active_textures()
 	if textures.is_empty():
 		return
 	var total_width = _get_blind_width() * textures.size()
 	if total_width <= 0.0:
 		return
-	_animation_offset = fposmod(_animation_offset + carousel_speed * delta, total_width)
+	_shared_animation_offset = fposmod(_shared_animation_offset + carousel_speed * delta, total_width)
 	queue_redraw()
 
 
 func _draw() -> void:
 	var textures = _get_active_textures()
 	if textures.is_empty():
-		draw_rect(Rect2(Vector2.ZERO, size), Color(0.1, 0.1, 0.12))
+		# Dark blue base when no textures
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0.06, 0.08, 0.12))
 		draw_rect(Rect2(Vector2.ZERO, size), overlay_color)
 		return
 
@@ -57,15 +117,16 @@ func _draw() -> void:
 	if total_width <= 0.0:
 		return
 
-	var start_index = int(_animation_offset / blind_width) - 1
+	var start_index = int(_shared_animation_offset / blind_width) - 1
 	var blinds_needed = int(ceil((size.x + abs(angle_offset) + blind_width) / blind_width)) + 3
 
 	for i in range(blinds_needed):
-		var blind_x = (start_index + i) * blind_width - _animation_offset
+		var blind_x = (start_index + i) * blind_width - _shared_animation_offset
 		var texture_index = posmod(start_index + i, textures.size())
 		var texture_entry = textures[texture_index]
 		_draw_blind(texture_entry, blind_x, blind_width, angle_offset)
 
+	# Semi-transparent overlay for unified look
 	draw_rect(Rect2(Vector2.ZERO, size), overlay_color)
 
 
@@ -77,6 +138,11 @@ func set_background_textures(paths: PackedStringArray) -> void:
 
 
 func _load_textures() -> void:
+	# Use cached textures if already loaded (shared across menu instances)
+	if _textures_loaded and not _shared_textures.is_empty():
+		_textures = _shared_textures.duplicate()
+		return
+	
 	_textures.clear()
 	var texture_paths = background_textures
 	
@@ -91,6 +157,10 @@ func _load_textures() -> void:
 		var texture = load(path)
 		if texture is Texture2D:
 			_textures.append(texture)
+	
+	# Cache for reuse
+	_shared_textures = _textures.duplicate()
+	_textures_loaded = true
 	
 	_prepare_textures()
 
@@ -114,18 +184,26 @@ func _draw_blind(texture_entry: Dictionary, start_x: float, blind_width: float, 
 		Vector2(start_x + angle_offset, size.y)
 	])
 
-	var color = Color.WHITE
-	var colors = PackedColorArray([color, color, color, color])
+	# Images are already processed with monochrome effect, use white to show them as-is
+	var colors = PackedColorArray([Color.WHITE, Color.WHITE, Color.WHITE, Color.WHITE])
 
 	draw_polygon(points, colors, uvs, texture)
 	_draw_blind_edges(points)
 
 
+func _calculate_tint_color() -> Color:
+	# No longer used for drawing - images are pre-processed
+	return MONOCHROME_HUE
+
+
 func _draw_blind_edges(points: PackedVector2Array) -> void:
 	if points.size() < 4:
 		return
-	var edge_color = Color(1, 1, 1, 0.24)
-	var thickness = 3.0
+	# Subtle light edge for separation between blinds
+	var edge_color = Color(0.6, 0.8, 1.0, 0.15)
+	var thickness = 1.5
+	
+	# Draw edge lines
 	draw_line(points[0], points[3], edge_color, thickness)
 	draw_line(points[1], points[2], edge_color, thickness)
 
@@ -224,6 +302,9 @@ func _create_prepared_texture(original: Texture2D, blind_width: int, angle_offse
 	var dest_pos = Vector2i(int(round((target_width - scaled_width) / 2.0)), int(round((target_height - scaled_height) / 2.0)))
 	_blit_image_with_clipping(final_image, image, dest_pos)
 	
+	# Apply monochrome effect - convert to grayscale and tint
+	_apply_monochrome_effect(final_image)
+	
 	var safe_width: int = max(target_width, 1)
 	var top_left_u: float = 0.0
 	var top_right_u: float = float(blind_width) / float(safe_width)
@@ -272,6 +353,44 @@ static func _blit_image_with_clipping(dest: Image, src: Image, dest_pos: Vector2
 		if max_copy <= 0:
 			continue
 		dest.blit_rect(src, Rect2i(Vector2i(src_x, row), Vector2i(max_copy, 1)), Vector2i(dest_x, dest_y))
+
+
+## Apply monochrome effect to image - converts to grayscale and applies blue tint
+static func _apply_monochrome_effect(image: Image) -> void:
+	if image == null or image.is_empty():
+		return
+	
+	var img_size := image.get_size()
+	var tint := MONOCHROME_HUE
+	var desat := DESATURATION
+	
+	for y in img_size.y:
+		for x in img_size.x:
+			var pixel := image.get_pixel(x, y)
+			if pixel.a < 0.01:
+				continue
+			
+			# Calculate luminance
+			var luminance := pixel.r * 0.299 + pixel.g * 0.587 + pixel.b * 0.114
+			
+			# Apply slight brightness boost and contrast
+			luminance = (luminance - 0.5) * 1.1 + 0.5
+			luminance *= 1.15
+			luminance = clampf(luminance, 0.0, 1.0)
+			
+			# Mix with grayscale based on desaturation amount
+			var gray := Color(luminance, luminance, luminance, pixel.a)
+			var desaturated := pixel.lerp(gray, desat)
+			
+			# Apply tint
+			var final_color := Color(
+				desaturated.r * tint.r,
+				desaturated.g * tint.g,
+				desaturated.b * tint.b,
+				pixel.a
+			)
+			
+			image.set_pixel(x, y, final_color)
 
 
 static func _make_texture_entry(texture: Texture2D) -> Dictionary:
@@ -336,18 +455,26 @@ func _build_default_texture_paths() -> PackedStringArray:
 				if ResourceLoader.exists(burst_path):
 					character_paths.append(burst_path)
 	
-	# Alternate between environment and character images
-	var env_count := environment_paths.size()
+	# Build rotation pattern: CHARACTER - BACKGROUND - CHARACTER
+	# Each character shows with a background between character appearances
+	# When characters run out, just show backgrounds
+	var char_index := 0
+	var env_index := 0
 	var char_count := character_paths.size()
-	var max_count: int = maxi(env_count, char_count)
+	var env_count := environment_paths.size()
 	
-	for i in range(max_count):
-		# Add environment image first
-		if i < env_count:
-			paths.append(environment_paths[i])
-		# Then add character image
-		if i < char_count:
-			paths.append(character_paths[i])
+	# We want pattern: C, B, C, B, C, B... until chars run out, then just B, B, B...
+	# This ensures CHARACTER-BKG-CHARACTER flow
+	while char_index < char_count or env_index < env_count:
+		# Add character if available
+		if char_index < char_count:
+			paths.append(character_paths[char_index])
+			char_index += 1
+		
+		# Add background if available
+		if env_index < env_count:
+			paths.append(environment_paths[env_index])
+			env_index += 1
 	
 	_default_texture_paths_cache = paths.duplicate()
 	return paths

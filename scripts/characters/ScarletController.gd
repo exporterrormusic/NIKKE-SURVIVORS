@@ -42,6 +42,8 @@ func _perform_attack(direction: Vector2) -> void:
 	if slash_scene:
 		var slash = slash_scene.instantiate()
 		slash.rotation = direction.angle()
+		# Use character's base damage with level scaling
+		slash.base_damage = player.calc_damage()
 		player.add_child(slash)  # Attach to player, not parent
 		slash.position = Vector2.ZERO  # Centered on player
 	
@@ -66,7 +68,9 @@ func _perform_special(direction: Vector2) -> void:
 		w.rotation = direction.angle()
 		w.owner_node = player
 		w.pierce_all = true
-		w.damage = 8
+		# Use character's base damage with level scaling (special does 0.8x base damage)
+		w.damage = player.calc_damage(0.8)
+		w.base_damage = w.damage
 		if special_heal_level > 0:
 			w.heal_mode = true
 			var heal_percents := [0.0, 0.05, 0.15, 0.25]

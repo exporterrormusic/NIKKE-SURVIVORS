@@ -6,8 +6,8 @@ signal health_fill_finished
 signal burst_fill_finished
 signal stamina_fill_finished
 
-@export var shake_distance: float = 14.0
-@export_range(0.05, 1.5, 0.01) var shake_duration: float = 0.35
+@export var shake_distance: float = 4.0
+@export_range(0.05, 1.5, 0.01) var shake_duration: float = 0.2
 @export_range(0.05, 1.0, 0.01) var fill_transition_time: float = 0.22
 @export_range(0.0, 1.0, 0.01) var low_health_threshold: float = 0.25
 @export var auto_apply_styles: bool = true

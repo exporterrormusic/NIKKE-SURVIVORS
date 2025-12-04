@@ -135,21 +135,33 @@ func _process_fading(_delta: float) -> void:
 		_finish()
 
 func _check_beam_hit() -> void:
-	if not _player or not is_instance_valid(_player):
+	if not _boss or not is_instance_valid(_boss):
 		return
 	
 	# Get beam line segment
 	var beam_start := _boss.global_position
 	var beam_end := beam_start + _locked_direction * BEAM_LENGTH
 	
-	# Calculate distance from player to beam line
-	var player_pos := _player.global_position
-	var dist := _point_to_line_distance(player_pos, beam_start, beam_end)
+	# Check player
+	if _player and is_instance_valid(_player):
+		var player_pos := _player.global_position
+		var dist := _point_to_line_distance(player_pos, beam_start, beam_end)
+		if dist < BEAM_WIDTH / 2.0:
+			if _player.has_method("take_damage"):
+				_player.take_damage(DAMAGE_PER_TICK)
 	
-	# Check if within beam width (half width since it's centered)
-	if dist < BEAM_WIDTH / 2.0:
-		if _player.has_method("take_damage"):
-			_player.take_damage(DAMAGE_PER_TICK)
+	# Check charmed allies (they're fighting for the player, so enemies should damage them)
+	var tree := get_tree()
+	if tree:
+		var charmed_allies := tree.get_nodes_in_group("charmed_allies")
+		for ally in charmed_allies:
+			if not is_instance_valid(ally) or not ally is Node2D:
+				continue
+			var ally_pos := (ally as Node2D).global_position
+			var dist := _point_to_line_distance(ally_pos, beam_start, beam_end)
+			if dist < BEAM_WIDTH / 2.0:
+				if ally.has_method("take_damage"):
+					ally.take_damage(DAMAGE_PER_TICK)
 
 func _point_to_line_distance(point: Vector2, line_start: Vector2, line_end: Vector2) -> float:
 	var line := line_end - line_start

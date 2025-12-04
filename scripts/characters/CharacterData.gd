@@ -63,6 +63,7 @@ extends Resource
 @export var move_speed: float = 400.0  # Actual movement speed
 @export var base_hp: int = 10
 @export var base_damage: float = 10.0
+@export var crit_chance: float = 0.05  # Default 5% crit chance
 @export var dash_speed: float = 900.0
 @export var dash_duration: float = 0.2
 
@@ -108,6 +109,8 @@ extends Resource
 @export var special_cooldown: float = 3.0
 @export var special_name: String = ""
 @export_multiline var special_description: String = ""
+@export var special_upgrade1: String = ""
+@export var special_upgrade2: String = ""
 
 # =============================================================================
 # BURST CONFIG
@@ -115,6 +118,8 @@ extends Resource
 @export_group("Burst Ability")
 @export var burst_name: String = ""
 @export_multiline var burst_description: String = ""
+@export var burst_upgrade1: String = ""
+@export var burst_upgrade2: String = ""
 @export var burst_duration: float = 5.0
 @export var burst_damage_multiplier: float = 2.0
 @export var burst_max_points: float = 100.0

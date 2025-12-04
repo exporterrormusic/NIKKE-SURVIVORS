@@ -3,6 +3,8 @@ extends Control
 ## Features a grid of character cards and 3 squad slots that start empty.
 ## Click a slot to select it, then click a character to assign.
 
+const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
+
 signal play_requested(squad: Array, map_id: String, time_id: String)
 signal back_requested
 
@@ -327,9 +329,12 @@ func _create_character_card(char_id: String) -> Control:
 	card.custom_minimum_size = CARD_SIZE
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
 	
+	# Check if character is unlocked
+	var is_unlocked: bool = ShopMenuScript.is_character_unlocked(char_id)
+	
 	var style := StyleBoxFlat.new()
-	style.bg_color = CARD_BG_COLOR
-	style.border_color = CARD_BORDER_COLOR
+	style.bg_color = CARD_BG_COLOR if is_unlocked else Color(0.06, 0.06, 0.08, 0.9)
+	style.border_color = CARD_BORDER_COLOR if is_unlocked else Color(0.25, 0.25, 0.3, 0.7)
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(CARD_CORNER_RADIUS)
 	card.add_theme_stylebox_override("panel", style)
@@ -347,7 +352,7 @@ func _create_character_card(char_id: String) -> Control:
 	portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	portrait.set_anchors_preset(Control.PRESET_FULL_RECT)
-	portrait.modulate = Color(1, 1, 1, 0.95)
+	portrait.modulate = Color(1, 1, 1, 0.95) if is_unlocked else Color(0.3, 0.3, 0.35, 0.8)
 	portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	
 	var registry := CharacterRegistry.get_instance()
@@ -357,6 +362,37 @@ func _create_character_card(char_id: String) -> Control:
 		if tex:
 			portrait.texture = tex
 	clip_container.add_child(portrait)
+	
+	# Lock overlay for locked characters
+	if not is_unlocked:
+		var lock_overlay := ColorRect.new()
+		lock_overlay.color = Color(0.0, 0.0, 0.0, 0.4)
+		lock_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+		lock_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		clip_container.add_child(lock_overlay)
+		
+		# VBox to center lock icon and text vertically
+		var lock_vbox := VBoxContainer.new()
+		lock_vbox.set_anchors_preset(Control.PRESET_CENTER)
+		lock_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		lock_vbox.add_theme_constant_override("separation", 2)
+		lock_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		clip_container.add_child(lock_vbox)
+		
+		var lock_icon := Label.new()
+		lock_icon.text = "🔒"
+		lock_icon.add_theme_font_size_override("font_size", 36)
+		lock_icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lock_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		lock_vbox.add_child(lock_icon)
+		
+		var locked_text := Label.new()
+		locked_text.text = "LOCKED"
+		locked_text.add_theme_font_size_override("font_size", 12)
+		locked_text.add_theme_color_override("font_color", Color(0.9, 0.3, 0.3, 1.0))
+		locked_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		locked_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		lock_vbox.add_child(locked_text)
 	
 	# Name overlay at bottom - ignore mouse
 	var name_overlay := ColorRect.new()
@@ -371,7 +407,7 @@ func _create_character_card(char_id: String) -> Control:
 	var name_label := Label.new()
 	name_label.text = char_data.display_name if char_data else char_id
 	name_label.add_theme_font_size_override("font_size", 13)
-	name_label.add_theme_color_override("font_color", TEXT_COLOR)
+	name_label.add_theme_color_override("font_color", TEXT_COLOR if is_unlocked else Color(0.5, 0.5, 0.55))
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	name_label.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -381,6 +417,7 @@ func _create_character_card(char_id: String) -> Control:
 	
 	# Store metadata
 	card.set_meta("char_id", char_id)
+	card.set_meta("is_unlocked", is_unlocked)
 	
 	# Event connections
 	card.gui_input.connect(_on_card_clicked.bind(char_id, card))
@@ -407,64 +444,173 @@ func _create_detail_panel() -> Control:
 	margin.add_theme_constant_override("margin_bottom", 12)
 	panel.add_child(margin)
 	
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 10)
-	margin.add_child(vbox)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(scroll)
 	
-	# Portrait with frame
+	var vbox := VBoxContainer.new()
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_theme_constant_override("separation", 8)
+	scroll.add_child(vbox)
+	
+	# Top row: Animated sprite + name/description
+	var top_row := HBoxContainer.new()
+	top_row.add_theme_constant_override("separation", 16)
+	vbox.add_child(top_row)
+	
+	# Animated sprite frame - larger and fills more space
 	var portrait_frame := Panel.new()
-	portrait_frame.custom_minimum_size = Vector2(0, 200)
+	portrait_frame.name = "SpriteFrame"
+	portrait_frame.custom_minimum_size = Vector2(200, 200)
 	var frame_style := StyleBoxFlat.new()
 	frame_style.bg_color = Color(0.05, 0.05, 0.08, 1.0)
-	frame_style.border_color = Color(0.3, 0.35, 0.5, 0.8)
-	frame_style.set_border_width_all(2)
-	frame_style.set_corner_radius_all(8)
+	frame_style.border_color = Color(0.9, 0.9, 0.95, 0.9)
+	frame_style.set_border_width_all(3)
+	frame_style.set_corner_radius_all(10)
 	portrait_frame.add_theme_stylebox_override("panel", frame_style)
-	vbox.add_child(portrait_frame)
+	portrait_frame.clip_children = Control.CLIP_CHILDREN_AND_DRAW
+	top_row.add_child(portrait_frame)
 	
-	var portrait := TextureRect.new()
-	portrait.name = "DetailPortrait"
-	portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	portrait.set_anchors_preset(Control.PRESET_FULL_RECT)
-	portrait.offset_left = 4
-	portrait.offset_right = -4
-	portrait.offset_top = 4
-	portrait.offset_bottom = -4
-	portrait_frame.add_child(portrait)
+	# SubViewportContainer to display AnimatedSprite2D in UI
+	var viewport_container := SubViewportContainer.new()
+	viewport_container.name = "ViewportContainer"
+	viewport_container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	viewport_container.stretch = true
+	portrait_frame.add_child(viewport_container)
 	
-	# Character name
+	var viewport := SubViewport.new()
+	viewport.name = "SpriteViewport"
+	viewport.size = Vector2i(200, 200)
+	viewport.transparent_bg = true
+	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	viewport_container.add_child(viewport)
+	
+	var sprite := AnimatedSprite2D.new()
+	sprite.name = "DetailSprite"
+	sprite.position = Vector2(100, 100)  # Center in viewport
+	sprite.centered = true
+	sprite.z_index = 10
+	viewport.add_child(sprite)
+	
+	# Name and description column
+	var name_col := VBoxContainer.new()
+	name_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_col.add_theme_constant_override("separation", 6)
+	top_row.add_child(name_col)
+	
 	var name_label := Label.new()
 	name_label.name = "DetailName"
 	name_label.text = "Select a Character"
-	name_label.add_theme_font_size_override("font_size", 24)
+	name_label.add_theme_font_size_override("font_size", 28)
 	name_label.add_theme_color_override("font_color", TEXT_COLOR)
-	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(name_label)
+	name_col.add_child(name_label)
 	
-	# Description
 	var desc_label := Label.new()
 	desc_label.name = "DetailDesc"
 	desc_label.text = ""
-	desc_label.add_theme_font_size_override("font_size", 13)
+	desc_label.add_theme_font_size_override("font_size", 15)
 	desc_label.add_theme_color_override("font_color", DIM_TEXT_COLOR)
-	desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc_label.custom_minimum_size = Vector2(0, 36)
-	vbox.add_child(desc_label)
+	name_col.add_child(desc_label)
 	
-	# Stats section
-	var stats_label := Label.new()
-	stats_label.text = "━━ STATS ━━"
-	stats_label.add_theme_font_size_override("font_size", 14)
-	stats_label.add_theme_color_override("font_color", ACCENT_COLOR)
-	stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(stats_label)
+	# Spacer
+	var spacer1 := Control.new()
+	spacer1.custom_minimum_size = Vector2(0, 6)
+	vbox.add_child(spacer1)
 	
-	var stats_container := VBoxContainer.new()
-	stats_container.name = "StatsContainer"
-	stats_container.add_theme_constant_override("separation", 8)
-	vbox.add_child(stats_container)
+	# Special section
+	var special_header := Label.new()
+	special_header.text = "━━ SPECIAL SKILL ━━"
+	special_header.add_theme_font_size_override("font_size", 18)
+	special_header.add_theme_color_override("font_color", Color(0.4, 0.8, 1.0, 1.0))
+	special_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(special_header)
+	
+	var special_name := Label.new()
+	special_name.name = "SpecialName"
+	special_name.text = ""
+	special_name.add_theme_font_size_override("font_size", 24)
+	special_name.add_theme_color_override("font_color", TEXT_COLOR)
+	special_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(special_name)
+	
+	var special_desc := Label.new()
+	special_desc.name = "SpecialDesc"
+	special_desc.text = ""
+	special_desc.add_theme_font_size_override("font_size", 16)
+	special_desc.add_theme_color_override("font_color", DIM_TEXT_COLOR)
+	special_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	special_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(special_desc)
+	
+	# Special upgrades
+	var special_upgrade1 := Label.new()
+	special_upgrade1.name = "SpecialUpgrade1"
+	special_upgrade1.text = ""
+	special_upgrade1.add_theme_font_size_override("font_size", 14)
+	special_upgrade1.add_theme_color_override("font_color", Color(0.5, 0.9, 0.5, 1.0))
+	special_upgrade1.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	special_upgrade1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(special_upgrade1)
+	
+	var special_upgrade2 := Label.new()
+	special_upgrade2.name = "SpecialUpgrade2"
+	special_upgrade2.text = ""
+	special_upgrade2.add_theme_font_size_override("font_size", 14)
+	special_upgrade2.add_theme_color_override("font_color", Color(0.9, 0.7, 0.3, 1.0))
+	special_upgrade2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	special_upgrade2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(special_upgrade2)
+	
+	# Spacer
+	var spacer2 := Control.new()
+	spacer2.custom_minimum_size = Vector2(0, 10)
+	vbox.add_child(spacer2)
+	
+	# Burst section
+	var burst_header := Label.new()
+	burst_header.text = "━━ BURST SKILL ━━"
+	burst_header.add_theme_font_size_override("font_size", 18)
+	burst_header.add_theme_color_override("font_color", Color(1.0, 0.6, 0.3, 1.0))
+	burst_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(burst_header)
+	
+	var burst_name := Label.new()
+	burst_name.name = "BurstName"
+	burst_name.text = ""
+	burst_name.add_theme_font_size_override("font_size", 24)
+	burst_name.add_theme_color_override("font_color", TEXT_COLOR)
+	burst_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(burst_name)
+	
+	var burst_desc := Label.new()
+	burst_desc.name = "BurstDesc"
+	burst_desc.text = ""
+	burst_desc.add_theme_font_size_override("font_size", 16)
+	burst_desc.add_theme_color_override("font_color", DIM_TEXT_COLOR)
+	burst_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	burst_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(burst_desc)
+	
+	# Burst upgrades
+	var burst_upgrade1 := Label.new()
+	burst_upgrade1.name = "BurstUpgrade1"
+	burst_upgrade1.text = ""
+	burst_upgrade1.add_theme_font_size_override("font_size", 14)
+	burst_upgrade1.add_theme_color_override("font_color", Color(0.5, 0.9, 0.5, 1.0))
+	burst_upgrade1.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	burst_upgrade1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(burst_upgrade1)
+	
+	var burst_upgrade2 := Label.new()
+	burst_upgrade2.name = "BurstUpgrade2"
+	burst_upgrade2.text = ""
+	burst_upgrade2.add_theme_font_size_override("font_size", 14)
+	burst_upgrade2.add_theme_color_override("font_color", Color(0.9, 0.7, 0.3, 1.0))
+	burst_upgrade2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	burst_upgrade2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(burst_upgrade2)
 	
 	return panel
 
@@ -669,23 +815,41 @@ func _update_character_cards() -> void:
 		card.add_theme_stylebox_override("panel", style)
 
 func _update_detail_panel(char_id: String) -> void:
-	var portrait: TextureRect = detail_panel.find_child("DetailPortrait", true, false)
+	var sprite: AnimatedSprite2D = detail_panel.find_child("DetailSprite", true, false)
 	var name_label: Label = detail_panel.find_child("DetailName", true, false)
 	var desc_label: Label = detail_panel.find_child("DetailDesc", true, false)
-	var stats_container: VBoxContainer = detail_panel.find_child("StatsContainer", true, false)
-	
-	# Clear stats
-	if stats_container:
-		for child in stats_container.get_children():
-			child.queue_free()
+	var special_name: Label = detail_panel.find_child("SpecialName", true, false)
+	var special_desc: Label = detail_panel.find_child("SpecialDesc", true, false)
+	var special_upgrade1: Label = detail_panel.find_child("SpecialUpgrade1", true, false)
+	var special_upgrade2: Label = detail_panel.find_child("SpecialUpgrade2", true, false)
+	var burst_name: Label = detail_panel.find_child("BurstName", true, false)
+	var burst_desc: Label = detail_panel.find_child("BurstDesc", true, false)
+	var burst_upgrade1: Label = detail_panel.find_child("BurstUpgrade1", true, false)
+	var burst_upgrade2: Label = detail_panel.find_child("BurstUpgrade2", true, false)
 	
 	if char_id == "":
-		if portrait:
-			portrait.texture = null
+		if sprite:
+			sprite.visible = false
 		if name_label:
 			name_label.text = "Hover over a character"
 		if desc_label:
 			desc_label.text = "Select a slot above, then click a character to assign"
+		if special_name:
+			special_name.text = ""
+		if special_desc:
+			special_desc.text = ""
+		if special_upgrade1:
+			special_upgrade1.text = ""
+		if special_upgrade2:
+			special_upgrade2.text = ""
+		if burst_name:
+			burst_name.text = ""
+		if burst_desc:
+			burst_desc.text = ""
+		if burst_upgrade1:
+			burst_upgrade1.text = ""
+		if burst_upgrade2:
+			burst_upgrade2.text = ""
 		return
 	
 	var registry := CharacterRegistry.get_instance()
@@ -694,17 +858,32 @@ func _update_detail_panel(char_id: String) -> void:
 	if not char_data:
 		return
 	
-	if portrait:
-		portrait.texture = char_data.get_portrait()
+	if sprite:
+		_configure_detail_sprite(sprite, char_data)
 	if name_label:
 		name_label.text = char_data.display_name
 	if desc_label:
 		desc_label.text = char_data.description if char_data.description else ""
 	
-	if stats_container:
-		_add_stat_row(stats_container, "HP", str(char_data.base_hp), 20.0, Color(0.4, 0.9, 0.5, 1.0))
-		_add_stat_row(stats_container, "Speed", str(int(char_data.move_speed)), 500.0, Color(0.5, 0.7, 1.0, 1.0))
-		_add_stat_row(stats_container, "Attack", str(int(char_data.base_damage)), 50.0, Color(1.0, 0.5, 0.4, 1.0))
+	# Special skill info
+	if special_name:
+		special_name.text = char_data.special_name if char_data.special_name else "Special Skill"
+	if special_desc:
+		special_desc.text = char_data.special_description if char_data.special_description else ""
+	if special_upgrade1:
+		special_upgrade1.text = "▲ " + char_data.special_upgrade1 if char_data.get("special_upgrade1") else ""
+	if special_upgrade2:
+		special_upgrade2.text = "★ " + char_data.special_upgrade2 if char_data.get("special_upgrade2") else ""
+	
+	# Burst skill info
+	if burst_name:
+		burst_name.text = char_data.burst_name if char_data.burst_name else "Burst Skill"
+	if burst_desc:
+		burst_desc.text = char_data.burst_description if char_data.burst_description else ""
+	if burst_upgrade1:
+		burst_upgrade1.text = "▲ " + char_data.burst_upgrade1 if char_data.get("burst_upgrade1") else ""
+	if burst_upgrade2:
+		burst_upgrade2.text = "★ " + char_data.burst_upgrade2 if char_data.get("burst_upgrade2") else ""
 
 func _add_stat_row(container: VBoxContainer, stat_name: String, value: String, max_value: float = 500.0, bar_color: Color = ACCENT_COLOR) -> void:
 	var row := HBoxContainer.new()
@@ -768,8 +947,19 @@ func _on_slot_clicked(event: InputEvent, slot_index: int) -> void:
 			var char_id := squad_slots[slot_index]
 			_update_detail_panel(char_id)
 
-func _on_card_clicked(event: InputEvent, char_id: String, _card: Control) -> void:
+func _on_card_clicked(event: InputEvent, char_id: String, card: Control) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		# Check if character is unlocked
+		var is_unlocked: bool = card.get_meta("is_unlocked", true)
+		if not is_unlocked:
+			# Shake the card to indicate locked
+			var tween := create_tween()
+			tween.tween_property(card, "position:x", card.position.x + 5, 0.05)
+			tween.tween_property(card, "position:x", card.position.x - 5, 0.05)
+			tween.tween_property(card, "position:x", card.position.x + 3, 0.05)
+			tween.tween_property(card, "position:x", card.position.x, 0.05)
+			return
+		
 		# Assign character to selected slot
 		squad_slots[selected_slot_index] = char_id
 		
@@ -787,8 +977,10 @@ func _on_card_hovered(char_id: String, card: Control) -> void:
 	hovered_char_id = char_id
 	_update_detail_panel(char_id)
 	
-	# Highlight card on hover
-	if not squad_slots.has(char_id):
+	var is_unlocked: bool = card.get_meta("is_unlocked", true)
+	
+	# Highlight card on hover (only if unlocked)
+	if not squad_slots.has(char_id) and is_unlocked:
 		var style: StyleBoxFlat = card.get_theme_stylebox("panel").duplicate()
 		style.border_color = CARD_HOVER_BORDER
 		style.set_border_width_all(3)
@@ -937,3 +1129,47 @@ func _transition_to_squad_phase() -> void:
 	var title: Label = main_container.find_child("TitleLabel", true, false)
 	if title:
 		title.text = "SELECT YOUR SQUAD"
+
+func _configure_detail_sprite(sprite: AnimatedSprite2D, char_data: Resource) -> void:
+	"""Configure the AnimatedSprite2D to play the walking right animation for a character."""
+	if not sprite or not char_data:
+		if sprite:
+			sprite.visible = false
+		return
+	
+	var sprite_sheet: Texture2D = char_data.get_sprite()
+	if not sprite_sheet:
+		sprite.visible = false
+		return
+	
+	var columns: int = char_data.sprite_sheet_columns if char_data.sprite_sheet_columns > 0 else 4
+	var rows: int = char_data.sprite_sheet_rows if char_data.sprite_sheet_rows > 0 else 4
+	var fps: float = char_data.sprite_animation_fps if char_data.sprite_animation_fps > 0 else 8.0
+	var scale_factor: float = char_data.sprite_scale if char_data.sprite_scale > 0 else 0.2
+	
+	# Make sprite bigger for the preview (3x the normal scale)
+	scale_factor *= 3.0
+	
+	var texture_size: Vector2 = sprite_sheet.get_size()
+	var frame_width := int(texture_size.x / columns)
+	var frame_height := int(texture_size.y / rows)
+	
+	var frames := SpriteFrames.new()
+	
+	# Create the "right" animation (row 2)
+	frames.add_animation("right")
+	frames.set_animation_speed("right", fps)
+	frames.set_animation_loop("right", true)
+	
+	# Add frames for the right direction (row 2, each column is a frame)
+	for col in range(columns):
+		var atlas := AtlasTexture.new()
+		atlas.atlas = sprite_sheet
+		atlas.region = Rect2(col * frame_width, 2 * frame_height, frame_width, frame_height)
+		frames.add_frame("right", atlas)
+	
+	sprite.sprite_frames = frames
+	sprite.scale = Vector2(scale_factor, scale_factor)
+	sprite.visible = true
+	sprite.animation = "right"
+	sprite.play("right")

@@ -335,8 +335,8 @@ func _find_best_target() -> Node2D:
 		if not is_instance_valid(enemy) or not enemy is Node2D:
 			continue
 		
-		# Skip charmed enemies
-		if enemy.get("_is_charmed") == true:
+		# Skip charmed enemies (they're friendly now)
+		if enemy.is_in_group("charmed_allies"):
 			continue
 		
 		# Skip dead or dying enemies

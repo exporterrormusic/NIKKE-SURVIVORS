@@ -1,6 +1,6 @@
 extends "res://scripts/characters/CharacterController.gd"
 class_name NayutaController
-## Nayuta - SMG with clone summoning and galaxy burst
+## Nayuta - SMG with clone summoning
 ## Special: Summon a clone that fights alongside (8s cooldown, clone lives until killed)
 ## Burst: Galaxy explosion that damages all enemies on screen
 
@@ -61,6 +61,9 @@ func _perform_attack(direction: Vector2) -> void:
 	var perp := Vector2(-direction.y, direction.x).normalized()
 	var gun_offset := 18.0
 	
+	# Each SMG bullet does 1 base damage (2 total per shot)
+	var bullet_damage: int = maxi(player.calc_damage(1.0 / player.get_base_damage()), 1)
+	
 	# Left gun bullet
 	var bullet_left = bullet_scene.instantiate()
 	player.get_parent().add_child(bullet_left)
@@ -68,7 +71,7 @@ func _perform_attack(direction: Vector2) -> void:
 	bullet_left.velocity = direction * bullet_speed
 	bullet_left.rotation = direction.angle()
 	bullet_left.owner_node = player
-	bullet_left.base_damage = 1
+	bullet_left.base_damage = bullet_damage
 	
 	# Right gun bullet
 	var bullet_right = bullet_scene.instantiate()
@@ -77,7 +80,7 @@ func _perform_attack(direction: Vector2) -> void:
 	bullet_right.velocity = direction * bullet_speed
 	bullet_right.rotation = direction.angle()
 	bullet_right.owner_node = player
-	bullet_right.base_damage = 1
+	bullet_right.base_damage = bullet_damage
 	
 	_play_sound("smg")
 

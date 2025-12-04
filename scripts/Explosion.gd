@@ -7,6 +7,9 @@ func _ready():
     connect("body_entered", Callable(self, "_on_body_entered"))
     for body in get_overlapping_bodies():
         if body != get_parent().get_node("Player") and body.has_method("take_damage"):
+            # Skip charmed enemies (they're friendly now)
+            if body.is_in_group("charmed_allies"):
+                continue
             var hit_direction = (body.global_position - global_position).normalized()
             body.take_damage(1, false, hit_direction)
     modulate.a = 1.0
@@ -45,5 +48,8 @@ func _process(delta):
 
 func _on_body_entered(body):
     if body != get_parent().get_node("Player") and body.has_method("take_damage"):
+        # Skip charmed enemies (they're friendly now)
+        if body.is_in_group("charmed_allies"):
+            return
         var hit_direction = (body.global_position - global_position).normalized()
         body.take_damage(1, false, hit_direction)

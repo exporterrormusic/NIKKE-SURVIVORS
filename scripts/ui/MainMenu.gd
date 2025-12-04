@@ -102,8 +102,8 @@ func _on_button_pressed(option_id: String) -> void:
 			print("[MainMenu] Emitting shop_selected")
 			shop_selected.emit()
 		"THE OUTPOST":
-			print("[MainMenu] Emitting outpost_selected")
-			outpost_selected.emit()
+			print("[MainMenu] Showing Outpost coming soon popup")
+			_show_outpost_coming_soon()
 		_:
 			print("[MainMenu] Unknown option, showing coming soon")
 			_show_coming_soon()
@@ -122,8 +122,16 @@ func _update_selection() -> void:
 
 
 var _quit_dialog: Control = null
+var _outpost_dialog: Control = null
 
 func _unhandled_input(event: InputEvent) -> void:
+	# If outpost dialog is open, handle its input first
+	if _outpost_dialog and _outpost_dialog.visible:
+		if event.is_action_pressed("ui_cancel") or event.is_action_pressed("ui_accept"):
+			_hide_outpost_dialog()
+			get_viewport().set_input_as_handled()
+		return
+	
 	# If quit dialog is open, handle its input first
 	if _quit_dialog and _quit_dialog.visible:
 		if event.is_action_pressed("ui_cancel"):
@@ -279,3 +287,87 @@ func _activate_current() -> void:
 func _show_coming_soon() -> void:
 	if _coming_soon_dialog:
 		_coming_soon_dialog.popup_centered()
+
+
+func _show_outpost_coming_soon() -> void:
+	if _outpost_dialog:
+		_outpost_dialog.visible = true
+		return
+	
+	# Create overlay
+	_outpost_dialog = Control.new()
+	_outpost_dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_outpost_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_outpost_dialog)
+	
+	# Dark background
+	var overlay := ColorRect.new()
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.color = Color(0.0, 0.0, 0.0, 0.7)
+	overlay.gui_input.connect(func(event): 
+		if event is InputEventMouseButton and event.pressed:
+			_hide_outpost_dialog()
+	)
+	_outpost_dialog.add_child(overlay)
+	
+	# Panel
+	var panel := Panel.new()
+	panel.custom_minimum_size = Vector2(450, 220)
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.offset_left = -225
+	panel.offset_right = 225
+	panel.offset_top = -110
+	panel.offset_bottom = 110
+	
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.08, 0.1, 0.14, 0.98)
+	panel_style.border_color = Color(0.95, 0.95, 0.98, 0.9)
+	panel_style.set_border_width_all(3)
+	panel_style.set_corner_radius_all(12)
+	panel.add_theme_stylebox_override("panel", panel_style)
+	_outpost_dialog.add_child(panel)
+	
+	# VBox for content
+	var vbox := VBoxContainer.new()
+	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vbox.offset_left = 32
+	vbox.offset_right = -32
+	vbox.offset_top = 24
+	vbox.offset_bottom = -24
+	vbox.add_theme_constant_override("separation", 16)
+	panel.add_child(vbox)
+	
+	# Title
+	var title := Label.new()
+	title.text = "COMING SOON!"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 36)
+	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4))
+	vbox.add_child(title)
+	
+	# Description
+	var desc := Label.new()
+	desc.text = "The Outpost is still under construction."
+	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc.add_theme_font_size_override("font_size", 18)
+	desc.add_theme_color_override("font_color", Color(0.8, 0.8, 0.85))
+	vbox.add_child(desc)
+	
+	# Spacer
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(spacer)
+	
+	# Close button
+	var btn_container := HBoxContainer.new()
+	btn_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_child(btn_container)
+	
+	var close_btn := _create_dialog_button("CLOSE", false)
+	close_btn.pressed.connect(_hide_outpost_dialog)
+	btn_container.add_child(close_btn)
+
+
+func _hide_outpost_dialog() -> void:
+	if _outpost_dialog:
+		_outpost_dialog.visible = false

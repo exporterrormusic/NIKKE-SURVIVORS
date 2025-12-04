@@ -184,11 +184,42 @@ func update_sprite() -> void:
 			print("[PlayerCore] Loaded sprite for slot %d (registry %d)" % [current_character, registry_idx])
 		else:
 			push_warning("[PlayerCore] update_sprite: No texture for character %d" % registry_idx)
+		
+		# Apply character stats
+		_apply_character_stats(char_data)
 	else:
 		push_warning("[PlayerCore] update_sprite: No char_data for index %d" % registry_idx)
 	
 	if player_hud and player_hud.is_inside_tree():
 		player_hud.set_character(current_character, is_burst_unlocked())
+
+func _apply_character_stats(char_data: Resource) -> void:
+	"""Apply character-specific stats like speed."""
+	if char_data.base_speed > 0:
+		speed = char_data.base_speed
+		print("[PlayerCore] Applied speed: %.1f" % speed)
+
+## Calculate damage with level scaling
+## Base formula: base_damage * (1.0 + (level - 1) * 0.5)
+## At level 1: 1.0x, level 2: 1.5x, level 3: 2.0x, level 5: 3.0x, level 10: 5.5x
+func calculate_damage(base_damage: float, multiplier: float = 1.0) -> int:
+	var level_multiplier: float = 1.0 + (level - 1) * 0.5
+	return maxi(1, int(base_damage * level_multiplier * multiplier))
+
+## Get current character's base damage from CharacterData
+func get_base_damage() -> float:
+	if current_character < 0 or current_character >= _selected_char_indices.size():
+		return 1.0
+	var registry_idx: int = _selected_char_indices[current_character]
+	if _registry:
+		var char_data = _registry.get_character_by_index(registry_idx)
+		if char_data:
+			return char_data.base_damage
+	return 1.0
+
+## Shorthand: calculate damage using current character's base damage
+func calc_damage(multiplier: float = 1.0) -> int:
+	return calculate_damage(get_base_damage(), multiplier)
 
 func is_burst_unlocked() -> bool:
 	if _current_controller:
@@ -278,6 +309,10 @@ func take_damage(dmg: int) -> void:
 		_on_player_death()
 
 func _on_player_death() -> void:
+	# Record the run result to GameState for leaderboard
+	if GameState:
+		GameState.record_run_result("")
+	
 	# Find the Level node and trigger defeat menu
 	var level_node = get_parent()
 	if level_node and level_node.has_method("show_defeat_menu"):

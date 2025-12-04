@@ -14,6 +14,13 @@ var explode_at_target = false
 var speed = 400
 var target_node: Node = null
 
+# Damage config
+var base_damage: int = 10  # Default explosion damage
+var ground_fire_enabled: bool = false
+var ground_fire_duration: float = 3.0
+var ground_fire_damage: int = 3
+var ground_fire_radius: float = 100.0
+
 # Smoke trail settings
 const SMOKE_INTERVAL := 0.03
 const SMOKE_LIFETIME := 0.4
@@ -120,7 +127,7 @@ func explode():
             if global_position.distance_to(child.global_position) < 100:
                 # Pass hit direction (from explosion center to enemy)
                 var hit_direction = (child.global_position - global_position).normalized()
-                child.take_damage(1, false, hit_direction)
+                child.take_damage(base_damage, false, hit_direction)
     # create explosion
     var explosion_scene = preload("res://scenes/effects/Explosion.tscn")
     var explosion = explosion_scene.instantiate()
@@ -133,7 +140,7 @@ func explode():
         combat_juice_script.camera_shake(5.0)
     
     # Create burning ground effect if enabled (Rapunzel's missiles only)
-    if create_burning_ground:
+    if create_burning_ground or ground_fire_enabled:
         _spawn_burning_ground()
     
     call_deferred("queue_free")
@@ -144,10 +151,10 @@ func _spawn_burning_ground():
         var fire = fire_scene.instantiate()
         get_parent().add_child(fire)
         fire.global_position = global_position
-        # Configure for Rapunzel's burning effect: 1 dmg per 0.5s for 4s
-        fire.radius = 80.0
-        fire.duration = 4.0
-        fire.damage_per_tick = 1
+        # Configure burning ground with missile's settings
+        fire.radius = ground_fire_radius
+        fire.duration = ground_fire_duration
+        fire.damage_per_tick = ground_fire_damage
         fire.tick_interval = 0.5
         # Golden/orange color to match Rapunzel's theme
         fire.color = Color(1.0, 0.7, 0.2, 0.5)
@@ -163,6 +170,9 @@ func _on_body_entered(body):
     if body.is_in_group("player_allies"):
         return
     if body == get_parent().get_node_or_null("Player"):
+        return
+    # Skip charmed enemies (they're friendly now)
+    if body.is_in_group("charmed_allies"):
         return
     # Ignore other projectiles
     if body.is_in_group("projectiles"):

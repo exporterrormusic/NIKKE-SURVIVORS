@@ -18,6 +18,9 @@ func _on_body_entered(body: Node) -> void:
 		return
 	if body == owner_node:
 		return
+	# Skip charmed enemies (they're friendly now)
+	if body.is_in_group("charmed_allies"):
+		return
 	if not body.has_method("take_damage"):
 		return
 	# Inflict damage

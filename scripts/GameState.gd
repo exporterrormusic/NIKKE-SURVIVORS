@@ -2,13 +2,16 @@ extends Node
 
 ## Global game state singleton that persists across scenes.
 ## Stores character selections and links them to the shop/talent system.
+## Tracks scores, waves survived, and maintains leaderboard data.
 ##
 ## Usage:
 ##   - Character select menu sets the 3 selected characters
 ##   - Shop/TalentTree reads from here to know which characters to display
-##   - This ensures character selection and shop are always in sync
+##   - Level reports score/wave on game over for leaderboard tracking
 ##
 ## Access via autoload: GameState.set_selected_characters([...])
+
+const LEADERBOARD_PATH := "user://leaderboard.cfg"
 
 # Selected characters for the current run (character registry indices)
 # Default: Cecil (8), Nayuta (9), Marian (4)
@@ -19,6 +22,243 @@ var player_character_index: int = 9  # Default to Nayuta
 
 # Character registry reference (loaded lazily)
 var _character_registry = null
+
+# --- Current Run Stats ---
+var current_score: int = 0
+var current_wave: int = 0
+var current_kills: int = 0
+
+# --- Leaderboard Data ---
+# Dictionary: character_id (String) -> { "best_score": int, "best_wave": int, "total_runs": int }
+var _leaderboard_data: Dictionary = {}
+var _total_score_all_time: int = 0
+
+# --- Meta Currency ---
+# Pristine Rapture Cores - earned by defeating bosses, used in main menu shop
+var pristine_rapture_cores: int = 0
+
+
+func _ready() -> void:
+	_load_leaderboard()
+
+
+# --- Current Run Tracking ---
+
+## Add score during gameplay (call when enemy dies)
+func add_score(points: int) -> void:
+	current_score += points
+	current_kills += 1
+
+
+## Update current wave (call from WaveDirector)
+func set_current_wave(wave: int) -> void:
+	current_wave = wave
+
+
+## Reset current run stats (call at start of new game)
+func reset_run_stats() -> void:
+	current_score = 0
+	current_wave = 0
+	current_kills = 0
+
+
+## Record the result of a completed run (call on game over)
+## @param character_id: The character code/id that was played
+func record_run_result(character_id: String) -> void:
+	if character_id.is_empty():
+		# Try to get from current player character
+		_ensure_registry()
+		if _character_registry:
+			var char_ids: Array = _character_registry.get_all_character_ids()
+			if player_character_index >= 0 and player_character_index < char_ids.size():
+				character_id = char_ids[player_character_index]
+	
+	if character_id.is_empty():
+		push_warning("GameState: Cannot record run - no character_id")
+		return
+	
+	print("[GameState] Recording run: character=%s, score=%d, wave=%d, kills=%d" % [character_id, current_score, current_wave, current_kills])
+	
+	# Get or create entry for this character
+	if not _leaderboard_data.has(character_id):
+		_leaderboard_data[character_id] = {
+			"best_score": 0,
+			"best_wave": 0,
+			"total_runs": 0
+		}
+	
+	var entry: Dictionary = _leaderboard_data[character_id]
+	entry["total_runs"] = entry.get("total_runs", 0) + 1
+	
+	# Update best score if this run was better
+	if current_score > entry.get("best_score", 0):
+		entry["best_score"] = current_score
+		print("[GameState] New best score for %s: %d" % [character_id, current_score])
+	
+	# Update best wave if this run went further
+	if current_wave > entry.get("best_wave", 0):
+		entry["best_wave"] = current_wave
+		print("[GameState] New best wave for %s: %d" % [character_id, current_wave])
+	
+	# Update total score
+	_total_score_all_time += current_score
+	
+	_leaderboard_data[character_id] = entry
+	_save_leaderboard()
+
+
+# --- Leaderboard Queries ---
+
+## Get leaderboard entries sorted by best score
+## Returns array of dictionaries with display_name, code, best_score, best_wave
+func get_leaderboard_entries(max_count: int = 10) -> Array:
+	var entries: Array = []
+	
+	_ensure_registry()
+	
+	# Build entries from all characters that have been played
+	for char_id in _leaderboard_data:
+		var data: Dictionary = _leaderboard_data[char_id]
+		var display_name: String = char_id.capitalize().replace("-", " ").replace("_", " ")
+		
+		# Try to get proper display name from registry
+		if _character_registry:
+			var char_data = _character_registry.get_character(char_id)
+			if char_data and char_data.display_name != "":
+				display_name = char_data.display_name
+		
+		entries.append({
+			"display_name": display_name,
+			"code": char_id,
+			"best_score": data.get("best_score", 0),
+			"best_wave": data.get("best_wave", 0),
+			"total_runs": data.get("total_runs", 0)
+		})
+	
+	# Also add characters that haven't been played yet (with 0 scores)
+	if _character_registry:
+		var all_ids: Array = _character_registry.get_all_character_ids()
+		for char_id in all_ids:
+			if not _leaderboard_data.has(char_id):
+				var char_data = _character_registry.get_character(char_id)
+				var display_name: String = char_id.capitalize().replace("-", " ").replace("_", " ")
+				if char_data and char_data.display_name != "":
+					display_name = char_data.display_name
+				entries.append({
+					"display_name": display_name,
+					"code": char_id,
+					"best_score": 0,
+					"best_wave": 0,
+					"total_runs": 0
+				})
+	
+	# Sort by best score descending
+	entries.sort_custom(func(a, b): return a["best_score"] > b["best_score"])
+	
+	# Limit to max_count
+	if entries.size() > max_count:
+		entries = entries.slice(0, max_count)
+	
+	return entries
+
+
+## Get total score across all runs
+func get_total_score() -> int:
+	return _total_score_all_time
+
+
+## Get best score for a specific character
+func get_best_score(character_id: String) -> int:
+	if _leaderboard_data.has(character_id):
+		return _leaderboard_data[character_id].get("best_score", 0)
+	return 0
+
+
+## Get best wave for a specific character
+func get_best_wave(character_id: String) -> int:
+	if _leaderboard_data.has(character_id):
+		return _leaderboard_data[character_id].get("best_wave", 0)
+	return 0
+
+
+# --- Meta Currency ---
+
+## Add Pristine Rapture Cores (call on boss defeat)
+func add_pristine_cores(amount: int) -> void:
+	pristine_rapture_cores += amount
+	print("[GameState] +%d Pristine Rapture Core(s)! Total: %d" % [amount, pristine_rapture_cores])
+	_save_leaderboard()
+
+## Spend Pristine Rapture Cores (returns true if successful)
+func spend_pristine_cores(amount: int) -> bool:
+	if pristine_rapture_cores >= amount:
+		pristine_rapture_cores -= amount
+		print("[GameState] Spent %d Pristine Rapture Core(s). Remaining: %d" % [amount, pristine_rapture_cores])
+		_save_leaderboard()
+		return true
+	return false
+
+## Get current Pristine Rapture Core count
+func get_pristine_cores() -> int:
+	return pristine_rapture_cores
+
+
+# --- Persistence ---
+
+func _save_leaderboard() -> void:
+	var config := ConfigFile.new()
+	
+	config.set_value("stats", "total_score", _total_score_all_time)
+	config.set_value("stats", "pristine_rapture_cores", pristine_rapture_cores)
+	
+	for char_id in _leaderboard_data:
+		var data: Dictionary = _leaderboard_data[char_id]
+		config.set_value("characters", char_id + "_best_score", data.get("best_score", 0))
+		config.set_value("characters", char_id + "_best_wave", data.get("best_wave", 0))
+		config.set_value("characters", char_id + "_total_runs", data.get("total_runs", 0))
+	
+	var err := config.save(LEADERBOARD_PATH)
+	if err == OK:
+		print("[GameState] Leaderboard saved")
+	else:
+		push_error("[GameState] Failed to save leaderboard: " + str(err))
+
+
+func _load_leaderboard() -> void:
+	var config := ConfigFile.new()
+	var err := config.load(LEADERBOARD_PATH)
+	
+	if err != OK:
+		print("[GameState] No leaderboard file found, starting fresh")
+		return
+	
+	_total_score_all_time = config.get_value("stats", "total_score", 0)
+	pristine_rapture_cores = config.get_value("stats", "pristine_rapture_cores", 0)
+	
+	# Load character data
+	_leaderboard_data.clear()
+	
+	# Find all character keys
+	var keys: PackedStringArray = config.get_section_keys("characters") if config.has_section("characters") else PackedStringArray()
+	var processed_chars: Dictionary = {}
+	
+	for key in keys:
+		# Keys are like "scarlet_best_score", extract character id
+		var parts := key.rsplit("_", true, 2)  # Split from right, max 2 splits
+		if parts.size() >= 3:
+			var char_id := parts[0]
+			for i in range(1, parts.size() - 2):
+				char_id += "_" + parts[i]
+			
+			if not processed_chars.has(char_id):
+				processed_chars[char_id] = true
+				_leaderboard_data[char_id] = {
+					"best_score": config.get_value("characters", char_id + "_best_score", 0),
+					"best_wave": config.get_value("characters", char_id + "_best_wave", 0),
+					"total_runs": config.get_value("characters", char_id + "_total_runs", 0)
+				}
+	
+	print("[GameState] Leaderboard loaded: %d characters, total score: %d, cores: %d" % [_leaderboard_data.size(), _total_score_all_time, pristine_rapture_cores])
 
 ## Set the 3 characters selected for this run
 ## @param indices: Array of 3 character registry indices

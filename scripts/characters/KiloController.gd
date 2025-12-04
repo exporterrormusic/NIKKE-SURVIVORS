@@ -98,7 +98,8 @@ func _fire_shotgun(direction: Vector2, is_special: bool, is_burst_shot: bool = f
 		pellet.global_position = player.global_position + pellet_dir * 30
 		pellet.velocity = pellet_dir * 850
 		pellet.owner_node = player
-		pellet.base_damage = int(2 * damage_mult)
+		# Use character's base damage with level scaling
+		pellet.base_damage = player.calc_damage(damage_mult)
 		pellet.pierce_all = false
 		pellet.is_special = is_special
 		pellet.is_burst = is_burst_shot  # Burst pellets get persistent lines

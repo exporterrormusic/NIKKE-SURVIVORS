@@ -12,14 +12,14 @@ var base_angle_offset: float = 0.0
 var orbit_radius: float = 90.0  # Larger orbit for shield mode
 var orbit_speed: float = 2.5  # Radians per second
 var current_angle: float = 0.0
-var hunt_speed: float = 300.0
+var hunt_speed: float = 400.0  # Faster hunting speed
 
 # Combat
-var attack_range: float = 250.0
-var fire_cooldown: float = 0.8
+var attack_range: float = 400.0  # Much longer range
+var fire_cooldown: float = 0.6  # Balanced firing rate
 var _fire_timer: float = 0.0
 var laser_damage: int = 3
-var laser_speed: float = 600.0
+var laser_speed: float = 800.0  # Faster projectiles
 
 # Multipliers from upgrades
 var speed_multiplier: float = 1.0
@@ -129,36 +129,55 @@ func _process_hunt_mode(delta: float) -> void:
 		var to_target := _current_target.global_position - global_position
 		var dist := to_target.length()
 		
-		if dist > attack_range:
-			# Move toward target
+		# Check if target is too far from owner - stay relatively near Cecil
+		var max_distance_from_owner := 450.0  # Increased to match longer attack range
+		var dist_from_owner := global_position.distance_to(owner_player.global_position)
+		
+		if dist_from_owner > max_distance_from_owner:
+			# Return toward owner if too far
+			var return_dir := (owner_player.global_position - global_position).normalized()
+			global_position += return_dir * hunt_speed * speed_multiplier * delta
+		elif dist > attack_range:
+			# Move toward target aggressively
 			var move_dir := to_target.normalized()
-			global_position += move_dir * hunt_speed * speed_multiplier * delta
+			var new_pos := global_position + move_dir * hunt_speed * speed_multiplier * delta
+			
+			# Clamp to max distance from owner
+			var new_dist_from_owner := new_pos.distance_to(owner_player.global_position)
+			if new_dist_from_owner <= max_distance_from_owner:
+				global_position = new_pos
+			else:
+				# Move but stay within range
+				var dir_from_owner := (new_pos - owner_player.global_position).normalized()
+				global_position = owner_player.global_position + dir_from_owner * max_distance_from_owner
 		else:
-			# In range, try to fire
+			# In range, fire immediately and aggressively
 			if _fire_timer <= 0:
 				_fire_laser_at(_current_target)
 				_fire_timer = fire_cooldown / speed_multiplier
 			
-			# Orbit around target slightly
-			var orbit_around := _current_target.global_position
-			var angle_to_drone := (global_position - orbit_around).angle()
-			angle_to_drone += orbit_speed * speed_multiplier * delta
-			var desired_pos := orbit_around + Vector2(cos(angle_to_drone), sin(angle_to_drone)) * (attack_range * 0.7)
-			global_position = global_position.lerp(desired_pos, 3.0 * delta)
+			# Stay close to target for continuous firing (don't orbit away)
+			var optimal_range := attack_range * 0.5  # Stay at half range for better accuracy
+			var desired_pos := _current_target.global_position + (global_position - _current_target.global_position).normalized() * optimal_range
+			
+			# Clamp desired position to max distance from owner
+			var desired_dist := desired_pos.distance_to(owner_player.global_position)
+			if desired_dist > max_distance_from_owner:
+				var dir := (desired_pos - owner_player.global_position).normalized()
+				desired_pos = owner_player.global_position + dir * max_distance_from_owner
+			
+			global_position = global_position.lerp(desired_pos, 5.0 * delta)  # Faster positioning
 	else:
 		# No target, orbit around player
 		_orbit_player(delta)
+	
+	# Keep drone on screen
+	_clamp_to_screen()
 
 func _process_shield_mode(delta: float) -> void:
 	# Move exactly with player in shield mode - no lag
+	# Drones do NOT fire in shield mode - they focus on protection
 	_orbit_player_instant(delta)
-	
-	# Still fire at nearby enemies
-	if _fire_timer <= 0:
-		var target := _find_nearest_enemy()
-		if target and global_position.distance_to(target.global_position) <= attack_range:
-			_fire_laser_at(target)
-			_fire_timer = fire_cooldown / speed_multiplier
 
 func _orbit_player(delta: float) -> void:
 	current_angle += orbit_speed * speed_multiplier * delta
@@ -169,6 +188,28 @@ func _orbit_player_instant(delta: float) -> void:
 	# Update angle and move instantly to position (no lerp) for shield mode
 	current_angle += orbit_speed * speed_multiplier * delta
 	global_position = owner_player.global_position + Vector2(cos(current_angle), sin(current_angle)) * orbit_radius
+
+func _clamp_to_screen() -> void:
+	# Keep drone visible on screen with some margin
+	var viewport := get_viewport()
+	if not viewport:
+		return
+	
+	var camera := viewport.get_camera_2d()
+	if not camera:
+		return
+	
+	var screen_size := viewport.get_visible_rect().size
+	var camera_pos := camera.global_position
+	var margin := 50.0
+	
+	var min_x := camera_pos.x - screen_size.x / 2.0 + margin
+	var max_x := camera_pos.x + screen_size.x / 2.0 - margin
+	var min_y := camera_pos.y - screen_size.y / 2.0 + margin
+	var max_y := camera_pos.y + screen_size.y / 2.0 - margin
+	
+	global_position.x = clampf(global_position.x, min_x, max_x)
+	global_position.y = clampf(global_position.y, min_y, max_y)
 
 func _process_returning(delta: float) -> void:
 	# Move quickly toward designated orbit position (based on base_angle_offset for proper spacing)
@@ -210,8 +251,8 @@ func _find_nearest_enemy() -> Node2D:
 		if not is_instance_valid(enemy) or not enemy is Node2D:
 			continue
 		
-		# Skip charmed enemies
-		if enemy.get("_is_charmed") == true:
+		# Skip charmed enemies (they're friendly now)
+		if enemy.is_in_group("charmed_allies"):
 			continue
 		
 		var dist := global_position.distance_to(enemy.global_position)
@@ -266,14 +307,16 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 func _draw() -> void:
-	# Draw larger blue laser beam (50% bigger)
-	var length := 30.0
-	var width := 6.0
+	# Draw thick blue laser beam
+	var length := 35.0
+	var width := 12.0
 	
+	# Outer glow
+	draw_line(Vector2.ZERO, Vector2(length, 0), Color(0.2, 0.5, 1.0, 0.3), width * 2.5)
+	# Mid glow
+	draw_line(Vector2.ZERO, Vector2(length, 0), Color(0.3, 0.7, 1.0, 0.6), width * 1.5)
 	# Core
 	draw_line(Vector2.ZERO, Vector2(length, 0), Color(0.7, 0.95, 1.0, 1.0), width)
-	# Glow
-	draw_line(Vector2.ZERO, Vector2(length, 0), Color(0.3, 0.7, 1.0, 0.5), width * 2)
 
 func _physics_process(_delta: float) -> void:
 	# Check for enemy collision

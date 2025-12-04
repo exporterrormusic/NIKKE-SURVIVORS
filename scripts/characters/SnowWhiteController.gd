@@ -42,6 +42,8 @@ func _perform_attack(direction: Vector2) -> void:
 	bullet.rotation = direction.angle()  # Sprite child already has PI rotation built-in
 	bullet.owner_node = player
 	bullet.pierce_all = true  # Snow White's bullets pierce
+	# Use character's base damage with level scaling
+	bullet.base_damage = player.calc_damage()
 	
 	_play_sound("sniper")
 

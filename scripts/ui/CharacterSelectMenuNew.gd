@@ -10,6 +10,7 @@ const SquadSlotsScript = preload("res://scripts/ui/components/SquadSlots.gd")
 const CharacterInfoPanelScript = preload("res://scripts/ui/components/CharacterInfoPanel.gd")
 const StageSelectorScript = preload("res://scripts/ui/components/StageSelector.gd")
 const VenetianBlindsScript = preload("res://scripts/ui/components/VenetianBlindsBackground.gd")
+const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
 
 const CARD_SIZE := Vector2(140, 220)
 const GRID_COLUMNS := 5
@@ -35,10 +36,12 @@ func _ready() -> void:
 	_build_ui()
 	_populate_grid()
 
-func _unhandled_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		_handle_escape()
-		accept_event()
+		var vp := get_viewport()
+		if vp:
+			vp.set_input_as_handled()
 
 func _handle_escape() -> void:
 	if _phase == Phase.STAGE:
@@ -46,6 +49,14 @@ func _handle_escape() -> void:
 		_transition_to_squad()
 	else:
 		# Go back to main menu
+		_go_back()
+
+func _go_back() -> void:
+	# If we came from Level (pause menu), use MenuManager to go to main menu
+	# Check if MenuManager exists and is the proper way back
+	if MenuManager:
+		MenuManager.return_to_main_menu()
+	else:
 		back_requested.emit()
 
 func _load_registry() -> void:
@@ -101,10 +112,10 @@ func _build_squad_phase() -> void:
 	
 	_squad_slots = SquadSlotsScript.new()
 	_squad_slots.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_squad_slots.offset_left = 8
-	_squad_slots.offset_right = -8
-	_squad_slots.offset_top = 8
-	_squad_slots.offset_bottom = -8
+	_squad_slots.offset_left = 20
+	_squad_slots.offset_right = -20
+	_squad_slots.offset_top = 16
+	_squad_slots.offset_bottom = -16
 	_squad_slots.squad_complete.connect(_on_squad_complete)
 	_squad_slots.slot_cleared.connect(_on_slot_cleared)
 	squad_panel.add_child(_squad_slots)
@@ -178,7 +189,7 @@ func _build_squad_phase() -> void:
 	back_btn.text = "BACK"
 	back_btn.custom_minimum_size = Vector2(140, 45)
 	_apply_button_style(back_btn)
-	back_btn.pressed.connect(func(): back_requested.emit())
+	back_btn.pressed.connect(_go_back)
 	btn_row.add_child(back_btn)
 	
 	var spacer := Control.new()
@@ -257,6 +268,10 @@ func _create_card(char_id: String, data: Resource) -> Control:
 	card.set_meta("char_data", data)
 	card.clip_children = Control.CLIP_CHILDREN_AND_DRAW
 	
+	# Check if character is unlocked
+	var is_unlocked: bool = ShopMenuScript.is_character_unlocked(char_id)
+	card.set_meta("is_unlocked", is_unlocked)
+	
 	_apply_card_style(card, false)
 	
 	var portrait := TextureRect.new()
@@ -266,7 +281,40 @@ func _create_card(char_id: String, data: Resource) -> Control:
 	portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if data:
 		portrait.texture = data.get_portrait()
+	# Dim portrait if locked
+	portrait.modulate = Color(1, 1, 1, 0.95) if is_unlocked else Color(0.3, 0.3, 0.35, 0.8)
 	card.add_child(portrait)
+	
+	# Lock overlay for locked characters
+	if not is_unlocked:
+		var lock_overlay := ColorRect.new()
+		lock_overlay.color = Color(0.0, 0.0, 0.0, 0.4)
+		lock_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+		lock_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(lock_overlay)
+		
+		# VBox to center lock icon and text vertically
+		var lock_vbox := VBoxContainer.new()
+		lock_vbox.set_anchors_preset(Control.PRESET_CENTER)
+		lock_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		lock_vbox.add_theme_constant_override("separation", 2)
+		lock_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(lock_vbox)
+		
+		var lock_icon := Label.new()
+		lock_icon.text = "🔒"
+		lock_icon.add_theme_font_size_override("font_size", 36)
+		lock_icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lock_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		lock_vbox.add_child(lock_icon)
+		
+		var locked_text := Label.new()
+		locked_text.text = "LOCKED"
+		locked_text.add_theme_font_size_override("font_size", 12)
+		locked_text.add_theme_color_override("font_color", Color(0.9, 0.3, 0.3, 1.0))
+		locked_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		locked_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		lock_vbox.add_child(locked_text)
 	
 	var name_bg := ColorRect.new()
 	name_bg.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
@@ -284,7 +332,7 @@ func _create_card(char_id: String, data: Resource) -> Control:
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	name_lbl.add_theme_font_size_override("font_size", 16)
-	name_lbl.add_theme_color_override("font_color", Color(0.95, 0.95, 0.98))
+	name_lbl.add_theme_color_override("font_color", Color(0.95, 0.95, 0.98) if is_unlocked else Color(0.5, 0.5, 0.55))
 	name_lbl.text = data.display_name if data else char_id
 	name_lbl.clip_text = true
 	name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -298,8 +346,8 @@ func _create_card(char_id: String, data: Resource) -> Control:
 	border_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var border_style := StyleBoxFlat.new()
 	border_style.bg_color = Color(0, 0, 0, 0)  # Transparent background
-	border_style.border_color = Color(0.95, 0.95, 0.98, 1.0)
-	border_style.set_border_width_all(3)
+	border_style.border_color = Color(0.95, 0.95, 0.98, 1.0) if is_unlocked else Color(0.25, 0.25, 0.3, 0.7)
+	border_style.set_border_width_all(3 if is_unlocked else 2)
 	border_style.set_corner_radius_all(12)
 	border_overlay.add_theme_stylebox_override("panel", border_style)
 	card.add_child(border_overlay)
@@ -386,13 +434,17 @@ func _on_random_pressed() -> void:
 	_squad_slots.clear()
 	_update_card_states()
 	
-	# Get all character IDs and shuffle
+	# Get all character IDs and filter to only unlocked ones
 	var all_ids: Array = _registry.get_all_character_ids().duplicate()
-	all_ids.shuffle()
+	var unlocked_ids: Array = []
+	for char_id in all_ids:
+		if ShopMenuScript.is_character_unlocked(char_id):
+			unlocked_ids.append(char_id)
+	unlocked_ids.shuffle()
 	
-	# Pick first 3
-	for i in range(mini(3, all_ids.size())):
-		_squad_slots.add_character(all_ids[i])
+	# Pick first 3 unlocked characters
+	for i in range(mini(3, unlocked_ids.size())):
+		_squad_slots.add_character(unlocked_ids[i])
 	
 	_update_card_states()
 
@@ -422,6 +474,23 @@ func _on_next_pressed() -> void:
 
 func _on_card_input(event: InputEvent, char_id: String) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		# Check if character is unlocked
+		var card = _cards.get(char_id)
+		var is_unlocked: bool = true
+		if card:
+			is_unlocked = card.get_meta("is_unlocked", true)
+		
+		if not is_unlocked:
+			# Shake the card to indicate locked
+			if card:
+				var orig_pos: float = card.position.x
+				var tween := create_tween()
+				tween.tween_property(card, "position:x", orig_pos + 5, 0.05)
+				tween.tween_property(card, "position:x", orig_pos - 5, 0.05)
+				tween.tween_property(card, "position:x", orig_pos + 3, 0.05)
+				tween.tween_property(card, "position:x", orig_pos, 0.05)
+			return
+		
 		if _squad_slots.has_character(char_id):
 			# Click on already-selected character removes them
 			_remove_from_squad(char_id)

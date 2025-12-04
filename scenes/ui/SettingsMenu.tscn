@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://settings_menu_scene"]
+[gd_scene load_steps=14 format=3 uid="uid://settings_menu_scene"]
 
 [ext_resource type="Script" path="res://scripts/ui/SettingsMenu.gd" id="1"]
 [ext_resource type="FontFile" path="res://resources/fonts/futura_condensed_extra_bold.tres" id="2"]
@@ -42,6 +42,41 @@ border_color = Color(0.75, 0.75, 0.8, 0.8)
 shadow_color = Color(0, 0, 0, 0.35)
 shadow_size = 3
 shadow_offset = Vector2(2, 2)
+
+[sub_resource type="StyleBoxFlat" id="slider_background"]
+bg_color = Color(0.15, 0.17, 0.22, 1.0)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.3, 0.32, 0.38, 1.0)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_left = 8
+corner_radius_bottom_right = 8
+
+[sub_resource type="StyleBoxFlat" id="slider_fill"]
+bg_color = Color(0.4, 0.75, 1.0, 1.0)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_left = 6
+corner_radius_bottom_right = 6
+
+[sub_resource type="StyleBoxFlat" id="slider_grabber_area"]
+bg_color = Color(0.4, 0.75, 1.0, 1.0)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_left = 6
+corner_radius_bottom_right = 6
+
+[sub_resource type="StyleBoxFlat" id="slider_grabber_highlight"]
+bg_color = Color(0.5, 0.85, 1.0, 1.0)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_left = 6
+corner_radius_bottom_right = 6
+
+[sub_resource type="StyleBoxEmpty" id="slider_grabber"]
 
 [node name="SettingsMenu" type="Control"]
 layout_mode = 3
@@ -127,18 +162,18 @@ theme_override_constants/separation = 20
 
 [node name="TabBar" type="HBoxContainer" parent="ContentPanel/VBox"]
 layout_mode = 2
-theme_override_constants/separation = 0
+theme_override_constants/separation = 16
 alignment = 1
 
 [node name="AudioTab" type="Button" parent="ContentPanel/VBox/TabBar"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 50)
+custom_minimum_size = Vector2(260, 84)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
 theme_override_colors/font_pressed_color = Color(0.1, 0.1, 0.12, 1)
 theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
 theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 40
 theme_override_styles/normal = SubResource("tab_inactive_style")
 theme_override_styles/hover = SubResource("tab_inactive_style")
 theme_override_styles/pressed = SubResource("tab_active_style")
@@ -146,13 +181,13 @@ text = "AUDIO"
 
 [node name="VideoTab" type="Button" parent="ContentPanel/VBox/TabBar"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 50)
+custom_minimum_size = Vector2(260, 84)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
 theme_override_colors/font_pressed_color = Color(0.1, 0.1, 0.12, 1)
 theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
 theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 40
 theme_override_styles/normal = SubResource("tab_inactive_style")
 theme_override_styles/hover = SubResource("tab_inactive_style")
 theme_override_styles/pressed = SubResource("tab_active_style")
@@ -160,13 +195,13 @@ text = "VIDEO"
 
 [node name="ControlsTab" type="Button" parent="ContentPanel/VBox/TabBar"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 50)
+custom_minimum_size = Vector2(260, 84)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
 theme_override_colors/font_pressed_color = Color(0.1, 0.1, 0.12, 1)
 theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
 theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 40
 theme_override_styles/normal = SubResource("tab_inactive_style")
 theme_override_styles/hover = SubResource("tab_inactive_style")
 theme_override_styles/pressed = SubResource("tab_active_style")
@@ -189,72 +224,86 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/separation = 32
+theme_override_constants/separation = 64
 alignment = 1
 
-[node name="MusicRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/AudioPanel"]
+[node name="MusicSection" type="VBoxContainer" parent="ContentPanel/VBox/PanelContainer/AudioPanel"]
 layout_mode = 2
 theme_override_constants/separation = 24
 
-[node name="Label" type="Label" parent="ContentPanel/VBox/PanelContainer/AudioPanel/MusicRow"]
-custom_minimum_size = Vector2(160, 0)
+[node name="MusicLabel" type="Label" parent="ContentPanel/VBox/PanelContainer/AudioPanel/MusicSection"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
 theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 26
+theme_override_font_sizes/font_size = 52
 text = "MUSIC"
+horizontal_alignment = 1
 
-[node name="MusicSlider" type="HSlider" parent="ContentPanel/VBox/PanelContainer/AudioPanel/MusicRow"]
+[node name="MusicRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/AudioPanel/MusicSection"]
+layout_mode = 2
+theme_override_constants/separation = 40
+
+[node name="MusicSlider" type="HSlider" parent="ContentPanel/VBox/PanelContainer/AudioPanel/MusicSection/MusicRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 28)
+custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 1
+theme_override_styles/slider = SubResource("slider_background")
+theme_override_styles/grabber_area = SubResource("slider_grabber_area")
+theme_override_styles/grabber_area_highlight = SubResource("slider_grabber_highlight")
 min_value = 0.0
 max_value = 1.0
 step = 0.01
 value = 1.0
 
-[node name="MusicValue" type="Label" parent="ContentPanel/VBox/PanelContainer/AudioPanel/MusicRow"]
+[node name="MusicValue" type="Label" parent="ContentPanel/VBox/PanelContainer/AudioPanel/MusicSection/MusicRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(80, 0)
+custom_minimum_size = Vector2(140, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
 theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 42
 text = "100%"
 horizontal_alignment = 2
 
-[node name="SfxRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/AudioPanel"]
+[node name="SfxSection" type="VBoxContainer" parent="ContentPanel/VBox/PanelContainer/AudioPanel"]
 layout_mode = 2
 theme_override_constants/separation = 24
 
-[node name="Label" type="Label" parent="ContentPanel/VBox/PanelContainer/AudioPanel/SfxRow"]
-custom_minimum_size = Vector2(160, 0)
+[node name="SfxLabel" type="Label" parent="ContentPanel/VBox/PanelContainer/AudioPanel/SfxSection"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
 theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 26
+theme_override_font_sizes/font_size = 52
 text = "SFX"
+horizontal_alignment = 1
 
-[node name="SfxSlider" type="HSlider" parent="ContentPanel/VBox/PanelContainer/AudioPanel/SfxRow"]
+[node name="SfxRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/AudioPanel/SfxSection"]
+layout_mode = 2
+theme_override_constants/separation = 40
+
+[node name="SfxSlider" type="HSlider" parent="ContentPanel/VBox/PanelContainer/AudioPanel/SfxSection/SfxRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 28)
+custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 1
+theme_override_styles/slider = SubResource("slider_background")
+theme_override_styles/grabber_area = SubResource("slider_grabber_area")
+theme_override_styles/grabber_area_highlight = SubResource("slider_grabber_highlight")
 min_value = 0.0
 max_value = 1.0
 step = 0.01
 value = 1.0
 
-[node name="SfxValue" type="Label" parent="ContentPanel/VBox/PanelContainer/AudioPanel/SfxRow"]
+[node name="SfxValue" type="Label" parent="ContentPanel/VBox/PanelContainer/AudioPanel/SfxSection/SfxRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(80, 0)
+custom_minimum_size = Vector2(140, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
 theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 42
 text = "100%"
 horizontal_alignment = 2
 
@@ -267,48 +316,48 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/separation = 32
+theme_override_constants/separation = 40
 alignment = 1
 
-[node name="ResolutionRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/VideoPanel"]
+[node name="ResolutionSection" type="VBoxContainer" parent="ContentPanel/VBox/PanelContainer/VideoPanel"]
 layout_mode = 2
-theme_override_constants/separation = 24
+theme_override_constants/separation = 20
 
-[node name="Label" type="Label" parent="ContentPanel/VBox/PanelContainer/VideoPanel/ResolutionRow"]
-custom_minimum_size = Vector2(180, 0)
+[node name="ResolutionLabel" type="Label" parent="ContentPanel/VBox/PanelContainer/VideoPanel/ResolutionSection"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
 theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 26
+theme_override_font_sizes/font_size = 52
 text = "RESOLUTION"
+horizontal_alignment = 1
 
-[node name="ResolutionOptions" type="OptionButton" parent="ContentPanel/VBox/PanelContainer/VideoPanel/ResolutionRow"]
+[node name="ResolutionOptions" type="OptionButton" parent="ContentPanel/VBox/PanelContainer/VideoPanel/ResolutionSection"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(240, 44)
+custom_minimum_size = Vector2(380, 72)
 layout_mode = 2
-size_flags_horizontal = 3
+size_flags_horizontal = 4
 theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 40
 
-[node name="FullscreenRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/VideoPanel"]
+[node name="FullscreenSection" type="VBoxContainer" parent="ContentPanel/VBox/PanelContainer/VideoPanel"]
 layout_mode = 2
-theme_override_constants/separation = 24
+theme_override_constants/separation = 20
 
-[node name="Label" type="Label" parent="ContentPanel/VBox/PanelContainer/VideoPanel/FullscreenRow"]
-custom_minimum_size = Vector2(180, 0)
+[node name="FullscreenLabel" type="Label" parent="ContentPanel/VBox/PanelContainer/VideoPanel/FullscreenSection"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
 theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 26
+theme_override_font_sizes/font_size = 52
 text = "FULLSCREEN"
+horizontal_alignment = 1
 
-[node name="FullscreenOptions" type="OptionButton" parent="ContentPanel/VBox/PanelContainer/VideoPanel/FullscreenRow"]
+[node name="FullscreenOptions" type="OptionButton" parent="ContentPanel/VBox/PanelContainer/VideoPanel/FullscreenSection"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(240, 44)
+custom_minimum_size = Vector2(380, 72)
 layout_mode = 2
-size_flags_horizontal = 3
+size_flags_horizontal = 4
 theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 40
 
 [node name="ControlsPanel" type="VBoxContainer" parent="ContentPanel/VBox/PanelContainer"]
 unique_name_in_owner = true

@@ -59,7 +59,7 @@ func _ready() -> void:
 	
 	# Setup collision
 	collision_layer = 8   # Enemy projectile layer
-	collision_mask = 1 | 8   # Hit player layer (1) and ally layer (8)
+	collision_mask = 1 | 2 | 8   # Hit player (1), enemies for charmed (2), ally layer (8)
 	monitoring = true
 	monitorable = false
 	
@@ -420,7 +420,11 @@ func _apply_damage_to(target: Node) -> void:
 		return
 	_hit_targets[instance_id] = true
 	
-	# Apply damage
+	# Skip non-charmed enemies (enemy lasers shouldn't hurt regular enemies)
+	if target.is_in_group("enemies") and not target.is_in_group("charmed_allies"):
+		return
+	
+	# Apply damage to player, charmed allies, or anything else with take_damage
 	if target.has_method("take_damage"):
 		target.take_damage(damage)
 		_retire()

@@ -99,6 +99,9 @@ func _on_body_entered(body: Node) -> void:
 		return
 	if _hit_nodes.has(body):
 		return
+	# Skip charmed enemies (they're friendly now)
+	if body.is_in_group("charmed_allies"):
+		return
 	
 	_hit_nodes.append(body)
 	

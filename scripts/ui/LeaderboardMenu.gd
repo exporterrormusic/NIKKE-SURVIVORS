@@ -101,30 +101,13 @@ func _refresh_entries() -> void:
 
 
 func _get_leaderboard_entries() -> Array:
-	# Get leaderboard data from GameState if available
+	# Get leaderboard data from GameState
 	var entries: Array = []
 	
 	if GameState and GameState.has_method("get_leaderboard_entries"):
 		entries = GameState.get_leaderboard_entries(MAX_VISIBLE_ENTRIES)
-	else:
-		# Generate sample data for testing
-		entries = _generate_sample_entries()
 	
 	return entries
-
-
-func _generate_sample_entries() -> Array:
-	# Sample data to show while leaderboard system isn't implemented
-	var sample: Array = [
-		{"display_name": "Scarlet", "code": "scarlet", "best_score": 125000, "best_wave": 15},
-		{"display_name": "Snow White", "code": "snow-white", "best_score": 98500, "best_wave": 12},
-		{"display_name": "Rapunzel", "code": "rapunzel", "best_score": 87200, "best_wave": 11},
-		{"display_name": "Kilo", "code": "kilo", "best_score": 0, "best_wave": 0},
-	]
-	
-	# Sort by score descending
-	sample.sort_custom(func(a, b): return a["best_score"] > b["best_score"])
-	return sample
 
 
 func _update_total_score_label() -> void:

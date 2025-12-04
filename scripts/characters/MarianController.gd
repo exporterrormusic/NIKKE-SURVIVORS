@@ -179,7 +179,8 @@ func _perform_attack(direction: Vector2) -> void:
 	bullet.velocity = direction * bullet_speed
 	bullet.rotation = direction.angle()
 	bullet.owner_node = player
-	bullet.base_damage = 2
+	# Use character's base damage with level scaling
+	bullet.base_damage = player.calc_damage()
 	
 	_play_sound("minigun")
 

@@ -4,15 +4,18 @@ class_name CharacterInfoPanel
 
 var _char_data: Resource = null
 
-var _portrait: TextureRect
+var _sprite_viewport: SubViewport
+var _animated_sprite: AnimatedSprite2D
 var _portrait_container: Control
 var _name_lbl: Label
 var _desc_lbl: Label
 var _stats_box: VBoxContainer
 var _special_title: Label
 var _special_desc: Label
+var _special_upgrades_label: Label
 var _burst_title: Label
 var _burst_desc: Label
+var _burst_upgrades_label: Label
 
 func _ready() -> void:
 	_build_ui()
@@ -51,7 +54,7 @@ func _build_ui() -> void:
 	
 	# Portrait container with clipping and border
 	_portrait_container = Control.new()
-	_portrait_container.custom_minimum_size = Vector2(160, 160)
+	_portrait_container.custom_minimum_size = Vector2(180, 180)
 	_portrait_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_portrait_container.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_portrait_container.visible = false  # Hidden until character is hovered
@@ -67,11 +70,23 @@ func _build_ui() -> void:
 	clip_panel.add_theme_stylebox_override("panel", clip_style)
 	_portrait_container.add_child(clip_panel)
 	
-	_portrait = TextureRect.new()
-	_portrait.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	clip_panel.add_child(_portrait)
+	# SubViewportContainer for animated sprite
+	var viewport_container := SubViewportContainer.new()
+	viewport_container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	viewport_container.stretch = true
+	clip_panel.add_child(viewport_container)
+	
+	_sprite_viewport = SubViewport.new()
+	_sprite_viewport.size = Vector2i(180, 180)
+	_sprite_viewport.transparent_bg = true
+	_sprite_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	viewport_container.add_child(_sprite_viewport)
+	
+	_animated_sprite = AnimatedSprite2D.new()
+	_animated_sprite.position = Vector2(90, 105)  # Center in viewport, lowered
+	_animated_sprite.centered = true
+	_animated_sprite.z_index = 10
+	_sprite_viewport.add_child(_animated_sprite)
 	
 	# White border overlay on top
 	var portrait_border := Panel.new()
@@ -132,12 +147,12 @@ func _build_ui() -> void:
 	
 	# Special column
 	var special_col := VBoxContainer.new()
-	special_col.add_theme_constant_override("separation", 8)
+	special_col.add_theme_constant_override("separation", 4)
 	special_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	right.add_child(special_col)
 	
 	_special_title = Label.new()
-	_special_title.add_theme_font_size_override("font_size", 18)
+	_special_title.add_theme_font_size_override("font_size", 24)
 	_special_title.add_theme_color_override("font_color", Color(1.0, 0.7, 0.2))
 	special_col.add_child(_special_title)
 	
@@ -145,20 +160,38 @@ func _build_ui() -> void:
 	special_col.add_child(special_sep)
 	
 	_special_desc = Label.new()
-	_special_desc.add_theme_font_size_override("font_size", 13)
-	_special_desc.add_theme_color_override("font_color", Color(0.8, 0.8, 0.85))
+	_special_desc.add_theme_font_size_override("font_size", 16)
+	_special_desc.add_theme_color_override("font_color", Color(0.85, 0.85, 0.9))
 	_special_desc.autowrap_mode = TextServer.AUTOWRAP_WORD
-	_special_desc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_special_desc.custom_minimum_size.y = 50  # Fixed height for alignment
 	special_col.add_child(_special_desc)
+	
+	# Spacer before upgrades
+	var special_spacer := Control.new()
+	special_spacer.custom_minimum_size.y = 8
+	special_col.add_child(special_spacer)
+	
+	# Special upgrades section
+	var special_upgrades_title := Label.new()
+	special_upgrades_title.text = "Upgrades:"
+	special_upgrades_title.add_theme_font_size_override("font_size", 14)
+	special_upgrades_title.add_theme_color_override("font_color", Color(0.7, 0.6, 0.4))
+	special_col.add_child(special_upgrades_title)
+	
+	_special_upgrades_label = Label.new()
+	_special_upgrades_label.add_theme_font_size_override("font_size", 13)
+	_special_upgrades_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
+	_special_upgrades_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	special_col.add_child(_special_upgrades_label)
 	
 	# Burst column
 	var burst_col := VBoxContainer.new()
-	burst_col.add_theme_constant_override("separation", 8)
+	burst_col.add_theme_constant_override("separation", 4)
 	burst_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	right.add_child(burst_col)
 	
 	_burst_title = Label.new()
-	_burst_title.add_theme_font_size_override("font_size", 18)
+	_burst_title.add_theme_font_size_override("font_size", 24)
 	_burst_title.add_theme_color_override("font_color", Color(0.6, 0.4, 1.0))
 	burst_col.add_child(_burst_title)
 	
@@ -166,11 +199,30 @@ func _build_ui() -> void:
 	burst_col.add_child(burst_sep)
 	
 	_burst_desc = Label.new()
-	_burst_desc.add_theme_font_size_override("font_size", 13)
-	_burst_desc.add_theme_color_override("font_color", Color(0.8, 0.8, 0.85))
+	_burst_desc.add_theme_font_size_override("font_size", 16)
+	_burst_desc.add_theme_color_override("font_color", Color(0.85, 0.85, 0.9))
 	_burst_desc.autowrap_mode = TextServer.AUTOWRAP_WORD
-	_burst_desc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_burst_desc.custom_minimum_size.y = 50  # Fixed height for alignment
 	burst_col.add_child(_burst_desc)
+	
+	# Spacer before upgrades
+	var burst_spacer := Control.new()
+	burst_spacer.custom_minimum_size.y = 8
+	burst_col.add_child(burst_spacer)
+	
+	# Burst upgrades section
+	var burst_upgrades_title := Label.new()
+	burst_upgrades_title.text = "Upgrades:"
+	burst_upgrades_title.add_theme_font_size_override("font_size", 14)
+	burst_upgrades_title.add_theme_color_override("font_color", Color(0.5, 0.4, 0.7))
+	burst_col.add_child(burst_upgrades_title)
+	
+	_burst_upgrades_label = Label.new()
+	_burst_upgrades_label.add_theme_font_size_override("font_size", 13)
+	_burst_upgrades_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
+	_burst_upgrades_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_burst_upgrades_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	burst_col.add_child(_burst_upgrades_label)
 
 func set_character(data: Resource) -> void:
 	_char_data = data
@@ -179,7 +231,7 @@ func set_character(data: Resource) -> void:
 		return
 	
 	_portrait_container.visible = true
-	_portrait.texture = data.get_portrait()
+	_configure_animated_sprite(data)
 	_name_lbl.text = data.display_name
 	_desc_lbl.text = data.description if data.description else ""
 	
@@ -189,8 +241,8 @@ func set_character(data: Resource) -> void:
 			child.queue_free()
 	
 	_add_stat("HP", data.base_hp, 20, Color(0.4, 0.9, 0.5))
-	_add_stat("ATK", int(data.base_damage), 50, Color(1.0, 0.5, 0.4))
-	_add_stat("SPD", int(data.move_speed), 500, Color(0.5, 0.7, 1.0))
+	_add_stat("ATK", int(data.base_damage), 20, Color(1.0, 0.5, 0.4))
+	_add_stat("SPD", int(data.base_speed / 10), 50, Color(0.5, 0.7, 1.0))  # Divide by 10 for cleaner display
 	var crit_val: int = int(data.crit_chance * 100) if data.get("crit_chance") else 5
 	_add_stat("CRIT", crit_val, 100, Color(1.0, 0.85, 0.3))
 	
@@ -201,6 +253,9 @@ func set_character(data: Resource) -> void:
 	# Burst
 	_burst_title.text = "BURST: " + (data.burst_name if data.burst_name else "Unknown")
 	_burst_desc.text = data.burst_description if data.burst_description else ""
+	
+	# Get upgrade descriptions from TalentTree
+	_populate_upgrades(data)
 
 func _add_stat(stat_name: String, value: int, max_val: int, color: Color) -> void:
 	var row := HBoxContainer.new()
@@ -252,10 +307,126 @@ func _add_stat(stat_name: String, value: int, max_val: int, color: Color) -> voi
 
 func _clear() -> void:
 	_portrait_container.visible = false
-	_portrait.texture = null
+	if _animated_sprite:
+		_animated_sprite.stop()
+		_animated_sprite.sprite_frames = null
 	_name_lbl.text = "Hover a Character"
 	_desc_lbl.text = ""
 	_special_title.text = "SPECIAL:"
 	_special_desc.text = ""
+	_special_upgrades_label.text = ""
 	_burst_title.text = "BURST:"
 	_burst_desc.text = ""
+	_burst_upgrades_label.text = ""
+
+func _populate_upgrades(data: Resource) -> void:
+	"""Get upgrade descriptions from TalentTree based on character index."""
+	var char_index := _get_character_index(data.id)
+	if char_index < 0:
+		_special_upgrades_label.text = ""
+		_burst_upgrades_label.text = ""
+		return
+	
+	# Access TalentTree's TALENT_DATA
+	var talent_tree_script = load("res://scripts/TalentTree.gd")
+	if not talent_tree_script:
+		return
+	
+	# Create temporary instance to access TALENT_DATA
+	var temp_tree = talent_tree_script.new()
+	if not temp_tree.TALENT_DATA.has(char_index):
+		_special_upgrades_label.text = ""
+		_burst_upgrades_label.text = ""
+		return
+	
+	var talents: Array = temp_tree.TALENT_DATA[char_index]
+	
+	# Find special upgrades (row 1, cols 0 and 2)
+	var special_upgrades: Array[String] = []
+	for talent in talents:
+		if talent.get("row") == 1 and talent.get("col") in [0, 2]:
+			var name_str: String = talent.get("name", "")
+			var desc_str: String = talent.get("desc", "")
+			if name_str and desc_str:
+				special_upgrades.append("• %s: %s" % [name_str, desc_str])
+	
+	# Find burst upgrades (row 2, cols 0 and 2)
+	var burst_upgrades: Array[String] = []
+	for talent in talents:
+		if talent.get("row") == 2 and talent.get("col") in [0, 2]:
+			var name_str: String = talent.get("name", "")
+			var desc_str: String = talent.get("desc", "")
+			if name_str and desc_str:
+				burst_upgrades.append("• %s: %s" % [name_str, desc_str])
+	
+	_special_upgrades_label.text = "\n".join(special_upgrades)
+	_burst_upgrades_label.text = "\n".join(burst_upgrades)
+
+func _get_character_index(char_id: String) -> int:
+	"""Map character ID to TalentTree index."""
+	var id_to_index := {
+		"scarlet": 0,
+		"commander": 1,
+		"rapunzel": 2,
+		"kilo": 3,
+		"marian": 4,
+		"crown": 5,
+		"snow_white": 6,
+		"sin": 7,
+		"cecil": 8,
+		"nayuta": 9,
+	}
+	return id_to_index.get(char_id, -1)
+
+func _configure_animated_sprite(char_data: Resource) -> void:
+	"""Configure the AnimatedSprite2D to play the walking right animation."""
+	if not _animated_sprite or not char_data:
+		return
+	
+	var sprite_sheet: Texture2D = char_data.get_sprite()
+	if not sprite_sheet:
+		_animated_sprite.visible = false
+		return
+	
+	# Use game defaults: 3 columns, 4 rows (down/left/right/up), 6 fps
+	var columns: int = 3
+	var rows: int = 4
+	var fps: float = 6.0
+	var scale_factor: float = 0.2
+	
+	# Override with CharacterData values if they're set properly
+	if char_data.sprite_sheet_columns > 1:
+		columns = char_data.sprite_sheet_columns
+	if char_data.sprite_sheet_rows > 1:
+		rows = char_data.sprite_sheet_rows
+	if char_data.sprite_animation_fps > 0:
+		fps = char_data.sprite_animation_fps
+	if char_data.sprite_scale > 0:
+		scale_factor = char_data.sprite_scale
+	
+	# Make sprite bigger for the preview (1.6x the normal scale)
+	scale_factor *= 1.6
+	
+	var texture_size: Vector2 = sprite_sheet.get_size()
+	var frame_width := int(texture_size.x / columns)
+	var frame_height := int(texture_size.y / rows)
+	
+	var frames := SpriteFrames.new()
+	
+	# Create the "right" animation (row 2)
+	frames.add_animation("right")
+	frames.set_animation_speed("right", fps)
+	frames.set_animation_loop("right", true)
+	
+	# Add frames for the right direction (row 2, each column is a frame)
+	for col in range(columns):
+		var atlas := AtlasTexture.new()
+		atlas.atlas = sprite_sheet
+		atlas.region = Rect2(col * frame_width, 2 * frame_height, frame_width, frame_height)
+		frames.add_frame("right", atlas)
+	
+	_animated_sprite.sprite_frames = frames
+	_animated_sprite.scale = Vector2(scale_factor, scale_factor)
+	_animated_sprite.visible = true
+	_animated_sprite.animation = "right"
+	_animated_sprite.play("right")

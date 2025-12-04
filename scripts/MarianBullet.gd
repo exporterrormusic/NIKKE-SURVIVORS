@@ -98,6 +98,10 @@ func _hit_target(target: Node) -> void:
 	if not target.is_in_group("enemies"):
 		return
 	
+	# Skip charmed enemies (they're friendly now)
+	if target.is_in_group("charmed_allies"):
+		return
+	
 	# Apply damage
 	if target.has_method("take_damage"):
 		target.take_damage(base_damage, false, velocity.normalized())

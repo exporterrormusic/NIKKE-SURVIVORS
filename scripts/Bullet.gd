@@ -71,6 +71,10 @@ func _on_body_entered(body):
 		return
 	if owner_node and body.name == "Player":
 		return
+	
+	# Don't damage charmed enemies (they're friendly now)
+	if body.is_in_group("charmed_allies"):
+		return
 
 	# Only apply damage to targets that can take damage
 	if not body.has_method("take_damage"):

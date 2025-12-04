@@ -7,16 +7,23 @@ var current_map_definition: MapDefinition = null
 var enemy_spawn_timer: Timer = null
 var world_bounds: Rect2 = Rect2()
 var _combat_juice: Node = null
+var _score_ui: Control = null
 
 @onready var environment: Node2D = $Environment
 @onready var map_selector: Control = $CanvasLayer/MapSelector
 
 func _ready():
 	set_process_input(true)
+	
+	# Reset run stats for new game
+	if GameState:
+		GameState.reset_run_stats()
+	
 	_load_map_definition(DEFAULT_MAP_ID)
 	_setup_combat_juice()
 	_setup_environment()
 	_setup_enemy_spawning()
+	_setup_score_ui()
 	_connect_map_selector()
 
 func _setup_combat_juice() -> void:
@@ -100,12 +107,30 @@ func _setup_enemy_spawning() -> void:
 	
 	start_new_wave()
 
+func _setup_score_ui() -> void:
+	var ScoreUIScript = load("res://scripts/ui/ScoreUI.gd")
+	if ScoreUIScript:
+		var canvas := CanvasLayer.new()
+		canvas.name = "ScoreUILayer"
+		canvas.layer = 10
+		add_child(canvas)
+		
+		_score_ui = Control.new()
+		_score_ui.set_script(ScoreUIScript)
+		_score_ui.name = "ScoreUI"
+		canvas.add_child(_score_ui)
+		print("[Level] Score UI initialized")
+
 @onready var wave_display: Label = $CanvasLayer/WaveDisplay
 
 func start_new_wave() -> void:
 	current_wave += 1
 	enemies_in_wave = current_wave * 3  # More enemies per wave
 	print("[Level] Starting wave ", current_wave, " with ", enemies_in_wave, " enemies")
+	
+	# Update GameState with current wave
+	if GameState:
+		GameState.set_current_wave(current_wave)
 	
 	if wave_display:
 		wave_display.text = "Wave: " + str(current_wave)
@@ -263,11 +288,15 @@ func _on_settings_requested() -> void:
 
 func _on_character_select_requested() -> void:
 	get_tree().paused = false
-	get_tree().change_scene_to_file("res://scenes/ui/CharacterSelectMenuNew.tscn")
+	get_tree().change_scene_to_file("res://scenes/ui/CharacterSelectMenu.tscn")
 
 func _on_quit_requested() -> void:
 	get_tree().paused = false
-	get_tree().change_scene_to_file("res://scenes/ui/MainMenu.tscn")
+	# Use MenuManager to return to main menu so signals get connected properly
+	if MenuManager:
+		MenuManager.return_to_main_menu()
+	else:
+		get_tree().change_scene_to_file("res://scenes/ui/MainMenu.tscn")
 
 func show_defeat_menu() -> void:
 	## Called when player dies to show the defeat screen

@@ -47,6 +47,9 @@ func _process(_delta):
 func _on_body_entered(body):
 	if body == get_parent():
 		return
+	# Skip charmed enemies (they're friendly now)
+	if body.is_in_group("charmed_allies"):
+		return
 	if body.has_method("take_damage"):
 		var hit_direction = Vector2.from_angle(rotation)
 		body.take_damage(5, false, hit_direction)

@@ -184,33 +184,55 @@ func _physics_process(delta: float) -> void:
 		_animator.update_state(velocity, dir)
 
 func _find_best_target() -> Node2D:
-	"""Find the best target to attack. Prioritize nearby clones, otherwise target player."""
-	# Check for nearby clones first
+	"""Find the closest valid target. Prioritizes proximity - charmed enemies, clones, or player."""
 	var tree := get_tree()
-	if tree:
-		var clones := tree.get_nodes_in_group("nayuta_clones")
-		var nearest_clone: Node2D = null
-		var nearest_dist: float = CLONE_AGGRO_RANGE
-		
-		for clone in clones:
-			if not is_instance_valid(clone) or not clone is Node2D:
-				continue
-			# Skip dying clones
-			if clone.get("_is_dying") == true:
-				continue
-			if clone.get("current_hp") != null and clone.get("current_hp") <= 0:
-				continue
-			
-			var dist := global_position.distance_to((clone as Node2D).global_position)
-			if dist < nearest_dist:
-				nearest_dist = dist
-				nearest_clone = clone as Node2D
-		
-		if nearest_clone:
-			return nearest_clone
+	if not tree:
+		return player
 	
-	# Default to player
-	return player
+	var nearest_target: Node2D = null
+	var nearest_dist: float = INF
+	
+	# Check for nearby charmed allies (enemies that switched to player's side)
+	var charmed_allies := tree.get_nodes_in_group("charmed_allies")
+	for ally in charmed_allies:
+		if ally == self:  # Don't target ourselves
+			continue
+		if not is_instance_valid(ally) or not ally is Node2D:
+			continue
+		# Skip dead enemies
+		if ally.get("hp") != null and ally.get("hp") <= 0:
+			continue
+		
+		var dist := global_position.distance_to((ally as Node2D).global_position)
+		if dist < nearest_dist:
+			nearest_dist = dist
+			nearest_target = ally as Node2D
+	
+	# Check for nearby clones
+	var clones := tree.get_nodes_in_group("nayuta_clones")
+	for clone in clones:
+		if not is_instance_valid(clone) or not clone is Node2D:
+			continue
+		# Skip dying clones
+		if clone.get("_is_dying") == true:
+			continue
+		if clone.get("current_hp") != null and clone.get("current_hp") <= 0:
+			continue
+		
+		var dist := global_position.distance_to((clone as Node2D).global_position)
+		if dist < nearest_dist:
+			nearest_dist = dist
+			nearest_target = clone as Node2D
+	
+	# Check player distance
+	if player and is_instance_valid(player):
+		var player_dist := global_position.distance_to(player.global_position)
+		if player_dist < nearest_dist:
+			nearest_dist = player_dist
+			nearest_target = player
+	
+	# Return the closest target, or player as fallback
+	return nearest_target if nearest_target else player
 
 func _attempt_laser_attack(distance: float, direction: Vector2) -> void:
 	# Check if we can start charging
@@ -378,6 +400,19 @@ func die():
 	if is_overkill:
 		overkill_multiplier = 2.0
 	
+	# Add score to GameState
+	var score_value: int = 100  # Base score
+	if has_meta("enemy_tier"):
+		var tier: String = get_meta("enemy_tier")
+		match tier:
+			"elite": score_value = 500
+			"boss": score_value = 2000
+			"tank": score_value = 300
+	if is_overkill:
+		score_value = int(score_value * 1.5)  # Bonus for overkill
+	if GameState:
+		GameState.add_score(score_value)
+	
 	# Register kill with combat juice for momentum
 	var combat_juice_script = load("res://scripts/CombatJuice.gd")
 	if combat_juice_script and combat_juice_script.instance:
@@ -483,7 +518,8 @@ func _find_nearest_enemy() -> Node:
 			continue
 		if not child.is_in_group("enemies"):
 			continue
-		if child.get("_is_charmed") == true:
+		# Skip other charmed enemies (they're on our side now)
+		if child.is_in_group("charmed_allies"):
 			continue
 		if child.get("hp") != null and child.hp <= 0:
 			continue

@@ -362,6 +362,10 @@ func _on_body_entered(body: Node2D) -> void:
 	if owner_node and body.name == "Player":
 		return
 	
+	# Skip charmed enemies (they're friendly now)
+	if body.is_in_group("charmed_allies"):
+		return
+	
 	if not body.has_method("take_damage"):
 		return
 	

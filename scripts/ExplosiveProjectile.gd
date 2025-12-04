@@ -278,6 +278,9 @@ func _should_ignore_target(target: Node) -> bool:
 	# Never damage player from player-owned projectiles
 	if target.name == "Player" and owner_node:
 		return true
+	# Skip charmed enemies (they're friendly now)
+	if target.is_in_group("charmed_allies"):
+		return true
 	# Also check if target is a child of the owner (e.g., hitbox Area2D of a clone)
 	if owner_node and is_instance_valid(owner_node):
 		if target.get_parent() == owner_node:

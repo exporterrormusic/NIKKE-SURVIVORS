@@ -104,10 +104,37 @@ func _ready() -> void:
 	_initialize_dropdowns()
 	_current_tab = ""
 	_switch_tab(TAB_AUDIO)
-	_update_music_label(_music_slider.value if _music_slider else 1.0)
-	_update_sfx_label(_sfx_slider.value if _sfx_slider else 1.0)
+	
+	# Load saved settings from SettingsManager
+	_load_from_settings_manager()
+	
 	_refresh_key_binding_labels()
 	set_process_unhandled_input(true)
+
+
+func _load_from_settings_manager() -> void:
+	var settings_mgr = get_node_or_null("/root/SettingsManager")
+	if not settings_mgr:
+		# Fallback - use default values
+		_update_music_label(_music_slider.value if _music_slider else 1.0)
+		_update_sfx_label(_sfx_slider.value if _sfx_slider else 1.0)
+		return
+	
+	_suppress_signals = true
+	
+	# Audio
+	if _music_slider:
+		_music_slider.value = settings_mgr.get_music_volume()
+		_update_music_label(_music_slider.value)
+	if _sfx_slider:
+		_sfx_slider.value = settings_mgr.get_sfx_volume()
+		_update_sfx_label(_sfx_slider.value)
+	
+	# Video
+	set_resolution(settings_mgr.get_resolution())
+	set_fullscreen(settings_mgr.is_fullscreen())
+	
+	_suppress_signals = false
 
 
 func _initialize_resolutions() -> void:
@@ -223,7 +250,11 @@ func _on_music_slider_value_changed(value: float) -> void:
 		return
 	emit_signal("music_volume_changed", value)
 	emit_signal("master_volume_changed", value)
-	_apply_bus_volume("Music", value)
+	# Apply and save via SettingsManager
+	if Engine.has_singleton("SettingsManager") or get_node_or_null("/root/SettingsManager"):
+		get_node("/root/SettingsManager").set_music_volume(value)
+	else:
+		_apply_bus_volume("Music", value)
 
 
 func _on_sfx_slider_value_changed(value: float) -> void:
@@ -231,7 +262,11 @@ func _on_sfx_slider_value_changed(value: float) -> void:
 	if _suppress_signals:
 		return
 	emit_signal("sfx_volume_changed", value)
-	_apply_bus_volume("SFX", value)
+	# Apply and save via SettingsManager
+	if get_node_or_null("/root/SettingsManager"):
+		get_node("/root/SettingsManager").set_sfx_volume(value)
+	else:
+		_apply_bus_volume("SFX", value)
 
 
 func _on_resolution_selected(index: int) -> void:
@@ -239,7 +274,11 @@ func _on_resolution_selected(index: int) -> void:
 		return
 	if _suppress_signals:
 		return
-	emit_signal("resolution_changed", _available_resolutions[index])
+	var new_resolution: Vector2i = _available_resolutions[index]
+	emit_signal("resolution_changed", new_resolution)
+	# Apply and save via SettingsManager
+	if get_node_or_null("/root/SettingsManager"):
+		get_node("/root/SettingsManager").set_resolution(new_resolution)
 
 
 func _on_fullscreen_selected(index: int) -> void:
@@ -247,6 +286,9 @@ func _on_fullscreen_selected(index: int) -> void:
 		return
 	var enabled: bool = index == 0
 	emit_signal("fullscreen_toggled", enabled)
+	# Apply and save via SettingsManager
+	if get_node_or_null("/root/SettingsManager"):
+		get_node("/root/SettingsManager").set_fullscreen(enabled)
 
 
 func _begin_key_capture(action: String, button: Button) -> void:
@@ -267,13 +309,21 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not key_event.is_pressed() or key_event.is_echo():
 		return
 	
+	var is_escape: bool = key_event.physical_keycode == KEY_ESCAPE or key_event.keycode == KEY_ESCAPE
+	
+	# Handle key capture mode
 	if _capturing_action != "":
+		# If escape pressed while capturing, cancel the capture instead of binding
+		if is_escape:
+			_cancel_key_capture()
+			get_viewport().set_input_as_handled()
+			return
 		_apply_key_binding(_capturing_action, key_event)
 		get_viewport().set_input_as_handled()
 		return
 	
-	var is_escape: bool = key_event.physical_keycode == KEY_ESCAPE or key_event.keycode == KEY_ESCAPE
-	if key_event.is_action_pressed("ui_cancel") or is_escape:
+	# Handle escape/back to return to previous menu
+	if is_escape or key_event.is_action_pressed("ui_cancel"):
 		emit_signal("back_requested")
 		get_viewport().set_input_as_handled()
 
@@ -295,6 +345,9 @@ func _apply_key_binding(action: String, event: InputEventKey) -> void:
 	_update_button_for_action(action, copy.physical_keycode)
 	if not _suppress_signals:
 		emit_signal("key_binding_changed", action, copy.physical_keycode)
+		# Save via SettingsManager
+		if get_node_or_null("/root/SettingsManager"):
+			get_node("/root/SettingsManager").set_key_binding(action, copy.physical_keycode)
 	_cancel_key_capture()
 
 

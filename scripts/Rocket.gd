@@ -131,6 +131,9 @@ func _on_body_entered(body):
     # Ignore other projectiles (rockets, missiles, etc.)
     if body.is_in_group("projectiles"):
         return
+    # Skip charmed enemies (they're friendly now)
+    if body.is_in_group("charmed_allies"):
+        return
     if body.has_method("take_damage"):
         var hit_direction = velocity.normalized()
         body.take_damage(1, false, hit_direction)

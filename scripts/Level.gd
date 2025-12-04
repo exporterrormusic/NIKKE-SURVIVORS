@@ -14,10 +14,15 @@ var _enemy_spawner: Node2D = null
 var _wave_ui: CanvasLayer = null
 var _enemy_container: Node2D = null
 var _combat_juice: Node = null
+var _score_ui: Control = null
 
 func _ready():
 	_rng.randomize()
 	set_process_input(true)  # Ensure we receive input events
+	
+	# Reset run stats for new game
+	if GameState:
+		GameState.reset_run_stats()
 	
 	# Setup pause menu immediately
 	_setup_pause_menu()
@@ -109,11 +114,15 @@ func _on_settings_requested() -> void:
 
 func _on_character_select_requested() -> void:
 	get_tree().paused = false
-	get_tree().change_scene_to_file("res://scenes/ui/CharacterSelectMenuNew.tscn")
+	get_tree().change_scene_to_file("res://scenes/ui/CharacterSelectMenu.tscn")
 
 func _on_quit_requested() -> void:
 	get_tree().paused = false
-	get_tree().change_scene_to_file("res://scenes/ui/MainMenu.tscn")
+	# Use MenuManager to return to main menu so signals get connected properly
+	if MenuManager:
+		MenuManager.return_to_main_menu()
+	else:
+		get_tree().change_scene_to_file("res://scenes/ui/MainMenu.tscn")
 
 func show_defeat_menu() -> void:
 	## Called when player dies to show the defeat screen
@@ -335,6 +344,23 @@ func _setup_wave_system() -> void:
 	# Start the wave system
 	_wave_director.start()
 	print("[Level] Wave system started - 5 minute run!")
+	
+	# Setup score UI in top-right corner
+	_setup_score_ui()
+
+func _setup_score_ui() -> void:
+	var ScoreUIScript = load("res://scripts/ui/ScoreUI.gd")
+	if ScoreUIScript:
+		var canvas := CanvasLayer.new()
+		canvas.name = "ScoreUILayer"
+		canvas.layer = 10
+		add_child(canvas)
+		
+		_score_ui = Control.new()
+		_score_ui.set_script(ScoreUIScript)
+		_score_ui.name = "ScoreUI"
+		canvas.add_child(_score_ui)
+		print("[Level] Score UI initialized")
 
 func _process(_delta: float) -> void:
 	# Update wave director with current enemy count
@@ -381,6 +407,13 @@ func _on_run_complete(survived: bool, final_time: float) -> void:
 	var secs := int(final_time) % 60
 	if survived:
 		print("[Level] 🎉 RUN COMPLETE! Survived %d:%02d" % [mins, secs])
+		# Award Pristine Rapture Core for defeating the boss
+		if GameState:
+			GameState.add_pristine_cores(1)
+		# Show victory screen
+		var pause_menu = get_node_or_null("PauseMenu")
+		if pause_menu and pause_menu.has_method("show_victory"):
+			pause_menu.show_victory()
 	else:
 		print("[Level] 💀 Run ended at %d:%02d" % [mins, secs])
 
@@ -390,6 +423,11 @@ func _on_time_updated(elapsed: float, remaining: float) -> void:
 
 func _on_wave_changed(wave_number: int) -> void:
 	print("[Level] Wave changed to: ", wave_number)
+	
+	# Update GameState with current wave for leaderboard
+	if GameState:
+		GameState.set_current_wave(wave_number)
+	
 	# Update spawner with new health multiplier
 	if _enemy_spawner and _wave_director:
 		var health_mult: float = _wave_director.get_health_multiplier()

@@ -65,11 +65,23 @@ func _check_damage() -> void:
 	if _damage_dealt:
 		return
 	
-	if not _player or not is_instance_valid(_player):
-		return
+	_damage_dealt = true
 	
-	var dist := global_position.distance_to(_player.global_position)
-	if dist <= _radius:
-		_damage_dealt = true
-		if _player.has_method("take_damage"):
-			_player.take_damage(_damage)
+	# Damage player if in radius
+	if _player and is_instance_valid(_player):
+		var dist := global_position.distance_to(_player.global_position)
+		if dist <= _radius:
+			if _player.has_method("take_damage"):
+				_player.take_damage(_damage)
+	
+	# Damage charmed allies if in radius (they're fighting for the player)
+	var tree := get_tree()
+	if tree:
+		var charmed_allies := tree.get_nodes_in_group("charmed_allies")
+		for ally in charmed_allies:
+			if not is_instance_valid(ally) or not ally is Node2D:
+				continue
+			var dist := global_position.distance_to((ally as Node2D).global_position)
+			if dist <= _radius:
+				if ally.has_method("take_damage"):
+					ally.take_damage(_damage)

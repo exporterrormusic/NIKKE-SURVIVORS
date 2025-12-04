@@ -5,7 +5,7 @@ extends Control
 ## Uses custom drawing to ensure border is always on top of fill
 
 # Colors - HoloCure style flat colors
-const BAR_FILL_COLOR := Color(0.9, 0.15, 0.15, 1.0)  # Bright red
+const BAR_FILL_COLOR := Color(0.2, 0.6, 1.0, 1.0)  # Bright blue
 const BAR_BG_COLOR := Color(0.12, 0.12, 0.15, 0.95)  # Dark background
 const BAR_BORDER_COLOR := Color(1.0, 1.0, 1.0, 0.9)  # White border
 const BADGE_BG_COLOR := Color(0.12, 0.12, 0.15, 0.95)

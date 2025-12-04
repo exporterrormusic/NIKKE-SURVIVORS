@@ -7,10 +7,10 @@ var player
 var xp_bar  # Reference to the actual ProgressBar node
 
 # Visual effect properties
-const PRIMARY_COLOR := Color(1.0, 0.2, 0.15, 1.0)      # Bright red
-const SECONDARY_COLOR := Color(1.0, 0.5, 0.3, 1.0)     # Orange-red accent
-const GLOW_COLOR := Color(1.0, 0.15, 0.1, 0.6)         # Red outer glow
-const SPARKLE_COLOR := Color(1.0, 0.95, 0.9, 0.9)      # White-red sparkles
+const PRIMARY_COLOR := Color(0.2, 0.6, 1.0, 1.0)      # Bright blue
+const SECONDARY_COLOR := Color(0.4, 0.8, 1.0, 1.0)     # Light blue accent
+const GLOW_COLOR := Color(0.1, 0.5, 1.0, 0.6)          # Blue outer glow
+const SPARKLE_COLOR := Color(0.9, 0.95, 1.0, 0.9)      # White-blue sparkles
 
 var _age := 0.0
 var _bob_offset := 0.0
@@ -74,11 +74,11 @@ func _create_glow_layers() -> void:
 	_glow_sprite.material = glow_mat
 	add_child(_glow_sprite)
 	
-	# Inner glow (bright white/red core)
+	# Inner glow (bright white/blue core)
 	_inner_glow = Sprite2D.new()
 	_inner_glow.texture = _glow_texture
 	_inner_glow.centered = true
-	_inner_glow.modulate = Color(1.0, 0.9, 0.85, 0.9)  # Bright white-red center
+	_inner_glow.modulate = Color(0.85, 0.9, 1.0, 0.9)  # Bright white-blue center
 	_inner_glow.scale = Vector2(0.6, 0.6)
 	_inner_glow.z_index = 1
 	var inner_mat := CanvasItemMaterial.new()
@@ -163,10 +163,10 @@ func _update_visuals(delta: float) -> void:
 		_inner_glow.modulate.a = 0.7 + fast_pulse * 0.3
 		_inner_glow.rotation -= delta * ROTATION_SPEED
 		
-		# Color shift between bright white and warm white-red
+		# Color shift between bright white and warm white-blue
 		var color_t := sin(_age * 4.5) * 0.5 + 0.5
-		var base_white := Color(1.0, 0.95, 0.9, 1.0)
-		var warm_white := Color(1.0, 0.8, 0.7, 1.0)
+		var base_white := Color(0.9, 0.95, 1.0, 1.0)
+		var warm_white := Color(0.7, 0.8, 1.0, 1.0)
 		var shifted_color := base_white.lerp(warm_white, color_t * 0.5)
 		_inner_glow.modulate = Color(shifted_color.r, shifted_color.g, shifted_color.b, 0.7 + fast_pulse * 0.3)
 	

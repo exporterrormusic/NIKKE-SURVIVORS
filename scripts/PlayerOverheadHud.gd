@@ -179,6 +179,12 @@ func _draw() -> void:
 		# Show reload text
 		var ammo_center := Vector2(0, ammo_top + AMMO_BAR_HEIGHT * 0.5)
 		_draw_bar_text("RELOAD", ammo_center, 7)
+	elif _current_character == 0 and not _scarlet_special_unlocked:
+		# Scarlet with locked special - show LOCKED
+		draw_rect(ammo_rect, Color(0.2, 0.2, 0.25, 0.9), true)
+		draw_rect(ammo_rect, Color(0.4, 0.4, 0.5, 0.8), false, BORDER_THICKNESS)
+		var ammo_center := Vector2(0, ammo_top + AMMO_BAR_HEIGHT * 0.5)
+		_draw_bar_text("LOCKED", ammo_center, 7)
 	else:
 		# Normal ammo display
 		_draw_bar(ammo_rect, float(_current_ammo), float(_max_ammo), ammo_background_color, ammo_fill_color, ammo_border_color)

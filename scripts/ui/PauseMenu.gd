@@ -9,10 +9,13 @@ signal settings_requested
 signal character_select_requested
 signal quit_requested
 
+# Menu modes
+enum MenuMode { PAUSE, DEFEAT, VICTORY }
+
 const UIThemeScript = preload("res://scripts/ui/UITheme.gd")
 
 # Menu state
-var _is_defeat: bool = false
+var _menu_mode: int = MenuMode.PAUSE
 var _container: Control = null
 var _panel: Panel = null
 var _button_container: VBoxContainer = null
@@ -142,7 +145,40 @@ func _rebuild_buttons() -> void:
 		child.queue_free()
 	_buttons.clear()
 	
-	if _is_defeat:
+	if _menu_mode == MenuMode.VICTORY:
+		# Victory menu: Show reward + RESTART, CHARACTER SELECTION, SETTINGS, QUIT
+		_title_label.text = "VICTORY!"
+		_title_label.add_theme_color_override("font_color", Color(0.4, 1.0, 0.4))
+		
+		# Reward label
+		var reward_label := Label.new()
+		reward_label.text = "+1 Pristine Rapture Core"
+		reward_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		reward_label.add_theme_font_size_override("font_size", 20)
+		reward_label.add_theme_color_override("font_color", Color(0.6, 0.9, 1.0))
+		_button_container.add_child(reward_label)
+		
+		# Spacer
+		var spacer := Control.new()
+		spacer.custom_minimum_size.y = 10
+		_button_container.add_child(spacer)
+		
+		var restart_btn := _create_button("PLAY AGAIN", _on_restart_pressed, true)
+		_button_container.add_child(restart_btn)
+		_buttons["restart"] = restart_btn
+		
+		var char_select_btn := _create_button("CHARACTER SELECTION", _on_character_select_pressed)
+		_button_container.add_child(char_select_btn)
+		_buttons["character_select"] = char_select_btn
+		
+		var settings_btn := _create_button("SETTINGS", _on_settings_pressed)
+		_button_container.add_child(settings_btn)
+		_buttons["settings"] = settings_btn
+		
+		var quit_btn := _create_button("QUIT", _on_quit_pressed, false, true)
+		_button_container.add_child(quit_btn)
+		_buttons["quit"] = quit_btn
+	elif _menu_mode == MenuMode.DEFEAT:
 		# Defeat menu: RESTART, CHARACTER SELECTION, SETTINGS, QUIT
 		_title_label.text = "DEFEATED"
 		_title_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
@@ -188,13 +224,19 @@ func _rebuild_buttons() -> void:
 		_buttons["quit"] = quit_btn
 
 func show_pause() -> void:
-	_is_defeat = false
+	_menu_mode = MenuMode.PAUSE
 	_rebuild_buttons()
 	visible = true
 	get_tree().paused = true
 
 func show_defeat() -> void:
-	_is_defeat = true
+	_menu_mode = MenuMode.DEFEAT
+	_rebuild_buttons()
+	visible = true
+	get_tree().paused = true
+
+func show_victory() -> void:
+	_menu_mode = MenuMode.VICTORY
 	_rebuild_buttons()
 	visible = true
 	get_tree().paused = true
@@ -207,8 +249,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
 		return
 	
-	# Only allow ESC to close if it's a pause menu (not defeat)
-	if event.is_action_pressed("ui_cancel") and not _is_defeat:
+	# Only allow ESC to close if it's a pause menu (not defeat/victory)
+	if event.is_action_pressed("ui_cancel") and _menu_mode == MenuMode.PAUSE:
 		hide_menu()
 		get_viewport().set_input_as_handled()
 

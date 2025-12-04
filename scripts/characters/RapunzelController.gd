@@ -44,7 +44,8 @@ func _perform_attack(direction: Vector2) -> void:
 	missile.ground_fire_duration = 3.0
 	# Use character's base damage with level scaling
 	var base_dmg: int = player.calc_damage()
-	missile.base_damage = base_dmg
+	missile.damage = base_dmg
+	missile.explosion_damage = base_dmg
 	missile.ground_fire_damage = maxi(int(base_dmg / 3.0), 1)  # Ground fire does 1/3 of missile damage
 	missile.ground_fire_radius = 100.0
 	

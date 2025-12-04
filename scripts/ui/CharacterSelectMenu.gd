@@ -1,367 +1,289 @@
 extends Control
-## Squad assembly UI inspired by NIKKE and Holocure.
-## Features a grid of character cards and 3 squad slots that start empty.
-## Click a slot to select it, then click a character to assign.
+## Character and Stage Selection Menu.
+## Layout: Grid (top-left) + Details (bottom-left) + Squad slots (right full height).
+## When squad is complete, animates up to reveal stage selector.
 
-const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
-
-signal play_requested(squad: Array, map_id: String, time_id: String)
+signal play_requested(squad: Array[int], map_id: String, time_id: String)
 signal back_requested
 
-# Visual constants - NIKKE/Holocure inspired
-const BG_COLOR := Color(0.06, 0.06, 0.10, 0.98)
-const CARD_BG_COLOR := Color(0.11, 0.11, 0.17, 0.92)
-const CARD_BORDER_COLOR := Color(0.39, 0.39, 0.47, 1.0)
-const CARD_HOVER_BORDER := Color(0.56, 0.63, 0.92, 0.85)
-const CARD_SELECTED_BORDER := Color(0.95, 0.95, 1.0, 1.0)
-const SLOT_EMPTY_COLOR := Color(0.12, 0.12, 0.18, 0.7)
-const SLOT_FILLED_COLOR := Color(0.11, 0.11, 0.17, 0.92)
-const SLOT_SELECTED_BORDER := Color(0.56, 0.63, 0.92, 1.0)
-const TEXT_COLOR := Color(0.95, 0.95, 1.0, 1.0)
-const DIM_TEXT_COLOR := Color(0.6, 0.6, 0.7, 1.0)
-const ACCENT_COLOR := Color(0.56, 0.63, 0.92, 1.0)
-const GOLDEN_ACCENT := Color(1.0, 0.85, 0.25, 1.0)
-const MAIN_SLOT_COLOR := Color(0.4, 1.0, 0.5, 1.0)
-const SUPPORT_SLOT_COLOR := Color(0.6, 0.5, 1.0, 1.0)
-const NAME_OVERLAY_COLOR := Color(0.0, 0.0, 0.0, 0.62)
-const CORNER_RADIUS := 12
-const CARD_CORNER_RADIUS := 10
+const SquadSlotsScript = preload("res://scripts/ui/components/SquadSlots.gd")
+const CharacterInfoPanelScript = preload("res://scripts/ui/components/CharacterInfoPanel.gd")
+const StageSelectorScript = preload("res://scripts/ui/components/StageSelector.gd")
+const VenetianBlindsScript = preload("res://scripts/ui/components/VenetianBlindsBackground.gd")
+const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
 
-# Sizes
-const CARD_SIZE := Vector2(145, 185)
-const SLOT_SIZE := Vector2(165, 210)
+const CARD_SIZE := Vector2(140, 220)
+const GRID_COLUMNS := 5
+const SQUAD_SLOT_SIZE := Vector2(180, 220)
 
-enum Phase { SQUAD, LEVEL }
-var current_phase: Phase = Phase.SQUAD
+enum Phase { SQUAD, STAGE }
+var _phase: Phase = Phase.SQUAD
 
-# Squad slots - START BLANK (Holocure style)
-var squad_slots: Array[String] = ["", "", ""]
-var selected_slot_index: int = 0
-var squad_slot_nodes: Array[Control] = []
+var _registry: RefCounted
+var _cards: Dictionary = {}  # char_id -> card node
 
-# Character cards
-var character_cards: Dictionary = {}  # char_id -> card node
-var hovered_char_id: String = ""
-
-# Level selection
-var selected_map_id: String = ""
-var selected_time_id: String = ""
-var level_cards: Array[Control] = []
-
-# UI references
-var main_container: Control
-var squad_phase_container: Control
-var level_phase_container: Control
-var detail_panel: Control
-var character_grid: GridContainer
-var transition_tween: Tween
+var _bg: Control
+var _squad_container: Control
+var _stage_container: Control
+var _grid: Control  # VBoxContainer holding row HBoxContainers
+var _squad_slots: Control
+var _info_panel: Panel
+var _stage_selector: Control
+var _transition_tween: Tween
 
 func _ready() -> void:
-	_setup_ui()
-	_update_all_visuals()
+	_load_registry()
+	_build_ui()
+	_populate_grid()
 
-func _setup_ui() -> void:
-	# Dark background
-	var bg := ColorRect.new()
-	bg.color = BG_COLOR
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
-	
-	# Main container with margins
-	main_container = MarginContainer.new()
-	main_container.set_anchors_preset(Control.PRESET_FULL_RECT)
-	main_container.add_theme_constant_override("margin_left", 30)
-	main_container.add_theme_constant_override("margin_right", 30)
-	main_container.add_theme_constant_override("margin_top", 15)
-	main_container.add_theme_constant_override("margin_bottom", 15)
-	add_child(main_container)
-	
-	var content := VBoxContainer.new()
-	content.set_anchors_preset(Control.PRESET_FULL_RECT)
-	content.add_theme_constant_override("separation", 10)
-	main_container.add_child(content)
-	
-	# Title bar
-	var title_bar := _create_title_bar()
-	content.add_child(title_bar)
-	
-	# Phase containers
-	var phase_holder := Control.new()
-	phase_holder.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	content.add_child(phase_holder)
-	
-	squad_phase_container = _create_squad_phase()
-	squad_phase_container.set_anchors_preset(Control.PRESET_FULL_RECT)
-	phase_holder.add_child(squad_phase_container)
-	
-	level_phase_container = _create_level_phase()
-	level_phase_container.set_anchors_preset(Control.PRESET_FULL_RECT)
-	level_phase_container.modulate.a = 0.0
-	level_phase_container.visible = false
-	phase_holder.add_child(level_phase_container)
-	
-	# Bottom buttons
-	var button_row := _create_button_row()
-	content.add_child(button_row)
+func _input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		_handle_escape()
+		var vp := get_viewport()
+		if vp:
+			vp.set_input_as_handled()
 
-func _create_title_bar() -> Control:
-	var bar := HBoxContainer.new()
-	bar.alignment = BoxContainer.ALIGNMENT_CENTER
-	
-	var title := Label.new()
-	title.name = "TitleLabel"
-	title.text = "SELECT YOUR SQUAD"
-	title.add_theme_font_size_override("font_size", 38)
-	title.add_theme_color_override("font_color", TEXT_COLOR)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	bar.add_child(title)
-	
-	return bar
-
-func _create_squad_phase() -> Control:
-	var container := VBoxContainer.new()
-	container.add_theme_constant_override("separation", 12)
-	
-	# Squad slots section (top, centered)
-	var slots_section := _create_slots_section()
-	container.add_child(slots_section)
-	
-	# Separator line
-	var sep := _create_separator()
-	container.add_child(sep)
-	
-	# Main content: character grid + details
-	var content_row := HBoxContainer.new()
-	content_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	content_row.add_theme_constant_override("separation", 20)
-	container.add_child(content_row)
-	
-	# Character grid (left side)
-	var grid_section := _create_character_grid_section()
-	grid_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	grid_section.size_flags_stretch_ratio = 0.58
-	content_row.add_child(grid_section)
-	
-	# Detail panel (right side)
-	detail_panel = _create_detail_panel()
-	detail_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	detail_panel.size_flags_stretch_ratio = 0.42
-	content_row.add_child(detail_panel)
-	
-	return container
-
-func _create_slots_section() -> Control:
-	var section := VBoxContainer.new()
-	section.add_theme_constant_override("separation", 6)
-	
-	var header_row := HBoxContainer.new()
-	header_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	header_row.add_theme_constant_override("separation", 20)
-	section.add_child(header_row)
-	
-	var label := Label.new()
-	label.text = "YOUR SQUAD"
-	label.add_theme_font_size_override("font_size", 20)
-	label.add_theme_color_override("font_color", ACCENT_COLOR)
-	header_row.add_child(label)
-	
-	var help_text := Label.new()
-	help_text.text = "• Click slot → Click character to assign"
-	help_text.add_theme_font_size_override("font_size", 12)
-	help_text.add_theme_color_override("font_color", DIM_TEXT_COLOR)
-	header_row.add_child(help_text)
-	
-	var slots_row := HBoxContainer.new()
-	slots_row.add_theme_constant_override("separation", 20)
-	slots_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	section.add_child(slots_row)
-	
-	for i in range(3):
-		var slot := _create_squad_slot(i)
-		slots_row.add_child(slot)
-		squad_slot_nodes.append(slot)
-	
-	return section
-
-func _create_squad_slot(index: int) -> Control:
-	var slot := Panel.new()
-	slot.custom_minimum_size = SLOT_SIZE
-	slot.mouse_filter = Control.MOUSE_FILTER_STOP
-	
-	var style := StyleBoxFlat.new()
-	style.bg_color = SLOT_EMPTY_COLOR
-	style.border_color = CARD_BORDER_COLOR
-	style.set_border_width_all(3)
-	style.set_corner_radius_all(CARD_CORNER_RADIUS)
-	slot.add_theme_stylebox_override("panel", style)
-	
-	# Content layout - MUST ignore mouse so slot gets events
-	var vbox := VBoxContainer.new()
-	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	vbox.add_theme_constant_override("separation", 0)
-	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	slot.add_child(vbox)
-	
-	# Slot badge (MAIN / SUPPORT)
-	var badge_container := CenterContainer.new()
-	badge_container.custom_minimum_size = Vector2(0, 28)
-	badge_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(badge_container)
-	
-	var badge := Label.new()
-	badge.name = "Badge"
-	if index == 0:
-		badge.text = "▶ MAIN"
-		badge.add_theme_color_override("font_color", MAIN_SLOT_COLOR)
+func _handle_escape() -> void:
+	if _phase == Phase.STAGE:
+		# Go back to squad selection
+		_transition_to_squad()
 	else:
-		badge.text = "SUPPORT %d" % index
-		badge.add_theme_color_override("font_color", SUPPORT_SLOT_COLOR)
-	badge.add_theme_font_size_override("font_size", 13)
-	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	badge_container.add_child(badge)
-	
-	# Portrait area
-	var portrait_area := Control.new()
-	portrait_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	portrait_area.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(portrait_area)
-	
-	var portrait := TextureRect.new()
-	portrait.name = "Portrait"
-	portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	portrait.set_anchors_preset(Control.PRESET_FULL_RECT)
-	portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	portrait_area.add_child(portrait)
-	
-	# Empty indicator (question mark)
-	var empty_label := Label.new()
-	empty_label.name = "EmptyLabel"
-	empty_label.text = "?"
-	empty_label.add_theme_font_size_override("font_size", 64)
-	empty_label.add_theme_color_override("font_color", Color(0.4, 0.4, 0.5, 0.5))
-	empty_label.set_anchors_preset(Control.PRESET_CENTER)
-	empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	empty_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	empty_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	portrait_area.add_child(empty_label)
-	
-	# Name overlay at bottom
-	var name_overlay := ColorRect.new()
-	name_overlay.name = "NameOverlay"
-	name_overlay.color = NAME_OVERLAY_COLOR
-	name_overlay.custom_minimum_size = Vector2(0, 32)
-	name_overlay.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(name_overlay)
-	
-	var name_label := Label.new()
-	name_label.name = "NameLabel"
-	name_label.text = "EMPTY"
-	name_label.add_theme_font_size_override("font_size", 14)
-	name_label.add_theme_color_override("font_color", DIM_TEXT_COLOR)
-	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	name_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	name_overlay.add_child(name_label)
-	
-	# Click handling
-	slot.gui_input.connect(_on_slot_clicked.bind(index))
-	
-	return slot
+		# Go back to main menu
+		_go_back()
 
-func _create_separator() -> Control:
-	var container := CenterContainer.new()
-	container.custom_minimum_size = Vector2(0, 8)
-	
-	var line := ColorRect.new()
-	line.color = Color(0.3, 0.35, 0.45, 0.4)
-	line.custom_minimum_size = Vector2(800, 1)
-	container.add_child(line)
-	
-	return container
+func _go_back() -> void:
+	# If we came from Level (pause menu), use MenuManager to go to main menu
+	# Check if MenuManager exists and is the proper way back
+	if MenuManager:
+		MenuManager.return_to_main_menu()
+	else:
+		back_requested.emit()
 
-func _create_character_grid_section() -> Control:
-	var section := VBoxContainer.new()
-	section.add_theme_constant_override("separation", 8)
-	
-	var label := Label.new()
-	label.text = "AVAILABLE CHARACTERS"
-	label.add_theme_font_size_override("font_size", 16)
-	label.add_theme_color_override("font_color", TEXT_COLOR)
-	section.add_child(label)
-	
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	section.add_child(scroll)
-	
-	character_grid = GridContainer.new()
-	character_grid.columns = 4
-	character_grid.add_theme_constant_override("h_separation", 10)
-	character_grid.add_theme_constant_override("v_separation", 10)
-	scroll.add_child(character_grid)
-	
-	_populate_character_grid()
-	
-	return section
+func _load_registry() -> void:
+	var RegClass = load("res://scripts/characters/CharacterRegistry.gd")
+	if RegClass:
+		_registry = RegClass.get_instance()
 
-func _populate_character_grid() -> void:
-	# Clear existing
-	for child in character_grid.get_children():
-		child.queue_free()
-	character_cards.clear()
+func _build_ui() -> void:
+	# Background
+	_bg = Control.new()
+	_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_bg.set_script(VenetianBlindsScript)
+	add_child(_bg)
 	
-	var registry := CharacterRegistry.get_instance()
-	if not registry:
+	var overlay := ColorRect.new()
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.color = Color(0, 0, 0, 0.4)
+	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(overlay)
+	
+	# Squad selection container
+	_squad_container = Control.new()
+	_squad_container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(_squad_container)
+	_build_squad_phase()
+	
+	# Stage selection container (hidden below)
+	_stage_container = Control.new()
+	_stage_container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_stage_container.position.y = get_viewport_rect().size.y
+	_stage_container.modulate.a = 0.0
+	add_child(_stage_container)
+	_build_stage_phase()
+
+func _build_squad_phase() -> void:
+	# Main content area (full height minus bottom buttons)
+	var content := Control.new()
+	content.set_anchors_preset(Control.PRESET_FULL_RECT)
+	content.offset_top = 24
+	content.offset_bottom = -70
+	content.offset_left = 24
+	content.offset_right = -24
+	_squad_container.add_child(content)
+	
+	# RIGHT: Squad slots panel (full height, right side)
+	var squad_panel := Panel.new()
+	squad_panel.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
+	squad_panel.anchor_left = 0.78
+	squad_panel.offset_left = 0
+	squad_panel.offset_right = 0
+	_apply_panel_style(squad_panel)
+	content.add_child(squad_panel)
+	
+	_squad_slots = SquadSlotsScript.new()
+	_squad_slots.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_squad_slots.offset_left = 20
+	_squad_slots.offset_right = -20
+	_squad_slots.offset_top = 16
+	_squad_slots.offset_bottom = -16
+	_squad_slots.squad_complete.connect(_on_squad_complete)
+	_squad_slots.slot_cleared.connect(_on_slot_cleared)
+	squad_panel.add_child(_squad_slots)
+	
+	# LEFT SIDE: Grid (top) + Details (bottom)
+	var left_side := Control.new()
+	left_side.set_anchors_preset(Control.PRESET_FULL_RECT)
+	left_side.anchor_right = 0.77
+	left_side.offset_right = -16
+	content.add_child(left_side)
+	
+	# TOP-LEFT: Character grid (about 65% height)
+	var grid_panel := Panel.new()
+	grid_panel.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	grid_panel.anchor_bottom = 0.65
+	_apply_panel_style(grid_panel)
+	left_side.add_child(grid_panel)
+	
+	var grid_margin := MarginContainer.new()
+	grid_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	grid_margin.add_theme_constant_override("margin_left", 20)
+	grid_margin.add_theme_constant_override("margin_right", 20)
+	grid_margin.add_theme_constant_override("margin_top", 16)
+	grid_margin.add_theme_constant_override("margin_bottom", 16)
+	grid_panel.add_child(grid_margin)
+	
+	# Use a VBoxContainer to hold rows that expand vertically
+	var grid_vbox := VBoxContainer.new()
+	grid_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	grid_vbox.add_theme_constant_override("separation", 16)
+	grid_margin.add_child(grid_vbox)
+	
+	# Row 1
+	var row1 := HBoxContainer.new()
+	row1.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row1.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	row1.add_theme_constant_override("separation", 16)
+	grid_vbox.add_child(row1)
+	
+	# Row 2
+	var row2 := HBoxContainer.new()
+	row2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row2.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	row2.add_theme_constant_override("separation", 16)
+	grid_vbox.add_child(row2)
+	
+	# Store rows for later population
+	_grid = grid_vbox
+	_grid.set_meta("row1", row1)
+	_grid.set_meta("row2", row2)
+	
+	# BOTTOM-LEFT: Details panel (about 35% height)
+	_info_panel = CharacterInfoPanelScript.new()
+	_info_panel.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	_info_panel.anchor_top = 0.67
+	_info_panel.offset_top = 8
+	left_side.add_child(_info_panel)
+	
+	# Back button at bottom
+	var btn_row := HBoxContainer.new()
+	btn_row.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	btn_row.offset_top = -55
+	btn_row.offset_bottom = -10
+	btn_row.offset_left = 24
+	btn_row.offset_right = -24
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_squad_container.add_child(btn_row)
+	
+	var back_btn := Button.new()
+	back_btn.text = "BACK"
+	back_btn.custom_minimum_size = Vector2(140, 45)
+	_apply_button_style(back_btn)
+	back_btn.pressed.connect(_go_back)
+	btn_row.add_child(back_btn)
+	
+	var spacer := Control.new()
+	spacer.custom_minimum_size.x = 20
+	btn_row.add_child(spacer)
+	
+	var random_btn := Button.new()
+	random_btn.text = "RANDOM"
+	random_btn.custom_minimum_size = Vector2(140, 45)
+	_apply_random_button_style(random_btn)
+	random_btn.pressed.connect(_on_random_pressed)
+	btn_row.add_child(random_btn)
+	
+	var spacer2 := Control.new()
+	spacer2.custom_minimum_size.x = 20
+	btn_row.add_child(spacer2)
+	
+	var next_btn := Button.new()
+	next_btn.text = "NEXT"
+	next_btn.custom_minimum_size = Vector2(140, 45)
+	_apply_next_button_style(next_btn)
+	next_btn.pressed.connect(_on_next_pressed)
+	btn_row.add_child(next_btn)
+
+func _build_stage_phase() -> void:
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 48)
+	margin.add_theme_constant_override("margin_right", 48)
+	margin.add_theme_constant_override("margin_top", 32)
+	margin.add_theme_constant_override("margin_bottom", 32)
+	_stage_container.add_child(margin)
+	
+	var panel := Panel.new()
+	_apply_panel_style(panel)
+	margin.add_child(panel)
+	
+	_stage_selector = StageSelectorScript.new()
+	_stage_selector.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_stage_selector.offset_left = 24
+	_stage_selector.offset_right = -24
+	_stage_selector.offset_top = 24
+	_stage_selector.offset_bottom = -24
+	_stage_selector.stage_confirmed.connect(_on_stage_confirmed)
+	_stage_selector.back_requested.connect(_on_stage_back)
+	panel.add_child(_stage_selector)
+
+func _populate_grid() -> void:
+	if not _registry:
 		return
 	
-	var char_ids := registry.get_all_character_ids()
-	for char_id in char_ids:
-		var card := _create_character_card(char_id)
-		character_grid.add_child(card)
-		character_cards[char_id] = card
+	var row1: HBoxContainer = _grid.get_meta("row1")
+	var row2: HBoxContainer = _grid.get_meta("row2")
+	
+	var char_ids = _registry.get_all_character_ids()
+	for i in range(char_ids.size()):
+		var char_id = char_ids[i]
+		var data = _registry.get_character(char_id)
+		var card := _create_card(char_id, data)
+		
+		# First 5 go to row1, rest go to row2
+		if i < GRID_COLUMNS:
+			row1.add_child(card)
+		else:
+			row2.add_child(card)
+		
+		_cards[char_id] = card
 
-func _create_character_card(char_id: String) -> Control:
+func _create_card(char_id: String, data: Resource) -> Control:
 	var card := Panel.new()
-	card.custom_minimum_size = CARD_SIZE
+	card.custom_minimum_size = Vector2(CARD_SIZE.x, 0)  # Min width only, height expands
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
+	card.set_meta("char_id", char_id)
+	card.set_meta("char_data", data)
+	card.clip_children = Control.CLIP_CHILDREN_AND_DRAW
 	
 	# Check if character is unlocked
 	var is_unlocked: bool = ShopMenuScript.is_character_unlocked(char_id)
+	card.set_meta("is_unlocked", is_unlocked)
 	
-	var style := StyleBoxFlat.new()
-	style.bg_color = CARD_BG_COLOR if is_unlocked else Color(0.06, 0.06, 0.08, 0.9)
-	style.border_color = CARD_BORDER_COLOR if is_unlocked else Color(0.25, 0.25, 0.3, 0.7)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(CARD_CORNER_RADIUS)
-	card.add_theme_stylebox_override("panel", style)
+	_apply_card_style(card, false)
 	
-	# Container for clipping - MUST ignore mouse so card gets events
-	var clip_container := Control.new()
-	clip_container.set_anchors_preset(Control.PRESET_FULL_RECT)
-	clip_container.clip_contents = true
-	clip_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	card.add_child(clip_container)
-	
-	# Portrait - ignore mouse
 	var portrait := TextureRect.new()
-	portrait.name = "Portrait"
+	portrait.set_anchors_preset(Control.PRESET_FULL_RECT)
 	portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	portrait.set_anchors_preset(Control.PRESET_FULL_RECT)
-	portrait.modulate = Color(1, 1, 1, 0.95) if is_unlocked else Color(0.3, 0.3, 0.35, 0.8)
 	portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	
-	var registry := CharacterRegistry.get_instance()
-	var char_data := registry.get_character(char_id) if registry else null
-	if char_data:
-		var tex: Texture2D = char_data.get_portrait()
-		if tex:
-			portrait.texture = tex
-	clip_container.add_child(portrait)
+	if data:
+		portrait.texture = data.get_portrait()
+	# Dim portrait if locked
+	portrait.modulate = Color(1, 1, 1, 0.95) if is_unlocked else Color(0.3, 0.3, 0.35, 0.8)
+	card.add_child(portrait)
 	
 	# Lock overlay for locked characters
 	if not is_unlocked:
@@ -369,7 +291,7 @@ func _create_character_card(char_id: String) -> Control:
 		lock_overlay.color = Color(0.0, 0.0, 0.0, 0.4)
 		lock_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 		lock_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		clip_container.add_child(lock_overlay)
+		card.add_child(lock_overlay)
 		
 		# VBox to center lock icon and text vertically
 		var lock_vbox := VBoxContainer.new()
@@ -377,7 +299,7 @@ func _create_character_card(char_id: String) -> Control:
 		lock_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 		lock_vbox.add_theme_constant_override("separation", 2)
 		lock_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		clip_container.add_child(lock_vbox)
+		card.add_child(lock_vbox)
 		
 		var lock_icon := Label.new()
 		lock_icon.text = "🔒"
@@ -394,782 +316,273 @@ func _create_character_card(char_id: String) -> Control:
 		locked_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		lock_vbox.add_child(locked_text)
 	
-	# Name overlay at bottom - ignore mouse
-	var name_overlay := ColorRect.new()
-	name_overlay.color = NAME_OVERLAY_COLOR
-	name_overlay.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	name_overlay.anchor_top = 0.78
-	name_overlay.offset_top = 0
-	name_overlay.offset_bottom = 0
-	name_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	clip_container.add_child(name_overlay)
-	
-	var name_label := Label.new()
-	name_label.text = char_data.display_name if char_data else char_id
-	name_label.add_theme_font_size_override("font_size", 13)
-	name_label.add_theme_color_override("font_color", TEXT_COLOR if is_unlocked else Color(0.5, 0.5, 0.55))
-	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	name_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	name_overlay.add_child(name_label)
-	
-	# Store metadata
-	card.set_meta("char_id", char_id)
-	card.set_meta("is_unlocked", is_unlocked)
-	
-	# Event connections
-	card.gui_input.connect(_on_card_clicked.bind(char_id, card))
-	card.mouse_entered.connect(_on_card_hovered.bind(char_id, card))
-	card.mouse_exited.connect(_on_card_unhovered.bind(char_id, card))
-	
-	return card
-
-func _create_detail_panel() -> Control:
-	var panel := Panel.new()
-	
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.07, 0.07, 0.11, 0.98)
-	style.border_color = ACCENT_COLOR
-	style.set_border_width_all(3)
-	style.set_corner_radius_all(CORNER_RADIUS)
-	panel.add_theme_stylebox_override("panel", style)
-	
-	var margin := MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 18)
-	margin.add_theme_constant_override("margin_right", 18)
-	margin.add_theme_constant_override("margin_top", 12)
-	margin.add_theme_constant_override("margin_bottom", 12)
-	panel.add_child(margin)
-	
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	margin.add_child(scroll)
-	
-	var vbox := VBoxContainer.new()
-	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.add_theme_constant_override("separation", 8)
-	scroll.add_child(vbox)
-	
-	# Top row: Animated sprite + name/description
-	var top_row := HBoxContainer.new()
-	top_row.add_theme_constant_override("separation", 16)
-	vbox.add_child(top_row)
-	
-	# Animated sprite frame - larger and fills more space
-	var portrait_frame := Panel.new()
-	portrait_frame.name = "SpriteFrame"
-	portrait_frame.custom_minimum_size = Vector2(200, 200)
-	var frame_style := StyleBoxFlat.new()
-	frame_style.bg_color = Color(0.05, 0.05, 0.08, 1.0)
-	frame_style.border_color = Color(0.9, 0.9, 0.95, 0.9)
-	frame_style.set_border_width_all(3)
-	frame_style.set_corner_radius_all(10)
-	portrait_frame.add_theme_stylebox_override("panel", frame_style)
-	portrait_frame.clip_children = Control.CLIP_CHILDREN_AND_DRAW
-	top_row.add_child(portrait_frame)
-	
-	# SubViewportContainer to display AnimatedSprite2D in UI
-	var viewport_container := SubViewportContainer.new()
-	viewport_container.name = "ViewportContainer"
-	viewport_container.set_anchors_preset(Control.PRESET_FULL_RECT)
-	viewport_container.stretch = true
-	portrait_frame.add_child(viewport_container)
-	
-	var viewport := SubViewport.new()
-	viewport.name = "SpriteViewport"
-	viewport.size = Vector2i(200, 200)
-	viewport.transparent_bg = true
-	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	viewport_container.add_child(viewport)
-	
-	var sprite := AnimatedSprite2D.new()
-	sprite.name = "DetailSprite"
-	sprite.position = Vector2(100, 100)  # Center in viewport
-	sprite.centered = true
-	sprite.z_index = 10
-	viewport.add_child(sprite)
-	
-	# Name and description column
-	var name_col := VBoxContainer.new()
-	name_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_col.add_theme_constant_override("separation", 6)
-	top_row.add_child(name_col)
-	
-	var name_label := Label.new()
-	name_label.name = "DetailName"
-	name_label.text = "Select a Character"
-	name_label.add_theme_font_size_override("font_size", 28)
-	name_label.add_theme_color_override("font_color", TEXT_COLOR)
-	name_col.add_child(name_label)
-	
-	var desc_label := Label.new()
-	desc_label.name = "DetailDesc"
-	desc_label.text = ""
-	desc_label.add_theme_font_size_override("font_size", 15)
-	desc_label.add_theme_color_override("font_color", DIM_TEXT_COLOR)
-	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	name_col.add_child(desc_label)
-	
-	# Spacer
-	var spacer1 := Control.new()
-	spacer1.custom_minimum_size = Vector2(0, 6)
-	vbox.add_child(spacer1)
-	
-	# Special section
-	var special_header := Label.new()
-	special_header.text = "━━ SPECIAL SKILL ━━"
-	special_header.add_theme_font_size_override("font_size", 18)
-	special_header.add_theme_color_override("font_color", Color(0.4, 0.8, 1.0, 1.0))
-	special_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(special_header)
-	
-	var special_name := Label.new()
-	special_name.name = "SpecialName"
-	special_name.text = ""
-	special_name.add_theme_font_size_override("font_size", 24)
-	special_name.add_theme_color_override("font_color", TEXT_COLOR)
-	special_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(special_name)
-	
-	var special_desc := Label.new()
-	special_desc.name = "SpecialDesc"
-	special_desc.text = ""
-	special_desc.add_theme_font_size_override("font_size", 16)
-	special_desc.add_theme_color_override("font_color", DIM_TEXT_COLOR)
-	special_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	special_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(special_desc)
-	
-	# Special upgrades
-	var special_upgrade1 := Label.new()
-	special_upgrade1.name = "SpecialUpgrade1"
-	special_upgrade1.text = ""
-	special_upgrade1.add_theme_font_size_override("font_size", 14)
-	special_upgrade1.add_theme_color_override("font_color", Color(0.5, 0.9, 0.5, 1.0))
-	special_upgrade1.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	special_upgrade1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(special_upgrade1)
-	
-	var special_upgrade2 := Label.new()
-	special_upgrade2.name = "SpecialUpgrade2"
-	special_upgrade2.text = ""
-	special_upgrade2.add_theme_font_size_override("font_size", 14)
-	special_upgrade2.add_theme_color_override("font_color", Color(0.9, 0.7, 0.3, 1.0))
-	special_upgrade2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	special_upgrade2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(special_upgrade2)
-	
-	# Spacer
-	var spacer2 := Control.new()
-	spacer2.custom_minimum_size = Vector2(0, 10)
-	vbox.add_child(spacer2)
-	
-	# Burst section
-	var burst_header := Label.new()
-	burst_header.text = "━━ BURST SKILL ━━"
-	burst_header.add_theme_font_size_override("font_size", 18)
-	burst_header.add_theme_color_override("font_color", Color(1.0, 0.6, 0.3, 1.0))
-	burst_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(burst_header)
-	
-	var burst_name := Label.new()
-	burst_name.name = "BurstName"
-	burst_name.text = ""
-	burst_name.add_theme_font_size_override("font_size", 24)
-	burst_name.add_theme_color_override("font_color", TEXT_COLOR)
-	burst_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(burst_name)
-	
-	var burst_desc := Label.new()
-	burst_desc.name = "BurstDesc"
-	burst_desc.text = ""
-	burst_desc.add_theme_font_size_override("font_size", 16)
-	burst_desc.add_theme_color_override("font_color", DIM_TEXT_COLOR)
-	burst_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	burst_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(burst_desc)
-	
-	# Burst upgrades
-	var burst_upgrade1 := Label.new()
-	burst_upgrade1.name = "BurstUpgrade1"
-	burst_upgrade1.text = ""
-	burst_upgrade1.add_theme_font_size_override("font_size", 14)
-	burst_upgrade1.add_theme_color_override("font_color", Color(0.5, 0.9, 0.5, 1.0))
-	burst_upgrade1.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	burst_upgrade1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(burst_upgrade1)
-	
-	var burst_upgrade2 := Label.new()
-	burst_upgrade2.name = "BurstUpgrade2"
-	burst_upgrade2.text = ""
-	burst_upgrade2.add_theme_font_size_override("font_size", 14)
-	burst_upgrade2.add_theme_color_override("font_color", Color(0.9, 0.7, 0.3, 1.0))
-	burst_upgrade2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	burst_upgrade2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(burst_upgrade2)
-	
-	return panel
-
-func _create_level_phase() -> Control:
-	var container := VBoxContainer.new()
-	container.add_theme_constant_override("separation", 30)
-	
-	var title := Label.new()
-	title.text = "SELECT MISSION"
-	title.add_theme_font_size_override("font_size", 32)
-	title.add_theme_color_override("font_color", TEXT_COLOR)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	container.add_child(title)
-	
-	var center := CenterContainer.new()
-	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	container.add_child(center)
-	
-	var grid := GridContainer.new()
-	grid.columns = 4
-	grid.add_theme_constant_override("h_separation", 20)
-	grid.add_theme_constant_override("v_separation", 20)
-	center.add_child(grid)
-	
-	var maps := ["emerald_fields", "sakura_grove", "ashen_sands", "polar_front"]
-	var map_names := {
-		"emerald_fields": "Emerald Fields",
-		"sakura_grove": "Sakura Grove",
-		"ashen_sands": "Ashen Sands",
-		"polar_front": "Polar Front"
-	}
-	var times := ["day", "night"]
-	var time_labels := {"day": "Day", "night": "Night"}
-	
-	for map_id in maps:
-		for time_id in times:
-			var card := _create_level_card(map_id, map_names.get(map_id, map_id), time_id, time_labels.get(time_id, time_id))
-			grid.add_child(card)
-			level_cards.append(card)
-	
-	return container
-
-func _create_level_card(map_id: String, map_name: String, time_id: String, time_label: String) -> Control:
-	var card := Panel.new()
-	card.custom_minimum_size = Vector2(180, 120)
-	
-	var style := StyleBoxFlat.new()
-	style.bg_color = CARD_BG_COLOR
-	if time_id == "day":
-		style.border_color = Color(1.0, 0.85, 0.4, 0.8)
-	else:
-		style.border_color = Color(0.4, 0.5, 0.9, 0.8)
-	style.set_border_width_all(3)
-	style.set_corner_radius_all(CORNER_RADIUS)
-	card.add_theme_stylebox_override("panel", style)
-	
-	var vbox := VBoxContainer.new()
-	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_theme_constant_override("separation", 8)
-	card.add_child(vbox)
+	var name_bg := ColorRect.new()
+	name_bg.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	name_bg.anchor_top = 0.86
+	name_bg.color = Color(0, 0, 0, 0.85)
+	name_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(name_bg)
 	
 	var name_lbl := Label.new()
-	name_lbl.text = map_name
-	name_lbl.add_theme_font_size_override("font_size", 18)
-	name_lbl.add_theme_color_override("font_color", TEXT_COLOR)
+	name_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
+	name_lbl.offset_left = 4
+	name_lbl.offset_right = -4
+	name_lbl.offset_top = 2
+	name_lbl.offset_bottom = -2
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(name_lbl)
+	name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	name_lbl.add_theme_font_size_override("font_size", 16)
+	name_lbl.add_theme_color_override("font_color", Color(0.95, 0.95, 0.98) if is_unlocked else Color(0.5, 0.5, 0.55))
+	name_lbl.text = data.display_name if data else char_id
+	name_lbl.clip_text = true
+	name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	name_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	name_bg.add_child(name_lbl)
 	
-	var time_lbl := Label.new()
-	time_lbl.text = time_label
-	time_lbl.add_theme_font_size_override("font_size", 15)
-	if time_id == "day":
-		time_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.5, 1.0))
-	else:
-		time_lbl.add_theme_color_override("font_color", Color(0.6, 0.7, 1.0, 1.0))
-	time_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(time_lbl)
+	# White border overlay on TOP of everything
+	var border_overlay := Panel.new()
+	border_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	border_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var border_style := StyleBoxFlat.new()
+	border_style.bg_color = Color(0, 0, 0, 0)  # Transparent background
+	border_style.border_color = Color(0.95, 0.95, 0.98, 1.0) if is_unlocked else Color(0.25, 0.25, 0.3, 0.7)
+	border_style.set_border_width_all(3 if is_unlocked else 2)
+	border_style.set_corner_radius_all(12)
+	border_overlay.add_theme_stylebox_override("panel", border_style)
+	card.add_child(border_overlay)
+	card.set_meta("border_overlay", border_overlay)
 	
-	card.set_meta("map_id", map_id)
-	card.set_meta("time_id", time_id)
-	card.gui_input.connect(_on_level_card_clicked.bind(map_id, time_id, card))
+	card.gui_input.connect(_on_card_input.bind(char_id))
+	card.mouse_entered.connect(_on_card_hover.bind(char_id))
+	card.mouse_exited.connect(_on_card_unhover.bind(char_id))
 	
 	return card
 
-func _create_button_row() -> Control:
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 40)
-	
-	var back_btn := _create_styled_button("BACK")
-	back_btn.pressed.connect(_on_back_pressed)
-	row.add_child(back_btn)
-	
-	var confirm_btn := _create_styled_button("START MISSION")
-	confirm_btn.name = "ConfirmButton"
-	confirm_btn.pressed.connect(_on_confirm_pressed)
-	row.add_child(confirm_btn)
-	
-	return row
+func _apply_panel_style(panel: Panel) -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.04, 0.055, 0.08, 0.95)
+	style.border_color = Color(0.95, 0.95, 0.98, 0.8)
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(10)
+	panel.add_theme_stylebox_override("panel", style)
 
-func _create_styled_button(text: String) -> Button:
-	var btn := Button.new()
-	btn.text = text
-	btn.custom_minimum_size = Vector2(180, 50)
+func _apply_card_style(card: Panel, in_squad: bool, is_hovered: bool = false) -> void:
+	# Base panel style (no border, just background)
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.06, 0.07, 0.1, 0.95)
+	style.set_corner_radius_all(12)
+	card.add_theme_stylebox_override("panel", style)
 	
+	# Update border overlay if it exists
+	var border_overlay = card.get_meta("border_overlay") if card.has_meta("border_overlay") else null
+	if border_overlay:
+		var border_style := StyleBoxFlat.new()
+		border_style.bg_color = Color(0, 0, 0, 0)  # Transparent
+		border_style.set_corner_radius_all(12)
+		
+		if in_squad:
+			border_style.border_color = Color(0.4, 0.9, 0.5, 1.0)
+			border_style.set_border_width_all(4)
+		elif is_hovered:
+			border_style.border_color = Color(1.0, 1.0, 1.0, 1.0)
+			border_style.set_border_width_all(4)
+		else:
+			border_style.border_color = Color(0.95, 0.95, 0.98, 1.0)
+			border_style.set_border_width_all(3)
+		
+		border_overlay.add_theme_stylebox_override("panel", border_style)
+
+func _apply_button_style(btn: Button) -> void:
 	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.12, 0.12, 0.18, 1.0)
-	normal.border_color = ACCENT_COLOR
-	normal.set_border_width_all(3)
+	normal.bg_color = Color(0.1, 0.1, 0.14, 0.95)
+	normal.border_color = Color(0.4, 0.4, 0.5, 0.8)
+	normal.set_border_width_all(2)
 	normal.set_corner_radius_all(8)
 	btn.add_theme_stylebox_override("normal", normal)
 	
 	var hover := StyleBoxFlat.new()
-	hover.bg_color = Color(0.18, 0.18, 0.26, 1.0)
-	hover.border_color = GOLDEN_ACCENT
+	hover.bg_color = Color(0.15, 0.15, 0.2, 1.0)
+	hover.border_color = Color(0.95, 0.95, 0.98)
 	hover.set_border_width_all(3)
 	hover.set_corner_radius_all(8)
 	btn.add_theme_stylebox_override("hover", hover)
 	
-	var pressed := StyleBoxFlat.new()
-	pressed.bg_color = Color(0.08, 0.08, 0.12, 1.0)
-	pressed.border_color = GOLDEN_ACCENT
-	pressed.set_border_width_all(3)
-	pressed.set_corner_radius_all(8)
-	btn.add_theme_stylebox_override("pressed", pressed)
+	btn.add_theme_font_size_override("font_size", 16)
+	btn.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95))
+
+func _apply_random_button_style(btn: Button) -> void:
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.6, 0.15, 0.15, 0.95)
+	normal.border_color = Color(0.9, 0.3, 0.3, 0.9)
+	normal.set_border_width_all(2)
+	normal.set_corner_radius_all(8)
+	btn.add_theme_stylebox_override("normal", normal)
 	
-	btn.add_theme_font_size_override("font_size", 18)
-	btn.add_theme_color_override("font_color", TEXT_COLOR)
+	var hover := StyleBoxFlat.new()
+	hover.bg_color = Color(0.75, 0.2, 0.2, 1.0)
+	hover.border_color = Color(1.0, 0.4, 0.4)
+	hover.set_border_width_all(3)
+	hover.set_corner_radius_all(8)
+	btn.add_theme_stylebox_override("hover", hover)
 	
-	return btn
+	btn.add_theme_font_size_override("font_size", 16)
+	btn.add_theme_color_override("font_color", Color(1.0, 0.95, 0.95))
 
-# ============== UPDATE METHODS ==============
-
-func _update_all_visuals() -> void:
-	_update_squad_slots()
-	_update_character_cards()
-	_update_detail_panel("")
-
-func _update_squad_slots() -> void:
-	var registry := CharacterRegistry.get_instance()
+func _on_random_pressed() -> void:
+	# Clear current squad
+	_squad_slots.clear()
+	_update_card_states()
 	
-	for i in range(squad_slot_nodes.size()):
-		var slot := squad_slot_nodes[i]
-		var char_id := squad_slots[i]
-		var is_selected := (i == selected_slot_index)
-		var is_filled := (char_id != "")
-		
-		# Get child nodes
-		var portrait: TextureRect = slot.find_child("Portrait", true, false)
-		var name_label: Label = slot.find_child("NameLabel", true, false)
-		var empty_label: Label = slot.find_child("EmptyLabel", true, false)
-		
-		# Update content
-		if is_filled and registry:
-			var char_data := registry.get_character(char_id)
-			if char_data:
-				if portrait:
-					portrait.texture = char_data.get_portrait()
-					portrait.visible = true
-				if name_label:
-					name_label.text = char_data.display_name
-					name_label.add_theme_color_override("font_color", TEXT_COLOR)
-				if empty_label:
-					empty_label.visible = false
-		else:
-			if portrait:
-				portrait.texture = null
-				portrait.visible = false
-			if name_label:
-				name_label.text = "EMPTY"
-				name_label.add_theme_color_override("font_color", DIM_TEXT_COLOR)
-			if empty_label:
-				empty_label.visible = true
-		
-		# Update slot style
-		var style: StyleBoxFlat = slot.get_theme_stylebox("panel").duplicate()
-		style.bg_color = SLOT_FILLED_COLOR if is_filled else SLOT_EMPTY_COLOR
-		if is_selected:
-			style.border_color = GOLDEN_ACCENT
-			style.set_border_width_all(4)
-		else:
-			style.border_color = CARD_BORDER_COLOR
-			style.set_border_width_all(3)
-		slot.add_theme_stylebox_override("panel", style)
-
-func _update_character_cards() -> void:
-	# Mark cards that are already in squad
-	for char_id in character_cards:
-		var card: Control = character_cards[char_id]
-		var is_in_squad: bool = squad_slots.has(char_id)
-		
-		var style: StyleBoxFlat = card.get_theme_stylebox("panel").duplicate()
-		if is_in_squad:
-			style.border_color = MAIN_SLOT_COLOR
-			style.set_border_width_all(3)
-			card.modulate = Color(0.7, 0.7, 0.7, 0.8)
-		else:
-			style.border_color = CARD_BORDER_COLOR
-			style.set_border_width_all(2)
-			card.modulate = Color.WHITE
-		card.add_theme_stylebox_override("panel", style)
-
-func _update_detail_panel(char_id: String) -> void:
-	var sprite: AnimatedSprite2D = detail_panel.find_child("DetailSprite", true, false)
-	var name_label: Label = detail_panel.find_child("DetailName", true, false)
-	var desc_label: Label = detail_panel.find_child("DetailDesc", true, false)
-	var special_name: Label = detail_panel.find_child("SpecialName", true, false)
-	var special_desc: Label = detail_panel.find_child("SpecialDesc", true, false)
-	var special_upgrade1: Label = detail_panel.find_child("SpecialUpgrade1", true, false)
-	var special_upgrade2: Label = detail_panel.find_child("SpecialUpgrade2", true, false)
-	var burst_name: Label = detail_panel.find_child("BurstName", true, false)
-	var burst_desc: Label = detail_panel.find_child("BurstDesc", true, false)
-	var burst_upgrade1: Label = detail_panel.find_child("BurstUpgrade1", true, false)
-	var burst_upgrade2: Label = detail_panel.find_child("BurstUpgrade2", true, false)
+	# Get all character IDs and filter to only unlocked ones
+	var all_ids: Array = _registry.get_all_character_ids().duplicate()
+	var unlocked_ids: Array = []
+	for char_id in all_ids:
+		if ShopMenuScript.is_character_unlocked(char_id):
+			unlocked_ids.append(char_id)
+	unlocked_ids.shuffle()
 	
-	if char_id == "":
-		if sprite:
-			sprite.visible = false
-		if name_label:
-			name_label.text = "Hover over a character"
-		if desc_label:
-			desc_label.text = "Select a slot above, then click a character to assign"
-		if special_name:
-			special_name.text = ""
-		if special_desc:
-			special_desc.text = ""
-		if special_upgrade1:
-			special_upgrade1.text = ""
-		if special_upgrade2:
-			special_upgrade2.text = ""
-		if burst_name:
-			burst_name.text = ""
-		if burst_desc:
-			burst_desc.text = ""
-		if burst_upgrade1:
-			burst_upgrade1.text = ""
-		if burst_upgrade2:
-			burst_upgrade2.text = ""
+	# Pick first 3 unlocked characters
+	for i in range(mini(3, unlocked_ids.size())):
+		_squad_slots.add_character(unlocked_ids[i])
+	
+	_update_card_states()
+
+func _apply_next_button_style(btn: Button) -> void:
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.15, 0.5, 0.15, 0.95)
+	normal.border_color = Color(0.3, 0.8, 0.3, 0.9)
+	normal.set_border_width_all(2)
+	normal.set_corner_radius_all(8)
+	btn.add_theme_stylebox_override("normal", normal)
+	
+	var hover := StyleBoxFlat.new()
+	hover.bg_color = Color(0.2, 0.65, 0.2, 1.0)
+	hover.border_color = Color(0.4, 1.0, 0.4)
+	hover.set_border_width_all(3)
+	hover.set_corner_radius_all(8)
+	btn.add_theme_stylebox_override("hover", hover)
+	
+	btn.add_theme_font_size_override("font_size", 16)
+	btn.add_theme_color_override("font_color", Color(0.95, 1.0, 0.95))
+
+func _on_next_pressed() -> void:
+	# Only proceed if we have a full squad (3 characters)
+	if not _squad_slots.is_complete():
 		return
-	
-	var registry := CharacterRegistry.get_instance()
-	var char_data := registry.get_character(char_id) if registry else null
-	
-	if not char_data:
-		return
-	
-	if sprite:
-		_configure_detail_sprite(sprite, char_data)
-	if name_label:
-		name_label.text = char_data.display_name
-	if desc_label:
-		desc_label.text = char_data.description if char_data.description else ""
-	
-	# Special skill info
-	if special_name:
-		special_name.text = char_data.special_name if char_data.special_name else "Special Skill"
-	if special_desc:
-		special_desc.text = char_data.special_description if char_data.special_description else ""
-	if special_upgrade1:
-		special_upgrade1.text = "▲ " + char_data.special_upgrade1 if char_data.get("special_upgrade1") else ""
-	if special_upgrade2:
-		special_upgrade2.text = "★ " + char_data.special_upgrade2 if char_data.get("special_upgrade2") else ""
-	
-	# Burst skill info
-	if burst_name:
-		burst_name.text = char_data.burst_name if char_data.burst_name else "Burst Skill"
-	if burst_desc:
-		burst_desc.text = char_data.burst_description if char_data.burst_description else ""
-	if burst_upgrade1:
-		burst_upgrade1.text = "▲ " + char_data.burst_upgrade1 if char_data.get("burst_upgrade1") else ""
-	if burst_upgrade2:
-		burst_upgrade2.text = "★ " + char_data.burst_upgrade2 if char_data.get("burst_upgrade2") else ""
+	_transition_to_stage()
 
-func _add_stat_row(container: VBoxContainer, stat_name: String, value: String, max_value: float = 500.0, bar_color: Color = ACCENT_COLOR) -> void:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
-	
-	var label := Label.new()
-	label.text = stat_name
-	label.add_theme_font_size_override("font_size", 13)
-	label.add_theme_color_override("font_color", DIM_TEXT_COLOR)
-	label.custom_minimum_size = Vector2(55, 0)
-	row.add_child(label)
-	
-	# Bar background
-	var bar_bg := Panel.new()
-	bar_bg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bar_bg.custom_minimum_size = Vector2(0, 16)
-	var bg_style := StyleBoxFlat.new()
-	bg_style.bg_color = Color(0.15, 0.15, 0.2, 1.0)
-	bg_style.set_corner_radius_all(4)
-	bar_bg.add_theme_stylebox_override("panel", bg_style)
-	row.add_child(bar_bg)
-	
-	# Bar fill
-	var fill_ratio := clampf(float(value) / max_value, 0.0, 1.0)
-	var bar_fill := ColorRect.new()
-	bar_fill.color = bar_color
-	bar_fill.set_anchors_preset(Control.PRESET_LEFT_WIDE)
-	bar_fill.anchor_right = fill_ratio
-	bar_fill.offset_left = 2
-	bar_fill.offset_right = -2
-	bar_fill.offset_top = 2
-	bar_fill.offset_bottom = -2
-	bar_bg.add_child(bar_fill)
-	
-	var val_label := Label.new()
-	val_label.text = value
-	val_label.add_theme_font_size_override("font_size", 13)
-	val_label.add_theme_color_override("font_color", TEXT_COLOR)
-	val_label.custom_minimum_size = Vector2(40, 0)
-	val_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	row.add_child(val_label)
-	
-	container.add_child(row)
-
-# ============== EVENT HANDLERS ==============
-
-func _on_slot_clicked(event: InputEvent, slot_index: int) -> void:
-	if event is InputEventMouseButton and event.pressed:
-		# Right-click to clear slot
-		if event.button_index == MOUSE_BUTTON_RIGHT:
-			squad_slots[slot_index] = ""
-			_update_squad_slots()
-			_update_character_cards()
-			_update_detail_panel("")
-		elif event.button_index == MOUSE_BUTTON_LEFT:
-			selected_slot_index = slot_index
-			_update_squad_slots()
-			_update_character_cards()
-			
-			# Show currently assigned character in detail panel
-			var char_id := squad_slots[slot_index]
-			_update_detail_panel(char_id)
-
-func _on_card_clicked(event: InputEvent, char_id: String, card: Control) -> void:
+func _on_card_input(event: InputEvent, char_id: String) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		# Check if character is unlocked
-		var is_unlocked: bool = card.get_meta("is_unlocked", true)
+		var card = _cards.get(char_id)
+		var is_unlocked: bool = true
+		if card:
+			is_unlocked = card.get_meta("is_unlocked", true)
+		
 		if not is_unlocked:
 			# Shake the card to indicate locked
-			var tween := create_tween()
-			tween.tween_property(card, "position:x", card.position.x + 5, 0.05)
-			tween.tween_property(card, "position:x", card.position.x - 5, 0.05)
-			tween.tween_property(card, "position:x", card.position.x + 3, 0.05)
-			tween.tween_property(card, "position:x", card.position.x, 0.05)
-			return
-		
-		# Assign character to selected slot
-		squad_slots[selected_slot_index] = char_id
-		
-		# Animate the slot
-		_animate_slot_filled(selected_slot_index)
-		
-		# Auto-advance to next empty slot
-		_advance_to_next_empty_slot()
-		
-		_update_squad_slots()
-		_update_character_cards()
-		_update_detail_panel(char_id)
-
-func _on_card_hovered(char_id: String, card: Control) -> void:
-	hovered_char_id = char_id
-	_update_detail_panel(char_id)
-	
-	var is_unlocked: bool = card.get_meta("is_unlocked", true)
-	
-	# Highlight card on hover (only if unlocked)
-	if not squad_slots.has(char_id) and is_unlocked:
-		var style: StyleBoxFlat = card.get_theme_stylebox("panel").duplicate()
-		style.border_color = CARD_HOVER_BORDER
-		style.set_border_width_all(3)
-		card.add_theme_stylebox_override("panel", style)
-
-func _on_card_unhovered(char_id: String, card: Control) -> void:
-	if hovered_char_id == char_id:
-		hovered_char_id = ""
-	
-	# Reset card style
-	if not squad_slots.has(char_id):
-		var style: StyleBoxFlat = card.get_theme_stylebox("panel").duplicate()
-		style.border_color = CARD_BORDER_COLOR
-		style.set_border_width_all(2)
-		card.add_theme_stylebox_override("panel", style)
-
-func _on_level_card_clicked(event: InputEvent, map_id: String, time_id: String, card: Control) -> void:
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		selected_map_id = map_id
-		selected_time_id = time_id
-		
-		# Update all level card styles
-		for lc in level_cards:
-			var style: StyleBoxFlat = lc.get_theme_stylebox("panel").duplicate()
-			if lc == card:
-				style.border_color = GOLDEN_ACCENT
-				style.set_border_width_all(5)
-			else:
-				var tid = lc.get_meta("time_id")
-				if tid == "day":
-					style.border_color = Color(1.0, 0.85, 0.4, 0.8)
-				else:
-					style.border_color = Color(0.4, 0.5, 0.9, 0.8)
-				style.set_border_width_all(3)
-			lc.add_theme_stylebox_override("panel", style)
-
-func _on_back_pressed() -> void:
-	if current_phase == Phase.LEVEL:
-		_transition_to_squad_phase()
-	else:
-		back_requested.emit()
-
-func _on_confirm_pressed() -> void:
-	if current_phase == Phase.SQUAD:
-		# Check if all slots are filled
-		var all_filled := true
-		for char_id in squad_slots:
-			if char_id == "":
-				all_filled = false
-				break
-		
-		if all_filled:
-			_transition_to_level_phase()
-		else:
-			# Flash empty slots
-			for i in range(squad_slots.size()):
-				if squad_slots[i] == "":
-					_flash_slot_error(i)
-	else:
-		# Level phase - start game
-		if selected_map_id != "" and selected_time_id != "":
-			play_requested.emit(squad_slots, selected_map_id, selected_time_id)
-		else:
-			# Flash all level cards
-			for card in level_cards:
+			if card:
+				var orig_pos: float = card.position.x
 				var tween := create_tween()
-				tween.tween_property(card, "modulate", Color(1.0, 0.4, 0.4), 0.1)
-				tween.tween_property(card, "modulate", Color.WHITE, 0.1)
-
-# ============== HELPER METHODS ==============
-
-func _advance_to_next_empty_slot() -> void:
-	# Find next empty slot after current
-	for i in range(squad_slots.size()):
-		var idx := (selected_slot_index + 1 + i) % squad_slots.size()
-		if squad_slots[idx] == "":
-			selected_slot_index = idx
+				tween.tween_property(card, "position:x", orig_pos + 5, 0.05)
+				tween.tween_property(card, "position:x", orig_pos - 5, 0.05)
+				tween.tween_property(card, "position:x", orig_pos + 3, 0.05)
+				tween.tween_property(card, "position:x", orig_pos, 0.05)
 			return
+		
+		if _squad_slots.has_character(char_id):
+			# Click on already-selected character removes them
+			_remove_from_squad(char_id)
+		else:
+			_add_to_squad(char_id)
 
-func _animate_slot_filled(slot_index: int) -> void:
-	if slot_index >= squad_slot_nodes.size():
+func _on_card_hover(char_id: String) -> void:
+	if _registry:
+		var data = _registry.get_character(char_id)
+		_info_panel.set_character(data)
+	
+	var card = _cards.get(char_id)
+	if card:
+		var in_squad: bool = _squad_slots.has_character(char_id)
+		_apply_card_style(card, in_squad, true)
+		var tween := create_tween().set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+		tween.tween_property(card, "scale", Vector2(1.02, 1.02), 0.1)
+
+func _on_card_unhover(char_id: String) -> void:
+	var card = _cards.get(char_id)
+	if card:
+		var in_squad: bool = _squad_slots.has_character(char_id)
+		_apply_card_style(card, in_squad, false)
+		var tween := create_tween().set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+		tween.tween_property(card, "scale", Vector2.ONE, 0.1)
+
+func _add_to_squad(char_id: String) -> void:
+	if _squad_slots.has_character(char_id):
+		return  # Already in squad
+	
+	if _squad_slots.add_character(char_id):
+		_update_card_states()
+
+func _on_slot_cleared(_index: int) -> void:
+	_update_card_states()
+
+func _update_card_states() -> void:
+	for char_id in _cards:
+		var card = _cards[char_id]
+		var in_squad: bool = _squad_slots.has_character(char_id)
+		_apply_card_style(card, in_squad, false)
+		card.modulate = Color(0.6, 0.6, 0.6, 0.85) if in_squad else Color.WHITE
+
+func _remove_from_squad(char_id: String) -> void:
+	_squad_slots.remove_character_by_id(char_id)
+	_update_card_states()
+
+func _on_squad_complete() -> void:
+	_transition_to_stage()
+
+func _transition_to_stage() -> void:
+	if _phase == Phase.STAGE:
 		return
-	var slot := squad_slot_nodes[slot_index]
-	var tween := create_tween()
-	tween.tween_property(slot, "scale", Vector2(1.08, 1.08), 0.1)
-	tween.tween_property(slot, "scale", Vector2(1.0, 1.0), 0.1)
+	_phase = Phase.STAGE
+	
+	if _transition_tween:
+		_transition_tween.kill()
+	
+	var vh := get_viewport_rect().size.y
+	_transition_tween = create_tween().set_parallel(true)
+	_transition_tween.tween_property(_squad_container, "position:y", -vh, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	_transition_tween.tween_property(_squad_container, "modulate:a", 0.0, 0.4)
+	_transition_tween.tween_property(_stage_container, "position:y", 0.0, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	_transition_tween.tween_property(_stage_container, "modulate:a", 1.0, 0.4).set_delay(0.1)
 
-func _flash_slot_error(slot_index: int) -> void:
-	if slot_index >= squad_slot_nodes.size():
+func _on_stage_back() -> void:
+	_transition_to_squad()
+
+func _transition_to_squad() -> void:
+	if _phase == Phase.SQUAD:
 		return
-	var slot := squad_slot_nodes[slot_index]
-	var tween := create_tween()
-	tween.tween_property(slot, "modulate", Color(1.0, 0.3, 0.3), 0.1)
-	tween.tween_property(slot, "modulate", Color.WHITE, 0.1)
-	tween.tween_property(slot, "modulate", Color(1.0, 0.3, 0.3), 0.1)
-	tween.tween_property(slot, "modulate", Color.WHITE, 0.1)
+	_phase = Phase.SQUAD
+	
+	if _transition_tween:
+		_transition_tween.kill()
+	
+	var vh := get_viewport_rect().size.y
+	_transition_tween = create_tween().set_parallel(true)
+	_transition_tween.tween_property(_stage_container, "position:y", vh, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	_transition_tween.tween_property(_stage_container, "modulate:a", 0.0, 0.4)
+	_transition_tween.tween_property(_squad_container, "position:y", 0.0, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	_transition_tween.tween_property(_squad_container, "modulate:a", 1.0, 0.4).set_delay(0.1)
 
-func _transition_to_level_phase() -> void:
-	current_phase = Phase.LEVEL
+func _on_stage_confirmed(map_id: String, time_id: String) -> void:
+	var squad_ids: Array[String] = _squad_slots.get_squad()
 	
-	if transition_tween:
-		transition_tween.kill()
+	# Convert character IDs to indices for the Level/GameState
+	var squad_indices: Array[int] = []
+	var all_ids = _registry.get_all_character_ids()
+	for char_id in squad_ids:
+		var idx: int = all_ids.find(char_id)
+		if idx >= 0:
+			squad_indices.append(idx)
 	
-	transition_tween = create_tween()
-	transition_tween.set_parallel(true)
-	
-	# Fade out squad phase
-	transition_tween.tween_property(squad_phase_container, "modulate:a", 0.0, 0.3)
-	transition_tween.tween_property(squad_phase_container, "position:x", -50, 0.3)
-	
-	# Fade in level phase
-	level_phase_container.visible = true
-	level_phase_container.position.x = 50
-	transition_tween.tween_property(level_phase_container, "modulate:a", 1.0, 0.3).set_delay(0.15)
-	transition_tween.tween_property(level_phase_container, "position:x", 0, 0.3).set_delay(0.15)
-	
-	transition_tween.chain().tween_callback(func(): squad_phase_container.visible = false)
-	
-	# Update title
-	var title: Label = main_container.find_child("TitleLabel", true, false)
-	if title:
-		title.text = "SELECT MISSION"
-
-func _transition_to_squad_phase() -> void:
-	current_phase = Phase.SQUAD
-	
-	if transition_tween:
-		transition_tween.kill()
-	
-	transition_tween = create_tween()
-	transition_tween.set_parallel(true)
-	
-	# Fade out level phase
-	transition_tween.tween_property(level_phase_container, "modulate:a", 0.0, 0.3)
-	transition_tween.tween_property(level_phase_container, "position:x", 50, 0.3)
-	
-	# Fade in squad phase
-	squad_phase_container.visible = true
-	squad_phase_container.position.x = -50
-	transition_tween.tween_property(squad_phase_container, "modulate:a", 1.0, 0.3).set_delay(0.15)
-	transition_tween.tween_property(squad_phase_container, "position:x", 0, 0.3).set_delay(0.15)
-	
-	transition_tween.chain().tween_callback(func(): level_phase_container.visible = false)
-	
-	# Update title
-	var title: Label = main_container.find_child("TitleLabel", true, false)
-	if title:
-		title.text = "SELECT YOUR SQUAD"
-
-func _configure_detail_sprite(sprite: AnimatedSprite2D, char_data: Resource) -> void:
-	"""Configure the AnimatedSprite2D to play the walking right animation for a character."""
-	if not sprite or not char_data:
-		if sprite:
-			sprite.visible = false
-		return
-	
-	var sprite_sheet: Texture2D = char_data.get_sprite()
-	if not sprite_sheet:
-		sprite.visible = false
-		return
-	
-	var columns: int = char_data.sprite_sheet_columns if char_data.sprite_sheet_columns > 0 else 4
-	var rows: int = char_data.sprite_sheet_rows if char_data.sprite_sheet_rows > 0 else 4
-	var fps: float = char_data.sprite_animation_fps if char_data.sprite_animation_fps > 0 else 8.0
-	var scale_factor: float = char_data.sprite_scale if char_data.sprite_scale > 0 else 0.2
-	
-	# Make sprite bigger for the preview (3x the normal scale)
-	scale_factor *= 3.0
-	
-	var texture_size: Vector2 = sprite_sheet.get_size()
-	var frame_width := int(texture_size.x / columns)
-	var frame_height := int(texture_size.y / rows)
-	
-	var frames := SpriteFrames.new()
-	
-	# Create the "right" animation (row 2)
-	frames.add_animation("right")
-	frames.set_animation_speed("right", fps)
-	frames.set_animation_loop("right", true)
-	
-	# Add frames for the right direction (row 2, each column is a frame)
-	for col in range(columns):
-		var atlas := AtlasTexture.new()
-		atlas.atlas = sprite_sheet
-		atlas.region = Rect2(col * frame_width, 2 * frame_height, frame_width, frame_height)
-		frames.add_frame("right", atlas)
-	
-	sprite.sprite_frames = frames
-	sprite.scale = Vector2(scale_factor, scale_factor)
-	sprite.visible = true
-	sprite.animation = "right"
-	sprite.play("right")
+	play_requested.emit(squad_indices, map_id, time_id)

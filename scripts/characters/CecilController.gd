@@ -5,8 +5,8 @@ class_name CecilController
 ## Burst: Freeze all enemies, hack non-elite/boss to fight for player
 
 # Preload scripts
-const CecilDroneScript = preload("res://scripts/CecilDrone.gd")
-const CecilShieldScript = preload("res://scripts/CecilShield.gd")
+const CecilDroneScript = preload("res://scripts/characters/effects/CecilDrone.gd")
+const CecilShieldScript = preload("res://scripts/characters/effects/CecilShield.gd")
 
 # SMG config (same as Sin)
 var bullet_speed: float = 900.0

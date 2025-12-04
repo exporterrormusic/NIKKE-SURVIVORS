@@ -5,7 +5,7 @@ class_name NayutaController
 ## Burst: Galaxy explosion that damages all enemies on screen
 
 # Preload scripts
-const NayutaCloneScript = preload("res://scripts/NayutaClone.gd")
+const NayutaCloneScript = preload("res://scripts/characters/effects/NayutaClone.gd")
 
 # SMG config (same as Sin/Cecil)
 var bullet_speed: float = 900.0

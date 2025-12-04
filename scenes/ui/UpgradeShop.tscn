@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://cabc123def456"]
 
-[ext_resource type="Script" uid="uid://cpus6a40ac7t" path="res://scripts/UpgradeShop.gd" id="1"]
+[ext_resource type="Script" uid="uid://cpus6a40ac7t" path="res://scripts/ui/UpgradeShop.gd" id="1"]
 
 [node name="UpgradeShop" type="Control"]
 z_index = 100

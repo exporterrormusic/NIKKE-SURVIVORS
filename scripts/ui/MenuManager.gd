@@ -2,7 +2,7 @@ extends Node
 ## Manages menu navigation and transitions between screens.
 ## Load this as an autoload or instantiate in your main scene.
 
-signal game_started(squad: Array[int], map_id: StringName, time_id: StringName)
+signal game_started(squad: Array[int], stage_id: String)
 
 # Menu scenes
 const MainMenuScene = preload("res://scenes/ui/MainMenu.tscn")
@@ -11,6 +11,7 @@ const CharacterSelectScene = preload("res://scenes/ui/CharacterSelectMenu.tscn")
 const AchievementsScene = preload("res://scenes/ui/AchievementsMenu.tscn")
 const LeaderboardScene = preload("res://scenes/ui/LeaderboardMenu.tscn")
 const ShopScene = preload("res://scenes/ui/ShopMenu.tscn")
+const DebugMenuScript = preload("res://scripts/ui/DebugMenu.gd")
 
 # Current menu stack (for back navigation)
 var _menu_stack: Array[Control] = []
@@ -18,6 +19,9 @@ var _current_menu: Control = null
 
 # Container for menus
 var _menu_container: Control = null
+
+# Debug menu (global, always available via F4)
+var _debug_menu: CanvasLayer = null
 
 # Music player
 var _music_player: AudioStreamPlayer = null
@@ -31,11 +35,21 @@ func _ready() -> void:
 	_menu_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_menu_container)
 	
+	# Setup global debug menu (available via F4 everywhere)
+	_setup_debug_menu()
+	
 	# Setup and play menu music
 	_setup_music()
 	
 	# Start with main menu
 	show_main_menu()
+
+
+func _setup_debug_menu() -> void:
+	_debug_menu = CanvasLayer.new()
+	_debug_menu.set_script(DebugMenuScript)
+	_debug_menu.name = "GlobalDebugMenu"
+	add_child(_debug_menu)
 
 
 func _setup_music() -> void:
@@ -80,7 +94,16 @@ func stop_menu_music() -> void:
 
 ## Start menu music - can be called when returning to menus
 func start_menu_music() -> void:
-	if _music_player and not _music_player.playing:
+	if _music_player == null:
+		_setup_music()
+		return
+	
+	if _music_player.stream == null:
+		# Stream wasn't loaded, try to set it up again
+		_setup_music()
+		return
+	
+	if not _music_player.playing:
 		print("[MenuManager] Starting menu music")
 		_music_player.play()
 
@@ -271,8 +294,8 @@ func _on_back_requested() -> void:
 	_pop_menu()
 
 
-func _on_game_start_requested(squad: Array[int], map_id: StringName, time_id: StringName) -> void:
-	print("[MenuManager] _on_game_start_requested called with squad: ", squad, " map: ", map_id, " time: ", time_id)
+func _on_game_start_requested(squad: Array[int], stage_id: String) -> void:
+	print("[MenuManager] _on_game_start_requested called with squad: ", squad, " stage: ", stage_id)
 	
 	# Save selection to GameState
 	if GameState:
@@ -280,9 +303,8 @@ func _on_game_start_requested(squad: Array[int], map_id: StringName, time_id: St
 		# Set the main character (first in squad) as the player character
 		if squad.size() > 0:
 			GameState.set_player_character(squad[0])
-		# Store map and time for Level to use
-		GameState.set_meta("selected_map_id", map_id)
-		GameState.set_meta("selected_time_id", time_id)
+		# Store stage_id for Level to use
+		GameState.current_stage_id = stage_id
 	
 	# Stop menu music
 	if _music_player:
@@ -293,7 +315,7 @@ func _on_game_start_requested(squad: Array[int], map_id: StringName, time_id: St
 		print("[MenuManager] No music player found!")
 	
 	# Emit signal for game to handle
-	emit_signal("game_started", squad, map_id, time_id)
+	emit_signal("game_started", squad, stage_id)
 	
 	# Clear menus and transition to game
 	_clear_stack()

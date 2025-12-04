@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://cx1rao8cr2m81"]
 
-[ext_resource type="Script" uid="uid://bowpsorovuryt" path="res://scripts/PlayerHudCluster.gd" id="1"]
+[ext_resource type="Script" uid="uid://bowpsorovuryt" path="res://scripts/player/PlayerHudCluster.gd" id="1"]
 
 [node name="PlayerHudCluster" type="Control"]
 custom_minimum_size = Vector2(405, 143)

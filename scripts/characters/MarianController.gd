@@ -5,9 +5,9 @@ class_name MarianController
 ## Burst: 5-second aimable purple laser beam with upgrades
 
 # Preload scripts
-const MarianCharmEffectScript = preload("res://scripts/MarianCharmEffect.gd")
-const MarianBulletScript = preload("res://scripts/MarianBullet.gd")
-const MarianBeamScript = preload("res://scripts/MarianBeam.gd")
+const MarianCharmEffectScript = preload("res://scripts/characters/effects/MarianCharmEffect.gd")
+const MarianBulletScript = preload("res://scripts/characters/effects/MarianBullet.gd")
+const MarianBeamScript = preload("res://scripts/characters/effects/MarianBeam.gd")
 
 # Charm area indicator (similar to Sin)
 var _charm_indicator: Node2D = null

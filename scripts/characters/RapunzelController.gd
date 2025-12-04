@@ -13,7 +13,8 @@ var burst_stun_level: int = 0
 var burst_invuln_unlocked: bool = false
 
 # Scripts for effects
-const RapunzelBurstEffectScript = preload("res://scripts/RapunzelBurstEffect.gd")
+const RapunzelBurstEffectScript = preload("res://scripts/characters/effects/RapunzelBurstEffect.gd")
+const HealingCrossScene = preload("res://scenes/effects/HealingCross.tscn")
 
 func _on_initialize() -> void:
 	# Rapunzel has 4 rockets
@@ -54,24 +55,32 @@ func _perform_attack(direction: Vector2) -> void:
 func _can_use_special() -> bool:
 	return cross_timer <= 0
 
+## Override use_special to bypass base class special_ready check
+## Rapunzel uses cross_timer instead of special_timer for cooldown
+func use_special(direction: Vector2) -> bool:
+	if not special_unlocked:
+		return false
+	if not _can_use_special():
+		return false
+	_perform_special(direction)
+	return true
+
 func _perform_special(direction: Vector2) -> void:
 	# Spawn healing cross
-	var cross_scene = load("res://scenes/effects/HealingCross.tscn")
-	if cross_scene:
-		var cross = cross_scene.instantiate()
-		
-		# Apply power bonus: 3% base + 7/14.5/22% per level
-		var power_bonuses := [0.0, 0.07, 0.145, 0.22]
-		cross.heal_percent = 0.03 + power_bonuses[mini(special_power_level, 3)]
-		
-		# Apply size bonus: 1x base multiplier for radius and lifespan
-		var size_multipliers := [1.0, 1.5, 2.5, 4.0]
-		var size_mult: float = size_multipliers[mini(special_size_level, 3)]
-		cross.heal_radius = 180.0 * size_mult
-		cross.lifespan = 9.0 * size_mult
-		
-		player.get_parent().add_child(cross)
-		cross.global_position = player.global_position + direction * 60
+	var cross = HealingCrossScene.instantiate()
+	
+	# Apply power bonus: 3% base + 7/14.5/22% per level
+	var power_bonuses := [0.0, 0.07, 0.145, 0.22]
+	cross.heal_percent = 0.03 + power_bonuses[mini(special_power_level, 3)]
+	
+	# Apply size bonus: 1x base multiplier for radius and lifespan
+	var size_multipliers := [1.0, 1.5, 2.5, 4.0]
+	var size_mult: float = size_multipliers[mini(special_size_level, 3)]
+	cross.heal_radius = 180.0 * size_mult
+	cross.lifespan = 9.0 * size_mult
+	
+	player.get_parent().add_child(cross)
+	cross.global_position = player.global_position + direction * 60
 	
 	# Start cooldown
 	cross_timer = cross_cooldown

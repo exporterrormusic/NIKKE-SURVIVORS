@@ -12,12 +12,15 @@ var special_reload_time: float = 4.0
 var damage_accumulator: float = 0.0  # Tracks fractional self-damage
 
 # Talent states
+var special_cd_level: int = 0  # Quick Dash: reduces cooldown
 var special_heal_level: int = 0
 var burst_execute_unlocked: bool = false
 var burst_vuln_unlocked: bool = false
 
 # Scripts for effects
-const ScarletBurstEffectScript = preload("res://scripts/ScarletBurstEffect.gd")
+const ScarletBurstEffectScript = preload("res://scripts/characters/effects/ScarletBurstEffect.gd")
+const SlashScene = preload("res://scenes/effects/Slash.tscn")
+const ScarletWaveScene = preload("res://scenes/effects/ScarletWave.tscn")
 
 func _on_initialize() -> void:
 	# Scarlet has unlimited basic attacks (melee)
@@ -38,14 +41,12 @@ func _can_attack() -> bool:
 
 func _perform_attack(direction: Vector2) -> void:
 	# Fire sword slash (melee attack attached to player)
-	var slash_scene = load("res://scenes/effects/Slash.tscn")
-	if slash_scene:
-		var slash = slash_scene.instantiate()
-		slash.rotation = direction.angle()
-		# Use character's base damage with level scaling
-		slash.base_damage = player.calc_damage()
-		player.add_child(slash)  # Attach to player, not parent
-		slash.position = Vector2.ZERO  # Centered on player
+	var slash = SlashScene.instantiate()
+	slash.rotation = direction.angle()
+	# Use character's base damage with level scaling
+	slash.base_damage = player.calc_damage()
+	player.add_child(slash)  # Attach to player, not parent
+	slash.position = Vector2.ZERO  # Centered on player
 	
 	# Play sword sound
 	_play_sound("sword")
@@ -56,28 +57,37 @@ func _perform_attack(direction: Vector2) -> void:
 func _can_use_special() -> bool:
 	return special_ammo > 0 and not special_reloading
 
+## Override use_special to bypass base class special_ready check
+## Scarlet uses her own ammo/reload system instead
+func use_special(direction: Vector2) -> bool:
+	if not special_unlocked:
+		return false
+	if not _can_use_special():
+		return false
+	
+	_perform_special(direction)
+	return true
+
 func _perform_special(direction: Vector2) -> void:
 	# Consume special ammo
 	special_ammo -= 1
 	_start_special_reload()
 	
 	# Spawn forward piercing wave
-	var wave_scene = load("res://scenes/effects/ScarletWave.tscn")
-	if wave_scene:
-		var w = wave_scene.instantiate()
-		w.rotation = direction.angle()
-		w.owner_node = player
-		w.pierce_all = true
-		# Use character's base damage with level scaling (special does 0.8x base damage)
-		w.damage = player.calc_damage(0.8)
-		w.base_damage = w.damage
-		if special_heal_level > 0:
-			w.heal_mode = true
-			var heal_percents := [0.0, 0.05, 0.15, 0.25]
-			w.heal_percent = heal_percents[special_heal_level]
-		player.get_parent().add_child(w)
-		w.global_position = player.global_position + direction * 36
-		w.velocity = direction.normalized() * 2400
+	var w = ScarletWaveScene.instantiate()
+	w.rotation = direction.angle()
+	w.owner_node = player
+	w.pierce_all = true
+	# Use character's base damage with level scaling (special does 0.8x base damage)
+	w.damage = player.calc_damage(0.8)
+	w.base_damage = w.damage
+	if special_heal_level > 0:
+		w.heal_mode = true
+		var heal_percents := [0.0, 0.05, 0.15, 0.25]
+		w.heal_percent = heal_percents[special_heal_level]
+	player.get_parent().add_child(w)
+	w.global_position = player.global_position + direction * 36
+	w.velocity = direction.normalized() * 2400
 	
 	_play_sound("sword")
 	_apply_self_damage()
@@ -139,12 +149,21 @@ func apply_talent(talent_id: String) -> void:
 	match talent_id:
 		"special":
 			special_unlocked = true
+			special_ammo = special_max_ammo  # Refill ammo
 			special_reloading = false  # Refresh cooldown
 			special_reload_timer = 0.0
+		"special_cd":
+			special_cd_level = mini(special_cd_level + 1, 3)
+			# Reduce cooldown by 1s per level (base 4s, min 1s)
+			special_reload_time = maxf(4.0 - special_cd_level, 1.0)
+			special_reloading = false  # Refresh cooldown
+			special_reload_timer = 0.0
+			special_ammo = special_max_ammo  # Refill ammo
 		"special_heal":
 			special_heal_level = mini(special_heal_level + 1, 3)
 			special_reloading = false  # Refresh cooldown
 			special_reload_timer = 0.0
+			special_ammo = special_max_ammo  # Refill ammo
 		"burst_execute":
 			burst_execute_unlocked = true
 		"burst_vuln":

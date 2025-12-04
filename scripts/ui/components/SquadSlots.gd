@@ -16,9 +16,7 @@ func _ready() -> void:
 	_build_ui()
 
 func _load_registry() -> void:
-	var RegClass = load("res://scripts/characters/CharacterRegistry.gd")
-	if RegClass:
-		_registry = RegClass.get_instance()
+	_registry = CharacterRegistry.get_instance()
 
 func _build_ui() -> void:
 	var vbox := VBoxContainer.new()

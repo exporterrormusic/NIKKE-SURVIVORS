@@ -1,0 +1,91 @@
+extends Node
+
+## Registry for all game stages with their properties and unlock requirements.
+## Each stage has a fixed biome, time of day, and special modifiers.
+## Registered as autoload: StageRegistry
+
+# Stage definitions
+const STAGES := [
+	{
+		"id": "stage_1",
+		"name": "Ark Outskirts",
+		"biome": "sakura_grove",
+		"time": "day",
+		"unlock_after": null,  # Always unlocked
+		"spawn_rules": {},
+		"description": "A peaceful grove outside the Ark. Perfect for training."
+	},
+	{
+		"id": "stage_2",
+		"name": "Frozen Hell",
+		"biome": "polar_front",
+		"time": "night",
+		"unlock_after": "stage_1",
+		"spawn_rules": {
+			"elite_only": true,  # Normal enemies become elites, elites become bosses
+		},
+		"description": "Only the strongest Raptures survive here. No normal units spawn."
+	},
+	{
+		"id": "stage_3",
+		"name": "Eternal Bloom",
+		"biome": "sakura_grove",
+		"time": "night",
+		"unlock_after": "stage_2",
+		"spawn_rules": {
+			"endless": true,  # No wave limit
+		},
+		"description": "An endless night. How long can you survive?"
+	},
+]
+
+## Get all stage data
+static func get_all_stages() -> Array:
+	return STAGES.duplicate(true)
+
+## Get a specific stage by ID
+static func get_stage(stage_id: String) -> Dictionary:
+	for stage in STAGES:
+		if stage["id"] == stage_id:
+			return stage.duplicate(true)
+	return {}
+
+## Get stage by index (0-based)
+static func get_stage_by_index(index: int) -> Dictionary:
+	if index >= 0 and index < STAGES.size():
+		return STAGES[index].duplicate(true)
+	return {}
+
+## Get stage count
+static func get_stage_count() -> int:
+	return STAGES.size()
+
+## Get the biome ID for a stage (matches resource file naming)
+static func get_biome_id(stage_id: String) -> StringName:
+	var stage := get_stage(stage_id)
+	if stage.is_empty():
+		return &"sakura_grove"
+	return StringName(stage.get("biome", "sakura_grove"))
+
+## Get the time of day ID for a stage
+static func get_time_id(stage_id: String) -> StringName:
+	var stage := get_stage(stage_id)
+	if stage.is_empty():
+		return &"day"
+	return StringName(stage.get("time", "day"))
+
+## Check if stage has elite-only modifier
+static func is_elite_only(stage_id: String) -> bool:
+	var stage := get_stage(stage_id)
+	if stage.is_empty():
+		return false
+	var rules: Dictionary = stage.get("spawn_rules", {})
+	return rules.get("elite_only", false)
+
+## Check if stage is endless mode
+static func is_endless(stage_id: String) -> bool:
+	var stage := get_stage(stage_id)
+	if stage.is_empty():
+		return false
+	var rules: Dictionary = stage.get("spawn_rules", {})
+	return rules.get("endless", false)

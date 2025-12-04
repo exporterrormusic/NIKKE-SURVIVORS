@@ -323,7 +323,21 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	
 	# Handle escape/back to return to previous menu
-	if is_escape or key_event.is_action_pressed("ui_cancel"):
+	if is_escape:
+		emit_signal("back_requested")
+		get_viewport().set_input_as_handled()
+
+
+func _input(event: InputEvent) -> void:
+	# Also catch escape in _input in case _unhandled_input doesn't receive it
+	if not (event is InputEventKey):
+		return
+	var key_event: InputEventKey = event as InputEventKey
+	if not key_event.is_pressed() or key_event.is_echo():
+		return
+	
+	var is_escape: bool = key_event.physical_keycode == KEY_ESCAPE or key_event.keycode == KEY_ESCAPE
+	if is_escape and _capturing_action == "":
 		emit_signal("back_requested")
 		get_viewport().set_input_as_handled()
 

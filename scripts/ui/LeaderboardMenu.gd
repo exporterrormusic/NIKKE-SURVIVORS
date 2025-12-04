@@ -17,25 +17,21 @@ const MUTED_VALUE_COLOR := Color(0.592, 0.6, 0.694, 1.0)
 const MAX_VISIBLE_ENTRIES := 10
 const ENTRIES_PER_COLUMN := 5
 
+# Preload fonts at compile time for better performance
+const _futura_bold: Font = preload("res://resources/fonts/futura_condensed_extra_bold.tres")
+const _pretendard_bold: Font = preload("res://resources/fonts/pretendard_bold.tres")
+const _pretendard_medium: Font = preload("res://resources/fonts/pretendard_medium.tres")
+
 @onready var _left_column: VBoxContainer = %LeftColumn
 @onready var _right_column: VBoxContainer = %RightColumn
 @onready var _columns_scroll: ScrollContainer = %ColumnsScroll
 @onready var _empty_state_label: Label = %EmptyStateLabel
 @onready var _total_score_label: Label = %TotalScoreLabel
 
-var _futura_bold: Font = null
-var _pretendard_bold: Font = null
-var _pretendard_medium: Font = null
-
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	set_process_input(true)
 	set_process_unhandled_input(true)
-	
-	# Load fonts
-	_futura_bold = load("res://resources/fonts/futura_condensed_extra_bold.tres")
-	_pretendard_bold = load("res://resources/fonts/pretendard_bold.tres")
-	_pretendard_medium = load("res://resources/fonts/pretendard_medium.tres")
 	
 	_update_static_labels()
 	_refresh_entries()

@@ -328,7 +328,7 @@ func _populate_upgrades(data: Resource) -> void:
 		return
 	
 	# Access TalentTree's TALENT_DATA
-	var talent_tree_script = load("res://scripts/TalentTree.gd")
+	var talent_tree_script = load("res://scripts/ui/TalentTree.gd")
 	if not talent_tree_script:
 		return
 	

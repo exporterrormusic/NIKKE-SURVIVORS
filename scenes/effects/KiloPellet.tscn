@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3]
 
-[ext_resource type="Script" path="res://scripts/KiloPellet.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/characters/effects/KiloPellet.gd" id="1"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_pellet"]
 radius = 10.0

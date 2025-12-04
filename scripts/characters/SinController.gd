@@ -5,8 +5,8 @@ class_name SinController
 ## Burst: DOT that drains health from all on-screen enemies
 
 # Preload scripts
-const SinDebuffEffectScript = preload("res://scripts/SinDebuffEffect.gd")
-const SinCharmEffectScript = preload("res://scripts/SinCharmEffect.gd")
+const SinDebuffEffectScript = preload("res://scripts/characters/effects/SinDebuffEffect.gd")
+const SinCharmEffectScript = preload("res://scripts/characters/effects/SinCharmEffect.gd")
 
 # Charm area indicator
 var _charm_indicator: SinCharmAreaIndicator = null

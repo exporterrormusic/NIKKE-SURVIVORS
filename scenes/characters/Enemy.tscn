@@ -1,7 +1,7 @@
-[gd_scene load_steps=5 format=3 uid="uid://bhddxhm7yrtth"]
+[gd_scene load_steps=6 format=3 uid="uid://bhddxhm7yrtth"]
 
-[ext_resource type="Script" uid="uid://devaisdys5dth" path="res://scripts/Enemy.gd" id="2"]
-[ext_resource type="Script" uid="uid://xs7mcymvsl5g" path="res://scripts/character_sprite_animator.gd" id="3"]
+[ext_resource type="Script" uid="uid://devaisdys5dth" path="res://scripts/enemies/Enemy.gd" id="2"]
+[ext_resource type="Script" uid="uid://xs7mcymvsl5g" path="res://scripts/characters/character_sprite_animator.gd" id="3"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D"]
 radius = 25.0
@@ -27,9 +27,9 @@ shape = SubResource("CircleShape2D")
 
 [node name="ProgressBar" type="ProgressBar" parent="."]
 offset_left = -25.0
-offset_top = -69.0
+offset_top = -52.0
 offset_right = 25.0
-offset_bottom = -59.0
+offset_bottom = -42.0
 theme_override_styles/background = SubResource("Background")
 theme_override_styles/fill = SubResource("Fill")
 max_value = 1.0

@@ -3,7 +3,7 @@ extends Control
 ## Layout: Grid (top-left) + Details (bottom-left) + Squad slots (right full height).
 ## When squad is complete, animates up to reveal stage selector.
 
-signal play_requested(squad: Array[int], map_id: String, time_id: String)
+signal play_requested(squad: Array[int], stage_id: String)
 signal back_requested
 
 const SquadSlotsScript = preload("res://scripts/ui/components/SquadSlots.gd")
@@ -22,6 +22,8 @@ var _phase: Phase = Phase.SQUAD
 var _registry: RefCounted
 var _cards: Dictionary = {}  # char_id -> card node
 
+var _burst_audio: AudioStreamPlayer  # For character selection burst SFX
+
 var _bg: Control
 var _squad_container: Control
 var _stage_container: Control
@@ -35,6 +37,21 @@ func _ready() -> void:
 	_load_registry()
 	_build_ui()
 	_populate_grid()
+	_setup_burst_audio()
+	
+	# Start menu music if not already playing (handles direct scene load from game)
+	_ensure_menu_music()
+
+func _setup_burst_audio() -> void:
+	_burst_audio = AudioStreamPlayer.new()
+	_burst_audio.bus = "Master"
+	add_child(_burst_audio)
+
+func _ensure_menu_music() -> void:
+	# When coming from the game (Level scene), MenuManager's music is stopped
+	# We need to restart it when entering the character select menu
+	if MenuManager:
+		MenuManager.start_menu_music()
 
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
@@ -60,9 +77,7 @@ func _go_back() -> void:
 		back_requested.emit()
 
 func _load_registry() -> void:
-	var RegClass = load("res://scripts/characters/CharacterRegistry.gd")
-	if RegClass:
-		_registry = RegClass.get_instance()
+	_registry = CharacterRegistry.get_instance()
 
 func _build_ui() -> void:
 	# Background
@@ -522,7 +537,23 @@ func _add_to_squad(char_id: String) -> void:
 		return  # Already in squad
 	
 	if _squad_slots.add_character(char_id):
+		_play_burst_sfx(char_id)
 		_update_card_states()
+
+func _play_burst_sfx(char_id: String) -> void:
+	# Stop any currently playing burst sound to prevent overlap
+	if _burst_audio.playing:
+		_burst_audio.stop()
+	
+	# Build path to burst sound - char_id uses underscores, folders use hyphens
+	var folder_name := char_id.replace("_", "-")
+	var sound_path := "res://assets/characters/%s/burst.wav" % folder_name
+	
+	if ResourceLoader.exists(sound_path):
+		var stream := load(sound_path) as AudioStream
+		if stream:
+			_burst_audio.stream = stream
+			_burst_audio.play()
 
 func _on_slot_cleared(_index: int) -> void:
 	_update_card_states()
@@ -574,7 +605,7 @@ func _transition_to_squad() -> void:
 	_transition_tween.tween_property(_squad_container, "position:y", 0.0, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 	_transition_tween.tween_property(_squad_container, "modulate:a", 1.0, 0.4).set_delay(0.1)
 
-func _on_stage_confirmed(map_id: String, time_id: String) -> void:
+func _on_stage_confirmed(stage_id: String) -> void:
 	var squad_ids: Array[String] = _squad_slots.get_squad()
 	
 	# Convert character IDs to indices for the Level/GameState
@@ -585,4 +616,24 @@ func _on_stage_confirmed(map_id: String, time_id: String) -> void:
 		if idx >= 0:
 			squad_indices.append(idx)
 	
-	play_requested.emit(squad_indices, map_id, time_id)
+	# Emit signal for MenuManager if connected
+	play_requested.emit(squad_indices, stage_id)
+	
+	# If no listeners (loaded directly from game), handle game start ourselves
+	if play_requested.get_connections().is_empty():
+		_start_game(squad_indices, stage_id)
+
+func _start_game(squad: Array[int], stage_id: String) -> void:
+	# Save selection to GameState
+	if GameState:
+		GameState.set_selected_characters(squad)
+		if squad.size() > 0:
+			GameState.set_player_character(squad[0])
+		GameState.current_stage_id = stage_id
+	
+	# Stop menu music
+	if MenuManager:
+		MenuManager.stop_menu_music()
+	
+	# Change to Level scene
+	get_tree().change_scene_to_file("res://scenes/levels/Level.tscn")

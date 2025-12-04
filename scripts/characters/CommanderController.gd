@@ -5,8 +5,8 @@ class_name CommanderController
 ## Burst: Summon AI-controlled allies (Scarlet, Snow White, or Rapunzel)
 
 # Preload scripts
-const CommanderStunEffectScript = preload("res://scripts/CommanderStunEffect.gd")
-const SummonedAllyScript = preload("res://scripts/SummonedAlly.gd")
+const CommanderStunEffectScript = preload("res://scripts/characters/effects/CommanderStunEffect.gd")
+const SummonedAllyScript = preload("res://scripts/player/SummonedAlly.gd")
 
 # Assault rifle config
 var bullet_speed: float = 900.0
@@ -328,19 +328,22 @@ func _play_ally_burst_sound(ally_type: int) -> void:
 	if sound == null:
 		return
 	
-	# Play the burst sound directly (similar to PlayerCore._play_burst_voice)
-	var root = player.get_tree().root
-	var audio_player = AudioStreamPlayer.new()
-	audio_player.name = "AllyBurstVoice_%d" % Time.get_ticks_msec()
-	audio_player.stream = sound
-	audio_player.volume_db = 8.0  # Slightly quieter than main burst
-	audio_player.bus = "Master"
-	audio_player.process_mode = Node.PROCESS_MODE_ALWAYS
-	root.add_child(audio_player)
-	audio_player.play()
-	
-	# Clean up when finished
-	audio_player.finished.connect(audio_player.queue_free)
+	# Use AudioDirector if available for proper audio management
+	if player.audio_director and player.audio_director.has_method("play_burst_voice"):
+		# Temporarily adjust volume for ally (quieter than main burst)
+		player.audio_director.play_burst_voice(sound)
+	else:
+		# Fallback: Create independent audio player
+		var root = player.get_tree().root
+		var audio_player = AudioStreamPlayer.new()
+		audio_player.name = "AllyBurstVoice_%d" % Time.get_ticks_msec()
+		audio_player.stream = sound
+		audio_player.volume_db = 8.0
+		audio_player.bus = "Master"
+		audio_player.process_mode = Node.PROCESS_MODE_ALWAYS
+		root.add_child(audio_player)
+		audio_player.play()
+		audio_player.finished.connect(audio_player.queue_free)
 
 ## Get attack cooldown
 func get_attack_cooldown() -> float:

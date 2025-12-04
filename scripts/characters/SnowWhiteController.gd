@@ -16,7 +16,7 @@ var burst_burn_level: int = 0
 var burst_gauge_unlocked: bool = false
 
 # Scripts for effects
-const SnowWhiteBurstBeamScript = preload("res://scripts/SnowWhiteBurstBeam.gd")
+const SnowWhiteBurstBeamScript = preload("res://scripts/characters/effects/SnowWhiteBurstBeam.gd")
 
 func _on_initialize() -> void:
 	# Snow White has 7 ammo
@@ -49,6 +49,17 @@ func _perform_attack(direction: Vector2) -> void:
 
 func _can_use_special() -> bool:
 	return turret_charges > 0
+
+## Override use_special to bypass base class special_ready check
+## Snow White uses her own charge/recharge system instead
+func use_special(direction: Vector2) -> bool:
+	if not special_unlocked:
+		return false
+	if not _can_use_special():
+		return false
+	
+	_perform_special(direction)
+	return true
 
 func _perform_special(_direction: Vector2) -> void:
 	# Update max charges based on talent
@@ -146,7 +157,7 @@ func apply_talent(talent_id: String) -> void:
 			turret_timer = 0.0
 			turret_recharging = false
 		"burst_burn":
-			burst_burn_level = mini(burst_burn_level + 1, 3)
+			burst_burn_level = mini(burst_burn_level + 1, 1)
 		"burst_gauge":
 			burst_gauge_unlocked = true
 

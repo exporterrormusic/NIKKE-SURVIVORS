@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3 uid="uid://b8q8q8q8q8q8"]
 
-[ext_resource type="Script" uid="uid://bhbba7qa716nu" path="res://scripts/MapSelector.gd" id="1"]
+[ext_resource type="Script" uid="uid://bhbba7qa716nu" path="res://scripts/world/MapSelector.gd" id="1"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_MapSelector"]
 bg_color = Color(0.1, 0.1, 0.15, 0.95)

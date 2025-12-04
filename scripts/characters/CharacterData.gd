@@ -24,7 +24,7 @@ extends Resource
 @export var sprite_path: String = "sprite.png"
 @export var portrait_path: String = "portrait-sq.png"
 @export var burst_texture_path: String = "burst.png"
-@export var burst_sound_path: String = "burst.mp3"
+@export var burst_sound_path: String = "burst.wav"
 
 # Pre-loaded textures (optional - used by UI if set, otherwise loaded from paths)
 @export var portrait_texture: Texture2D

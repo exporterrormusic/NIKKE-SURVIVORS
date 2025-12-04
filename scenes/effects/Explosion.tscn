@@ -1,7 +1,7 @@
 [gd_scene load_steps=5 format=3]
 
 [ext_resource type="Texture2D" path="res://assets/effects/explosion.png" id="1"]
-[ext_resource type="Script" path="res://scripts/Explosion.gd" id="2"]
+[ext_resource type="Script" path="res://scripts/effects/Explosion.gd" id="2"]
 [ext_resource type="Shader" path="res://scenes/effects/explosion_shader.gdshader" id="3"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial"]

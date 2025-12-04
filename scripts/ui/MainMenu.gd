@@ -25,7 +25,6 @@ const TITLE_TEXT := "KINGDOM CLEANUP"
 const SUBTITLE_TEXT := "A NIKKE FAN GAME"
 const VERSION_TEXT := "v0.1"
 
-@onready var _background: Control = get_node_or_null("%Background")
 @onready var _button_row: HBoxContainer = get_node_or_null("%ButtonRow")
 @onready var _title_label: Label = get_node_or_null("%TitleLabel")
 @onready var _subtitle_label: Label = get_node_or_null("%SubtitleLabel")
@@ -371,3 +370,44 @@ func _show_outpost_coming_soon() -> void:
 func _hide_outpost_dialog() -> void:
 	if _outpost_dialog:
 		_outpost_dialog.visible = false
+
+
+# --- Debug Functions ---
+
+func _debug_unlock_all() -> void:
+	## Debug: Unlock all stages (F3)
+	if not GameState:
+		print("[DEBUG] GameState not available")
+		return
+	
+	# Unlock all stages
+	for stage in StageRegistry.STAGES:
+		var stage_id: String = stage["id"]
+		if stage_id not in GameState.stages_cleared:
+			GameState.stages_cleared.append(stage_id)
+	
+	GameState._save_stage_progress()
+	
+	# Show feedback
+	print("[DEBUG] All stages unlocked!")
+	_show_debug_notification("DEBUG: All stages unlocked!")
+
+
+func _show_debug_notification(text: String) -> void:
+	# Create a temporary notification label
+	var label := Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", 24)
+	label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.4))
+	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	label.add_theme_constant_override("shadow_offset_x", 2)
+	label.add_theme_constant_override("shadow_offset_y", 2)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	label.position.y = 120
+	add_child(label)
+	
+	# Fade out and remove
+	var tween := create_tween()
+	tween.tween_property(label, "modulate:a", 0.0, 1.5).set_delay(1.0)
+	tween.tween_callback(label.queue_free)

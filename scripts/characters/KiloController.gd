@@ -3,7 +3,7 @@ class_name KiloController
 ## Kilo - Shotgun with Penetrating Blast special
 ## Burst mode: automatic fire with persistent connecting lines across shots
 
-const KiloPelletScript = preload("res://scripts/KiloPellet.gd")
+const KiloPelletScript = preload("res://scripts/characters/effects/KiloPellet.gd")
 
 # Shotgun config
 var pellet_count: int = 5

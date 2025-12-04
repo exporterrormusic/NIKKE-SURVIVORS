@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://w5nroosjr4a3"]
 
-[ext_resource type="Script" uid="uid://ha56y3tg6lyp" path="res://scripts/PlayerOverheadHud.gd" id="1"]
+[ext_resource type="Script" uid="uid://ha56y3tg6lyp" path="res://scripts/player/PlayerOverheadHud.gd" id="1"]
 
 [node name="PlayerOverheadHud" type="Node2D"]
 top_level = true

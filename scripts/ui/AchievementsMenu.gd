@@ -46,10 +46,10 @@ var _achievements: Array[Dictionary] = []
 var _selected_filter: String = GENERAL_FILTER
 var _character_entries: Array[Dictionary] = []
 
-# Fonts
-var _futura_bold: Font = null
-var _pretendard_bold: Font = null
-var _pretendard_medium: Font = null
+# Preload fonts at compile time for better performance
+const _futura_bold: Font = preload("res://resources/fonts/futura_condensed_extra_bold.tres")
+const _pretendard_bold: Font = preload("res://resources/fonts/pretendard_bold.tres")
+const _pretendard_medium: Font = preload("res://resources/fonts/pretendard_medium.tres")
 
 # UI references
 var _character_list: VBoxContainer = null
@@ -62,11 +62,6 @@ var _button_group: ButtonGroup = null
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	
-	# Load fonts
-	_futura_bold = load("res://resources/fonts/futura_condensed_extra_bold.tres")
-	_pretendard_bold = load("res://resources/fonts/pretendard_bold.tres")
-	_pretendard_medium = load("res://resources/fonts/pretendard_medium.tres")
 	
 	_button_group = ButtonGroup.new()
 	

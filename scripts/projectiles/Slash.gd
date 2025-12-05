@@ -5,7 +5,7 @@ extends Area2D
 var _hit_bodies: Array = []
 
 # Critical hit settings
-const CRIT_CHANCE := 0.15  # 15% chance to crit
+const BASE_CRIT_CHANCE := 0.15  # 15% base chance to crit
 const CRIT_MULTIPLIER := 2.0  # 2x damage on crit
 var base_damage := 2
 
@@ -53,8 +53,12 @@ func _on_body_entered(body):
 	if body.is_in_group("charmed_allies"):
 		return
 	if body.has_method("take_damage"):
-		# Roll for critical hit
-		var is_crit := randf() < CRIT_CHANCE
+		# Roll for critical hit - base chance + shop bonus
+		var crit_chance := BASE_CRIT_CHANCE
+		var player = get_tree().get_first_node_in_group("player")
+		if player and player.has_method("get_crit_chance"):
+			crit_chance += player.get_crit_chance()
+		var is_crit := randf() < crit_chance
 		var damage := base_damage
 		if is_crit:
 			damage = int(base_damage * CRIT_MULTIPLIER)

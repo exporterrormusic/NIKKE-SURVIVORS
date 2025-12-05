@@ -26,24 +26,13 @@ const CHARACTER_SELECTED_COLOR := Color(0.18, 0.18, 0.25, 1.0)
 
 const GENERAL_FILTER := "GENERAL"
 
-# Character data - same order as TalentTree
-const CHARACTER_NAMES := ["Snow White", "Scarlet", "Rapunzel", "Nayuta", "Commander", "Marian", "Crown", "Kilo", "Cecil", "Sin"]
-const PORTRAIT_PATHS := [
-	"res://assets/characters/scarlet/portrait-sq.png",
-	"res://assets/characters/commander/portrait-sq.png",
-	"res://assets/characters/rapunzel/portrait-sq.png",
-	"res://assets/characters/kilo/portrait-sq.png",
-	"res://assets/characters/marian/portrait-sq.png",
-	"res://assets/characters/crown/portrait-sq.png",
-	"res://assets/characters/snow-white/portrait-sq.png",
-	"res://assets/characters/sin/portrait-sq.png",
-	"res://assets/characters/cecil/portrait-sq.png",
-	"res://assets/characters/nayuta/portrait-sq.png",
-]
+# Character data - loaded from CharacterRegistry (single source of truth)
+var _registry: CharacterRegistry = null
 
 # Achievement data
 var _achievements: Array[Dictionary] = []
 var _selected_filter: String = GENERAL_FILTER
+var _completion_filter: String = "ALL"  # ALL, COMPLETE, INCOMPLETE
 var _character_entries: Array[Dictionary] = []
 
 # Preload fonts at compile time for better performance
@@ -51,19 +40,26 @@ const _futura_bold: Font = preload("res://resources/fonts/futura_condensed_extra
 const _pretendard_bold: Font = preload("res://resources/fonts/pretendard_bold.tres")
 const _pretendard_medium: Font = preload("res://resources/fonts/pretendard_medium.tres")
 
+# Filter colors
+const FILTER_ALL_COLOR := Color(1.0, 1.0, 1.0, 1.0)  # White
+const FILTER_COMPLETE_COLOR := Color(0.392, 0.86, 0.549, 1.0)  # Green
+const FILTER_INCOMPLETE_COLOR := Color(0.9, 0.35, 0.35, 1.0)  # Red
+
 # UI references
 var _character_list: VBoxContainer = null
 var _achievement_list: VBoxContainer = null
 var _achievement_scroll: ScrollContainer = null
-var _stats_label: Label = null
 var _empty_label: Label = null
 var _button_group: ButtonGroup = null
-
+var _filter_button_group: ButtonGroup = null
+var _filter_buttons: Dictionary = {}  # Store references to filter buttons
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	
+	_registry = CharacterRegistry.get_instance()
 	_button_group = ButtonGroup.new()
+	_filter_button_group = ButtonGroup.new()
 	
 	_load_achievements()
 	_build_ui()
@@ -77,61 +73,22 @@ func _input(event: InputEvent) -> void:
 
 
 func _load_achievements() -> void:
-	# Define achievements with character categories
+	# Start with general achievements (these are manually defined placeholders)
 	_achievements = [
 		# General achievements
-		{"id": "first_blood", "title": "First Blood", "desc": "Defeat your first enemy", "category": GENERAL_FILTER, "unlocked": true, "progress": 1, "target": 1},
-		{"id": "kill_100", "title": "Century Slayer", "desc": "Defeat 100 enemies in a single run", "category": GENERAL_FILTER, "unlocked": false, "progress": 67, "target": 100},
-		{"id": "kill_1000", "title": "Massacre", "desc": "Defeat 1000 enemies total", "category": GENERAL_FILTER, "unlocked": false, "progress": 423, "target": 1000},
+		{"id": "first_blood", "title": "First Blood", "desc": "Complete a Stage 1 map", "category": GENERAL_FILTER, "unlocked": false, "progress": 0, "target": 1},
+		{"id": "kill_50000", "title": "Massacre", "desc": "Defeat 50,000 enemies total", "category": GENERAL_FILTER, "unlocked": false, "progress": 0, "target": 50000},
 		{"id": "boss_slayer", "title": "Boss Slayer", "desc": "Defeat a boss enemy", "category": GENERAL_FILTER, "unlocked": false, "progress": 0, "target": 1},
 		{"id": "no_damage", "title": "Untouchable", "desc": "Complete a wave without taking damage", "category": GENERAL_FILTER, "unlocked": false, "progress": 0, "target": 1},
 		{"id": "all_maps", "title": "World Traveler", "desc": "Play on all maps", "category": GENERAL_FILTER, "unlocked": false, "progress": 2, "target": 4},
-		{"id": "speed_run", "title": "Speed Demon", "desc": "Complete wave 10 in under 5 minutes", "category": GENERAL_FILTER, "unlocked": false, "progress": 0, "target": 1},
-		{"id": "max_level", "title": "Fully Powered", "desc": "Reach max level in a single run", "category": GENERAL_FILTER, "unlocked": false, "progress": 0, "target": 1},
-		
-		# Scarlet achievements
-		{"id": "scarlet_win_1", "title": "Scarlet's First Victory", "desc": "Win a run with Scarlet", "category": "scarlet", "unlocked": false, "progress": 0, "target": 1},
-		{"id": "scarlet_mastery", "title": "Scarlet Mastery", "desc": "Win 10 runs with Scarlet", "category": "scarlet", "unlocked": false, "progress": 3, "target": 10},
-		{"id": "scarlet_dash", "title": "Dash Master", "desc": "Hit 50 enemies with Dash Slash", "category": "scarlet", "unlocked": false, "progress": 12, "target": 50},
-		
-		# Commander achievements  
-		{"id": "commander_win_1", "title": "Commander's First Victory", "desc": "Win a run with Commander", "category": "commander", "unlocked": true, "progress": 1, "target": 1},
-		{"id": "commander_freeze", "title": "Time Lord", "desc": "Freeze 100 enemies with Time Freeze", "category": "commander", "unlocked": false, "progress": 45, "target": 100},
-		{"id": "commander_allies", "title": "Rally the Troops", "desc": "Summon 20 allies total", "category": "commander", "unlocked": false, "progress": 8, "target": 20},
-		
-		# Rapunzel achievements
-		{"id": "rapunzel_heal", "title": "Healer Supreme", "desc": "Heal 10000 HP total", "category": "rapunzel", "unlocked": false, "progress": 2500, "target": 10000},
-		{"id": "rapunzel_stun", "title": "Stunning Beauty", "desc": "Stun 50 enemies with Golden Hair", "category": "rapunzel", "unlocked": false, "progress": 15, "target": 50},
-		
-		# Kilo achievements
-		{"id": "kilo_blast", "title": "Blast Zone", "desc": "Hit 100 enemies with Penetrating Blast", "category": "kilo", "unlocked": false, "progress": 30, "target": 100},
-		{"id": "kilo_burst", "title": "Priority Target", "desc": "Defeat 50 enemies during Assign Priority", "category": "kilo", "unlocked": false, "progress": 20, "target": 50},
-		
-		# Marian achievements
-		{"id": "marian_charm", "title": "Charming", "desc": "Charm 100 enemies", "category": "marian", "unlocked": false, "progress": 40, "target": 100},
-		{"id": "marian_beam", "title": "Purple Rain", "desc": "Hit 200 enemies with Purple Beam", "category": "marian", "unlocked": false, "progress": 80, "target": 200},
-		
-		# Crown achievements
-		{"id": "crown_charge", "title": "Cavalry Charge", "desc": "Hit 100 enemies with Cavalry Charge", "category": "crown", "unlocked": false, "progress": 25, "target": 100},
-		{"id": "crown_nova", "title": "Golden Age", "desc": "Hit 500 enemies with Golden Nova", "category": "crown", "unlocked": false, "progress": 150, "target": 500},
-		
-		# Snow White achievements
-		{"id": "snow_turret", "title": "Turret Master", "desc": "Deploy 50 turrets", "category": "snow_white", "unlocked": false, "progress": 18, "target": 50},
-		{"id": "snow_sniper", "title": "Sharpshooter", "desc": "Hit 50 enemies in a row without missing", "category": "snow_white", "unlocked": false, "progress": 23, "target": 50},
-		
-		# Sin achievements
-		{"id": "sin_drain", "title": "Life Stealer", "desc": "Heal 5000 HP with Life Drain", "category": "sin", "unlocked": false, "progress": 1200, "target": 5000},
-		{"id": "sin_seduce", "title": "Seductress", "desc": "Charm 100 enemies with Seduction", "category": "sin", "unlocked": false, "progress": 35, "target": 100},
-		
-		# Cecil achievements
-		{"id": "cecil_drone", "title": "Drone Commander", "desc": "Have drones defeat 200 enemies", "category": "cecil", "unlocked": false, "progress": 60, "target": 200},
-		{"id": "cecil_hack", "title": "System Override", "desc": "Convert 50 enemies with System Hack", "category": "cecil", "unlocked": false, "progress": 15, "target": 50},
-		
-		# Nayuta achievements
-		{"id": "nayuta_clones", "title": "Clone Army", "desc": "Have 5 clones active at once", "category": "nayuta", "unlocked": true, "progress": 5, "target": 5},
-		{"id": "nayuta_nova", "title": "Galaxy Master", "desc": "Hit 300 enemies with Galaxy Nova", "category": "nayuta", "unlocked": false, "progress": 100, "target": 300},
 	]
-
+	
+	# Load character-specific achievements from AchievementManager
+	if has_node("/root/AchievementManager"):
+		var manager = get_node("/root/AchievementManager")
+		var char_achievements: Array = manager.get_all_achievements()
+		for ach in char_achievements:
+			_achievements.append(ach)
 
 func _build_ui() -> void:
 	# Clear existing children
@@ -250,22 +207,21 @@ func _build_ui() -> void:
 	right_vbox.add_theme_constant_override("separation", 12)
 	right_panel.add_child(right_vbox)
 	
-	# Stats row
-	var stats_row := HBoxContainer.new()
-	stats_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right_vbox.add_child(stats_row)
+	# Filter buttons row
+	var filter_row := HBoxContainer.new()
+	filter_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	filter_row.add_theme_constant_override("separation", 8)
+	right_vbox.add_child(filter_row)
 	
-	var stats_spacer := Control.new()
-	stats_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	stats_row.add_child(stats_spacer)
+	# Add filter buttons
+	_create_filter_button(filter_row, "ALL", FILTER_ALL_COLOR)
+	_create_filter_button(filter_row, "COMPLETE", FILTER_COMPLETE_COLOR)
+	_create_filter_button(filter_row, "INCOMPLETE", FILTER_INCOMPLETE_COLOR)
 	
-	_stats_label = Label.new()
-	_stats_label.text = "0 / 0 Unlocked"
-	if _pretendard_bold:
-		_stats_label.add_theme_font_override("font", _pretendard_bold)
-	_stats_label.add_theme_font_size_override("font_size", 22)
-	_stats_label.add_theme_color_override("font_color", LABEL_COLOR)
-	stats_row.add_child(_stats_label)
+	# Spacer to push buttons left
+	var filter_spacer := Control.new()
+	filter_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	filter_row.add_child(filter_spacer)
 	
 	# Achievement scroll
 	_achievement_scroll = ScrollContainer.new()
@@ -276,7 +232,7 @@ func _build_ui() -> void:
 	
 	_achievement_list = VBoxContainer.new()
 	_achievement_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_achievement_list.add_theme_constant_override("separation", 8)
+	_achievement_list.add_theme_constant_override("separation", 16)
 	_achievement_scroll.add_child(_achievement_list)
 	
 	# Empty state label
@@ -309,13 +265,17 @@ func _build_character_list() -> void:
 	var general_entry := _create_character_entry(GENERAL_FILTER, "General", null)
 	_character_entries.append(general_entry)
 	
-	# Add all characters
-	for i in range(CHARACTER_NAMES.size()):
-		var char_name: String = CHARACTER_NAMES[i]
-		var char_code: String = char_name.to_lower().replace(" ", "_")
+	# Add all characters from registry
+	var char_ids := _registry.get_all_character_ids()
+	var char_names := _registry.get_all_character_names()
+	var portrait_paths := _registry.get_all_portrait_paths()
+	
+	for i in range(char_ids.size()):
+		var char_name: String = char_names[i] if i < char_names.size() else ""
+		var char_code: String = char_ids[i]
 		var portrait: Texture2D = null
-		if i < PORTRAIT_PATHS.size() and ResourceLoader.exists(PORTRAIT_PATHS[i]):
-			portrait = load(PORTRAIT_PATHS[i])
+		if i < portrait_paths.size() and ResourceLoader.exists(portrait_paths[i]):
+			portrait = load(portrait_paths[i])
 		var entry := _create_character_entry(char_code, char_name, portrait)
 		_character_entries.append(entry)
 	
@@ -354,6 +314,11 @@ func _create_character_entry(code: String, display_name: String, portrait: Textu
 	portrait_container.add_child(portrait_panel)
 	
 	if portrait != null:
+		# Check if character is unlocked
+		var is_unlocked := true
+		if code != GENERAL_FILTER:
+			is_unlocked = ShopMenu.is_character_unlocked(code)
+		
 		var tex_rect := TextureRect.new()
 		tex_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 		tex_rect.offset_left = 3
@@ -364,7 +329,35 @@ func _create_character_entry(code: String, display_name: String, portrait: Textu
 		tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 		tex_rect.texture = portrait
 		tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		# Grey out if locked
+		if not is_unlocked:
+			tex_rect.modulate = Color(0.3, 0.3, 0.35, 1.0)
 		portrait_panel.add_child(tex_rect)
+		
+		# Lock overlay for locked characters - ON TOP of portrait
+		if not is_unlocked:
+			var lock_overlay := VBoxContainer.new()
+			lock_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+			lock_overlay.alignment = BoxContainer.ALIGNMENT_CENTER
+			lock_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			portrait_panel.add_child(lock_overlay)
+			
+			var lock_icon := Label.new()
+			lock_icon.text = "🔒"
+			lock_icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			lock_icon.add_theme_font_size_override("font_size", 48)
+			lock_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			lock_overlay.add_child(lock_icon)
+			
+			var locked_text := Label.new()
+			locked_text.text = "LOCKED"
+			locked_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			if _pretendard_bold:
+				locked_text.add_theme_font_override("font", _pretendard_bold)
+			locked_text.add_theme_font_size_override("font_size", 14)
+			locked_text.add_theme_color_override("font_color", Color(0.95, 0.7, 0.2, 1.0))  # Gold color like shop
+			locked_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			lock_overlay.add_child(locked_text)
 	else:
 		# Trophy icon for General (larger to match portrait)
 		var icon := Label.new()
@@ -455,6 +448,63 @@ func _make_char_button_style(color: Color) -> StyleBoxFlat:
 	return style
 
 
+func _create_filter_button(parent: HBoxContainer, filter_name: String, color: Color) -> void:
+	var button := Button.new()
+	button.text = filter_name
+	button.toggle_mode = true
+	button.button_group = _filter_button_group
+	button.focus_mode = Control.FOCUS_NONE
+	button.custom_minimum_size = Vector2(120, 36)
+	
+	# Style the button
+	var normal_style := StyleBoxFlat.new()
+	normal_style.bg_color = Color(0.1, 0.1, 0.14, 0.9)
+	normal_style.set_border_width_all(2)
+	normal_style.border_color = color.darkened(0.3)
+	normal_style.set_corner_radius_all(4)
+	normal_style.set_content_margin_all(8)
+	
+	var hover_style := StyleBoxFlat.new()
+	hover_style.bg_color = Color(0.15, 0.15, 0.2, 0.95)
+	hover_style.set_border_width_all(2)
+	hover_style.border_color = color
+	hover_style.set_corner_radius_all(4)
+	hover_style.set_content_margin_all(8)
+	
+	var pressed_style := StyleBoxFlat.new()
+	pressed_style.bg_color = color.darkened(0.5)
+	pressed_style.set_border_width_all(2)
+	pressed_style.border_color = color
+	pressed_style.set_corner_radius_all(4)
+	pressed_style.set_content_margin_all(8)
+	
+	button.add_theme_stylebox_override("normal", normal_style)
+	button.add_theme_stylebox_override("hover", hover_style)
+	button.add_theme_stylebox_override("pressed", pressed_style)
+	button.add_theme_stylebox_override("focus", hover_style)
+	
+	if _pretendard_bold:
+		button.add_theme_font_override("font", _pretendard_bold)
+	button.add_theme_font_size_override("font_size", 18)
+	button.add_theme_color_override("font_color", color)
+	button.add_theme_color_override("font_hover_color", color)
+	button.add_theme_color_override("font_pressed_color", color)
+	button.add_theme_color_override("font_focus_color", color)
+	
+	# Set ALL as default selected
+	if filter_name == "ALL":
+		button.button_pressed = true
+	
+	button.pressed.connect(_on_completion_filter_pressed.bind(filter_name))
+	parent.add_child(button)
+	_filter_buttons[filter_name] = button
+
+
+func _on_completion_filter_pressed(filter_name: String) -> void:
+	_completion_filter = filter_name
+	_rebuild_achievement_list()
+
+
 func _on_character_pressed(code: String) -> void:
 	_select_filter(code)
 
@@ -469,7 +519,6 @@ func _select_filter(filter_code: String) -> void:
 			button.button_pressed = (entry.get("code") == filter_code)
 	
 	_rebuild_achievement_list()
-	_update_stats_label()
 
 
 func _update_character_counts() -> void:
@@ -513,6 +562,20 @@ func _rebuild_achievement_list() -> void:
 	
 	var filtered := _filter_achievements(_selected_filter)
 	
+	# Apply completion filter
+	if _completion_filter == "COMPLETE":
+		var complete_filtered: Array[Dictionary] = []
+		for ach in filtered:
+			if ach.get("unlocked", false):
+				complete_filtered.append(ach)
+		filtered = complete_filtered
+	elif _completion_filter == "INCOMPLETE":
+		var incomplete_filtered: Array[Dictionary] = []
+		for ach in filtered:
+			if not ach.get("unlocked", false):
+				incomplete_filtered.append(ach)
+		filtered = incomplete_filtered
+	
 	# Sort: unlocked first, then by progress percentage
 	filtered.sort_custom(func(a, b):
 		if a.unlocked != b.unlocked:
@@ -532,34 +595,42 @@ func _rebuild_achievement_list() -> void:
 		_achievement_scroll.set_v_scroll(0)
 
 
-func _update_stats_label() -> void:
-	if not _stats_label:
-		return
-	var counts := _calculate_counts_for(_selected_filter)
-	_stats_label.text = "%d / %d Unlocked" % [counts.unlocked, counts.total]
-
-
 func _create_achievement_item(achievement: Dictionary) -> Control:
 	var is_unlocked: bool = achievement.get("unlocked", false)
 	
-	var container := PanelContainer.new()
-	container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	container.add_theme_stylebox_override("panel", _make_achievement_style(is_unlocked))
+	# Wrapper to make Button size to content
+	var wrapper := PanelContainer.new()
+	wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Make the panel transparent - we just use it for sizing
+	var transparent_style := StyleBoxEmpty.new()
+	wrapper.add_theme_stylebox_override("panel", transparent_style)
+	
+	# Use Button for hover effect
+	var container := Button.new()
+	container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	container.focus_mode = Control.FOCUS_NONE
+	container.mouse_default_cursor_shape = Control.CURSOR_ARROW
+	_apply_achievement_button_styles(container, is_unlocked)
+	wrapper.add_child(container)
 	
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 16)
 	margin.add_theme_constant_override("margin_right", 16)
 	margin.add_theme_constant_override("margin_top", 12)
 	margin.add_theme_constant_override("margin_bottom", 12)
-	container.add_child(margin)
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wrapper.add_child(margin)
 	
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 6)
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(vbox)
 	
 	# Title row
 	var title_row := HBoxContainer.new()
 	title_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(title_row)
 	
 	var title_label := Label.new()
@@ -569,6 +640,7 @@ func _create_achievement_item(achievement: Dictionary) -> Control:
 		title_label.add_theme_font_override("font", _pretendard_bold)
 	title_label.add_theme_font_size_override("font_size", 24)
 	title_label.add_theme_color_override("font_color", UNLOCKED_COLOR if is_unlocked else HEADER_COLOR)
+	title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	title_row.add_child(title_label)
 	
 	if is_unlocked:
@@ -576,6 +648,7 @@ func _create_achievement_item(achievement: Dictionary) -> Control:
 		check.text = "✓"
 		check.add_theme_font_size_override("font_size", 28)
 		check.add_theme_color_override("font_color", UNLOCKED_COLOR)
+		check.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		title_row.add_child(check)
 	
 	# Description
@@ -586,15 +659,17 @@ func _create_achievement_item(achievement: Dictionary) -> Control:
 	desc_label.add_theme_font_size_override("font_size", 18)
 	desc_label.add_theme_color_override("font_color", LABEL_COLOR)
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(desc_label)
 	
-	# Progress bar (if not unlocked and has progress)
+	# Progress bar (always show for non-unlocked, so all achievements look consistent)
 	var target: int = achievement.get("target", 1)
 	var progress: int = achievement.get("progress", 0)
 	
-	if not is_unlocked and target > 1:
+	if not is_unlocked:
 		var progress_row := HBoxContainer.new()
 		progress_row.add_theme_constant_override("separation", 12)
+		progress_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		vbox.add_child(progress_row)
 		
 		var progress_bar := ProgressBar.new()
@@ -605,6 +680,7 @@ func _create_achievement_item(achievement: Dictionary) -> Control:
 		progress_bar.show_percentage = false
 		progress_bar.add_theme_stylebox_override("background", _make_progress_bg_style())
 		progress_bar.add_theme_stylebox_override("fill", _make_progress_fill_style())
+		progress_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		progress_row.add_child(progress_bar)
 		
 		var progress_label := Label.new()
@@ -613,17 +689,19 @@ func _create_achievement_item(achievement: Dictionary) -> Control:
 			progress_label.add_theme_font_override("font", _pretendard_medium)
 		progress_label.add_theme_font_size_override("font_size", 16)
 		progress_label.add_theme_color_override("font_color", LOCKED_COLOR)
+		progress_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		progress_row.add_child(progress_label)
-	elif is_unlocked:
+	else:
 		var status_label := Label.new()
 		status_label.text = "Unlocked"
 		if _pretendard_medium:
 			status_label.add_theme_font_override("font", _pretendard_medium)
 		status_label.add_theme_font_size_override("font_size", 16)
 		status_label.add_theme_color_override("font_color", UNLOCKED_COLOR)
+		status_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		vbox.add_child(status_label)
 	
-	return container
+	return wrapper
 
 
 # Style helper functions
@@ -698,4 +776,24 @@ func _make_progress_fill_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	style.bg_color = PROGRESS_FILL
 	style.set_corner_radius_all(4)
+	return style
+
+
+func _apply_achievement_button_styles(button: Button, is_unlocked: bool) -> void:
+	button.add_theme_stylebox_override("normal", _make_achievement_style(is_unlocked))
+	button.add_theme_stylebox_override("hover", _make_achievement_hover_style(is_unlocked))
+	button.add_theme_stylebox_override("pressed", _make_achievement_style(is_unlocked))
+	button.add_theme_stylebox_override("focus", _make_achievement_hover_style(is_unlocked))
+
+
+func _make_achievement_hover_style(is_unlocked: bool) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	# Brighter background on hover
+	if is_unlocked:
+		style.bg_color = Color(0.14, 0.16, 0.22, 0.98)
+	else:
+		style.bg_color = Color(0.12, 0.12, 0.18, 0.98)
+	style.set_border_width_all(2)
+	style.border_color = ENTRY_BORDER_COLOR if is_unlocked else Color(0.5, 0.5, 0.55, 0.5)
+	style.set_corner_radius_all(8)
 	return style

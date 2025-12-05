@@ -19,9 +19,7 @@ var burst_gauge_unlocked: bool = false
 const SnowWhiteBurstBeamScript = preload("res://scripts/characters/effects/SnowWhiteBurstBeam.gd")
 
 func _on_initialize() -> void:
-	# Snow White has 7 ammo
-	max_ammo = 7
-	ammo = max_ammo
+	# Ammo already set from CharacterRegistry by base class
 	turret_charges = turret_max_charges
 
 func _on_process(delta: float) -> void:
@@ -42,6 +40,7 @@ func _perform_attack(direction: Vector2) -> void:
 	bullet.rotation = direction.angle()  # Sprite child already has PI rotation built-in
 	bullet.owner_node = player
 	bullet.pierce_all = true  # Snow White's bullets pierce
+	bullet.max_range = 0.0  # Sniper has unlimited range (despawns via lifetime only)
 	# Use character's base damage with level scaling
 	bullet.base_damage = player.calc_damage()
 	
@@ -96,6 +95,7 @@ func _on_burst_start() -> void:
 	beam.beam_angle_degrees = 90.0
 	beam.burn_level = burst_burn_level
 	beam.gauge_on_kill = burst_gauge_unlocked
+	beam.player_level = player.level if "level" in player else 1
 	beam.configure(aim_dir)
 	player.get_parent().add_child(beam)
 	beam.global_position = player.global_position

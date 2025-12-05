@@ -35,20 +35,24 @@ var _trail_color := Color(0.5, 0.5, 0.55, 0.6)  # Grey smoke
 var _fire_color := Color(1.0, 0.5, 0.2, 0.8)  # Orange fire core
 var _light: PointLight2D = null
 
+# Performance: disable dynamic lights on missiles (expensive with many projectiles)
+const ENABLE_MISSILE_LIGHTS := false
+
 func _ready():
     add_to_group("projectiles")
     connect("body_entered", Callable(self, "_on_body_entered"))
     set_process(true)
     
-    # Add dynamic point light
-    _light = PointLight2D.new()
-    _light.name = "MissileLight"
-    _light.color = Color(1.0, 0.6, 0.2)  # Orange glow
-    _light.energy = 0.7
-    _light.texture = _create_light_texture()
-    _light.texture_scale = 0.25
-    _light.shadow_enabled = false
-    add_child(_light)
+    # Dynamic lights are expensive - disabled by default
+    if ENABLE_MISSILE_LIGHTS:
+        _light = PointLight2D.new()
+        _light.name = "MissileLight"
+        _light.color = Color(1.0, 0.6, 0.2)  # Orange glow
+        _light.energy = 0.7
+        _light.texture = _create_light_texture()
+        _light.texture_scale = 0.25
+        _light.shadow_enabled = false
+        add_child(_light)
 
 func _create_light_texture() -> Texture2D:
     # Use cached texture for performance
@@ -118,7 +122,13 @@ func _physics_process(delta):
         velocity = velocity.normalized() * max_speed
     position += velocity * delta
     rotation = velocity.angle()
-    if global_position.distance_to(target_pos) < 10:
+    
+    # Check if missile reached target - account for enemy scale
+    var hit_distance: float = 10.0
+    if target_node and is_instance_valid(target_node) and target_node is Node2D:
+        var enemy_scale: float = target_node.scale.x if target_node.scale.x > 1.0 else 1.0
+        hit_distance = 10.0 + 30.0 * (enemy_scale - 1.0)  # Scale hitbox for large enemies
+    if global_position.distance_to(target_pos) < hit_distance:
         explode()
     if position.x < -100 or position.x > 2000 or position.y < -100 or position.y > 1200:
         queue_free()
@@ -127,13 +137,24 @@ func explode():
     # Play explosion sound
     _play_explosion_sound()
     
-    # damage enemies in area
-    for child in get_parent().get_children():
-        if child is CharacterBody2D and child != get_parent().get_node_or_null("Player") and child.has_method("take_damage"):
-            if global_position.distance_to(child.global_position) < 100:
-                # Pass hit direction (from explosion center to enemy)
-                var hit_direction = (child.global_position - global_position).normalized()
-                child.take_damage(base_damage, false, hit_direction)
+    # Damage enemies in area (only enemies, not friendly units like player, allies, or clones)
+    var enemies = get_tree().get_nodes_in_group("enemies")
+    const BASE_EXPLOSION_RADIUS := 100.0
+    for enemy in enemies:
+        if not is_instance_valid(enemy):
+            continue
+        if not (enemy is Node2D):
+            continue
+        # Account for enemy scale - larger enemies (bosses/elites) have bigger hitboxes
+        # Base enemy size ~30 units, scale affects effective hitbox radius
+        var enemy_scale: float = enemy.scale.x if enemy.scale.x > 1.0 else 1.0
+        var enemy_hitbox_bonus: float = 30.0 * (enemy_scale - 1.0)  # Extra radius for scaled enemies
+        var effective_radius: float = BASE_EXPLOSION_RADIUS + enemy_hitbox_bonus
+        if global_position.distance_to(enemy.global_position) < effective_radius:
+            # Pass hit direction (from explosion center to enemy)
+            var hit_direction = (enemy.global_position - global_position).normalized()
+            if enemy.has_method("take_damage"):
+                enemy.take_damage(base_damage, false, hit_direction)
     # create explosion
     var explosion_scene = preload("res://scenes/effects/Explosion.tscn")
     var explosion = explosion_scene.instantiate()

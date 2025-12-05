@@ -9,7 +9,6 @@ signal settings_selected
 signal quit_selected
 signal leaderboards_selected
 signal shop_selected
-signal outpost_selected
 
 const MENU_OPTIONS: Array[Dictionary] = [
 	{"id": "LEADERBOARDS", "icon": "leaderboards", "label": "LEADERBOARDS"},

@@ -14,7 +14,7 @@ var _anim_state := 0  # 0=hidden, 1=animating in, 2=showing, 3=animating out
 var _anim_progress := 0.0
 const ANIM_DURATION := 0.4
 
-const BAR_COLOR := Color(0.85, 0.1, 0.08, 0.5)
+const BAR_COLOR := Color(0.85, 0.1, 0.08, 0.75)
 const BAR_HEIGHT := 200.0
 const HEX_SIZE := 16.0
 const PULSE_SPEED := 8.0
@@ -53,7 +53,7 @@ func _draw() -> void:
 	
 	# Calculate pulse (faster, more visible)
 	var pulse := (sin(_time * PULSE_SPEED) + 1.0) * 0.5
-	var alpha := (0.25 + pulse * 0.25) * anim_alpha
+	var alpha := (0.5 + pulse * 0.3) * anim_alpha
 	
 	# Draw scanline reveal/hide effect
 	if scanline_intensity > 0:
@@ -117,7 +117,7 @@ func _draw_scanline_effect(intensity: float, alpha: float) -> void:
 		var glitch_color := Color(1.0, 0.2, 0.1, intensity * 0.6)
 		draw_rect(Rect2(glitch_x, glitch_y, glitch_width, 3.0), glitch_color)
 
-func _draw_animated_bar(bar_color: Color, alpha: float, scanline_intensity: float) -> void:
+func _draw_animated_bar(bar_color: Color, anim_alpha: float, scanline_intensity: float) -> void:
 	# Draw bar in horizontal strips that slide in from edges
 	var strip_height := size.y / SCANLINE_COUNT
 	
@@ -126,7 +126,8 @@ func _draw_animated_bar(bar_color: Color, alpha: float, scanline_intensity: floa
 	
 	for i in range(SCANLINE_COUNT):
 		var y := float(i) * strip_height
-		var strip_progress := clampf(alpha * 1.5 - float(i) * 0.05, 0.0, 1.0)
+		# Use anim_alpha for strip reveal/hide animation
+		var strip_progress := clampf(anim_alpha * 1.5 - float(i) * 0.05, 0.0, 1.0)
 		
 		if strip_progress > 0:
 			# Strips slide in from alternating sides

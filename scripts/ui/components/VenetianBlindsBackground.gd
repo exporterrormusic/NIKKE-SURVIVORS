@@ -23,6 +23,7 @@ static var _default_texture_paths_cache: PackedStringArray = PackedStringArray()
 static var _shared_textures: Array[Texture2D] = []
 static var _textures_loaded: bool = false
 static var _shared_animation_offset: float = 0.0  # Persists across menu instances
+static var _animation_offset_initialized: bool = false  # Track if we've set random start
 static var _last_process_frame: int = -1  # Prevents double-updating when multiple instances exist
 
 var _textures: Array[Texture2D] = []
@@ -43,8 +44,23 @@ func _ready() -> void:
 	set_process(true)
 	# Don't clear cache - reuse processed textures across menu transitions
 	_setup_hex_overlay()
+	
+	# Defer heavy texture loading to next frame for faster initial display
+	call_deferred("_deferred_load")
+
+
+func _deferred_load() -> void:
 	_load_textures()
 	_prepare_textures()
+	
+	# Initialize random animation offset on first load
+	if not _animation_offset_initialized:
+		_animation_offset_initialized = true
+		var textures = _get_active_textures()
+		if not textures.is_empty():
+			var total_width = _get_blind_width() * textures.size()
+			_shared_animation_offset = randf() * total_width
+	
 	queue_redraw()
 
 
@@ -415,8 +431,8 @@ func _build_default_texture_paths() -> PackedStringArray:
 	if not _default_texture_paths_cache.is_empty():
 		return _default_texture_paths_cache.duplicate()
 	
-	var environment_paths := PackedStringArray()
-	var character_paths := PackedStringArray()
+	var environment_paths: Array[String] = []
+	var character_paths: Array[String] = []
 	var paths := PackedStringArray()
 	
 	# Look for background/environment images in the backgrounds directory
@@ -455,26 +471,30 @@ func _build_default_texture_paths() -> PackedStringArray:
 				if ResourceLoader.exists(burst_path):
 					character_paths.append(burst_path)
 	
-	# Build rotation pattern: CHARACTER - BACKGROUND - CHARACTER
-	# Each character shows with a background between character appearances
-	# When characters run out, just show backgrounds
-	var char_index := 0
-	var env_index := 0
+	# Shuffle both arrays for random order each time
+	character_paths.shuffle()
+	environment_paths.shuffle()
+	
+	# Build rotation pattern: CHARACTER - BACKGROUND - CHARACTER - BACKGROUND
+	# Loop characters to always maintain the alternating pattern
 	var char_count := character_paths.size()
 	var env_count := environment_paths.size()
 	
-	# We want pattern: C, B, C, B, C, B... until chars run out, then just B, B, B...
-	# This ensures CHARACTER-BKG-CHARACTER flow
-	while char_index < char_count or env_index < env_count:
-		# Add character if available
-		if char_index < char_count:
-			paths.append(character_paths[char_index])
-			char_index += 1
+	if char_count == 0 and env_count == 0:
+		_default_texture_paths_cache = paths
+		return paths
+	
+	# Total pairs = max of both counts, so we cover all images
+	var total_pairs := maxi(char_count, env_count)
+	
+	for i in range(total_pairs):
+		# Add character (loop if we've run out)
+		if char_count > 0:
+			paths.append(character_paths[i % char_count])
 		
-		# Add background if available
-		if env_index < env_count:
-			paths.append(environment_paths[env_index])
-			env_index += 1
+		# Add background (loop if we've run out)
+		if env_count > 0:
+			paths.append(environment_paths[i % env_count])
 	
 	_default_texture_paths_cache = paths.duplicate()
 	return paths

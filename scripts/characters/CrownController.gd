@@ -50,13 +50,7 @@ var burst_charge_unlocked: bool = false  # Burst generates burst gauge
 var burst_beam_unlocked: bool = false  # Adds forward beam to burst
 
 func _on_initialize() -> void:
-	# Crown uses minigun - 100 rounds, moderate fire rate
-	max_ammo = 100
-	ammo = max_ammo
-	
-	# Set timings
-	data.reload_time = 3.5
-	data.attack_cooldown = 0.06  # Fast minigun fire rate
+	# Ammo already set from CharacterRegistry by base class
 	data.special_cooldown = charge_cooldown
 
 func _on_process(delta: float) -> void:
@@ -75,14 +69,14 @@ func _can_attack() -> bool:
 	return not is_reloading and ammo > 0 and not _is_charging
 
 func _perform_attack(direction: Vector2) -> void:
-	# Fire minigun bullet
-	var bullet_scene = preload("res://scenes/effects/MinigunBullet.tscn")
+	# Fire golden minigun bullet with swirling effect
+	const CrownBulletScript = preload("res://scripts/characters/effects/CrownBullet.gd")
 	
 	# Slight random spread for minigun
 	var spread := randf_range(-3.0, 3.0) * PI / 180.0
 	var spread_dir := direction.rotated(spread)
 	
-	var bullet = bullet_scene.instantiate()
+	var bullet = CrownBulletScript.new()
 	player.get_parent().add_child(bullet)
 	bullet.global_position = player.global_position + spread_dir * 30
 	bullet.velocity = spread_dir * bullet_speed
@@ -176,8 +170,11 @@ func _damage_enemies_in_charge_zone() -> void:
 		# Hit this enemy
 		_hit_enemies.append(enemy)
 		
+		# Calculate damage with level scaling
+		var scaled_damage: int = player.calc_damage(float(charge_damage) / player.get_base_damage())
+		
 		if enemy.has_method("take_damage"):
-			enemy.take_damage(charge_damage, false, _charge_direction, true)
+			enemy.take_damage(scaled_damage, false, _charge_direction, true)
 		
 		# Check if enemy survived and should be marked
 		if special_explosion_level > 0 and is_instance_valid(enemy):
@@ -261,9 +258,9 @@ func _trigger_mark_explosion(position: Vector2, _source_enemy: Node) -> void:
 	
 	# Calculate damage and radius based on upgrade level
 	# Base: 2x player attack, +50% per level
-	var base_damage := int(player.base_damage * 2)
+	var base_dmg := int(player.get_base_damage() * 2)
 	var damage_mult := 1.0 + (special_explosion_level - 1) * 0.5
-	var explosion_damage := int(base_damage * damage_mult)
+	var explosion_damage := int(base_dmg * damage_mult)
 	
 	# Base radius 80, +20% per level
 	var base_radius := 80.0
@@ -371,7 +368,12 @@ func _spawn_burst_nova() -> void:
 			var hit_dir := (enemy_node.global_position - player.global_position).normalized()
 			# Should this charge burst gauge?
 			var from_burst := not burst_charge_unlocked
-			enemy.take_damage(BURST_DAMAGE, false, hit_dir, from_burst)
+			# Scale burst damage with player level (+50% per level)
+			var level_mult: float = 1.0
+			if "level" in player:
+				level_mult = 1.0 + (player.level - 1) * 0.5
+			var scaled_damage := int(BURST_DAMAGE * level_mult)
+			enemy.take_damage(scaled_damage, false, hit_dir, from_burst)
 		
 		# Register hit for burst gauge if upgrade unlocked
 		if burst_charge_unlocked and player.has_method("register_burst_hit"):
@@ -399,9 +401,18 @@ func _update_burst_beam(delta: float) -> void:
 		_end_burst_beam()
 		return
 	
-	# Update visual position (follows player)
+	# Update beam direction to follow mouse (like Marian's beam)
+	var mouse_pos := player.get_global_mouse_position()
+	var to_mouse := mouse_pos - player.global_position
+	if to_mouse.length() > 10.0:
+		var target_direction := to_mouse.normalized()
+		# Smoothly rotate beam toward mouse
+		_beam_direction = _beam_direction.lerp(target_direction, 4.0 * delta).normalized()
+	
+	# Update visual position and rotation (follows player and mouse)
 	if _beam_visual and is_instance_valid(_beam_visual):
 		_beam_visual.global_position = player.global_position
+		_beam_visual.rotation = _beam_direction.angle()
 	
 	# Damage tick
 	_beam_tick_timer -= delta
@@ -434,7 +445,12 @@ func _damage_enemies_in_beam() -> void:
 		# Damage enemy
 		if enemy.has_method("take_damage"):
 			var from_burst := not burst_charge_unlocked
-			enemy.take_damage(BEAM_DAMAGE, false, _beam_direction, from_burst)
+			# Scale beam damage with player level (+50% per level)
+			var level_mult: float = 1.0
+			if "level" in player:
+				level_mult = 1.0 + (player.level - 1) * 0.5
+			var scaled_beam_damage := int(BEAM_DAMAGE * level_mult)
+			enemy.take_damage(scaled_beam_damage, false, _beam_direction, from_burst)
 		
 		if burst_charge_unlocked and player.has_method("register_burst_hit"):
 			player.register_burst_hit(enemy, false)

@@ -1,20 +1,9 @@
-[gd_scene load_steps=9 format=3 uid="uid://main_menu_scene"]
+[gd_scene load_steps=6 format=3 uid="uid://c450rthss5kki"]
 
-[ext_resource type="Script" path="res://scripts/ui/MainMenu.gd" id="1"]
-[ext_resource type="Script" path="res://scripts/ui/components/VenetianBlindsBackground.gd" id="2"]
-[ext_resource type="Script" path="res://scripts/ui/components/MainMenuOptionButton.gd" id="3"]
-[ext_resource type="Script" path="res://scripts/ui/components/MainMenuIcon.gd" id="4"]
-[ext_resource type="FontFile" path="res://resources/fonts/futura_condensed_extra_bold.tres" id="5"]
-[ext_resource type="FontFile" path="res://resources/fonts/pretendard_bold.tres" id="6"]
-
-[sub_resource type="StyleBoxFlat" id="1"]
-bg_color = Color(0.04, 0.055, 0.08, 0.95)
-border_width_top = 3
-border_width_bottom = 3
-border_color = Color(0.75, 0.75, 0.8, 0.8)
-shadow_color = Color(0, 0, 0, 0.35)
-shadow_size = 3
-shadow_offset = Vector2(2, 2)
+[ext_resource type="Script" uid="uid://c7wf2ffqix7uk" path="res://scripts/ui/MainMenu.gd" id="1"]
+[ext_resource type="Script" uid="uid://c1v7n25tr3lec" path="res://scripts/ui/components/VenetianBlindsBackground.gd" id="2"]
+[ext_resource type="Script" uid="uid://uv7r3ogedfth" path="res://scripts/ui/components/MainMenuOptionButton.gd" id="3"]
+[ext_resource type="Script" uid="uid://mi2gc0lgx5kb" path="res://scripts/ui/components/MainMenuIcon.gd" id="4"]
 
 [sub_resource type="StyleBoxFlat" id="2"]
 bg_color = Color(0.04, 0.055, 0.08, 0.95)
@@ -62,8 +51,8 @@ anchors_preset = -1
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = -240.0
-offset_bottom = -48.0
+offset_top = -279.0
+offset_bottom = -87.0
 grow_horizontal = 2
 theme_override_styles/panel = SubResource("2")
 
@@ -99,7 +88,7 @@ script = ExtResource("3")
 option_id = "LEADERBOARDS"
 icon_type = "leaderboards"
 label_text = "LEADERBOARDS"
-accent_color = Color(1.0, 0.714, 0.15, 1)
+accent_color = Color(1, 0.714, 0.15, 1)
 
 [node name="Content" type="VBoxContainer" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/LEADERBOARDS"]
 layout_mode = 1
@@ -119,15 +108,14 @@ alignment = 1
 [node name="Icon" type="Control" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/LEADERBOARDS/Content"]
 custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
-mouse_filter = 2
 size_flags_vertical = 3
+mouse_filter = 2
 script = ExtResource("4")
 icon_type = "leaderboards"
 base_color = Color(1, 0.85, 0.4, 1)
 
 [node name="Label" type="Label" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/LEADERBOARDS/Content"]
 layout_mode = 2
-mouse_filter = 2
 theme_override_font_sizes/font_size = 11
 text = "LEADERBOARDS"
 horizontal_alignment = 1
@@ -161,15 +149,14 @@ alignment = 1
 
 [node name="Icon" type="Control" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/ACHIEVEMENTS/Content"]
 custom_minimum_size = Vector2(0, 32)
-mouse_filter = 2
 layout_mode = 2
 size_flags_vertical = 3
+mouse_filter = 2
 script = ExtResource("4")
 icon_type = "achievements"
 
 [node name="Label" type="Label" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/ACHIEVEMENTS/Content"]
 layout_mode = 2
-mouse_filter = 2
 theme_override_font_sizes/font_size = 11
 text = "ACHIEVEMENTS"
 horizontal_alignment = 1
@@ -203,15 +190,14 @@ alignment = 1
 [node name="Icon" type="Control" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/SHOP/Content"]
 custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
-mouse_filter = 2
 size_flags_vertical = 3
+mouse_filter = 2
 script = ExtResource("4")
 icon_type = "shop"
 base_color = Color(0.29, 0.87, 0.5, 1)
 
 [node name="Label" type="Label" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/SHOP/Content"]
 layout_mode = 2
-mouse_filter = 2
 theme_override_font_sizes/font_size = 12
 text = "SHOP"
 horizontal_alignment = 1
@@ -222,9 +208,6 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 script = ExtResource("3")
-option_id = "PLAY"
-icon_type = "play"
-label_text = "PLAY"
 accent_color = Color(0.376471, 0.376471, 0.376471, 1)
 play_option = true
 
@@ -245,17 +228,15 @@ alignment = 1
 
 [node name="Icon" type="Control" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/PLAY/Content"]
 custom_minimum_size = Vector2(0, 32)
-mouse_filter = 2
 layout_mode = 2
 size_flags_vertical = 3
+mouse_filter = 2
 script = ExtResource("4")
-icon_type = "play"
 base_color = Color(0.4, 0.4, 0.4, 1)
 
 [node name="Label" type="Label" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/PLAY/Content"]
 modulate = Color(0.231373, 0.231373, 0.231373, 1)
 layout_mode = 2
-mouse_filter = 2
 theme_override_font_sizes/font_size = 16
 text = "PLAY"
 horizontal_alignment = 1
@@ -269,7 +250,7 @@ script = ExtResource("3")
 option_id = "THE OUTPOST"
 icon_type = "outpost"
 label_text = "THE OUTPOST"
-accent_color = Color(0.5, 0.75, 1.0, 1)
+accent_color = Color(0.5, 0.75, 1, 1)
 
 [node name="Content" type="VBoxContainer" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/THE OUTPOST"]
 layout_mode = 1
@@ -289,15 +270,14 @@ alignment = 1
 [node name="Icon" type="Control" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/THE OUTPOST/Content"]
 custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
-mouse_filter = 2
 size_flags_vertical = 3
+mouse_filter = 2
 script = ExtResource("4")
 icon_type = "outpost"
-base_color = Color(0.5, 0.75, 1.0, 1)
+base_color = Color(0.5, 0.75, 1, 1)
 
 [node name="Label" type="Label" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/THE OUTPOST/Content"]
 layout_mode = 2
-mouse_filter = 2
 theme_override_font_sizes/font_size = 11
 text = "THE OUTPOST"
 horizontal_alignment = 1
@@ -330,15 +310,14 @@ alignment = 1
 
 [node name="Icon" type="Control" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/SETTINGS/Content"]
 custom_minimum_size = Vector2(0, 32)
-mouse_filter = 2
 layout_mode = 2
 size_flags_vertical = 3
+mouse_filter = 2
 script = ExtResource("4")
 icon_type = "settings"
 
 [node name="Label" type="Label" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/SETTINGS/Content"]
 layout_mode = 2
-mouse_filter = 2
 theme_override_font_sizes/font_size = 12
 text = "SETTINGS"
 horizontal_alignment = 1
@@ -352,7 +331,7 @@ script = ExtResource("3")
 option_id = "QUIT"
 icon_type = "quit"
 label_text = "QUIT"
-accent_color = Color(1.0, 0.34, 0.34, 1)
+accent_color = Color(1, 0.34, 0.34, 1)
 danger_option = true
 
 [node name="Content" type="VBoxContainer" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/QUIT"]
@@ -372,17 +351,16 @@ alignment = 1
 
 [node name="Icon" type="Control" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/QUIT/Content"]
 custom_minimum_size = Vector2(0, 32)
-mouse_filter = 2
 layout_mode = 2
 size_flags_vertical = 3
+mouse_filter = 2
 script = ExtResource("4")
 icon_type = "quit"
-base_color = Color(1.0, 0.34, 0.34, 1)
-selected_color = Color(1.0, 0.5, 0.5, 1)
+base_color = Color(1, 0.34, 0.34, 1)
+selected_color = Color(1, 0.5, 0.5, 1)
 
 [node name="Label" type="Label" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/QUIT/Content"]
 layout_mode = 2
-mouse_filter = 2
 theme_override_font_sizes/font_size = 12
 text = "QUIT"
 horizontal_alignment = 1

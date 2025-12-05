@@ -94,7 +94,7 @@ var TALENT_DATA := {
 	],
 	3: [  # Nayuta - SMG with Clone Summoning & Galaxy Burst
 		{"id": "unlock", "name": "Unlock Nayuta", "desc": "Add Nayuta to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
-		 "tooltip": "SMG user. 45 ammo, high fire rate. Summons clones."},
+		 "tooltip": "SMG user. 30 ammo, high fire rate. Summons clones."},
 		{"id": "special", "name": "SUMMON CLONE", "desc": "Summon a fighting clone", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
 		 "tooltip": "Summons clone with 1/2 HP/attack. Lives until killed. 8s cooldown."},
 		{"id": "special_heal", "name": "NIMPH Return", "desc": "Clone death heals 20/35/50%", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
@@ -129,8 +129,8 @@ var TALENT_DATA := {
 		 "tooltip": "Minigun user. 100 ammo, high fire rate. Charms enemies and fires epic beams."},
 		{"id": "special", "name": "Rapture Queen", "desc": "AoE charm converts enemies", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
 		 "tooltip": "Charms normal enemies in area to fight for you. 10s cooldown."},
-		{"id": "special_size", "name": "Queen Gene", "desc": "Charm AoE +50/100/200%", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "Increases charm area of effect."},
+		{"id": "special_size", "name": "Queen Gene", "desc": "AoE + enemy types", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
+		 "tooltip": "AoE +50/100/200%. Lv1: Also affects Tanks. Lv2: Also affects Elites. Lv3: Stuns Bosses for 3s."},
 		{"id": "special_cooldown", "name": "Royal Dominion", "desc": "-2s special cooldown", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
 		 "tooltip": "-2s cooldown per level. At max: 4s cooldown."},
 		{"id": "burst", "name": "New World", "desc": "BURST: Epic 5s laser beam", "col": 1, "row": 2, "requires": ["special"], "max": 1, "cost": 1, "burst": true,
@@ -174,7 +174,7 @@ var TALENT_DATA := {
 	],
 	8: [  # Cecil - SMG with Drones & Hacking Burst
 		{"id": "unlock", "name": "Unlock Cecil", "desc": "Add Cecil to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
-		 "tooltip": "SMG user. 45 ammo, high fire rate. Drone robots and hacking burst."},
+		 "tooltip": "SMG user. 30 ammo, high fire rate. Drone robots and hacking burst."},
 		{"id": "special", "name": "Drone Deploy", "desc": "Deploy 2 companion drones", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
 		 "tooltip": "Deploys 2 invincible drones. Right-click toggles Hunt/Shield modes."},
 		{"id": "special_speed", "name": "Overclock", "desc": "Drone speed +50/100/200%", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
@@ -190,7 +190,7 @@ var TALENT_DATA := {
 	],
 	9: [  # Sin - SMG with Charm & Life Drain
 		{"id": "unlock", "name": "Unlock Sin", "desc": "Add Sin to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
-		 "tooltip": "SMG user. 45 ammo, high fire rate. Charms enemies and drains life."},
+		 "tooltip": "SMG user. 30 ammo, high fire rate. Charms enemies and drains life."},
 		{"id": "special", "name": "Heavy Talker", "desc": "AoE charm converts enemies", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
 		 "tooltip": "Charms normal enemies in area to fight for you. 10s cooldown."},
 		{"id": "special_size", "name": "Loud Talker", "desc": "Charm AoE +50/100/200%", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
@@ -1257,6 +1257,10 @@ func _on_talent_clicked(btn: Button) -> void:
 	_skill_points -= talent["cost"]
 	
 	print("[TalentTree] UNLOCKED %s! New state: %s" % [talent_id, _unlocked_talents[char_id]])
+	
+	# Track skill purchase for achievement
+	if has_node("/root/AchievementManager"):
+		get_node("/root/AchievementManager").on_skill_purchased(char_id, talent_id)
 	
 	emit_signal("talent_unlocked", char_id, talent_id)
 	

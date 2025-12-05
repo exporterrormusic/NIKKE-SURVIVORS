@@ -28,13 +28,7 @@ var left_upgrade_unlocked: bool = false
 var right_upgrade_unlocked: bool = false
 
 func _on_initialize() -> void:
-	# Commander uses assault rifle - 30 rounds, medium fire rate
-	max_ammo = 30
-	ammo = max_ammo
-	
-	# Set timings
-	data.reload_time = 2.0
-	data.attack_cooldown = 0.2  # Assault rifle - slower than SMG/Minigun but auto-fires
+	# Ammo already set from CharacterRegistry by base class
 	data.special_cooldown = freeze_cooldown
 
 func _on_process(_delta: float) -> void:
@@ -245,7 +239,9 @@ func _summon_allies() -> void:
 
 func _spawn_ally(ally_type: int, index: int) -> void:
 	var ally: Node2D = SummonedAllyScript.new()
-	ally.setup(player, ally_type)
+	# Pass player level for damage scaling
+	var level: int = player.level if "level" in player else 1
+	ally.setup(player, ally_type, level)
 	ally.lifetime = summon_duration
 	
 	# Position ally around player

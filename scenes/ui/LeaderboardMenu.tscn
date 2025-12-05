@@ -1,7 +1,7 @@
-[gd_scene load_steps=7 format=3 uid="uid://leaderboard_menu_scene"]
+[gd_scene load_steps=7 format=3 uid="uid://bjh3ukxgt4ftl"]
 
-[ext_resource type="Script" path="res://scripts/ui/LeaderboardMenu.gd" id="1"]
-[ext_resource type="Script" path="res://scripts/ui/components/VenetianBlindsBackground.gd" id="2"]
+[ext_resource type="Script" uid="uid://jsffv2l0bksl" path="res://scripts/ui/LeaderboardMenu.gd" id="1"]
+[ext_resource type="Script" uid="uid://c1v7n25tr3lec" path="res://scripts/ui/components/VenetianBlindsBackground.gd" id="2"]
 [ext_resource type="FontFile" path="res://resources/fonts/futura_condensed_extra_bold.tres" id="3"]
 [ext_resource type="FontFile" path="res://resources/fonts/pretendard_bold.tres" id="4"]
 
@@ -23,8 +23,8 @@ border_width_bottom = 4
 border_color = Color(0.95, 0.95, 0.98, 0.9)
 corner_radius_top_left = 12
 corner_radius_top_right = 12
-corner_radius_bottom_left = 12
 corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
 shadow_color = Color(0, 0, 0, 0.5)
 shadow_size = 6
 shadow_offset = Vector2(3, 3)
@@ -91,9 +91,9 @@ anchors_preset = -1
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 48.0
-offset_top = 190.0
+offset_top = 220.0
 offset_right = -48.0
-offset_bottom = -40.0
+offset_bottom = -80.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_styles/panel = SubResource("panel_style")
@@ -103,10 +103,10 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 24.0
-offset_top = 24.0
-offset_right = -24.0
-offset_bottom = -24.0
+offset_left = 16.0
+offset_top = 12.0
+offset_right = -16.0
+offset_bottom = -12.0
 grow_horizontal = 2
 grow_vertical = 2
 
@@ -114,7 +114,7 @@ grow_vertical = 2
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-theme_override_constants/separation = 24
+theme_override_constants/separation = 12
 
 [node name="InfoRow" type="HBoxContainer" parent="ContentPanel/ContentMargin/ContentVBox"]
 layout_mode = 2

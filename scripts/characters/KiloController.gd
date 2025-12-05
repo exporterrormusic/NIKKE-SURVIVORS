@@ -22,12 +22,7 @@ var burst_duration_unlocked: bool = false  # Extended Assault: 10s duration
 var burst_invuln_unlocked: bool = false  # T.A.L.O.S. Shield: invincibility
 
 func _on_initialize() -> void:
-	# Kilo has 6 shells (like Snow White and Rapunzel)
-	max_ammo = 6
-	ammo = max_ammo
-	
-	# Set reload time
-	data.reload_time = 2.5
+	# Ammo already set from CharacterRegistry by base class
 	data.special_cooldown = 3.0
 
 func _on_process(delta: float) -> void:

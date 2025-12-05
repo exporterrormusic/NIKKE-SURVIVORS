@@ -33,13 +33,7 @@ var burst_missile_upgrade: bool = false  # Left: 4 homing missiles every 2.5s
 var burst_trail_upgrade: bool = false    # Right: burning trail
 
 func _on_initialize() -> void:
-	# Marian uses minigun - 100 rounds, very fast fire rate
-	max_ammo = 100
-	ammo = max_ammo
-	
-	# Set timings
-	data.reload_time = 3.5
-	data.attack_cooldown = 0.06  # Very fast minigun
+	# Ammo already set from CharacterRegistry by base class
 	data.special_cooldown = charm_cooldown
 
 func _on_cleanup() -> void:
@@ -206,8 +200,11 @@ func _perform_special(_direction: Vector2) -> void:
 			if not is_instance_valid(enemy) or not enemy is Node2D:
 				continue
 			
-			# Skip elites and bosses
-			if _is_elite_or_boss(enemy):
+			# Check enemy tier and whether we can affect them based on Queen Gene level
+			var enemy_tier := _get_enemy_tier(enemy)
+			var can_affect := _can_affect_enemy_tier(enemy_tier)
+			
+			if not can_affect:
 				continue
 			
 			# Check range
@@ -215,22 +212,64 @@ func _perform_special(_direction: Vector2) -> void:
 			if dist > actual_radius:
 				continue
 			
-			# Charm the enemy
-			_charm_enemy(enemy)
+			# Handle the enemy based on tier
+			if enemy_tier == "boss" or enemy_tier == "super_boss":
+				# Bosses get stunned for 5 seconds instead of charmed
+				_stun_boss(enemy, 5.0)
+			else:
+				# Charm the enemy
+				_charm_enemy(enemy)
 	
 	# Apply cooldown
 	var cooldown_reduction := special_cooldown_level * 2.0
 	special_timer = max(charm_cooldown - cooldown_reduction, 2.0)
 	data.special_cooldown = special_timer
 
-func _is_elite_or_boss(enemy: Node) -> bool:
+func _get_enemy_tier(enemy: Node) -> String:
+	# Check for tier metadata first
 	if enemy.has_meta("enemy_tier"):
-		var tier = enemy.get_meta("enemy_tier")
-		if tier in ["elite", "boss", "tank"]:
+		return enemy.get_meta("enemy_tier")
+	# Check groups
+	if enemy.is_in_group("boss") or enemy.is_in_group("super_boss"):
+		return "boss"
+	if enemy.is_in_group("elite"):
+		return "elite"
+	if enemy.is_in_group("tank"):
+		return "tank"
+	return "basic"
+
+func _can_affect_enemy_tier(tier: String) -> bool:
+	# Queen Gene levels unlock affecting different enemy types
+	# Level 0: Only basic enemies
+	# Level 1: + Tanks
+	# Level 2: + Elites
+	# Level 3: + Bosses (stun only)
+	match tier:
+		"basic":
 			return true
-	if enemy.is_in_group("elite") or enemy.is_in_group("boss"):
-		return true
-	return false
+		"tank":
+			return special_size_level >= 1
+		"elite":
+			return special_size_level >= 2
+		"boss", "super_boss":
+			return special_size_level >= 3
+	return true
+
+func _stun_boss(boss: Node, duration: float) -> void:
+	# Stun the boss instead of charming
+	if boss.has_method("stun"):
+		boss.stun(duration)
+	elif boss.has_method("set_stunned"):
+		boss.set_stunned(true, duration)
+	else:
+		# Fallback: set properties directly if available
+		if "is_stunned" in boss:
+			boss.is_stunned = true
+		if "stun_timer" in boss:
+			boss.stun_timer = duration
+	
+	# Add visual stun effect
+	_spawn_stun_effect(boss)
 
 func _charm_enemy(enemy: Node) -> void:
 	if enemy.has_meta("charmed") and enemy.get_meta("charmed"):
@@ -252,6 +291,48 @@ func _charm_enemy(enemy: Node) -> void:
 	var effect = MarianCharmEffectScript.new()
 	effect.name = "MarianCharmEffect"
 	enemy.add_child(effect)
+
+func _spawn_stun_effect(boss: Node) -> void:
+	# Create a visual stun indicator on the boss
+	var stun_visual := Node2D.new()
+	stun_visual.name = "MarianStunEffect"
+	stun_visual.z_index = 100
+	
+	var script := GDScript.new()
+	script.source_code = """
+extends Node2D
+
+var _time: float = 0.0
+var _duration: float = 5.0
+var _star_count: int = 5
+
+func _process(delta: float) -> void:
+	_time += delta
+	if _time >= _duration:
+		queue_free()
+		return
+	queue_redraw()
+
+func _draw() -> void:
+	# Draw spinning stars around the boss's head
+	var radius := 40.0
+	for i in range(_star_count):
+		var angle := _time * 3.0 + float(i) * TAU / float(_star_count)
+		var pos := Vector2(cos(angle), sin(angle)) * radius + Vector2(0, -50)
+		_draw_star(pos, 8.0, Color(1.0, 1.0, 0.5, 1.0))
+
+func _draw_star(center: Vector2, size: float, color: Color) -> void:
+	var points := PackedVector2Array()
+	for i in range(10):
+		var angle := float(i) * TAU / 10.0 - PI / 2.0
+		var r := size if i % 2 == 0 else size * 0.4
+		points.append(center + Vector2(cos(angle), sin(angle)) * r)
+	draw_colored_polygon(points, color)
+"""
+	script.reload()
+	stun_visual.set_script(script)
+	stun_visual.set("_duration", 5.0)
+	boss.add_child(stun_visual)
 
 func _spawn_charm_aoe_visual(center: Vector2, radius: float) -> void:
 	var visual := Node2D.new()
@@ -298,6 +379,7 @@ func _on_burst_start() -> void:
 	_active_beam.duration = beam_duration
 	_active_beam.owner_node = player
 	_active_beam.player_ref = player  # Pass player reference for tracking
+	_active_beam.player_level = player.level if "level" in player else 1
 	_active_beam.missile_upgrade = burst_missile_upgrade
 	_active_beam.trail_upgrade = burst_trail_upgrade
 	

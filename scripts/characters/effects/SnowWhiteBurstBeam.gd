@@ -23,6 +23,9 @@ var _age: float = 0.0
 var _forward: Vector2 = Vector2.RIGHT
 var _has_dealt_damage: bool = false
 
+# Player level for damage scaling
+var player_level: int = 1
+
 # Talent bonuses
 var burn_level: int = 0  # 0=none, 1-3=talent level for frostburn
 var gauge_on_kill: bool = false  # Soul Harvest talent
@@ -70,6 +73,10 @@ func _apply_cone_damage() -> void:
 	var half_angle := deg_to_rad(beam_angle_degrees * 0.5)
 	var range_sq := beam_range * beam_range
 	
+	# Calculate level-scaled damage (+50% per level)
+	var level_mult := 1.0 + (player_level - 1) * 0.5
+	var scaled_damage := int(damage * level_mult)
+	
 	# Track enemies for burn and kill counting
 	var hit_enemies: Array[Node2D] = []
 	
@@ -103,9 +110,9 @@ func _apply_cone_damage() -> void:
 			enemy_hp_before = enemy.hp
 		
 		if enemy.has_method("take_damage"):
-			enemy.take_damage(damage, false, hit_direction, true)  # from_burst = true
+			enemy.take_damage(scaled_damage, false, hit_direction, true)  # from_burst = true
 		elif enemy.has_method("apply_damage"):
-			enemy.apply_damage(damage)
+			enemy.apply_damage(scaled_damage)
 		
 		# Check if enemy was killed
 		if "hp" in enemy and enemy.hp <= 0 and enemy_hp_before > 0:

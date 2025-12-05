@@ -12,15 +12,15 @@ signal run_complete(survived: bool, final_time: float)
 signal time_updated(elapsed: float, remaining: float)
 signal wave_changed(wave_number: int)
 
-# Run settings - 7 waves at 30 seconds each = 3.5 minutes
+# Run settings - 11 waves at 30 seconds each = 5.5 minutes
 const WAVE_DURATION := 30.0
-const TOTAL_WAVES := 7
-const RUN_DURATION := WAVE_DURATION * TOTAL_WAVES  # 210 seconds (3:30)
+const TOTAL_WAVES := 11
+const RUN_DURATION := WAVE_DURATION * TOTAL_WAVES  # 330 seconds (5:30)
 
 # Stage difficulty modes
 var _stage_mode := 1  # 1 = normal, 2 = hard (tanks replace basic, etc.)
 
-# Spawn brackets - 7 waves at 30 second intervals
+# Spawn brackets - 11 waves at 30 second intervals
 # Stage 1: basic enemies, Stage 2: tanks replace basic
 const SPAWN_BRACKETS := [
 	{"time": 0.0, "rate": 3.0, "max": 25, "interval": 0.33},       # Wave 1 (0:00)
@@ -30,6 +30,10 @@ const SPAWN_BRACKETS := [
 	{"time": 120.0, "rate": 12.0, "max": 65, "interval": 0.08},    # Wave 5 (2:00)
 	{"time": 150.0, "rate": 15.0, "max": 75, "interval": 0.07},    # Wave 6 (2:30)
 	{"time": 180.0, "rate": 18.0, "max": 85, "interval": 0.055},   # Wave 7 (3:00)
+	{"time": 210.0, "rate": 20.0, "max": 95, "interval": 0.05},    # Wave 8 (3:30)
+	{"time": 240.0, "rate": 22.0, "max": 100, "interval": 0.045},  # Wave 9 (4:00)
+	{"time": 270.0, "rate": 25.0, "max": 110, "interval": 0.04},   # Wave 10 (4:30)
+	{"time": 300.0, "rate": 15.0, "max": 60, "interval": 0.07},    # Wave 11 (5:00) - fewer adds during super boss
 ]
 
 # Enemy type unlocks by wave (Stage 1)
@@ -42,34 +46,48 @@ const ENEMY_UNLOCKS := [
 ]
 
 # Scheduled events (Stage 1)
-# Events trigger at wave start (0, 30, 60, 90, 120, 150, 180)
+# Events trigger at wave start (0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300)
 # Wave 1: Horde
 # Wave 2: Horde (tanks unlock)
 # Wave 3: Horde + Elite
 # Wave 4: Horde + Elite
 # Wave 5: Horde + Elite + 1 Boss
 # Wave 6: Horde + Elite
-# Wave 7: Horde + Elite + 3 Bosses
+# Wave 7: Horde + Elite + 2 Bosses
+# Wave 8: Horde + Elite
+# Wave 9: Horde + Elite + 3 Bosses
+# Wave 10: Horde + Elite
+# Wave 11: 1 Super Boss + 5 Bosses (FINAL)
 const EVENTS := [
 	# Horde waves - trigger at wave start, last full 30 seconds
-	{"time": 0.0, "type": "horde", "enemy": "basic", "count": 15, "duration": 30.0},     # Wave 1
-	{"time": 30.0, "type": "horde", "enemy": "basic", "count": 20, "duration": 30.0},    # Wave 2
-	{"time": 60.0, "type": "horde", "enemy": "basic", "count": 25, "duration": 30.0},    # Wave 3
-	{"time": 90.0, "type": "horde", "enemy": "tank", "count": 12, "duration": 30.0},     # Wave 4
-	{"time": 120.0, "type": "horde", "enemy": "basic", "count": 30, "duration": 30.0},   # Wave 5
-	{"time": 150.0, "type": "horde", "enemy": "tank", "count": 15, "duration": 30.0},    # Wave 6
-	{"time": 180.0, "type": "horde", "enemy": "basic", "count": 35, "duration": 30.0},   # Wave 7
+	{"time": 0.0, "type": "horde", "enemy": "basic", "count": 8, "duration": 30.0},      # Wave 1
+	{"time": 30.0, "type": "horde", "enemy": "basic", "count": 10, "duration": 30.0},    # Wave 2
+	{"time": 60.0, "type": "horde", "enemy": "basic", "count": 12, "duration": 30.0},    # Wave 3
+	{"time": 90.0, "type": "horde", "enemy": "tank", "count": 6, "duration": 30.0},      # Wave 4
+	{"time": 120.0, "type": "horde", "enemy": "basic", "count": 15, "duration": 30.0},   # Wave 5
+	{"time": 150.0, "type": "horde", "enemy": "tank", "count": 8, "duration": 30.0},     # Wave 6
+	{"time": 180.0, "type": "horde", "enemy": "basic", "count": 18, "duration": 30.0},   # Wave 7
+	{"time": 210.0, "type": "horde", "enemy": "tank", "count": 9, "duration": 30.0},     # Wave 8
+	{"time": 240.0, "type": "horde", "enemy": "basic", "count": 20, "duration": 30.0},   # Wave 9
+	{"time": 270.0, "type": "horde", "enemy": "tank", "count": 10, "duration": 30.0},    # Wave 10
+	{"time": 300.0, "type": "horde", "enemy": "basic", "count": 12, "duration": 30.0},   # Wave 11 (fewer during super boss)
 	
 	# Elite spawns - at wave start, starting wave 3
-	{"time": 60.0, "type": "elite", "enemy": "basic"},    # Wave 3
-	{"time": 90.0, "type": "elite", "enemy": "basic"},    # Wave 4
-	{"time": 120.0, "type": "elite", "enemy": "basic"},   # Wave 5
-	{"time": 150.0, "type": "elite", "enemy": "basic"},   # Wave 6
-	{"time": 180.0, "type": "elite", "enemy": "basic"},   # Wave 7
+	{"time": 60.0, "type": "elite", "enemy": "basic"},     # Wave 3
+	{"time": 90.0, "type": "elite", "enemy": "basic"},     # Wave 4
+	{"time": 120.0, "type": "elite", "enemy": "basic"},    # Wave 5
+	{"time": 150.0, "type": "elite", "enemy": "basic"},    # Wave 6
+	{"time": 180.0, "type": "elite", "enemy": "basic"},    # Wave 7
+	{"time": 210.0, "type": "elite", "enemy": "basic"},    # Wave 8
+	{"time": 240.0, "type": "elite", "enemy": "basic"},    # Wave 9
+	{"time": 270.0, "type": "elite", "enemy": "basic"},    # Wave 10
 	
 	# Boss spawns - at wave start
-	{"time": 120.0, "type": "boss", "enemy": "boss", "count": 1},   # Wave 5: 1 boss
-	{"time": 180.0, "type": "boss", "enemy": "boss", "count": 3},   # Wave 7: 3 bosses
+	{"time": 120.0, "type": "boss", "enemy": "boss", "count": 1},      # Wave 5: 1 boss
+	{"time": 180.0, "type": "boss", "enemy": "boss", "count": 2},      # Wave 7: 2 bosses
+	{"time": 240.0, "type": "boss", "enemy": "boss", "count": 3},      # Wave 9: 3 bosses
+	{"time": 300.0, "type": "boss", "enemy": "boss", "count": 5},      # Wave 11: 5 bosses
+	{"time": 300.0, "type": "super_boss", "enemy": "super_boss", "count": 1},  # Wave 11: 1 super boss (FINAL)
 ]
 
 # State
@@ -85,6 +103,7 @@ var _event_timer := 0.0
 var _current_enemy_count := 0
 var _boss_active := false
 var _bosses_remaining := 0  # Track remaining bosses to defeat
+var _super_boss_active := false  # Track if super boss has spawned
 var _run_won := false
 var _current_wave := 1
 var _last_wave := 0
@@ -120,6 +139,7 @@ func start() -> void:
 	_current_enemy_count = 0
 	_boss_active = false
 	_bosses_remaining = 0
+	_super_boss_active = false
 	_run_won = false
 	_current_wave = 1
 	_last_wave = 0
@@ -138,15 +158,23 @@ func resume() -> void:
 func set_enemy_count(count: int) -> void:
 	_current_enemy_count = count
 
-func notify_boss_defeated() -> void:
+func notify_boss_defeated(is_super_boss: bool = false) -> void:
 	if _boss_active:
 		_bosses_remaining -= 1
-		print("[WaveDirector] Boss defeated! Remaining: ", _bosses_remaining)
-		if _bosses_remaining <= 0:
+		print("[WaveDirector] Boss defeated! Remaining: ", _bosses_remaining, " Super boss active: ", _super_boss_active)
+		
+		# Game ends when super boss is killed
+		if is_super_boss and _super_boss_active:
+			print("[WaveDirector] SUPER BOSS DEFEATED - RUN COMPLETE!")
 			_boss_active = false
+			_super_boss_active = false
 			_run_won = true
 			emit_signal("run_complete", true, _elapsed_time)
 			_active = false
+		elif _bosses_remaining <= 0 and not _super_boss_active:
+			# All bosses cleared but super boss hasn't spawned yet - just reset boss state
+			_boss_active = false
+			emit_signal("event_ended", "boss")
 
 func _process(delta: float) -> void:
 	if not _active or _paused:
@@ -216,11 +244,8 @@ func get_current_wave() -> int:
 	return _current_wave
 
 func get_health_multiplier() -> float:
-	# Wave 1: 1x, Wave 2: 2x, Wave 3: 4x, then +2 each wave (6x, 8x, 10x...)
-	if _current_wave <= 3:
-		return pow(2.0, _current_wave - 1)  # 1, 2, 4
-	else:
-		return 4.0 + (_current_wave - 3) * 2.0  # 6, 8, 10...
+	# Wave 1: 1x, Wave 2: 2x, Wave 3: 3x, Wave 4: 4x, etc. (linear +1 per wave)
+	return float(_current_wave)
 
 func _check_enemy_unlocks() -> void:
 	for unlock in ENEMY_UNLOCKS:
@@ -272,7 +297,7 @@ func _start_event(event: Dictionary) -> void:
 		"boss":
 			var boss_count: int = event.get("count", 1)
 			_boss_active = true
-			_bosses_remaining = boss_count
+			_bosses_remaining += boss_count
 			_active_event = event.duplicate()
 			
 			# Spawn boss(es) - use super_boss for stage 2
@@ -280,6 +305,16 @@ func _start_event(event: Dictionary) -> void:
 			for i in range(boss_count):
 				emit_signal("enemy_spawn_requested", boss_type, 1, "center")
 			emit_signal("event_started", "boss", {"count": boss_count})
+		
+		"super_boss":
+			_boss_active = true
+			_bosses_remaining += 1
+			_super_boss_active = true
+			_active_event = event.duplicate()
+			
+			# Spawn super boss
+			emit_signal("enemy_spawn_requested", "super_boss", 1, "center")
+			emit_signal("event_started", "super_boss", {"count": 1})
 
 ## Translate enemy types based on stage mode
 ## Stage 1: normal (basic, tank, elite, boss)

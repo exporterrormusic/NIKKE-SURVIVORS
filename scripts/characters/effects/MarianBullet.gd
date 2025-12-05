@@ -8,6 +8,11 @@ var owner_node: Node = null
 var base_damage: int = 2
 var lifespan: float = 3.0
 var _age: float = 0.0
+var start_position: Vector2 = Vector2.ZERO
+var _start_position_set: bool = false
+
+# Max range for minigun bullets
+const MAX_RANGE := 1100.0
 
 # Shader material for the mystical effect
 var _shader_material: ShaderMaterial = null
@@ -52,8 +57,20 @@ func _process(delta: float) -> void:
 		queue_free()
 		return
 	
+	# Capture start position on first frame
+	if not _start_position_set:
+		start_position = global_position
+		_start_position_set = true
+	
 	# Move bullet
 	position += velocity * delta
+	
+	# Check max range
+	if MAX_RANGE > 0.0:
+		var traveled := global_position.distance_to(start_position)
+		if traveled >= MAX_RANGE:
+			queue_free()
+			return
 	
 	# Redraw for shader animation
 	queue_redraw()

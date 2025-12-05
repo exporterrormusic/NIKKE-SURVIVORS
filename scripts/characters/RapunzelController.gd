@@ -17,9 +17,8 @@ const RapunzelBurstEffectScript = preload("res://scripts/characters/effects/Rapu
 const HealingCrossScene = preload("res://scenes/effects/HealingCross.tscn")
 
 func _on_initialize() -> void:
-	# Rapunzel has 4 rockets
-	max_ammo = 4
-	ammo = max_ammo
+	# Ammo already set from CharacterRegistry by base class
+	pass
 
 func _on_process(delta: float) -> void:
 	# Update cross cooldown

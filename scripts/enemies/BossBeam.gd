@@ -26,7 +26,7 @@ var _damage_timer := 0.0
 # Tracking behavior
 var track_during_charge: bool = true  # Lock direction at end of charge (elite) vs track during charge (boss)
 var track_during_fire: bool = false   # Slow tracking during firing (boss only)
-var tracking_speed: float = 0.3       # How fast beam rotates during firing (radians per second)
+var tracking_speed: float = 0.08      # Very slow rotation during firing (radians per second) - must be dodgeable
 
 # Direction locked when charging completes
 var _locked_direction := Vector2.RIGHT
@@ -48,7 +48,12 @@ func initialize(boss: Node2D, player: Node2D, charge_time: float, fire_time: flo
 	if is_boss:
 		track_during_charge = true
 		track_during_fire = true
-		tracking_speed = 0.15  # Very slow rotation during fire
+		tracking_speed = 0.05  # Very slow rotation - player can outrun if moving
+		# Initialize direction toward player (will slowly track from here)
+		if _player and is_instance_valid(_player):
+			_locked_direction = (_player.global_position - _boss.global_position).normalized()
+			if _locked_direction == Vector2.ZERO:
+				_locked_direction = Vector2.RIGHT
 	else:
 		# Elite: lock direction immediately when beam starts charging
 		track_during_charge = false
@@ -81,12 +86,18 @@ func _process(delta: float) -> void:
 	
 	queue_redraw()
 
-func _process_charging(_delta: float) -> void:
-	# Track player during charge (only if enabled)
+func _process_charging(delta: float) -> void:
+	# Track player during charge with same slow speed as firing (only if enabled)
 	if track_during_charge and _player and is_instance_valid(_player):
-		_locked_direction = (_player.global_position - _boss.global_position).normalized()
-		if _locked_direction == Vector2.ZERO:
-			_locked_direction = Vector2.RIGHT
+		var target_dir := (_player.global_position - _boss.global_position).normalized()
+		if target_dir != Vector2.ZERO:
+			# Slowly rotate toward player (same speed as during firing)
+			var current_angle := _locked_direction.angle()
+			var target_angle := target_dir.angle()
+			var angle_diff := wrapf(target_angle - current_angle, -PI, PI)
+			var max_rotation := tracking_speed * delta
+			var rotation_amount := clampf(angle_diff, -max_rotation, max_rotation)
+			_locked_direction = _locked_direction.rotated(rotation_amount)
 	
 	# Pulse preview line
 	var pulse := sin(_timer * 10.0) * 0.3 + 0.7

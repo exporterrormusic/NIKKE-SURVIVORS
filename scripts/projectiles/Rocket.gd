@@ -18,20 +18,28 @@ var _smoke_particles: Array = []
 var _trail_color := Color(0.45, 0.45, 0.5, 0.7)  # Grey smoke
 var _fire_color := Color(1.0, 0.6, 0.15, 0.9)  # Orange-yellow fire
 var _light: PointLight2D = null
+var _has_exploded := false  # Prevent multiple explosions
+
+# Performance: disable dynamic lights on rockets (expensive with many projectiles)
+const ENABLE_ROCKET_LIGHTS := false
 
 func _ready():
     add_to_group("projectiles")
     connect("body_entered", Callable(self, "_on_body_entered"))
     player = get_parent().get_node("Player")
-    # Select initial target
+    # Select initial target - only target enemies, not friendly units
     var closest_enemy = null
     var min_dist = INF
-    for child in get_parent().get_children():
-        if child is CharacterBody2D and child != player and child.has_method("take_damage"):
-            var dist = global_position.distance_to(child.global_position)
-            if dist < min_dist:
-                min_dist = dist
-                closest_enemy = child
+    var enemies = get_tree().get_nodes_in_group("enemies")
+    for enemy in enemies:
+        if not is_instance_valid(enemy):
+            continue
+        if not (enemy is Node2D):
+            continue
+        var dist = global_position.distance_to(enemy.global_position)
+        if dist < min_dist:
+            min_dist = dist
+            closest_enemy = enemy
     if closest_enemy:
         target_enemy = closest_enemy
         last_target_pos = closest_enemy.global_position
@@ -39,15 +47,16 @@ func _ready():
         last_target_pos = player.global_position  # fallback
     set_process(true)
     
-    # Add dynamic point light - rockets are brighter
-    _light = PointLight2D.new()
-    _light.name = "RocketLight"
-    _light.color = Color(1.0, 0.5, 0.15)  # Orange-red glow
-    _light.energy = 1.0
-    _light.texture = _create_light_texture()
-    _light.texture_scale = 0.35
-    _light.shadow_enabled = false
-    add_child(_light)
+    # Dynamic lights are expensive - disabled by default
+    if ENABLE_ROCKET_LIGHTS:
+        _light = PointLight2D.new()
+        _light.name = "RocketLight"
+        _light.color = Color(1.0, 0.5, 0.15)  # Orange-red glow
+        _light.energy = 1.0
+        _light.texture = _create_light_texture()
+        _light.texture_scale = 0.35
+        _light.shadow_enabled = false
+        add_child(_light)
 
 func _create_light_texture() -> Texture2D:
     # Use cached texture for performance
@@ -134,12 +143,18 @@ func _on_body_entered(body):
     # Skip charmed enemies (they're friendly now)
     if body.is_in_group("charmed_allies"):
         return
+    # Only damage enemies - skip friendly units (allies, clones, turrets, etc.)
+    if not body.is_in_group("enemies"):
+        return
     if body.has_method("take_damage"):
         var hit_direction = velocity.normalized()
         body.take_damage(1, false, hit_direction)
     call_deferred("explode")
 
 func explode():
+    if _has_exploded:
+        return
+    _has_exploded = true
     var explosion_scene = preload("res://scenes/effects/Explosion.tscn")
     var explosion = explosion_scene.instantiate()
     get_parent().add_child(explosion)

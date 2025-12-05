@@ -41,15 +41,8 @@ var burst_charge_on_kill: bool = false  # Killing during burst charges burst
 var burst_explode_on_death: bool = false  # Enemies explode on death during burst
 
 func _on_initialize() -> void:
-	# Sin uses dual SMGs - 45 rounds total, fast fire rate
-	max_ammo = 45
-	ammo = max_ammo
-	
-	# Set timings
-	data.reload_time = 2.0
-	data.attack_cooldown = 0.08  # Fast SMG fire rate
+	# Ammo already set from CharacterRegistry by base class
 	data.special_cooldown = charm_cooldown
-	
 	# Note: Indicator is created lazily in _on_process to ensure scene is ready
 
 func _create_charm_indicator() -> void:
@@ -374,8 +367,11 @@ func _update_burst_dot(_delta: float) -> void:
 		if now >= next_damage:
 			var dealt := 0
 			if enemy.has_method("take_damage"):
-				# Calculate damage (base DOT damage)
-				var damage := SIN_DOT_DAMAGE
+				# Calculate damage with player level scaling (+50% per level)
+				var level_mult: float = 1.0
+				if "level" in player:
+					level_mult = 1.0 + (player.level - 1) * 0.5
+				var damage := int(SIN_DOT_DAMAGE * level_mult)
 				enemy.take_damage(damage, false, Vector2.ZERO, not burst_charge_on_kill)
 				dealt = damage
 			
@@ -406,9 +402,12 @@ func _spawn_burst_explosion(position: Vector2) -> void:
 	if not tree:
 		return
 	
-	# Damage nearby enemies
+	# Damage nearby enemies with level scaling
 	var enemies := tree.get_nodes_in_group("enemies")
-	var damage := burst_explosion_damage
+	var level_mult: float = 1.0
+	if "level" in player:
+		level_mult = 1.0 + (player.level - 1) * 0.5
+	var damage := int(burst_explosion_damage * level_mult)
 	
 	for enemy in enemies:
 		if not is_instance_valid(enemy) or not enemy is Node2D:

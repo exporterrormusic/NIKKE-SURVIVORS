@@ -32,14 +32,9 @@ var burst_damage_boost: bool = false  # Hacked enemies do 50% more damage
 var burst_boss_damage: bool = false  # Deal 25% max HP to bosses/elites after stun
 
 func _on_initialize() -> void:
-	# Cecil uses dual SMGs like Sin
-	max_ammo = 45
-	ammo = max_ammo
-	
-	# Set timings
-	data.reload_time = 2.0
-	data.attack_cooldown = 0.08  # Fast SMG fire rate
-	data.special_cooldown = 0.5  # Short cooldown since it's just a mode toggle
+	# Ammo already set from CharacterRegistry by base class
+	# Short cooldown since it's just a mode toggle
+	data.special_cooldown = 0.5
 
 func _on_process(delta: float) -> void:
 	# Spawn drones when special is unlocked

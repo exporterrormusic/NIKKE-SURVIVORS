@@ -145,7 +145,19 @@ func _update_display_value(value: float):
 	queue_redraw()
 
 func flash_level_up():
-	# Quick flash effect
+	# Impressive golden flash and glow effect
 	var tween := create_tween()
-	tween.tween_property(self, "modulate", Color(1.5, 1.5, 0.8, 1.0), 0.1)
-	tween.tween_property(self, "modulate", Color.WHITE, 0.2)
+	tween.set_parallel(true)
+	
+	# Bright golden flash - peak brightness
+	tween.tween_property(self, "modulate", Color(2.0, 1.7, 0.5, 1.0), 0.08)
+	
+	# Then sustain a warm glow
+	tween.chain().tween_property(self, "modulate", Color(1.6, 1.4, 0.7, 1.0), 0.15)
+	
+	# Pulse brighter again
+	tween.chain().tween_property(self, "modulate", Color(1.8, 1.5, 0.6, 1.0), 0.1)
+	
+	# Fade back smoothly
+	tween.chain().tween_property(self, "modulate", Color(1.3, 1.2, 0.9, 1.0), 0.2)
+	tween.chain().tween_property(self, "modulate", Color.WHITE, 0.3)

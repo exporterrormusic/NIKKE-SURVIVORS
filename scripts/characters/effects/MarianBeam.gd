@@ -30,6 +30,9 @@ var _beam_direction: Vector2 = Vector2.RIGHT
 var _target_direction: Vector2 = Vector2.RIGHT
 var _turn_speed: float = 4.0  # How fast beam follows mouse
 
+# Player level for damage scaling
+var player_level: int = 1
+
 # Upgrade states
 var missile_upgrade: bool = false  # Left upgrade: fire homing missiles
 var trail_upgrade: bool = false    # Right upgrade: leave burning trail
@@ -126,7 +129,11 @@ func _deal_beam_damage() -> void:
 		return
 	
 	var enemies := tree.get_nodes_in_group("enemies")
-	var damage_this_tick := int(damage_per_second * damage_tick_interval)
+	
+	# Calculate level-scaled damage (+50% per level)
+	var level_mult := 1.0 + (player_level - 1) * 0.5
+	var scaled_dps := damage_per_second * level_mult
+	var damage_this_tick := int(scaled_dps * damage_tick_interval)
 	
 	for enemy in enemies:
 		if not is_instance_valid(enemy) or not enemy is Node2D:

@@ -308,11 +308,20 @@ var _overkill_damage: int = 0  # Track excess damage for overkill effect
 const DEATH_ANTICIPATION_TIME := 0.12  # Longer freeze before death (MORE NOTICEABLE)
 
 func take_damage(dmg, is_crit: bool = false, hit_direction: Vector2 = Vector2.ZERO, from_burst: bool = false):
+	# Don't take damage if already dying
+	if _death_anticipation:
+		return
+	
 	# Apply vulnerability debuff if present (from Scarlet's Expose Weakness talent)
 	var actual_dmg: int = dmg
 	if has_meta("damage_vulnerability"):
 		var vuln_mult: float = get_meta("damage_vulnerability")
 		actual_dmg = int(dmg * vuln_mult)
+	
+	# Apply super boss aura damage reduction (Goddess Fall mode)
+	if has_meta("super_boss_damage_reduction"):
+		var reduction: float = get_meta("super_boss_damage_reduction")
+		actual_dmg = int(actual_dmg * (1.0 - reduction))
 	
 	hp -= actual_dmg
 	hp_bar.value = hp
@@ -365,6 +374,8 @@ func _process_death_anticipation(delta: float) -> void:
 		_death_anticipation = false
 		call_deferred("die")
 
+var _is_dead: bool = false  # Prevent multiple die() calls
+
 func _process_knockback_visual(_delta: float) -> void:
 	# Decay knockback offset with spring physics
 	_knockback_offset *= 0.8
@@ -392,6 +403,11 @@ func set_can_shoot(enabled: bool) -> void:
 	_can_shoot = enabled
 
 func die():
+	# Prevent multiple die() calls
+	if _is_dead:
+		return
+	_is_dead = true
+	
 	# Calculate overkill multiplier (3x damage = overkill)
 	var overkill_multiplier := 1.0
 	var is_overkill: bool = _overkill_damage >= (max_hp * 2)  # 3x total = 2x excess

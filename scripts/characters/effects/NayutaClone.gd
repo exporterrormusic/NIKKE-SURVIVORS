@@ -17,6 +17,9 @@ const SlashScene = preload("res://scenes/effects/Slash.tscn")
 const MissileScene = preload("res://scenes/effects/Missile.tscn")
 const BulletScene = preload("res://scenes/effects/Bullet.tscn")
 
+# Character registry for stats
+var _registry: CharacterRegistry = null
+
 # Core properties
 var owner_player: Node2D = null
 var weapon_type: String = "smg"  # smg, sword, rocket, sniper
@@ -24,6 +27,7 @@ var max_hp: int = 5
 var current_hp: int = 5
 var attack_multiplier: float = 0.5
 var should_heal_on_death: bool = false
+var player_level: int = 1  # Player level for damage/HP scaling
 
 # Movement
 var move_speed: float = 180.0
@@ -36,8 +40,8 @@ var attack_cooldown: float = 0.08
 var _attack_timer: float = 0.0
 
 # Ammo (for ranged weapons)
-var ammo: int = 45
-var max_ammo: int = 45
+var ammo: int = 30
+var max_ammo: int = 30
 var _reload_timer: float = 0.0
 var reload_time: float = 2.0
 var _is_reloading: bool = false
@@ -55,9 +59,9 @@ var _death_duration: float = 1.0
 # Health bar
 var _health_bar_bg: ColorRect = null
 var _health_bar_fill: ColorRect = null
-var _health_bar_label: Label = null
+var _health_bar_label: Node2D = null  # Now uses SummonHPLabel script for world-space text
 const HEALTH_BAR_WIDTH := 40.0
-const HEALTH_BAR_HEIGHT := 5.0
+const HEALTH_BAR_HEIGHT := 8.0
 const HEALTH_BAR_OFFSET_Y := -45.0
 
 # SMG burst fire control (2s shoot, 2s pause)
@@ -69,15 +73,15 @@ const SMG_PAUSE_DURATION := 2.0
 # Death sparkles
 var _sparkles: Array = []  # Array of {pos, vel, life}
 var _sparkles_traveling: bool = false
-var _sparkle_travel_timer: float = 0.0
 
 func _ready() -> void:
 	z_index = 9
 	add_to_group("nayuta_clones")
 	add_to_group("player_allies")
 	
-	# Collision setup - layer 1 so enemies can hit us like player
-	collision_layer = 1  # Same as player so enemies can damage us
+	# Collision setup - use layer 8 (allies) so we don't collide with player
+	# Layer 1 = player, Layer 4 = enemies, Layer 8 = allies
+	collision_layer = 8  # Allies layer - not player, so no physical collision with player
 	collision_mask = 4   # Only collide with enemies
 	
 	# Create visual components
@@ -178,19 +182,16 @@ func _create_health_bar() -> void:
 	_health_bar_fill.z_index = 101
 	add_child(_health_bar_fill)
 	
-	# HP text label (centered inside the bar)
-	_health_bar_label = Label.new()
-	_health_bar_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_health_bar_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_health_bar_label.position = Vector2(-HEALTH_BAR_WIDTH / 2.0, HEALTH_BAR_OFFSET_Y)
-	_health_bar_label.size = Vector2(HEALTH_BAR_WIDTH, HEALTH_BAR_HEIGHT)
-	_health_bar_label.add_theme_font_size_override("font_size", 7)
-	_health_bar_label.add_theme_color_override("font_color", Color.WHITE)
-	_health_bar_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 1.0))
-	_health_bar_label.add_theme_constant_override("shadow_offset_x", 1)
-	_health_bar_label.add_theme_constant_override("shadow_offset_y", 1)
-	_health_bar_label.z_index = 102
-	add_child(_health_bar_label)
+	# HP text label using custom draw script (like EnemyHPLabel) for world-space rendering
+	var hp_label_script = load("res://scripts/effects/SummonHPLabel.gd")
+	if hp_label_script:
+		_health_bar_label = Node2D.new()
+		_health_bar_label.set_script(hp_label_script)
+		_health_bar_label.z_index = 102
+		# Position at center of health bar
+		_health_bar_label.position = Vector2(0, HEALTH_BAR_OFFSET_Y + HEALTH_BAR_HEIGHT / 2.0)
+		add_child(_health_bar_label)
+		_health_bar_label.setup(self)
 
 func _update_health_bar() -> void:
 	if _health_bar_fill:
@@ -205,34 +206,41 @@ func _update_health_bar() -> void:
 		else:
 			_health_bar_fill.color = Color(1.0, 0.3, 0.3, 1.0)  # Red
 	
-	if _health_bar_label:
-		_health_bar_label.text = "%d/%d" % [current_hp, max_hp]
+	if _health_bar_label and _health_bar_label.has_method("update_values"):
+		_health_bar_label.update_values(current_hp, max_hp)
 
 func _configure_weapon() -> void:
+	# Get registry for character stats
+	_registry = CharacterRegistry.get_instance()
+	
 	# Clone weapons are 3x slower than player versions (except SMG which uses burst fire)
+	# Ammo/reload values come from registry
 	match weapon_type:
 		"smg":
+			var nayuta_data := _registry.get_character("nayuta")
 			attack_range = 350.0
 			attack_cooldown = 0.08  # Normal fire rate, burst system handles pauses
-			max_ammo = 45
+			max_ammo = nayuta_data.ammo_capacity if nayuta_data else 30
 			ammo = max_ammo
-			reload_time = 2.0
+			reload_time = nayuta_data.reload_time if nayuta_data else 2.0
 		"sword":
 			attack_range = 100.0
 			attack_cooldown = 0.9  # 0.3 * 3
 			max_ammo = -1  # Melee, no ammo
 		"rocket":
+			var rapunzel_data := _registry.get_character("rapunzel")
 			attack_range = 450.0
 			attack_cooldown = 1.5  # 0.5 * 3
-			max_ammo = 4
+			max_ammo = rapunzel_data.ammo_capacity if rapunzel_data else 4
 			ammo = max_ammo
-			reload_time = 3.0
+			reload_time = rapunzel_data.reload_time if rapunzel_data else 3.0
 		"sniper":
+			var snow_white_data := _registry.get_character("snow_white")
 			attack_range = 600.0
 			attack_cooldown = 1.05  # 0.35 * 3
-			max_ammo = 7
+			max_ammo = snow_white_data.ammo_capacity if snow_white_data else 7
 			ammo = max_ammo
-			reload_time = 1.5
+			reload_time = snow_white_data.reload_time if snow_white_data else 1.5
 
 func _process(delta: float) -> void:
 	_glow_time += delta
@@ -281,7 +289,7 @@ func _process(delta: float) -> void:
 	
 	queue_redraw()
 
-func _physics_process(delta: float) -> void:
+func _physics_process(_delta: float) -> void:
 	if _spawn_timer > 0 or _is_dying:
 		velocity = Vector2.ZERO
 		return
@@ -427,12 +435,16 @@ func _attack_smg(direction: Vector2) -> void:
 	bullet.velocity = direction * 900.0
 	bullet.rotation = direction.angle()
 	bullet.owner_node = self
-	bullet.base_damage = maxi(1, int(2 * attack_multiplier))
+	# Scale damage with player level (base 2 damage * attack_mult * level scaling)
+	var level_mult := 1.0 + (player_level - 1) * 0.15  # +15% per level
+	bullet.base_damage = maxi(1, int(2 * attack_multiplier * level_mult))
 
 func _attack_sword(direction: Vector2) -> void:
 	var slash = SlashScene.instantiate()
 	slash.rotation = direction.angle()
-	slash.base_damage = maxi(1, int(10 * attack_multiplier))
+	# Scale damage with player level
+	var level_mult := 1.0 + (player_level - 1) * 0.15  # +15% per level
+	slash.base_damage = maxi(1, int(10 * attack_multiplier * level_mult))
 	add_child(slash)
 	slash.position = Vector2.ZERO
 
@@ -457,7 +469,9 @@ func _attack_sniper(direction: Vector2) -> void:
 	bullet.velocity = direction * 1650.0
 	bullet.rotation = direction.angle()
 	bullet.owner_node = self
-	bullet.base_damage = maxi(1, int(15 * attack_multiplier))
+	# Scale damage with player level
+	var level_mult := 1.0 + (player_level - 1) * 0.15  # +15% per level
+	bullet.base_damage = maxi(1, int(15 * attack_multiplier * level_mult))
 	bullet.pierce_all = true
 
 func _apply_separation() -> void:
@@ -626,13 +640,14 @@ func _die() -> void:
 	
 	clone_died.emit()
 
-func initialize(player: Node2D, weapon: String, hp: int, atk_mult: float, heal_on_death: bool) -> void:
+func initialize(player: Node2D, weapon: String, hp: int, atk_mult: float, heal_on_death: bool, level: int = 1) -> void:
 	owner_player = player
 	weapon_type = weapon
 	max_hp = hp
 	current_hp = hp
 	attack_multiplier = atk_mult
 	should_heal_on_death = heal_on_death
+	player_level = level
 	
 	# Reconfigure weapon stats after setting weapon_type
 	_configure_weapon()

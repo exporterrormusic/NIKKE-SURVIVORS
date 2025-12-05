@@ -10,7 +10,7 @@ const ATTACK_START_DELAY := 3.0  # Delay before boss starts attacking
 
 # Missile settings
 const MISSILES_PER_SIDE := 4
-const MISSILE_SPAWN_OFFSET := 100.0  # Distance from boss to spawn missiles
+const MISSILE_SPAWN_OFFSET := 30.0  # Distance from boss to spawn missiles (close to body)
 
 # Beam settings
 const BEAM_CHARGE_TIME := 2.0
@@ -80,6 +80,10 @@ func _fire_missile_barrage() -> void:
 	var to_player := (_player.global_position - _boss.global_position).normalized()
 	var perpendicular := Vector2(-to_player.y, to_player.x)  # 90 degree rotation
 	
+	# Calculate total missiles and reset index for spread distribution
+	_total_missiles_in_volley = MISSILES_PER_SIDE * 2  # Both sides
+	_missile_index = 0
+	
 	# Spawn missiles on both sides
 	for side in [-1, 1]:
 		var side_offset: Vector2 = perpendicular * float(side) * MISSILE_SPAWN_OFFSET * _boss.scale.x
@@ -92,6 +96,9 @@ func _fire_missile_barrage() -> void:
 			# Create missile
 			_spawn_missile(spawn_pos, i * 0.15)  # Stagger launch times
 
+var _missile_index := 0
+var _total_missiles_in_volley := 0
+
 func _spawn_missile(spawn_pos: Vector2, delay: float) -> void:
 	# Create missile node
 	var missile := Node2D.new()
@@ -99,9 +106,10 @@ func _spawn_missile(spawn_pos: Vector2, delay: float) -> void:
 	missile.name = "BossMissile"
 	missile.global_position = spawn_pos
 	
-	# Initialize with player reference and delay
+	# Initialize with player reference, delay, and spread index
 	if missile.has_method("initialize"):
-		missile.initialize(_player, delay)
+		missile.initialize(_player, delay, _missile_index, _total_missiles_in_volley)
+	_missile_index += 1
 	
 	# Add to scene (same level as boss)
 	if _boss.get_parent():

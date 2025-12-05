@@ -11,7 +11,7 @@ extends Node
 ##
 ## Access via autoload: GameState.set_selected_characters([...])
 
-const LEADERBOARD_PATH := "user://leaderboard.cfg"
+const SaveManagerScript = preload("res://scripts/systems/SaveManager.gd")
 
 # Selected characters for the current run (character registry indices)
 # Default: Cecil (8), Nayuta (9), Marian (4)
@@ -42,18 +42,33 @@ var pristine_rapture_cores: int = 0
 var stages_cleared: Array[String] = []
 var current_stage_id: String = "stage_1"
 
+# --- Map Selection ---
+# Selected biome and time of day from the stage selector
+var selected_biome: String = "sakura_grove"
+var selected_time: String = "day"
+
+# --- Difficulty Settings ---
+# Difficulty multiplier (1-100): multiplies enemy HP and boss core drops
+var difficulty_multiplier: int = 1
+# Goddess Fall mode: enhanced enemy abilities, boss enrage timer
+var goddess_fall_mode: bool = false
+
 
 func _ready() -> void:
 	_load_leaderboard()
 	_load_stage_progress()
 
-
 # --- Current Run Tracking ---
 
 ## Add score during gameplay (call when enemy dies)
 func add_score(points: int) -> void:
-	current_score += points
+	# Multiply score by difficulty multiplier
+	var multiplied_points: int = points * difficulty_multiplier
+	current_score += multiplied_points
 	current_kills += 1
+	
+	# Track kill for achievement - get current character ID
+	_track_kill_for_achievement()
 
 
 ## Update current wave (call from WaveDirector)
@@ -90,16 +105,20 @@ func record_run_result(character_id: String) -> void:
 		_leaderboard_data[character_id] = {
 			"best_score": 0,
 			"best_wave": 0,
+			"best_difficulty": 1,
+			"best_goddess_fall": false,
 			"total_runs": 0
 		}
 	
 	var entry: Dictionary = _leaderboard_data[character_id]
 	entry["total_runs"] = entry.get("total_runs", 0) + 1
 	
-	# Update best score if this run was better
+	# Update best score if this run was better (also store the difficulty/goddess_fall settings)
 	if current_score > entry.get("best_score", 0):
 		entry["best_score"] = current_score
-		print("[GameState] New best score for %s: %d" % [character_id, current_score])
+		entry["best_difficulty"] = difficulty_multiplier
+		entry["best_goddess_fall"] = goddess_fall_mode
+		print("[GameState] New best score for %s: %d (difficulty=%d, goddess_fall=%s)" % [character_id, current_score, difficulty_multiplier, goddess_fall_mode])
 	
 	# Update best wave if this run went further
 	if current_wave > entry.get("best_wave", 0):
@@ -138,6 +157,8 @@ func get_leaderboard_entries(max_count: int = 10) -> Array:
 			"code": char_id,
 			"best_score": data.get("best_score", 0),
 			"best_wave": data.get("best_wave", 0),
+			"best_difficulty": data.get("best_difficulty", 1),
+			"best_goddess_fall": data.get("best_goddess_fall", false),
 			"total_runs": data.get("total_runs", 0)
 		})
 	
@@ -155,6 +176,8 @@ func get_leaderboard_entries(max_count: int = 10) -> Array:
 					"code": char_id,
 					"best_score": 0,
 					"best_wave": 0,
+					"best_difficulty": 1,
+					"best_goddess_fall": false,
 					"total_runs": 0
 				})
 	
@@ -208,6 +231,12 @@ func spend_pristine_cores(amount: int) -> bool:
 func get_pristine_cores() -> int:
 	return pristine_rapture_cores
 
+## Set Pristine Rapture Cores to a specific value (for debug/reset)
+func set_pristine_cores(amount: int) -> void:
+	pristine_rapture_cores = amount
+	print("[GameState] Set Pristine Rapture Cores to: %d" % pristine_rapture_cores)
+	_save_leaderboard()
+
 
 # --- Persistence ---
 
@@ -223,7 +252,7 @@ func _save_leaderboard() -> void:
 		config.set_value("characters", char_id + "_best_wave", data.get("best_wave", 0))
 		config.set_value("characters", char_id + "_total_runs", data.get("total_runs", 0))
 	
-	var err := config.save(LEADERBOARD_PATH)
+	var err := config.save(SaveManagerScript.LEADERBOARD_PATH)
 	if err == OK:
 		print("[GameState] Leaderboard saved")
 	else:
@@ -232,7 +261,7 @@ func _save_leaderboard() -> void:
 
 func _load_leaderboard() -> void:
 	var config := ConfigFile.new()
-	var err := config.load(LEADERBOARD_PATH)
+	var err := config.load(SaveManagerScript.LEADERBOARD_PATH)
 	
 	if err != OK:
 		print("[GameState] No leaderboard file found, starting fresh")
@@ -341,8 +370,6 @@ func reset_selection() -> void:
 
 # --- Stage Progress ---
 
-const STAGE_PROGRESS_PATH := "user://stage_progress.cfg"
-
 ## Mark a stage as cleared (unlocks next stage)
 func mark_stage_cleared(stage_id: String) -> void:
 	if stage_id not in stages_cleared:
@@ -382,14 +409,14 @@ func get_current_stage() -> String:
 func _save_stage_progress() -> void:
 	var config := ConfigFile.new()
 	config.set_value("progress", "stages_cleared", stages_cleared)
-	var err := config.save(STAGE_PROGRESS_PATH)
+	var err := config.save(SaveManagerScript.STAGE_PROGRESS_PATH)
 	if err != OK:
 		push_warning("[GameState] Failed to save stage progress: %d" % err)
 
 ## Load stage progress from disk
 func _load_stage_progress() -> void:
 	var config := ConfigFile.new()
-	var err := config.load(STAGE_PROGRESS_PATH)
+	var err := config.load(SaveManagerScript.STAGE_PROGRESS_PATH)
 	if err == OK:
 		var loaded = config.get_value("progress", "stages_cleared", [])
 		stages_cleared.clear()
@@ -398,5 +425,21 @@ func _load_stage_progress() -> void:
 		print("[GameState] Loaded stage progress: %s" % str(stages_cleared))
 	else:
 		stages_cleared.clear()
+
+
+# --- Achievement Tracking Helpers ---
+
+## Track kill for the current active character (called from add_score)
+func _track_kill_for_achievement() -> void:
+	_ensure_registry()
+	if not _character_registry:
+		return
+	
+	# Get the character ID from the current player character index
+	var char_ids: Array = _character_registry.get_all_character_ids()
+	if player_character_index >= 0 and player_character_index < char_ids.size():
+		var char_id: String = char_ids[player_character_index]
+		if has_node("/root/AchievementManager"):
+			get_node("/root/AchievementManager").on_enemy_killed(char_id)
 		print("[GameState] No stage progress found, starting fresh")
 	player_character_index = 9  # Nayuta

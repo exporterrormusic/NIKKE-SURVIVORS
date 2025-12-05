@@ -298,6 +298,20 @@ func shoot():
 		rocket.owner_node = get_parent().get_node("Player")
 		rocket.scale = Vector2(0.5, 0.5)
 		rocket.ground_fire_enabled = false
+		rocket.homing_enabled = true  # Enable homing for turret rockets
+		rocket.homing_strength = 10.0  # Strong homing
+		# Set proper damage values for turret rockets with level scaling
+		# Base: 2 damage, 2 explosion damage, scales with player level
+		var player_node = get_parent().get_node_or_null("Player")
+		if player_node and player_node.has_method("calculate_damage"):
+			# Use player's calculate_damage which includes level scaling
+			rocket.damage = player_node.calculate_damage(2)
+			rocket.explosion_damage = player_node.calculate_damage(2)
+		else:
+			# Fallback if player not found
+			rocket.damage = 2
+			rocket.explosion_damage = 2
+		rocket.explosion_radius = 60.0  # Smaller explosion radius
 	
 	# Check if out of ammo after firing
 	if ammo <= 0:

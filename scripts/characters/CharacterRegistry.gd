@@ -16,6 +16,9 @@ var _characters: Dictionary = {}
 # Character order (for UI)
 var _character_order: Array[String] = []
 
+# Characters that start unlocked by default (source of truth)
+const DEFAULT_UNLOCKED: Array[String] = ["snow_white", "scarlet", "rapunzel"]
+
 # Controller scripts
 const CONTROLLER_SCRIPTS = {
 	"scarlet": preload("res://scripts/characters/ScarletController.gd"),
@@ -107,7 +110,7 @@ func _load_all_characters() -> void:
 		"burst_color": Color(1.0, 0.95, 0.5),
 		"base_speed": 310.0,
 		"base_hp": 12,
-		"base_damage": 15.0,
+		"base_damage": 10.0,
 		"crit_chance": 0.10,  # 10% crit - support focused
 		"weapon_type": 2,  # Launcher
 		"ammo_capacity": 4,
@@ -138,7 +141,7 @@ func _load_all_characters() -> void:
 		"base_damage": 2.0,
 		"crit_chance": 0.20,  # 20% crit - clone synergy
 		"weapon_type": 4,  # Dual SMG
-		"ammo_capacity": 45,
+		"ammo_capacity": 30,
 		"reload_time": 2.0,
 		"attack_cooldown": 0.08,
 		"projectile_speed": 900.0,
@@ -200,7 +203,7 @@ func _load_all_characters() -> void:
 		"projectile_speed": 1100.0,
 		"special_name": "Rapture Queen",
 		"special_description": "Charms normal enemies in area to fight for you. 10s cooldown.",
-		"special_upgrade1": "Queen Gene: Charm AoE +50/100/200%.",
+		"special_upgrade1": "Queen Gene: AoE +50/100/200%. Lv1: +Tanks. Lv2: +Elites. Lv3: Stun Bosses.",
 		"special_upgrade2": "Royal Dominion: -2s cooldown per level. At max: 4s cooldown.",
 		"burst_name": "New World",
 		"burst_description": "5 second aimable purple laser beam. Follow mouse to aim.",
@@ -280,7 +283,7 @@ func _load_all_characters() -> void:
 		"base_damage": 2.0,
 		"crit_chance": 0.15,  # 15% crit
 		"weapon_type": 4,  # Dual SMG
-		"ammo_capacity": 45,
+		"ammo_capacity": 30,
 		"reload_time": 2.0,
 		"attack_cooldown": 0.08,
 		"projectile_speed": 900.0,
@@ -308,7 +311,7 @@ func _load_all_characters() -> void:
 		"base_damage": 2.0,
 		"crit_chance": 0.15,  # 15% crit
 		"weapon_type": 4,  # Dual SMG
-		"ammo_capacity": 45,
+		"ammo_capacity": 30,
 		"reload_time": 2.0,
 		"attack_cooldown": 0.08,
 		"projectile_speed": 900.0,
@@ -402,3 +405,58 @@ func get_burst_sound(id: String) -> AudioStream:
 	if data:
 		return data.get_burst_sound()
 	return null
+
+
+## Get all character display names in order
+func get_all_character_names() -> Array[String]:
+	var names: Array[String] = []
+	for id in _character_order:
+		var data = _characters.get(id)
+		if data:
+			names.append(data.display_name)
+		else:
+			names.append(id)
+	return names
+
+
+## Get character display name by ID
+func get_character_name(id: String) -> String:
+	var data = get_character(id)
+	if data:
+		return data.display_name
+	return id
+
+
+## Get character display name by index
+func get_character_name_by_index(index: int) -> String:
+	var data = get_character_by_index(index)
+	if data:
+		return data.display_name
+	return ""
+
+
+## Get all portrait paths in order
+func get_all_portrait_paths() -> Array[String]:
+	var paths: Array[String] = []
+	for id in _character_order:
+		var data = _characters.get(id)
+		if data:
+			var folder = id.replace("_", "-")
+			paths.append("res://assets/characters/%s/%s" % [folder, data.portrait_path])
+	return paths
+
+
+## Get portrait path by ID
+func get_portrait_path(id: String) -> String:
+	var data = get_character(id)
+	if data:
+		var folder = id.replace("_", "-")
+		return "res://assets/characters/%s/%s" % [folder, data.portrait_path]
+	return ""
+
+
+## Get character ID by index
+func get_character_id(index: int) -> String:
+	if index >= 0 and index < _character_order.size():
+		return _character_order[index]
+	return ""

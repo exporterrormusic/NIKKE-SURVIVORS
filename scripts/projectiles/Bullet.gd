@@ -5,65 +5,98 @@ extends Area2D
 var velocity = Vector2.ZERO
 var lifetime: float = 0.0
 var owner_node: Node = null
+var start_position: Vector2 = Vector2.ZERO
+var _start_position_set: bool = false  # Track if start position has been captured
 
 # If true, bullet will pierce every damageable target it hits (doesn't queue_free on hit)
 @export var pierce_all: bool = false
 # Optional limited pierce count; 0 = unlimited when pierce_all is true
 @export var pierce_count: int = 0
 
+# Max range - bullet despawns after traveling this distance (0 = no limit, use lifetime)
+@export var max_range: float = 0.0
+
 # Critical hit settings
-const CRIT_CHANCE := 0.15  # 15% chance to crit
+const BASE_CRIT_CHANCE := 0.15  # 15% base chance to crit
 const CRIT_MULTIPLIER := 2.0  # 2x damage on crit
 var base_damage := 3
 
 var _hit_nodes: Array = []
 
+# Default max ranges by weapon type
+const RANGE_SNIPER := 0.0  # Unlimited (despawns off-screen via lifetime)
+const RANGE_ASSAULT := 1100.0  # Slightly past camera edge
+const RANGE_SMG := 750.0  # 2/3 screen width
+const RANGE_SHOTGUN := 750.0  # 2/3 screen width
+const RANGE_MINIGUN := 1100.0  # Like assault rifle
+
+# Performance: disable dynamic lights on bullets (they're expensive!)
+const ENABLE_BULLET_LIGHTS := false
+
 func _ready():
 	connect("body_entered", Callable(self, "_on_body_entered"))
+	# Don't set start_position here - bullet isn't positioned yet
+	# It will be set on first physics frame
 	
-	# Use unshaded material with brightness boost for bloom - preserves sprite color
-	var shader_mat = ShaderMaterial.new()
-	shader_mat.shader = _create_glow_shader()
-	shader_mat.set_shader_parameter("brightness_boost", 1.4)  # Boost brightness for bloom
-	$Sprite2D.material = shader_mat
+	# Auto-detect max range based on bullet type if not already set
+	if max_range == 0.0:
+		_auto_detect_range()
 	
-	# Add dynamic point light for real-time lighting
-	var light = PointLight2D.new()
-	light.name = "BulletLight"
-	light.color = Color(1.0, 0.95, 0.7)  # Warm bullet glow
-	light.energy = 0.4
-	light.texture = _create_light_texture()
-	light.texture_scale = 0.15
-	light.shadow_enabled = false  # Bullets don't need shadows
-	add_child(light)
+	# Use CACHED shader material for performance (no new Shader.new() per bullet!)
+	$Sprite2D.material = ShaderCache.get_bullet_glow_material()
+	
+	# Dynamic lights are VERY expensive with many bullets - disabled by default
+	if ENABLE_BULLET_LIGHTS:
+		var light = PointLight2D.new()
+		light.name = "BulletLight"
+		light.color = Color(1.0, 0.95, 0.7)  # Warm bullet glow
+		light.energy = 0.4
+		light.texture = _create_light_texture()
+		light.texture_scale = 0.15
+		light.shadow_enabled = false
+		add_child(light)
+
+func _auto_detect_range() -> void:
+	# Detect bullet type from scene/node name
+	var bullet_name := name.to_lower()
+	
+	if "sniper" in bullet_name or "snow" in bullet_name:
+		max_range = RANGE_SNIPER  # Sniper has no limit
+	elif "smg" in bullet_name:
+		max_range = RANGE_SMG
+	elif "shotgun" in bullet_name or "pellet" in bullet_name or "kilo" in bullet_name:
+		max_range = RANGE_SHOTGUN
+	elif "assault" in bullet_name or "ar" in bullet_name:
+		max_range = RANGE_ASSAULT
+	elif "minigun" in bullet_name or "marian" in bullet_name or "crown" in bullet_name:
+		max_range = RANGE_MINIGUN
+	else:
+		# Default: assault rifle range for unknown bullets
+		max_range = RANGE_ASSAULT
 
 func _create_light_texture() -> Texture2D:
 	# Use cached texture for performance
 	return TextureCache.get_light_texture_64()
 
-# Unshaded shader that boosts brightness while preserving sprite colors
-func _create_glow_shader() -> Shader:
-	var shader = Shader.new()
-	shader.code = """
-shader_type canvas_item;
-render_mode unshaded;
-
-uniform float brightness_boost : hint_range(1.0, 3.0) = 1.4;
-
-void fragment() {
-	vec4 tex = texture(TEXTURE, UV);
-	// Boost RGB while preserving color ratios for bloom
-	COLOR = vec4(tex.rgb * brightness_boost, tex.a);
-}
-"""
-	return shader
-
 func _physics_process(delta):
+	# Capture start position on first frame (after bullet has been positioned)
+	if not _start_position_set:
+		start_position = global_position
+		_start_position_set = true
+	
 	global_position += velocity * delta
 	
 	lifetime += delta
 	if lifetime > 5.0:
 		queue_free()
+		return
+	
+	# Check max range
+	if max_range > 0.0:
+		var traveled := global_position.distance_to(start_position)
+		if traveled >= max_range:
+			queue_free()
+			return
 
 func _on_body_entered(body):
 	# Don't damage owner or player if owner is player/turret
@@ -84,8 +117,12 @@ func _on_body_entered(body):
 	if _hit_nodes.has(body):
 		return
 
-	# Roll for critical hit
-	var is_crit := randf() < CRIT_CHANCE
+	# Roll for critical hit - base chance + shop bonus
+	var crit_chance := BASE_CRIT_CHANCE
+	var player = get_tree().get_first_node_in_group("player")
+	if player and player.has_method("get_crit_chance"):
+		crit_chance += player.get_crit_chance()
+	var is_crit := randf() < crit_chance
 	var damage := base_damage
 	if is_crit:
 		damage = int(base_damage * CRIT_MULTIPLIER)

@@ -8,6 +8,11 @@ class_name KiloPellet
 var velocity := Vector2.ZERO
 var lifetime := 0.0
 var owner_node: Node = null
+var start_position := Vector2.ZERO
+var _start_position_set := false  # Track if start position has been captured
+
+# Max range for shotgun pellets (2/3 screen width)
+const MAX_RANGE := 750.0
 
 @export var pierce_all := false
 @export var pierce_count := 0
@@ -48,6 +53,7 @@ const BASE_RADIUS := 10.0  # Was 6.0, now much larger
 
 func _ready() -> void:
 	connect("body_entered", Callable(self, "_on_body_entered"))
+	# Don't set start_position here - pellet isn't positioned yet
 	
 	# Register for line drawing
 	if is_special:
@@ -230,11 +236,22 @@ func _draw_line_to_pellet(pellet: KiloPellet) -> void:
 	draw_line(Vector2.ZERO, local_pos, core_color, 3.0)
 
 func _physics_process(delta: float) -> void:
+	# Capture start position on first frame (after pellet has been positioned)
+	if not _start_position_set:
+		start_position = global_position
+		_start_position_set = true
+	
 	global_position += velocity * delta
 	
 	lifetime += delta
 	if lifetime > 3.0:  # Shorter lifetime for shotgun pellets
 		queue_free()
+		return
+	
+	# Check max range (750px for shotgun)
+	if global_position.distance_to(start_position) >= MAX_RANGE:
+		queue_free()
+		return
 	
 	# Always redraw for pulsing effect and line connections
 	if is_special or is_burst:

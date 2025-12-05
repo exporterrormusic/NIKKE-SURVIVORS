@@ -31,7 +31,6 @@ signal reload_finished()
 signal special_cooldown_changed(progress: float)
 signal burst_activated()
 signal burst_ended()
-signal damage_dealt(amount: float, target: Node2D)
 
 ## Initialize the controller with player reference and character data
 func initialize(p_player: Node2D, p_data: Resource) -> void:  # CharacterData

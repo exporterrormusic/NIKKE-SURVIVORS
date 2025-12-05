@@ -117,7 +117,11 @@ func _apply_damage() -> void:
 		if not (enemy is Node2D):
 			continue
 		var distance := (enemy as Node2D).global_position.distance_to(global_position)
-		if distance <= radius:
+		# Account for enemy scale - larger enemies (bosses/elites) have bigger hitboxes
+		var enemy_scale: float = enemy.scale.x if enemy.scale.x > 1.0 else 1.0
+		var enemy_hitbox_bonus: float = 30.0 * (enemy_scale - 1.0)
+		var effective_radius: float = radius + enemy_hitbox_bonus
+		if distance <= effective_radius:
 			var hit_direction := ((enemy as Node2D).global_position - global_position).normalized()
 			if enemy.has_method("take_damage"):
 				# Enemy.take_damage takes (damage, is_critical, direction)

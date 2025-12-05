@@ -83,12 +83,12 @@ func _refresh_entries() -> void:
 	
 	var rank := 1
 	for entry in left_entries:
-		var control := _create_entry_control(entry, rank)
+		var control := _create_entry_control(entry, rank, true)
 		_left_column.add_child(control)
 		rank += 1
 	
 	for entry in right_entries:
-		var control := _create_entry_control(entry, rank)
+		var control := _create_entry_control(entry, rank, false)
 		_right_column.add_child(control)
 		rank += 1
 	
@@ -118,13 +118,44 @@ func _update_total_score_label() -> void:
 
 
 func _format_number(value: int) -> String:
-	var str_value := str(value)
+	# Abbreviate large numbers with 3 significant digits: 102K, 11.3M, 1.23B, etc.
+	if value >= 1000000000:  # Billions
+		var billions := float(value) / 1000000000.0
+		if billions >= 100:
+			return "%dB" % int(billions)
+		elif billions >= 10:
+			return "%.1fB" % billions
+		else:
+			return "%.2fB" % billions
+	elif value >= 1000000:  # Millions
+		var millions := float(value) / 1000000.0
+		if millions >= 100:
+			return "%dM" % int(millions)
+		elif millions >= 10:
+			return "%.1fM" % millions
+		else:
+			return "%.2fM" % millions
+	elif value >= 1000:  # Thousands
+		var thousands := float(value) / 1000.0
+		if thousands >= 100:
+			return "%dK" % int(thousands)
+		elif thousands >= 10:
+			return "%.1fK" % thousands
+		else:
+			return "%.2fK" % thousands
+	else:
+		return str(value)
+
+
+func _format_full_number(value: int) -> String:
+	# Format number with comma separators: 1,234,567
+	var str_val := str(value)
 	var result := ""
 	var count := 0
-	for i in range(str_value.length() - 1, -1, -1):
+	for i in range(str_val.length() - 1, -1, -1):
 		if count > 0 and count % 3 == 0:
 			result = "," + result
-		result = str_value[i] + result
+		result = str_val[i] + result
 		count += 1
 	return result
 
@@ -138,13 +169,14 @@ func _clear_columns() -> void:
 			child.queue_free()
 
 
-func _create_entry_control(entry: Dictionary, rank: int) -> Control:
+func _create_entry_control(entry: Dictionary, rank: int, is_left_column: bool = true) -> Control:
 	var wrapper := MarginContainer.new()
 	wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	wrapper.add_theme_constant_override("margin_left", 0)
-	wrapper.add_theme_constant_override("margin_right", 0)
-	wrapper.add_theme_constant_override("margin_top", 6)
-	wrapper.add_theme_constant_override("margin_bottom", 6)
+	# Add outer padding - left margin for left column, right margin for right column
+	wrapper.add_theme_constant_override("margin_left", 16 if is_left_column else 0)
+	wrapper.add_theme_constant_override("margin_right", 16 if not is_left_column else 0)
+	wrapper.add_theme_constant_override("margin_top", 10)
+	wrapper.add_theme_constant_override("margin_bottom", 10)
 	
 	var panel := Panel.new()
 	panel.custom_minimum_size = Vector2(0, 120)
@@ -263,13 +295,25 @@ func _create_name_block(entry: Dictionary) -> Control:
 	wrapper.size_flags_stretch_ratio = 2.0
 	
 	var name_label := Label.new()
-	name_label.text = String(entry.get("display_name", ""))
+	var display_name: String = String(entry.get("display_name", ""))
+	name_label.text = display_name
 	if _pretendard_bold:
 		name_label.add_theme_font_override("font", _pretendard_bold)
-	name_label.add_theme_font_size_override("font_size", 30)
+	
+	# Scale font size based on name length to prevent clipping
+	var font_size := 42
+	if display_name.length() > 16:
+		font_size = 28
+	elif display_name.length() > 12:
+		font_size = 34
+	elif display_name.length() > 8:
+		font_size = 38
+	
+	name_label.add_theme_font_size_override("font_size", font_size)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	name_label.clip_text = true
+	name_label.clip_text = false
+	name_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	wrapper.add_child(name_label)
@@ -306,15 +350,17 @@ func _create_score_block(entry: Dictionary) -> Control:
 	var best_score := int(entry.get("best_score", 0))
 	if best_score > 0:
 		value_label.text = _format_number(best_score)
+		value_label.tooltip_text = _format_full_number(best_score)
 		value_label.modulate = VALUE_COLOR
 	else:
 		value_label.text = "NO DATA"
 		value_label.modulate = MUTED_VALUE_COLOR
 	if _futura_bold:
 		value_label.add_theme_font_override("font", _futura_bold)
-	value_label.add_theme_font_size_override("font_size", 32)
+	value_label.add_theme_font_size_override("font_size", 40)
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	value_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	value_label.mouse_filter = Control.MOUSE_FILTER_PASS  # Enable tooltip
 	container.add_child(value_label)
 	
 	return wrapper
@@ -322,7 +368,7 @@ func _create_score_block(entry: Dictionary) -> Control:
 
 func _create_wave_block(entry: Dictionary) -> Control:
 	var wrapper := MarginContainer.new()
-	wrapper.custom_minimum_size = Vector2(120, 0)
+	wrapper.custom_minimum_size = Vector2(140, 0)
 	wrapper.add_theme_constant_override("margin_left", 12)
 	wrapper.add_theme_constant_override("margin_right", 16)
 	wrapper.add_theme_constant_override("margin_top", 12)
@@ -345,20 +391,42 @@ func _create_wave_block(entry: Dictionary) -> Control:
 	label.modulate = LABEL_COLOR
 	container.add_child(label)
 	
+	# HBox for wave value and goddess fall badge
+	var value_hbox := HBoxContainer.new()
+	value_hbox.add_theme_constant_override("separation", 6)
+	value_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	container.add_child(value_hbox)
+	
 	var value_label := Label.new()
 	var best_wave := int(entry.get("best_wave", 0))
+	var best_difficulty := int(entry.get("best_difficulty", 1))
+	var goddess_fall: bool = entry.get("best_goddess_fall", false)
+	
 	if best_wave > 0:
-		value_label.text = "%d" % best_wave
+		# Format: "difficulty-wave" (e.g., "5-12" for difficulty 5, wave 12)
+		value_label.text = "%d-%d" % [best_difficulty, best_wave]
+		value_label.tooltip_text = "Difficulty %d, Wave %d" % [best_difficulty, best_wave]
 		value_label.modulate = Color(0.588, 0.949, 0.588, 1.0)  # Green tint
 	else:
 		value_label.text = "--"
 		value_label.modulate = MUTED_VALUE_COLOR
 	if _futura_bold:
 		value_label.add_theme_font_override("font", _futura_bold)
-	value_label.add_theme_font_size_override("font_size", 30)
+	value_label.add_theme_font_size_override("font_size", 40)  # Same as score
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	value_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	container.add_child(value_label)
+	value_label.mouse_filter = Control.MOUSE_FILTER_PASS  # Enable tooltip
+	value_hbox.add_child(value_label)
+	
+	# Add wing badge for Goddess Fall runs
+	if goddess_fall and best_wave > 0:
+		var wing_label := Label.new()
+		wing_label.text = "🪽"  # Wing emoji for Goddess Fall
+		wing_label.add_theme_font_size_override("font_size", 28)
+		wing_label.tooltip_text = "Goddess Fall"
+		wing_label.modulate = Color(1.0, 0.85, 0.4, 1.0)  # Golden tint
+		wing_label.mouse_filter = Control.MOUSE_FILTER_PASS
+		value_hbox.add_child(wing_label)
 	
 	return wrapper
 

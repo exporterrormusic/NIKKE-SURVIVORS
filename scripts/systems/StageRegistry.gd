@@ -4,38 +4,38 @@ extends Node
 ## Each stage has a fixed biome, time of day, and special modifiers.
 ## Registered as autoload: StageRegistry
 
-# Stage definitions
+# Stage definitions - Now these are MODIFIERS that apply to any map
 const STAGES := [
 	{
 		"id": "stage_1",
-		"name": "Ark Outskirts",
+		"name": "Standard",
 		"biome": "sakura_grove",
 		"time": "day",
 		"unlock_after": null,  # Always unlocked
 		"spawn_rules": {},
-		"description": "A peaceful grove outside the Ark. Perfect for training."
+		"description": "Survive 11 waves of Raptures to complete the mission."
 	},
 	{
 		"id": "stage_2",
-		"name": "Frozen Hell",
-		"biome": "polar_front",
+		"name": "Elite Hunt",
+		"biome": "snowfield",
 		"time": "night",
 		"unlock_after": "stage_1",
 		"spawn_rules": {
 			"elite_only": true,  # Normal enemies become elites, elites become bosses
 		},
-		"description": "Only the strongest Raptures survive here. No normal units spawn."
+		"description": "All enemies spawn one rarity tier higher. Normals become Elites!"
 	},
 	{
 		"id": "stage_3",
-		"name": "Eternal Bloom",
+		"name": "Endless",
 		"biome": "sakura_grove",
 		"time": "night",
 		"unlock_after": "stage_2",
 		"spawn_rules": {
 			"endless": true,  # No wave limit
 		},
-		"description": "An endless night. How long can you survive?"
+		"description": "No wave limit. How long can you survive the endless horde?"
 	},
 ]
 

@@ -21,6 +21,7 @@ GameState="*res://scripts/systems/GameState.gd"
 StageRegistry="*res://scripts/systems/StageRegistry.gd"
 MenuManager="*res://scripts/ui/MenuManager.gd"
 SettingsManager="*res://scripts/systems/SettingsManager.gd"
+AchievementManager="*res://scripts/systems/AchievementManager.gd"
 
 [display]
 

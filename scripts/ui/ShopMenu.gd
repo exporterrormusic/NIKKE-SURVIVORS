@@ -4,6 +4,8 @@ class_name ShopMenu
 ## Layout: Left sidebar with character portraits + GENERAL, right side with upgrade grid.
 ## Characters can be unlocked here. Default unlocked: Snow White, Rapunzel, Scarlet.
 
+const SaveManagerScript = preload("res://scripts/systems/SaveManager.gd")
+
 signal back_requested
 
 # Visual constants - matching AchievementsMenu style
@@ -26,37 +28,20 @@ const CHARACTER_SELECTED_COLOR := Color(0.18, 0.18, 0.25, 1.0)
 const CHARACTER_LOCKED_COLOR := Color(0.05, 0.05, 0.07, 0.95)
 
 const GENERAL_FILTER := "GENERAL"
-const SAVE_PATH := "user://shop_data.cfg"
 
-# Character data - same order as CharacterRegistry
-const CHARACTER_NAMES := ["Snow White", "Scarlet", "Rapunzel", "Nayuta", "Commander", "Marian", "Crown", "Kilo", "Cecil", "Sin"]
-const CHARACTER_IDS := ["snow_white", "scarlet", "rapunzel", "nayuta", "commander", "marian", "crown", "kilo", "cecil", "sin"]
-const PORTRAIT_PATHS := [
-	"res://assets/characters/scarlet/portrait-sq.png",
-	"res://assets/characters/commander/portrait-sq.png",
-	"res://assets/characters/rapunzel/portrait-sq.png",
-	"res://assets/characters/kilo/portrait-sq.png",
-	"res://assets/characters/marian/portrait-sq.png",
-	"res://assets/characters/crown/portrait-sq.png",
-	"res://assets/characters/snow-white/portrait-sq.png",
-	"res://assets/characters/sin/portrait-sq.png",
-	"res://assets/characters/cecil/portrait-sq.png",
-	"res://assets/characters/nayuta/portrait-sq.png",
-]
-
-# Default unlocked characters
-const DEFAULT_UNLOCKED := ["snow_white", "rapunzel", "scarlet"]
+# Character data - loaded from CharacterRegistry (single source of truth)
+var _registry: CharacterRegistry = null
 
 # Character unlock costs
 const CHARACTER_UNLOCK_COST := 3  # Pristine Rapture Cores to unlock a character
 
 # General upgrades (apply to all characters)
 const GENERAL_UPGRADES := [
-	{"id": "atk", "name": "ATK", "desc": "+5% Attack Damage", "max_level": 10, "base_cost": 1, "icon": "⚔️"},
-	{"id": "hp", "name": "HP", "desc": "+1 Max HP", "max_level": 10, "base_cost": 1, "icon": "❤️"},
-	{"id": "speed", "name": "SPD", "desc": "+3% Movement Speed", "max_level": 10, "base_cost": 1, "icon": "👟"},
-	{"id": "crit", "name": "CRIT", "desc": "+2% Critical Chance", "max_level": 10, "base_cost": 1, "icon": "💥"},
-	{"id": "xp", "name": "XP", "desc": "+5% Experience Gain", "max_level": 5, "base_cost": 2, "icon": "⭐"},
+	{"id": "atk", "name": "ATK", "desc": "+5% Attack Damage", "max_level": 99, "base_cost": 1, "icon": "⚔️"},
+	{"id": "hp", "name": "HP", "desc": "+1 Max HP", "max_level": 99, "base_cost": 1, "icon": "❤️"},
+	{"id": "speed", "name": "SPD", "desc": "+5% Movement Speed", "max_level": 99, "base_cost": 1, "icon": "👟"},
+	{"id": "crit", "name": "CRIT", "desc": "+2% Critical Chance", "max_level": 99, "base_cost": 1, "icon": "💥"},
+	{"id": "xp", "name": "XP", "desc": "+5% Experience Gain", "max_level": 99, "base_cost": 2, "icon": "⭐"},
 ]
 
 # Shop data persistence
@@ -86,6 +71,7 @@ var _button_group: ButtonGroup = null
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	
+	_registry = CharacterRegistry.get_instance()
 	_button_group = ButtonGroup.new()
 	
 	_load_shop_data()
@@ -103,11 +89,11 @@ func _input(event: InputEvent) -> void:
 
 func _load_shop_data() -> void:
 	var config := ConfigFile.new()
-	var err := config.load(SAVE_PATH)
+	var err := config.load(SaveManagerScript.SHOP_PATH)
 	
 	# Start with default unlocked characters
 	_unlocked_characters.clear()
-	for char_id in DEFAULT_UNLOCKED:
+	for char_id in CharacterRegistry.DEFAULT_UNLOCKED:
 		_unlocked_characters.append(char_id)
 	
 	if err == OK:
@@ -136,7 +122,7 @@ func _save_shop_data() -> void:
 	# Save unlocked characters (excluding defaults to save space)
 	var extra_unlocked: Array = []
 	for char_id in _unlocked_characters:
-		if char_id not in DEFAULT_UNLOCKED:
+		if char_id not in CharacterRegistry.DEFAULT_UNLOCKED:
 			extra_unlocked.append(char_id)
 	config.set_value("characters", "unlocked", extra_unlocked)
 	
@@ -148,7 +134,7 @@ func _save_shop_data() -> void:
 	for category in _cores_spent:
 		config.set_value("cores_spent", category, _cores_spent[category])
 	
-	var err := config.save(SAVE_PATH)
+	var err := config.save(SaveManagerScript.SHOP_PATH)
 	if err == OK:
 		print("[ShopMenu] Shop data saved")
 	else:
@@ -183,27 +169,9 @@ func _build_ui() -> void:
 	top_bar.add_theme_stylebox_override("panel", _make_letterbox_style())
 	add_child(top_bar)
 	
-	# Title and currency row
-	var title_row := HBoxContainer.new()
-	title_row.set_anchors_preset(Control.PRESET_FULL_RECT)
-	title_row.offset_left = 48
-	title_row.offset_right = -48
-	title_row.add_theme_constant_override("separation", 24)
-	top_bar.add_child(title_row)
-	
-	# Left placeholder for centering balance
-	var left_placeholder := Control.new()
-	left_placeholder.custom_minimum_size = Vector2(150, 0)  # Match right side
-	left_placeholder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	title_row.add_child(left_placeholder)
-	
-	# Left spacer for true centering
-	var left_spacer := Control.new()
-	left_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	left_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	title_row.add_child(left_spacer)
-	
+	# Title label - absolutely centered in the header, ignoring other elements
 	var title_label := Label.new()
+	title_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	title_label.text = "SHOP"
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -213,32 +181,31 @@ func _build_ui() -> void:
 	title_label.add_theme_color_override("font_color", HEADER_COLOR)
 	title_label.add_theme_color_override("font_outline_color", Color(0.1, 0.1, 0.15, 1.0))
 	title_label.add_theme_constant_override("outline_size", 3)
-	title_row.add_child(title_label)
+	title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top_bar.add_child(title_label)
 	
-	var right_spacer := Control.new()
-	right_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	title_row.add_child(right_spacer)
+	# Currency container - positioned at right side
+	var currency_row := HBoxContainer.new()
+	currency_row.set_anchors_preset(Control.PRESET_FULL_RECT)
+	currency_row.offset_left = 48
+	currency_row.offset_right = -48
+	currency_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top_bar.add_child(currency_row)
 	
-	# Currency display (top right)
-	var currency_container := HBoxContainer.new()
-	currency_container.custom_minimum_size = Vector2(150, 0)  # Match left placeholder
-	currency_container.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	currency_container.add_theme_constant_override("separation", 12)
-	title_row.add_child(currency_container)
+	# Spacer to push currency to right
+	var currency_spacer := Control.new()
+	currency_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	currency_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	currency_row.add_child(currency_spacer)
 	
-	# Pristine Rapture Core icon
-	_currency_icon = _create_core_icon(48)
-	currency_container.add_child(_currency_icon)
+	# Sci-fi danger container for Pristine Rapture Core currency
+	var core_container := _PristineCoreContainer.new()
+	core_container.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	currency_row.add_child(core_container)
 	
-	_currency_label = Label.new()
-	_currency_label.text = "0"
-	_currency_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	if _futura_bold:
-		_currency_label.add_theme_font_override("font", _futura_bold)
-	_currency_label.add_theme_font_size_override("font_size", 48)
-	_currency_label.add_theme_color_override("font_color", CORE_COLOR)
-	currency_container.add_child(_currency_label)
+	# Store references for updating
+	_currency_icon = core_container.get_core_icon()
+	_currency_label = core_container.get_count_label()
 	
 	_update_currency_display()
 	
@@ -329,10 +296,10 @@ func _build_ui() -> void:
 	_upgrade_scroll.add_child(grid_margin)
 	
 	_upgrade_grid = GridContainer.new()
-	_upgrade_grid.columns = 3
+	_upgrade_grid.columns = 5  # 5 per row instead of 3
 	_upgrade_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_upgrade_grid.add_theme_constant_override("h_separation", 16)
-	_upgrade_grid.add_theme_constant_override("v_separation", 16)
+	_upgrade_grid.add_theme_constant_override("h_separation", 12)
+	_upgrade_grid.add_theme_constant_override("v_separation", 12)
 	grid_margin.add_child(_upgrade_grid)
 	
 	# Unlock panel (shown when locked character selected)
@@ -370,14 +337,18 @@ func _build_character_list() -> void:
 	var general_entry := _create_character_entry(GENERAL_FILTER, "General", null, true)
 	_character_entries.append(general_entry)
 	
-	# Add all characters
-	for i in range(CHARACTER_NAMES.size()):
-		var char_name: String = CHARACTER_NAMES[i]
-		var char_id: String = CHARACTER_IDS[i]
+	# Add all characters from registry
+	var char_ids := _registry.get_all_character_ids()
+	var char_names := _registry.get_all_character_names()
+	var portrait_paths := _registry.get_all_portrait_paths()
+	
+	for i in range(char_ids.size()):
+		var char_name: String = char_names[i] if i < char_names.size() else ""
+		var char_id: String = char_ids[i]
 		var is_unlocked: bool = char_id in _unlocked_characters
 		var portrait: Texture2D = null
-		if i < PORTRAIT_PATHS.size() and ResourceLoader.exists(PORTRAIT_PATHS[i]):
-			portrait = load(PORTRAIT_PATHS[i])
+		if i < portrait_paths.size() and ResourceLoader.exists(portrait_paths[i]):
+			portrait = load(portrait_paths[i])
 		var entry := _create_character_entry(char_id, char_name, portrait, is_unlocked)
 		_character_entries.append(entry)
 
@@ -479,18 +450,11 @@ func _create_character_entry(code: String, _display_name: String, portrait: Text
 	divider_container.add_child(divider)
 	
 	# Cores spent label container - expand to fill remaining space and center
-	var count_margin := MarginContainer.new()
-	count_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	count_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	count_margin.add_theme_constant_override("margin_left", 10)
-	count_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hbox.add_child(count_margin)
-	
 	var count_container := CenterContainer.new()
 	count_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	count_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	count_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	count_margin.add_child(count_container)
+	hbox.add_child(count_container)
 	
 	var count_label := Label.new()
 	count_label.text = "0"
@@ -607,131 +571,202 @@ func _create_upgrade_card(upgrade: Dictionary, category: String) -> Control:
 	var current_level: int = _upgrade_levels.get(upgrade_id, 0)
 	var max_level: int = upgrade["max_level"]
 	var is_maxed: bool = current_level >= max_level
-	var cost: int = upgrade["base_cost"] + current_level  # Cost increases with level
+	var cost: int = _calculate_upgrade_cost(upgrade["base_cost"], current_level)
+	var can_afford: bool = GameState.get_pristine_cores() >= cost
 	
-	var card := Panel.new()
-	card.custom_minimum_size = Vector2(220, 180)
+	# Use interactive card class for hover effects
+	var card := _UpgradeCard.new()
+	card.custom_minimum_size = Vector2(200, 560)  # Twice as tall
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	card.add_theme_stylebox_override("panel", _make_upgrade_card_style(is_maxed))
+	card.setup(is_maxed)
+	card.set_can_purchase(can_afford and not is_maxed)
+	
+	# Connect card click to purchase
+	if not is_maxed:
+		card.card_clicked.connect(_on_upgrade_purchased_with_card.bind(upgrade_id, cost, card))
 	
 	var vbox := VBoxContainer.new()
 	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
 	vbox.offset_left = 16
 	vbox.offset_right = -16
-	vbox.offset_top = 12
-	vbox.offset_bottom = -12
-	vbox.add_theme_constant_override("separation", 8)
+	vbox.offset_top = 24
+	vbox.offset_bottom = -24
+	vbox.add_theme_constant_override("separation", 20)
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.add_child(vbox)
 	
-	# Icon and name row
-	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation", 8)
-	vbox.add_child(header)
+	# Icon centered at top
+	var icon_center := CenterContainer.new()
+	icon_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	icon_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(icon_center)
 	
 	var icon := Label.new()
 	icon.text = upgrade["icon"]
-	icon.add_theme_font_size_override("font_size", 32)
-	header.add_child(icon)
+	icon.add_theme_font_size_override("font_size", 96)  # Much bigger icon
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon_center.add_child(icon)
 	
+	# Name centered
 	var name_label := Label.new()
 	name_label.text = upgrade["name"]
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if _pretendard_bold:
 		name_label.add_theme_font_override("font", _pretendard_bold)
-	name_label.add_theme_font_size_override("font_size", 24)
+	name_label.add_theme_font_size_override("font_size", 48)  # Much bigger text
 	name_label.add_theme_color_override("font_color", HEADER_COLOR)
-	header.add_child(name_label)
+	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(name_label)
 	
-	# Level indicator
+	# Level indicator centered
 	var level_label := Label.new()
 	level_label.text = "Lv. %d / %d" % [current_level, max_level]
+	level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if _pretendard_medium:
 		level_label.add_theme_font_override("font", _pretendard_medium)
-	level_label.add_theme_font_size_override("font_size", 18)
+	level_label.add_theme_font_size_override("font_size", 36)  # Much bigger text
 	level_label.add_theme_color_override("font_color", UNLOCKED_COLOR if is_maxed else LABEL_COLOR)
+	level_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(level_label)
 	
-	# Description
+	# Description centered
 	var desc_label := Label.new()
 	desc_label.text = upgrade["desc"]
+	desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if _pretendard_medium:
 		desc_label.add_theme_font_override("font", _pretendard_medium)
-	desc_label.add_theme_font_size_override("font_size", 14)
+	desc_label.add_theme_font_size_override("font_size", 28)  # Much bigger text
 	desc_label.add_theme_color_override("font_color", LABEL_COLOR)
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(desc_label)
 	
 	# Spacer
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(spacer)
 	
-	# Buy button
+	# Buy button or maxed label - centered
+	var btn_center := CenterContainer.new()
+	btn_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(btn_center)
+	
 	if is_maxed:
 		var maxed_label := Label.new()
 		maxed_label.text = "MAXED"
 		maxed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		if _pretendard_bold:
 			maxed_label.add_theme_font_override("font", _pretendard_bold)
-		maxed_label.add_theme_font_size_override("font_size", 18)
+		maxed_label.add_theme_font_size_override("font_size", 36)  # Much bigger text
 		maxed_label.add_theme_color_override("font_color", UNLOCKED_COLOR)
-		vbox.add_child(maxed_label)
+		maxed_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn_center.add_child(maxed_label)
 	else:
-		var buy_btn := _create_buy_button(cost, upgrade_id)
-		vbox.add_child(buy_btn)
+		var buy_btn := _create_core_cost_button(cost, upgrade_id, card)
+		btn_center.add_child(buy_btn)
 	
 	return card
 
 
 func _create_buy_button(cost: int, upgrade_id: String) -> Button:
+	# Legacy function - redirect to new core cost button
+	return _create_core_cost_button(cost, upgrade_id, null)
+
+
+func _create_core_cost_button(cost: int, upgrade_id: String, parent_card: _UpgradeCard = null) -> Button:
+	var can_afford: bool = GameState.get_pristine_cores() >= cost
+	
 	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(0, 36)
-	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.custom_minimum_size = Vector2(160, 72)  # Much bigger button
+	btn.focus_mode = Control.FOCUS_NONE
 	
-	# Button content: icon + cost
-	var hbox := HBoxContainer.new()
-	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	hbox.add_theme_constant_override("separation", 8)
-	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	btn.add_child(hbox)
+	# Style: sci-fi container look matching the header
+	var normal := StyleBoxFlat.new()
+	var hover := StyleBoxFlat.new()
+	var pressed := StyleBoxFlat.new()
+	var disabled := StyleBoxFlat.new()
 	
-	var core_icon := _create_core_icon(24)
-	hbox.add_child(core_icon)
+	if can_afford:
+		normal.bg_color = Color(0.05, 0.02, 0.02, 0.95)
+		normal.border_color = Color(1.0, 0.25, 0.2, 0.9)
+		hover.bg_color = Color(0.1, 0.04, 0.04, 0.98)
+		hover.border_color = Color(1.0, 0.4, 0.35, 1.0)
+		pressed.bg_color = Color(0.15, 0.05, 0.05, 1.0)
+		pressed.border_color = Color(1.0, 0.5, 0.45, 1.0)
+	else:
+		normal.bg_color = Color(0.04, 0.04, 0.05, 0.7)
+		normal.border_color = Color(0.4, 0.35, 0.35, 0.5)
+		hover.bg_color = Color(0.05, 0.05, 0.06, 0.8)
+		hover.border_color = Color(0.5, 0.45, 0.45, 0.6)
+		pressed.bg_color = Color(0.04, 0.04, 0.05, 0.7)
+		pressed.border_color = Color(0.4, 0.35, 0.35, 0.5)
+	
+	disabled.bg_color = Color(0.03, 0.03, 0.04, 0.6)
+	disabled.border_color = Color(0.3, 0.3, 0.35, 0.4)
+	
+	for style in [normal, hover, pressed, disabled]:
+		style.set_border_width_all(3)
+		style.set_corner_radius_all(6)
+		style.corner_detail = 2
+	
+	btn.add_theme_stylebox_override("normal", normal)
+	btn.add_theme_stylebox_override("hover", hover)
+	btn.add_theme_stylebox_override("pressed", pressed)
+	btn.add_theme_stylebox_override("disabled", disabled)
+	
+	# Button content: icon | divider | cost
+	var content := HBoxContainer.new()
+	content.alignment = BoxContainer.ALIGNMENT_CENTER
+	content.add_theme_constant_override("separation", 0)
+	content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	content.set_anchors_preset(Control.PRESET_FULL_RECT)
+	btn.add_child(content)
+	
+	# Core icon section - much bigger
+	var icon_section := CenterContainer.new()
+	icon_section.custom_minimum_size = Vector2(60, 0)
+	icon_section.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	content.add_child(icon_section)
+	
+	var core_icon := _create_core_icon(44)  # Much bigger icon
+	core_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon_section.add_child(core_icon)
+	
+	# Divider line
+	var divider := ColorRect.new()
+	divider.custom_minimum_size = Vector2(2, 48)  # Taller divider
+	divider.color = Color(1.0, 0.3, 0.25, 0.5) if can_afford else Color(0.4, 0.4, 0.45, 0.3)
+	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	content.add_child(divider)
+	
+	# Cost section
+	var cost_section := CenterContainer.new()
+	cost_section.custom_minimum_size = Vector2(60, 0)
+	cost_section.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	content.add_child(cost_section)
 	
 	var cost_label := Label.new()
 	cost_label.text = str(cost)
 	if _pretendard_bold:
 		cost_label.add_theme_font_override("font", _pretendard_bold)
-	cost_label.add_theme_font_size_override("font_size", 18)
-	cost_label.add_theme_color_override("font_color", Color(1, 1, 1))
+	cost_label.add_theme_font_size_override("font_size", 36)  # Much bigger text
+	cost_label.add_theme_color_override("font_color", CORE_COLOR if can_afford else LOCKED_COLOR)
 	cost_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hbox.add_child(cost_label)
-	
-	var can_afford: bool = GameState.get_pristine_cores() >= cost
-	
-	var normal := StyleBoxFlat.new()
-	if can_afford:
-		normal.bg_color = Color(0.2, 0.5, 0.2, 0.95)
-		normal.border_color = Color(0.3, 0.8, 0.3, 0.9)
-	else:
-		normal.bg_color = Color(0.2, 0.2, 0.25, 0.6)
-		normal.border_color = Color(0.4, 0.4, 0.45, 0.5)
-	normal.set_border_width_all(2)
-	normal.set_corner_radius_all(6)
-	btn.add_theme_stylebox_override("normal", normal)
-	
-	var hover := StyleBoxFlat.new()
-	if can_afford:
-		hover.bg_color = Color(0.25, 0.6, 0.25, 1.0)
-		hover.border_color = Color(0.4, 1.0, 0.4)
-	else:
-		hover.bg_color = Color(0.25, 0.25, 0.3, 0.7)
-		hover.border_color = Color(0.5, 0.5, 0.55, 0.6)
-	hover.set_border_width_all(2)
-	hover.set_corner_radius_all(6)
-	btn.add_theme_stylebox_override("hover", hover)
+	cost_section.add_child(cost_label)
 	
 	btn.disabled = not can_afford
-	btn.pressed.connect(_on_upgrade_purchased.bind(upgrade_id, cost))
+	
+	# Connect with parent card for visual feedback
+	if parent_card:
+		btn.pressed.connect(_on_upgrade_purchased_with_card.bind(upgrade_id, cost, parent_card))
+	else:
+		btn.pressed.connect(_on_upgrade_purchased.bind(upgrade_id, cost))
+	
+	# Flash red on click if can't afford
+	if not can_afford and parent_card:
+		btn.button_down.connect(parent_card.flash_cant_afford)
 	
 	return btn
 
@@ -828,11 +863,7 @@ func _create_unlock_panel() -> Control:
 
 
 func _update_unlock_panel(char_id: String) -> void:
-	var char_name := ""
-	for i in range(CHARACTER_IDS.size()):
-		if CHARACTER_IDS[i] == char_id:
-			char_name = CHARACTER_NAMES[i]
-			break
+	var char_name := _registry.get_character_name(char_id)
 	
 	# The unlock panel is now a Button itself
 	var panel_btn := _unlock_panel as Button
@@ -895,6 +926,10 @@ func _update_unlock_panel(char_id: String) -> void:
 
 
 func _on_upgrade_purchased(upgrade_id: String, cost: int) -> void:
+	_on_upgrade_purchased_with_card(upgrade_id, cost, null)
+
+
+func _on_upgrade_purchased_with_card(upgrade_id: String, cost: int, card: _UpgradeCard) -> void:
 	if GameState.spend_pristine_cores(cost):
 		_upgrade_levels[upgrade_id] = _upgrade_levels.get(upgrade_id, 0) + 1
 		
@@ -906,9 +941,16 @@ func _on_upgrade_purchased(upgrade_id: String, cost: int) -> void:
 				category = parts[1]  # Extract char_id from "char_<char_id>_<upgrade>"
 		_cores_spent[category] = _cores_spent.get(category, 0) + cost
 		
+		# Flash card to show successful purchase
+		if card and is_instance_valid(card):
+			card.flash_purchased()
+		
 		_save_shop_data()
 		_update_currency_display()
 		_update_sidebar_counts()
+		
+		# Delay rebuild slightly to show the flash effect
+		await get_tree().create_timer(0.15).timeout
 		_rebuild_content()
 		print("[ShopMenu] Purchased upgrade: %s (now level %d)" % [upgrade_id, _upgrade_levels[upgrade_id]])
 
@@ -919,6 +961,10 @@ func _on_character_unlock(char_id: String, cost: int) -> void:
 		
 		# Track cores spent for unlocking
 		_cores_spent[char_id] = _cores_spent.get(char_id, 0) + cost
+		
+		# Track achievement for unlocking character in shop
+		if has_node("/root/AchievementManager"):
+			get_node("/root/AchievementManager").on_character_unlocked_in_shop(char_id)
 		
 		_save_shop_data()
 		_update_currency_display()
@@ -945,7 +991,7 @@ func _reset_all_shop_data() -> void:
 	
 	# Reset unlocked characters to defaults only
 	_unlocked_characters.clear()
-	for char_id in DEFAULT_UNLOCKED:
+	for char_id in CharacterRegistry.DEFAULT_UNLOCKED:
 		_unlocked_characters.append(char_id)
 	
 	# Reset all upgrade levels
@@ -1133,10 +1179,22 @@ func _make_upgrade_card_style(is_maxed: bool) -> StyleBoxFlat:
 
 # === UTILITY FUNCTIONS ===
 
+## Calculate upgrade cost - linear for first 10 levels, then doubles each level after
+static func _calculate_upgrade_cost(base_cost: int, current_level: int) -> int:
+	if current_level < 10:
+		# First 10 levels: base_cost + current_level (1, 2, 3, ... 10)
+		return base_cost + current_level
+	else:
+		# After level 10: starts at base cost of 11, then doubles each level
+		# Level 10 costs 11, level 11 costs 22, level 12 costs 44, etc.
+		var levels_past_10 := current_level - 10
+		var doubling_cost := 11 * int(pow(2, levels_past_10))
+		return doubling_cost
+
 ## Get total bonus for an upgrade type (for use by game systems)
 static func get_upgrade_bonus(upgrade_type: String) -> float:
 	var config := ConfigFile.new()
-	if config.load(SAVE_PATH) != OK:
+	if config.load(SaveManagerScript.SHOP_PATH) != OK:
 		return 0.0
 	
 	var level: int = config.get_value("upgrades", "general_" + upgrade_type, 0)
@@ -1147,7 +1205,7 @@ static func get_upgrade_bonus(upgrade_type: String) -> float:
 		"hp":
 			return float(level)  # +1 HP per level
 		"speed":
-			return level * 0.03  # +3% per level
+			return level * 0.05  # +5% per level
 		"crit":
 			return level * 0.02  # +2% per level
 		"pickup":
@@ -1160,15 +1218,170 @@ static func get_upgrade_bonus(upgrade_type: String) -> float:
 
 ## Check if a character is unlocked
 static func is_character_unlocked(char_id: String) -> bool:
-	if char_id in DEFAULT_UNLOCKED:
+	if char_id in CharacterRegistry.DEFAULT_UNLOCKED:
 		return true
 	
 	var config := ConfigFile.new()
-	if config.load(SAVE_PATH) != OK:
+	if config.load(SaveManagerScript.SHOP_PATH) != OK:
 		return false
 	
 	var unlocked = config.get_value("characters", "unlocked", [])
 	return char_id in unlocked
+
+
+# === UPGRADE CARD (Inner class) - Interactive card with hover/flash effects ===
+
+class _UpgradeCard extends Control:
+	signal card_clicked
+	
+	const NORMAL_BG := Color(0.1, 0.1, 0.14, 0.95)
+	const HOVER_BG := Color(0.14, 0.14, 0.2, 0.98)
+	const PURCHASED_BG := Color(0.25, 0.28, 0.3, 0.95)  # Light grey for purchased
+	const CANT_AFFORD_BG := Color(0.35, 0.08, 0.08, 0.95)  # Red flash
+	const BORDER_NORMAL := Color(0.4, 0.4, 0.45, 0.7)
+	const BORDER_HOVER := Color(0.7, 0.7, 0.75, 0.9)
+	const BORDER_MAXED := Color(0.392, 0.86, 0.549, 1.0)
+	
+	var _is_maxed: bool = false
+	var _is_hovered: bool = false
+	var _flash_color: Color = Color.TRANSPARENT
+	var _flash_time: float = 0.0
+	var _flash_duration: float = 0.3
+	var _can_purchase: bool = false
+	
+	func setup(is_maxed: bool) -> void:
+		_is_maxed = is_maxed
+		mouse_entered.connect(_on_mouse_entered)
+		mouse_exited.connect(_on_mouse_exited)
+	
+	func set_can_purchase(can_purchase: bool) -> void:
+		_can_purchase = can_purchase
+	
+	func _gui_input(event: InputEvent) -> void:
+		if event is InputEventMouseButton:
+			var mb := event as InputEventMouseButton
+			if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
+				if _is_maxed:
+					return  # Can't click maxed cards
+				if not _can_purchase:
+					flash_cant_afford()
+					return
+				emit_signal("card_clicked")
+	
+	func _process(delta: float) -> void:
+		if _flash_time > 0.0:
+			_flash_time -= delta
+			queue_redraw()
+	
+	func _on_mouse_entered() -> void:
+		_is_hovered = true
+		queue_redraw()
+	
+	func _on_mouse_exited() -> void:
+		_is_hovered = false
+		queue_redraw()
+	
+	func flash_purchased() -> void:
+		_flash_color = PURCHASED_BG
+		_flash_time = _flash_duration
+		queue_redraw()
+	
+	func flash_cant_afford() -> void:
+		_flash_color = CANT_AFFORD_BG
+		_flash_time = _flash_duration * 0.5  # Shorter red flash
+		queue_redraw()
+	
+	func _draw() -> void:
+		var rect := Rect2(Vector2.ZERO, size)
+		
+		# Calculate current background color
+		var bg_color: Color = NORMAL_BG
+		if _flash_time > 0.0:
+			var flash_t: float = _flash_time / _flash_duration
+			bg_color = NORMAL_BG.lerp(_flash_color, flash_t)
+		elif _is_hovered:
+			bg_color = HOVER_BG
+		
+		# Border color
+		var border_color: Color
+		if _is_maxed:
+			border_color = BORDER_MAXED
+		elif _is_hovered:
+			border_color = BORDER_HOVER
+		else:
+			border_color = BORDER_NORMAL
+		
+		# Draw rounded rectangle background
+		var corner_radius := 10.0
+		
+		# Background
+		_draw_rounded_rect(rect, bg_color, corner_radius)
+		
+		# Border
+		_draw_rounded_rect_outline(rect, border_color, corner_radius, 2.0)
+		
+		# Subtle hover glow
+		if _is_hovered and _flash_time <= 0.0:
+			for i in range(3, 0, -1):
+				var glow_alpha: float = 0.05 * (1.0 - float(i) / 3.0)
+				var glow_rect := Rect2(rect.position - Vector2(i, i) * 2, rect.size + Vector2(i, i) * 4)
+				_draw_rounded_rect(glow_rect, Color(0.8, 0.8, 0.9, glow_alpha), corner_radius + i * 2)
+	
+	func _draw_rounded_rect(rect: Rect2, color: Color, radius: float) -> void:
+		# Simple rounded rect using polygon
+		var points := PackedVector2Array()
+		var segments := 8
+		
+		# Top-left corner
+		for i in range(segments + 1):
+			var angle := PI + (PI / 2.0) * float(i) / float(segments)
+			points.append(rect.position + Vector2(radius, radius) + Vector2(cos(angle), sin(angle)) * radius)
+		
+		# Top-right corner
+		for i in range(segments + 1):
+			var angle := -PI / 2.0 + (PI / 2.0) * float(i) / float(segments)
+			points.append(rect.position + Vector2(rect.size.x - radius, radius) + Vector2(cos(angle), sin(angle)) * radius)
+		
+		# Bottom-right corner
+		for i in range(segments + 1):
+			var angle := 0.0 + (PI / 2.0) * float(i) / float(segments)
+			points.append(rect.position + Vector2(rect.size.x - radius, rect.size.y - radius) + Vector2(cos(angle), sin(angle)) * radius)
+		
+		# Bottom-left corner
+		for i in range(segments + 1):
+			var angle := PI / 2.0 + (PI / 2.0) * float(i) / float(segments)
+			points.append(rect.position + Vector2(radius, rect.size.y - radius) + Vector2(cos(angle), sin(angle)) * radius)
+		
+		draw_colored_polygon(points, color)
+	
+	func _draw_rounded_rect_outline(rect: Rect2, color: Color, radius: float, width: float) -> void:
+		var points := PackedVector2Array()
+		var segments := 8
+		
+		# Top-left corner
+		for i in range(segments + 1):
+			var angle := PI + (PI / 2.0) * float(i) / float(segments)
+			points.append(rect.position + Vector2(radius, radius) + Vector2(cos(angle), sin(angle)) * radius)
+		
+		# Top-right corner
+		for i in range(segments + 1):
+			var angle := -PI / 2.0 + (PI / 2.0) * float(i) / float(segments)
+			points.append(rect.position + Vector2(rect.size.x - radius, radius) + Vector2(cos(angle), sin(angle)) * radius)
+		
+		# Bottom-right corner
+		for i in range(segments + 1):
+			var angle := 0.0 + (PI / 2.0) * float(i) / float(segments)
+			points.append(rect.position + Vector2(rect.size.x - radius, rect.size.y - radius) + Vector2(cos(angle), sin(angle)) * radius)
+		
+		# Bottom-left corner
+		for i in range(segments + 1):
+			var angle := PI / 2.0 + (PI / 2.0) * float(i) / float(segments)
+			points.append(rect.position + Vector2(radius, rect.size.y - radius) + Vector2(cos(angle), sin(angle)) * radius)
+		
+		# Close the loop
+		points.append(points[0])
+		
+		draw_polyline(points, color, width, true)
 
 
 # === GENERAL UPGRADE ICON (Inner class) - Animated star burst ===
@@ -1283,3 +1496,140 @@ class _PristineCoreIcon extends Control:
 		var highlight_radius: float = radius * 0.2
 		draw_circle(center + highlight_offset, highlight_radius, Color(1.0, 1.0, 1.0, 0.6))
 		draw_circle(center + highlight_offset, highlight_radius * 0.5, Color(1.0, 1.0, 1.0, 0.9))
+
+
+# Sci-fi danger container for Pristine Rapture Core display
+class _PristineCoreContainer extends Control:
+	const CONTAINER_WIDTH := 180.0  # Narrower
+	const CONTAINER_HEIGHT := 70.0
+	const BORDER_THICKNESS := 2.0
+	const CORNER_CUT := 8.0  # Smaller corner cuts
+	
+	const BG_COLOR := Color(0.05, 0.02, 0.02, 0.95)  # Very dark red-tinted
+	const BORDER_COLOR := Color(1.0, 0.25, 0.2, 0.9)  # Danger red
+	const GLOW_COLOR := Color(1.0, 0.2, 0.15, 0.4)  # Red glow
+	const DIVIDER_COLOR := Color(1.0, 0.3, 0.25, 0.6)  # Divider line
+	const TEXT_COLOR := Color(1.0, 0.35, 0.3, 1.0)  # Bright danger red
+	
+	var _core_icon: Control = null
+	var _count_label: Label = null
+	var _glow_time: float = 0.0
+	
+	func _init() -> void:
+		custom_minimum_size = Vector2(CONTAINER_WIDTH, CONTAINER_HEIGHT)
+	
+	func _ready() -> void:
+		_build_container()
+	
+	func _process(delta: float) -> void:
+		_glow_time += delta
+		queue_redraw()
+	
+	func get_core_icon() -> Control:
+		return _core_icon
+	
+	func get_count_label() -> Label:
+		return _count_label
+	
+	func _build_container() -> void:
+		# Main content HBox
+		var content := HBoxContainer.new()
+		content.set_anchors_preset(Control.PRESET_FULL_RECT)
+		content.offset_left = 12
+		content.offset_right = -12
+		content.offset_top = 14  # Below the title
+		content.offset_bottom = -6
+		content.add_theme_constant_override("separation", 0)
+		content.alignment = BoxContainer.ALIGNMENT_CENTER
+		add_child(content)
+		
+		# Core icon section (left side)
+		var icon_section := CenterContainer.new()
+		icon_section.custom_minimum_size = Vector2(50, 0)
+		content.add_child(icon_section)
+		
+		var icon_container := Control.new()
+		icon_container.custom_minimum_size = Vector2(40, 40)
+		icon_section.add_child(icon_container)
+		
+		_core_icon = _PristineCoreIcon.new()
+		_core_icon.custom_minimum_size = Vector2(40, 40)
+		_core_icon.size = Vector2(40, 40)
+		icon_container.add_child(_core_icon)
+		
+		# Vertical divider - drawn in _draw() instead
+		var divider_space := Control.new()
+		divider_space.custom_minimum_size = Vector2(16, 0)
+		content.add_child(divider_space)
+		
+		# Count section (right side)
+		var count_section := CenterContainer.new()
+		count_section.custom_minimum_size = Vector2(60, 0)
+		count_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		content.add_child(count_section)
+		
+		_count_label = Label.new()
+		_count_label.text = "0"
+		_count_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var font: Font = preload("res://resources/fonts/futura_condensed_extra_bold.tres")
+		_count_label.add_theme_font_override("font", font)
+		_count_label.add_theme_font_size_override("font_size", 36)
+		_count_label.add_theme_color_override("font_color", TEXT_COLOR)
+		_count_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.8))
+		_count_label.add_theme_constant_override("outline_size", 2)
+		count_section.add_child(_count_label)
+	
+	func _draw() -> void:
+		var w := size.x
+		var h := size.y
+		
+		# Pulsing glow effect
+		var glow_pulse: float = 0.4 + 0.15 * sin(_glow_time * 2.5)
+		
+		# Draw outer glow
+		for i in range(4, 0, -1):
+			var glow_alpha: float = glow_pulse * 0.06 * (1.0 - float(i) / 4.0)
+			var offset: float = float(i) * 1.5
+			var glow_rect := Rect2(-offset, -offset, w + offset * 2, h + offset * 2)
+			draw_rect(glow_rect, Color(GLOW_COLOR.r, GLOW_COLOR.g, GLOW_COLOR.b, glow_alpha))
+		
+		# Draw background with cut corners (sci-fi hexagonal look)
+		var bg_points := PackedVector2Array([
+			Vector2(CORNER_CUT, 0),
+			Vector2(w - CORNER_CUT, 0),
+			Vector2(w, CORNER_CUT),
+			Vector2(w, h - CORNER_CUT),
+			Vector2(w - CORNER_CUT, h),
+			Vector2(CORNER_CUT, h),
+			Vector2(0, h - CORNER_CUT),
+			Vector2(0, CORNER_CUT)
+		])
+		draw_colored_polygon(bg_points, BG_COLOR)
+		
+		# Draw border
+		for i in range(bg_points.size()):
+			var p1: Vector2 = bg_points[i]
+			var p2: Vector2 = bg_points[(i + 1) % bg_points.size()]
+			draw_line(p1, p2, BORDER_COLOR, BORDER_THICKNESS, true)
+		
+		# Draw vertical divider line in the middle
+		var divider_x := w * 0.42  # Position divider between icon and count
+		var divider_top := 16.0
+		var divider_bottom := h - 8.0
+		draw_line(Vector2(divider_x, divider_top), Vector2(divider_x, divider_bottom), DIVIDER_COLOR, 1.5)
+		
+		# Draw "PRISTINE CORE" title at top (shorter)
+		var title_font: Font = preload("res://resources/fonts/futura_condensed_extra_bold.tres")
+		var title_text := "PRISTINE CORE"
+		var title_size := 10
+		var title_color := Color(1.0, 0.4, 0.35, 0.9)
+		var title_width: float = title_font.get_string_size(title_text, HORIZONTAL_ALIGNMENT_LEFT, -1, title_size).x
+		var title_x: float = (w - title_width) / 2.0
+		draw_string(title_font, Vector2(title_x, 12), title_text, HORIZONTAL_ALIGNMENT_LEFT, -1, title_size, title_color)
+		
+		# Draw subtle scan lines for tech effect
+		var scan_alpha: float = 0.03 + 0.02 * sin(_glow_time * 5.0)
+		for y_line in range(0, int(h), 4):
+			draw_line(Vector2(CORNER_CUT, y_line), Vector2(w - CORNER_CUT, y_line), 
+					 Color(1.0, 0.3, 0.2, scan_alpha), 1.0)

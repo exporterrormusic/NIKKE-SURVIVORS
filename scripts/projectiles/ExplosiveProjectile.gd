@@ -40,6 +40,8 @@ class_name ExplosiveProjectile
 @export var ground_fire_damage: int = 0
 @export var ground_fire_radius: float = 0.0
 @export var ground_fire_color: Color = Color(1.0, 0.5, 0.3, 0.85)
+@export var homing_enabled: bool = false
+@export var homing_strength: float = 8.0  # How fast the rocket turns toward target
 
 const ExplosionEffectScene := preload("res://scenes/effects/ExplosionEffect.tscn")
 const PROJECTILE_BASE_Z_INDEX := 900
@@ -116,6 +118,15 @@ func _process(delta: float) -> void:
 	if target_node and is_instance_valid(target_node):
 		target_position = target_node.global_position
 	
+	# Homing: steer velocity toward target
+	if homing_enabled and target_position != Vector2.ZERO:
+		var to_target := (target_position - global_position).normalized()
+		if to_target != Vector2.ZERO and _velocity.length() > 0:
+			# Smoothly rotate velocity toward target
+			var current_dir := _velocity.normalized()
+			var new_dir := current_dir.lerp(to_target, homing_strength * delta).normalized()
+			_velocity = new_dir * _velocity.length()
+	
 	# Calculate impact anticipation (increases as rocket approaches target)
 	if target_position != Vector2.ZERO:
 		var distance_to_target := global_position.distance_to(target_position)
@@ -137,6 +148,15 @@ func _process(delta: float) -> void:
 			global_position = target_position
 			_explode()
 			return
+	# Check for proximity to target (if homing toward an enemy)
+	# This catches cases where collision detection doesn't trigger for large enemies
+	if target_node and is_instance_valid(target_node) and target_node is Node2D:
+		var enemy_scale: float = target_node.scale.x if target_node.scale.x > 1.0 else 1.0
+		var scaled_hit_radius: float = 15.0 + 35.0 * (enemy_scale - 1.0)  # Larger hitbox for scaled enemies
+		if global_position.distance_to(target_node.global_position) < scaled_hit_radius:
+			_explode()
+			return
+	
 	global_position = new_position
 	var is_rocket := render_style.to_lower() == "rocket"
 	if trail_enabled:
@@ -326,25 +346,51 @@ func _apply_explosion_damage() -> void:
 			continue
 		var enemy_node := enemy as Node2D
 		var distance := enemy_node.global_position.distance_to(global_position)
-		if distance <= explosion_radius:
+		# Account for enemy scale - larger enemies (bosses/elites) have bigger hitboxes
+		var enemy_scale: float = enemy_node.scale.x if enemy_node.scale.x > 1.0 else 1.0
+		var enemy_hitbox_bonus: float = 30.0 * (enemy_scale - 1.0)
+		var effective_radius: float = explosion_radius + enemy_hitbox_bonus
+		if distance <= effective_radius:
 			enemy_node.take_damage(explosion_damage)
 			if owner_node and is_instance_valid(owner_node) and owner_node.has_method("register_burst_hit"):
 				owner_node.register_burst_hit(enemy_node)
 	
-	# Also damage clones if this explosion is from an enemy projectile
-	var clones := get_tree().get_nodes_in_group("clones")
-	for clone in clones:
-		if not is_instance_valid(clone):
-			continue
-		if not (clone is Node2D):
-			continue
-		var clone_node := clone as Node2D
-		var distance := clone_node.global_position.distance_to(global_position)
-		if distance <= explosion_radius:
-			if clone_node.has_method("take_damage"):
-				clone_node.take_damage(explosion_damage)
-			elif clone_node.has_method("apply_damage"):
-				clone_node.apply_damage(explosion_damage)
+	# Only damage clones/allies if this explosion is from an enemy projectile
+	# Player/ally explosions should NOT damage friendly units
+	var is_enemy_projectile := false
+	if owner_node and is_instance_valid(owner_node):
+		is_enemy_projectile = owner_node.is_in_group("enemies") or owner_node.is_in_group("boss")
+	
+	if is_enemy_projectile:
+		# Damage clones
+		var clones := get_tree().get_nodes_in_group("clones")
+		for clone in clones:
+			if not is_instance_valid(clone):
+				continue
+			if not (clone is Node2D):
+				continue
+			var clone_node := clone as Node2D
+			var distance := clone_node.global_position.distance_to(global_position)
+			if distance <= explosion_radius:
+				if clone_node.has_method("take_damage"):
+					clone_node.take_damage(explosion_damage)
+				elif clone_node.has_method("apply_damage"):
+					clone_node.apply_damage(explosion_damage)
+		
+		# Also damage summoned allies
+		var allies := get_tree().get_nodes_in_group("summoned_allies")
+		for ally in allies:
+			if not is_instance_valid(ally):
+				continue
+			if not (ally is Node2D):
+				continue
+			var ally_node := ally as Node2D
+			var distance := ally_node.global_position.distance_to(global_position)
+			if distance <= explosion_radius:
+				if ally_node.has_method("take_damage"):
+					ally_node.take_damage(explosion_damage)
+				elif ally_node.has_method("apply_damage"):
+					ally_node.apply_damage(explosion_damage)
 
 func _spawn_explosion_effect() -> void:
 	if ExplosionEffectScene == null:

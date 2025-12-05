@@ -4,6 +4,8 @@ class_name DebugMenu
 ## Debug menu accessible via F5 key
 ## Provides toggles and buttons for testing/debugging
 
+const SaveManagerScript = preload("res://scripts/systems/SaveManager.gd")
+
 var _panel: PanelContainer
 var _vbox: VBoxContainer
 var _is_visible: bool = false
@@ -102,6 +104,12 @@ func _setup_ui() -> void:
 	
 	_add_separator()
 	
+	# === DANGER ZONE ===
+	_add_section_label("⚠️ DANGER ZONE")
+	_add_danger_button("RESET ALL DATA", _on_reset_all_data)
+	
+	_add_separator()
+	
 	# Close button
 	var close_btn := Button.new()
 	close_btn.text = "CLOSE (F4 / ESC)"
@@ -135,6 +143,14 @@ func _add_toggle_button(text: String, callback: Callable) -> Button:
 	btn.pressed.connect(func(): callback.call(btn))
 	_style_button(btn, Color(0.5, 0.3, 0.3))
 	btn.set_meta("base_text", text)
+	_vbox.add_child(btn)
+	return btn
+
+func _add_danger_button(text: String, callback: Callable) -> Button:
+	var btn := Button.new()
+	btn.text = text
+	btn.pressed.connect(callback)
+	_style_button(btn, Color(0.7, 0.2, 0.2))
 	_vbox.add_child(btn)
 	return btn
 
@@ -305,10 +321,37 @@ func _on_reset_shop() -> void:
 		GameState.set_pristine_cores(0)
 	
 	var config := ConfigFile.new()
-	var save_path := "user://shop_data.save"
 	config.set_value("currency", "pristine_cores", 0)
-	config.set_value("characters", "unlocked", ["snow_white", "scarlet"])
+	config.set_value("characters", "unlocked", CharacterRegistry.DEFAULT_UNLOCKED.duplicate())
 	config.set_value("upgrades", "data", {})
-	config.save(save_path)
+	config.save(SaveManagerScript.SHOP_PATH)
 	
 	print("[DEBUG] Shop data reset!")
+
+func _on_reset_all_data() -> void:
+	# Use SaveManager to get all save paths and delete them
+	var results := SaveManagerScript.delete_all_saves()
+	
+	# Log results
+	for path in results:
+		if results[path]:
+			print("[DEBUG] Deleted: %s" % path)
+		else:
+			print("[DEBUG] Failed to delete: %s" % path)
+	
+	# Reset in-memory state
+	if GameState:
+		GameState.set_pristine_cores(0)
+		GameState.stages_cleared.clear()
+	
+	# Reset achievement progress in memory
+	var achievement_manager := get_node_or_null("/root/AchievementManager")
+	if achievement_manager:
+		if "_character_progress" in achievement_manager:
+			achievement_manager._character_progress.clear()
+		if "_achievements" in achievement_manager:
+			achievement_manager._achievements.clear()
+	
+	print("[DEBUG] ========================================")
+	print("[DEBUG] ALL DATA RESET! Restart game to apply.")
+	print("[DEBUG] ========================================")

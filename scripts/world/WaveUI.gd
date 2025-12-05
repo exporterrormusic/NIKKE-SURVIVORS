@@ -189,8 +189,8 @@ func _process(delta: float) -> void:
 	# Pulse boss warning
 	if _boss_warning and _boss_warning.visible:
 		_boss_warning_timer -= delta
-		if _boss_warning_timer <= 0:
-			_boss_warning.visible = false
+		# Don't force hide - let WarningBar handle its own fade-out animation
+		# The WarningBar will set visible = false when animation completes
 
 func _update_next_event(elapsed: float) -> void:
 	# Find the next upcoming event
@@ -233,7 +233,7 @@ func update_time(elapsed: float, remaining: float) -> void:
 		_target_progress = 0.0
 		_current_progress = 0.0
 
-func show_event(event_type: String, _event_data: Dictionary, elapsed_time: float = 0.0) -> void:
+func show_event(event_type: String, event_data: Dictionary, elapsed_time: float = 0.0) -> void:
 	if not _event_label:
 		return
 	
@@ -252,6 +252,10 @@ func show_event(event_type: String, _event_data: Dictionary, elapsed_time: float
 			text = "ELITE ENEMY"
 			show_warning_bar = true
 		"boss":
+			var boss_count: int = event_data.get("count", 1)
+			text = "BOSS x%d" % boss_count if boss_count > 1 else "BOSS"
+			show_warning_bar = true
+		"super_boss":
 			text = "FINAL BOSS"
 			show_warning_bar = true
 	

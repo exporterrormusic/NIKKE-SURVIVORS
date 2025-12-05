@@ -7,6 +7,7 @@ class_name PlayerCore
 const CharacterRegistryScript = preload("res://scripts/characters/CharacterRegistry.gd")
 const PlayerOverheadHudScript = preload("res://scripts/player/PlayerOverheadHud.gd")
 const CharacterSwapEffectScript = preload("res://scripts/effects/CharacterSwapEffect.gd")
+const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
 
 # Movement settings
 @export var speed: float = 400.0
@@ -81,14 +82,49 @@ var shop_open: bool = false
 var _swap_effect: Node2D = null
 var _skill_points_notify: Control = null
 
+# Shop upgrade bonuses (cached at start)
+var _shop_atk_bonus: float = 0.0  # Multiplier (e.g., 0.25 = +25%)
+var _shop_crit_bonus: float = 0.0  # Flat chance (e.g., 0.10 = +10%)
+var _shop_xp_bonus: float = 0.0  # Multiplier (e.g., 0.25 = +25%)
+
 func _ready() -> void:
 	add_to_group("player")
 	_create_shadow()
+	_apply_shop_upgrades()
 	_init_audio()
 	_init_character_system()
 	_init_ui()
 	update_sprite()
 	call_deferred("_update_hud")
+
+func _apply_shop_upgrades() -> void:
+	"""Apply permanent shop upgrades to player stats."""
+	# HP bonus: +1 per level
+	var hp_bonus: int = int(ShopMenuScript.get_upgrade_bonus("hp"))
+	max_hp += hp_bonus
+	hp = max_hp
+	
+	# Speed bonus: +3% per level
+	var speed_bonus: float = ShopMenuScript.get_upgrade_bonus("speed")
+	speed *= (1.0 + speed_bonus)
+	
+	# ATK bonus: +5% per level (stored for use in calculate_damage)
+	_shop_atk_bonus = ShopMenuScript.get_upgrade_bonus("atk")
+	
+	# Crit bonus: +2% per level (stored for use in damage calculations)
+	_shop_crit_bonus = ShopMenuScript.get_upgrade_bonus("crit")
+	
+	# XP bonus: +5% per level (stored for use in XP gain)
+	_shop_xp_bonus = ShopMenuScript.get_upgrade_bonus("xp")
+	
+	if hp_bonus > 0 or speed_bonus > 0 or _shop_atk_bonus > 0 or _shop_crit_bonus > 0 or _shop_xp_bonus > 0:
+		print("[PlayerCore] Applied shop upgrades: +%d HP, +%.0f%% SPD, +%.0f%% ATK, +%.0f%% CRIT, +%.0f%% XP" % [
+			hp_bonus,
+			speed_bonus * 100,
+			_shop_atk_bonus * 100,
+			_shop_crit_bonus * 100,
+			_shop_xp_bonus * 100
+		])
 
 func _init_audio() -> void:
 	var AudioDirectorScript = load("res://scripts/systems/AudioDirector.gd")
@@ -196,15 +232,32 @@ func update_sprite() -> void:
 func _apply_character_stats(char_data: Resource) -> void:
 	"""Apply character-specific stats like speed."""
 	if char_data.base_speed > 0:
-		speed = char_data.base_speed
-		print("[PlayerCore] Applied speed: %.1f" % speed)
+		# Apply base speed then shop bonus
+		var base_speed: float = char_data.base_speed
+		var speed_bonus: float = ShopMenuScript.get_upgrade_bonus("speed")
+		speed = base_speed * (1.0 + speed_bonus)
+		print("[PlayerCore] Applied speed: %.1f (base: %.1f, +%.0f%% shop)" % [speed, base_speed, speed_bonus * 100])
 
-## Calculate damage with level scaling
-## Base formula: base_damage * (1.0 + (level - 1) * 0.5)
-## At level 1: 1.0x, level 2: 1.5x, level 3: 2.0x, level 5: 3.0x, level 10: 5.5x
+## Calculate damage with level scaling and shop ATK bonus
+## Base formula: base_damage * level_mult * (1 + shop_atk_bonus)
+## At level 1: 1.0x, level 2: 1.25x, level 3: 1.5x, level 5: 2.0x, level 10: 3.25x
 func calculate_damage(base_damage: float, multiplier: float = 1.0) -> int:
-	var level_multiplier: float = 1.0 + (level - 1) * 0.5
-	return maxi(1, int(base_damage * level_multiplier * multiplier))
+	var level_multiplier: float = 1.0 + (level - 1) * 0.25
+	var atk_multiplier: float = 1.0 + _shop_atk_bonus
+	return maxi(1, int(base_damage * level_multiplier * atk_multiplier * multiplier))
+
+## Calculate damage with potential critical hit (uses shop crit bonus)
+## Returns [damage, is_crit] - damage is 2x on crit
+func calculate_damage_with_crit(base_damage: float, multiplier: float = 1.0) -> Array:
+	var damage: int = calculate_damage(base_damage, multiplier)
+	var is_crit: bool = randf() < _shop_crit_bonus
+	if is_crit:
+		damage *= 2
+	return [damage, is_crit]
+
+## Get shop crit chance (for UI display or other systems)
+func get_crit_chance() -> float:
+	return _shop_crit_bonus
 
 ## Get current character's base damage from CharacterData
 func get_base_damage() -> float:
@@ -411,7 +464,9 @@ func _play_burst_voice() -> void:
 # ============= XP / LEVELING =============
 
 func add_xp(amount: int) -> void:
-	xp += amount
+	# Apply shop XP bonus
+	var bonus_amount: int = int(float(amount) * (1.0 + _shop_xp_bonus))
+	xp += bonus_amount
 	var leveled_up := false
 	while xp >= xp_to_next:
 		xp -= xp_to_next

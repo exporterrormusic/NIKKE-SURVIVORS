@@ -10,6 +10,7 @@ var _color := Color(1.0, 0.3, 0.1, 0.8)
 var _timer := 0.0
 var _started := false
 var _ring_width := 8.0
+var _redraw_frame := 0
 
 func initialize(radius: float, duration: float, delay: float, color: Color) -> void:
 	_max_radius = radius
@@ -36,7 +37,10 @@ func _process(delta: float) -> void:
 		queue_free()
 		return
 	
-	queue_redraw()
+	# Throttle redraws to every other frame
+	_redraw_frame += 1
+	if _redraw_frame % 2 == 0:
+		queue_redraw()
 
 func _draw() -> void:
 	if not _started:
@@ -48,5 +52,5 @@ func _draw() -> void:
 	var draw_color := Color(_color.r, _color.g, _color.b, alpha)
 	var width := _ring_width * (1.0 - t * 0.5)  # Ring gets thinner as it expands
 	
-	# Draw ring as arc (full circle)
-	draw_arc(Vector2.ZERO, current_radius, 0, TAU, 64, draw_color, width, true)
+	# Draw ring as arc (full circle) - reduced segments for performance
+	draw_arc(Vector2.ZERO, current_radius, 0, TAU, 24, draw_color, width, true)

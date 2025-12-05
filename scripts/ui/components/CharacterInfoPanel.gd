@@ -2,6 +2,8 @@ extends Panel
 class_name CharacterInfoPanel
 ## Shows character stats, special attack, and burst info when hovering.
 
+const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
+
 var _char_data: Resource = null
 
 var _sprite_viewport: SubViewport
@@ -240,11 +242,11 @@ func set_character(data: Resource) -> void:
 		if child is HBoxContainer:
 			child.queue_free()
 	
-	_add_stat("HP", data.base_hp, 20, Color(0.4, 0.9, 0.5))
-	_add_stat("ATK", int(data.base_damage), 20, Color(1.0, 0.5, 0.4))
-	_add_stat("SPD", int(data.base_speed / 10), 50, Color(0.5, 0.7, 1.0))  # Divide by 10 for cleaner display
+	_add_stat("HP", data.base_hp, 20, Color(0.4, 0.9, 0.5), "hp")
+	_add_stat("ATK", int(data.base_damage), 20, Color(1.0, 0.5, 0.4), "atk")
+	_add_stat("SPD", int(data.base_speed / 10), 50, Color(0.5, 0.7, 1.0), "speed")  # Divide by 10 for cleaner display
 	var crit_val: int = int(data.crit_chance * 100) if data.get("crit_chance") else 5
-	_add_stat("CRIT", crit_val, 100, Color(1.0, 0.85, 0.3))
+	_add_stat("CRIT", crit_val, 100, Color(1.0, 0.85, 0.3), "crit")
 	
 	# Special
 	_special_title.text = "SPECIAL: " + (data.special_name if data.special_name else "None")
@@ -257,7 +259,7 @@ func set_character(data: Resource) -> void:
 	# Get upgrade descriptions from TalentTree
 	_populate_upgrades(data)
 
-func _add_stat(stat_name: String, value: int, max_val: int, color: Color) -> void:
+func _add_stat(stat_name: String, value: int, max_val: int, color: Color, upgrade_type: String = "") -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -293,15 +295,50 @@ func _add_stat(stat_name: String, value: int, max_val: int, color: Color) -> voi
 	fill.offset_bottom = -3
 	bar_bg.add_child(fill)
 	
-	# Value label inside the bar
+	# Build value text with bonus from shop upgrades
+	var bonus_text := ""
+	
+	if upgrade_type != "":
+		var bonus: float = ShopMenuScript.get_upgrade_bonus(upgrade_type)
+		if bonus > 0:
+			match upgrade_type:
+				"hp":
+					# HP is a flat bonus (+1 per level)
+					bonus_text = "+%d" % int(bonus)
+				"atk":
+					# ATK is a percentage bonus (+5% per level)
+					bonus_text = "+%d%%" % int(bonus * 100)
+				"speed":
+					# Speed is a percentage bonus (+5% per level)
+					bonus_text = "+%d%%" % int(bonus * 100)
+				"crit":
+					# Crit is a flat percentage point bonus (+2% per level)
+					bonus_text = "+%d%%" % int(bonus * 100)
+	
+	# Create HBoxContainer for the value label content (base + bonus)
+	var val_container := HBoxContainer.new()
+	val_container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	val_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	bar_bg.add_child(val_container)
+	
+	# Base value label
 	var val_lbl := Label.new()
 	val_lbl.text = str(value)
 	val_lbl.add_theme_font_size_override("font_size", 16)
 	val_lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
-	val_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
-	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	val_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	bar_bg.add_child(val_lbl)
+	val_container.add_child(val_lbl)
+	
+	# Bonus label (if any)
+	if bonus_text != "":
+		var bonus_lbl := Label.new()
+		bonus_lbl.text = bonus_text
+		bonus_lbl.add_theme_font_size_override("font_size", 14)
+		bonus_lbl.add_theme_color_override("font_color", Color(1.0, 0.95, 0.8))  # White with slight gold tint
+		bonus_lbl.add_theme_color_override("font_outline_color", Color(1.0, 0.85, 0.4, 0.6))  # Gold glow
+		bonus_lbl.add_theme_constant_override("outline_size", 2)
+		bonus_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		val_container.add_child(bonus_lbl)
 	
 	_stats_box.add_child(row)
 
@@ -363,20 +400,9 @@ func _populate_upgrades(data: Resource) -> void:
 	_burst_upgrades_label.text = "\n".join(burst_upgrades)
 
 func _get_character_index(char_id: String) -> int:
-	"""Map character ID to TalentTree index."""
-	var id_to_index := {
-		"scarlet": 0,
-		"commander": 1,
-		"rapunzel": 2,
-		"kilo": 3,
-		"marian": 4,
-		"crown": 5,
-		"snow_white": 6,
-		"sin": 7,
-		"cecil": 8,
-		"nayuta": 9,
-	}
-	return id_to_index.get(char_id, -1)
+	"""Map character ID to TalentTree index using CharacterRegistry."""
+	var registry := CharacterRegistry.get_instance()
+	return registry.get_character_index(char_id)
 
 func _configure_animated_sprite(char_data: Resource) -> void:
 	"""Configure the AnimatedSprite2D to play the walking right animation."""

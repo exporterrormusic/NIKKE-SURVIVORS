@@ -10,6 +10,9 @@ signal ally_died
 # Preload effect scripts, scenes, and shaders
 const ExplosionEffectScript = preload("res://scripts/effects/ExplosionEffect.gd")
 const HologramShader = preload("res://resources/shaders/hologram_ally.gdshader")
+const ScarletBurstEffectScript = preload("res://scripts/characters/effects/ScarletBurstEffect.gd")
+const SnowWhiteBurstBeamScript = preload("res://scripts/characters/effects/SnowWhiteBurstBeam.gd")
+const RapunzelBurstEffectScript = preload("res://scripts/characters/effects/RapunzelBurstEffect.gd")
 
 # Preload combat scenes for better performance
 const SlashScene = preload("res://scenes/effects/Slash.tscn")
@@ -18,6 +21,9 @@ const MissileScene = preload("res://scenes/effects/Missile.tscn")
 const ScarletWaveScene = preload("res://scenes/effects/ScarletWave.tscn")
 const TurretScene = preload("res://scenes/effects/Turret.tscn")
 const HealingCrossScene = preload("res://scenes/effects/HealingCross.tscn")
+
+# Character registry for stats
+var _registry: CharacterRegistry = null
 
 # Ally type enum
 enum AllyType { SCARLET, SNOW_WHITE, RAPUNZEL }
@@ -29,6 +35,7 @@ var lifetime: float = 10.0
 var _time_alive: float = 0.0
 var _has_used_burst: bool = false
 var _burst_used_time: float = -1.0
+var player_level: int = 1  # Player level for damage scaling
 
 # Stats (will be configured based on ally type)
 var max_hp: int = 50
@@ -70,6 +77,14 @@ var _is_despawning: bool = false
 var _glow_time: float = 0.0
 var _shader_material: ShaderMaterial = null
 
+# Health bar visuals
+const HEALTH_BAR_WIDTH := 40.0
+const HEALTH_BAR_HEIGHT := 8.0
+const HEALTH_BAR_OFFSET_Y := -45.0
+var _health_bar_bg: ColorRect = null
+var _health_bar_fill: ColorRect = null
+var _health_bar_label: Node2D = null  # Now uses SummonHPLabel script for world-space text
+
 # AI behavior
 var _stuck_timer: float = 0.0
 var _last_position: Vector2 = Vector2.ZERO
@@ -89,6 +104,9 @@ func _ready() -> void:
 	# Create collision shape
 	_create_collision_shape()
 	
+	# Create health bar
+	_create_health_bar()
+	
 	# Initialize based on type
 	_configure_ally_type()
 	
@@ -98,6 +116,7 @@ func _ready() -> void:
 	_special_timer = _special_cooldown * 0.5
 	
 	current_hp = max_hp
+	_update_health_bar()
 	_last_position = global_position
 	
 	set_process(true)
@@ -129,7 +148,54 @@ func _create_collision_shape() -> void:
 	collision.shape = shape
 	add_child(collision)
 
+func _create_health_bar() -> void:
+	# Background (dark)
+	_health_bar_bg = ColorRect.new()
+	_health_bar_bg.size = Vector2(HEALTH_BAR_WIDTH, HEALTH_BAR_HEIGHT)
+	_health_bar_bg.position = Vector2(-HEALTH_BAR_WIDTH / 2.0, HEALTH_BAR_OFFSET_Y)
+	_health_bar_bg.color = Color(0.1, 0.1, 0.1, 0.8)
+	_health_bar_bg.z_index = 100
+	add_child(_health_bar_bg)
+	
+	# Fill (silver/white for hologram theme)
+	_health_bar_fill = ColorRect.new()
+	_health_bar_fill.size = Vector2(HEALTH_BAR_WIDTH, HEALTH_BAR_HEIGHT)
+	_health_bar_fill.position = Vector2(-HEALTH_BAR_WIDTH / 2.0, HEALTH_BAR_OFFSET_Y)
+	_health_bar_fill.color = Color(0.7, 0.85, 1.0, 1.0)  # Light blue/silver
+	_health_bar_fill.z_index = 101
+	add_child(_health_bar_fill)
+	
+	# HP text label using custom draw script (like EnemyHPLabel) for world-space rendering
+	var hp_label_script = load("res://scripts/effects/SummonHPLabel.gd")
+	if hp_label_script:
+		_health_bar_label = Node2D.new()
+		_health_bar_label.set_script(hp_label_script)
+		_health_bar_label.z_index = 102
+		# Position at center of health bar
+		_health_bar_label.position = Vector2(0, HEALTH_BAR_OFFSET_Y + HEALTH_BAR_HEIGHT / 2.0)
+		add_child(_health_bar_label)
+		_health_bar_label.setup(self)
+
+func _update_health_bar() -> void:
+	if _health_bar_fill:
+		var hp_ratio := float(current_hp) / float(max_hp) if max_hp > 0 else 1.0
+		_health_bar_fill.size.x = HEALTH_BAR_WIDTH * hp_ratio
+		
+		# Change color based on health (blue -> orange -> red)
+		if hp_ratio > 0.5:
+			_health_bar_fill.color = Color(0.7, 0.85, 1.0, 1.0)  # Light blue
+		elif hp_ratio > 0.25:
+			_health_bar_fill.color = Color(1.0, 0.6, 0.2, 1.0)  # Orange
+		else:
+			_health_bar_fill.color = Color(1.0, 0.3, 0.3, 1.0)  # Red
+	
+	if _health_bar_label and _health_bar_label.has_method("update_values"):
+		_health_bar_label.update_values(current_hp, max_hp)
+
 func _configure_ally_type() -> void:
+	# Get registry for character stats
+	_registry = CharacterRegistry.get_instance()
+	
 	match ally_type:
 		AllyType.SCARLET:
 			_configure_scarlet()
@@ -139,34 +205,48 @@ func _configure_ally_type() -> void:
 			_configure_rapunzel()
 
 func _configure_scarlet() -> void:
-	max_hp = 60
+	# HP and damage scale with player level (+25% HP, +25% damage per level)
+	var level_mult := 1.0 + (player_level - 1) * 0.25
+	var hp_mult := 1.0 + (player_level - 1) * 0.25
+	max_hp = int(60 * hp_mult)
 	move_speed = 280.0  # Fast melee rusher
-	attack_damage = 12
+	attack_damage = int(10 * level_mult)  # Matches Scarlet's base_damage
 	attack_range = 120.0  # Melee
 	attack_cooldown = 1.0  # 1 second between slashes for animation
 	_special_cooldown = 3.0
 	_load_sprite("scarlet")
 
 func _configure_snow_white() -> void:
-	max_hp = 45
+	# HP and damage scale with player level (+25% HP, +25% damage per level)
+	var level_mult := 1.0 + (player_level - 1) * 0.25
+	var hp_mult := 1.0 + (player_level - 1) * 0.25
+	max_hp = int(45 * hp_mult)
 	move_speed = 200.0  # Mobile sniper
-	attack_damage = 18
+	attack_damage = int(7 * level_mult)  # Matches Snow White's base_damage
 	attack_range = 600.0  # Sniper
 	attack_cooldown = 0.5  # Slower sniper shots (was 0.2)
 	_special_cooldown = 6.0
-	_snow_white_ammo = 7
-	_snow_white_max_ammo = 7
+	# Get ammo from registry
+	var snow_white_data := _registry.get_character("snow_white") if _registry else null
+	_snow_white_ammo = snow_white_data.ammo_capacity if snow_white_data else 7
+	_snow_white_max_ammo = _snow_white_ammo
 	_load_sprite("snow_white")
 
 func _configure_rapunzel() -> void:
-	max_hp = 55
+	# HP and damage scale with player level (+25% HP, +25% damage per level)
+	var level_mult := 1.0 + (player_level - 1) * 0.25
+	var hp_mult := 1.0 + (player_level - 1) * 0.25
+	max_hp = int(55 * hp_mult)
 	move_speed = 220.0  # Mobile launcher
-	attack_damage = 28
+	attack_damage = int(10 * level_mult)  # Matches Rapunzel's base_damage
 	attack_range = 500.0  # Rockets
 	attack_cooldown = 1.5  # Slower rockets (was 0.3)
 	_special_cooldown = 4.0
-	_rapunzel_ammo = 6  # More ammo
-	_rapunzel_max_ammo = 6
+	# Get ammo from registry (1.5x base ammo for allies)
+	var rapunzel_data := _registry.get_character("rapunzel") if _registry else null
+	var base_ammo: int = rapunzel_data.ammo_capacity if rapunzel_data else 4
+	_rapunzel_ammo = int(base_ammo * 1.5)
+	_rapunzel_max_ammo = _rapunzel_ammo
 	_load_sprite("rapunzel")
 
 func _load_sprite(character_id: String) -> void:
@@ -659,81 +739,40 @@ func _perform_burst() -> void:
 			_burst_rapunzel()
 
 func _burst_scarlet() -> void:
-	# Massive sword nova - damages all nearby enemies
-	var tree := get_tree()
-	if not tree:
-		return
-	
-	var burst_radius := 200.0
-	var burst_damage := attack_damage * 5
-	
-	# Damage all enemies in radius
-	var enemies := tree.get_nodes_in_group("enemies")
-	for enemy in enemies:
-		if not is_instance_valid(enemy) or not enemy is Node2D:
-			continue
-		var dist := global_position.distance_to((enemy as Node2D).global_position)
-		if dist <= burst_radius and enemy.has_method("take_damage"):
-			enemy.take_damage(burst_damage, false, Vector2.ZERO, true)
-	
-	# Visual effect - red nova
-	_spawn_burst_nova(Color(1.0, 0.2, 0.2, 0.8), burst_radius)
+	# Use the same burst effect as the player - hits all enemies on screen
+	var effect = ScarletBurstEffectScript.new()
+	effect.owner_node = self
+	effect.execute_talent = false  # No execution talent for allies
+	effect.vuln_talent = false  # No vulnerability talent for allies
+	get_parent().add_child(effect)
+	effect.global_position = global_position
 
 func _burst_snow_white() -> void:
-	# Powerful piercing shot that goes through all enemies
+	# Use the same burst beam as the player - 90° ice beam
 	var direction := _last_direction.normalized()
 	if direction.length() < 0.5:
 		direction = Vector2.RIGHT
 	
-	# Fire one super-powerful piercing bullet
-	var bullet = BulletScene.instantiate()
-	bullet.global_position = global_position + direction * 60
-	bullet.velocity = direction * 2500.0  # Extra fast
-	bullet.rotation = direction.angle()
-	bullet.owner_node = self
-	bullet.base_damage = attack_damage * 8  # Massive damage
-	bullet.pierce_all = true
-	
-	get_parent().add_child(bullet)
-	
-	# Visual effect - blue flash
-	_spawn_burst_nova(Color(0.4, 0.7, 1.0, 0.8), 100.0)
+	var beam = SnowWhiteBurstBeamScript.new()
+	beam.owner_node = self
+	beam.damage = 50  # Same as player
+	beam.beam_range = 1200.0
+	beam.beam_angle_degrees = 90.0
+	beam.burn_level = 0  # No burn talent for allies
+	beam.gauge_on_kill = false  # No gauge refill for allies
+	beam.player_level = player_level
+	beam.configure(direction)
+	get_parent().add_child(beam)
+	beam.global_position = global_position
 
 func _burst_rapunzel() -> void:
-	# Massive healing burst + damage nova
-	var tree := get_tree()
-	if not tree:
-		return
-	
-	var heal_amount := 5
-	var burst_radius := 150.0
-	var burst_damage := attack_damage * 3
-	
-	# Heal everyone
-	if owner_player and is_instance_valid(owner_player):
-		if owner_player.has_method("heal"):
-			owner_player.heal(heal_amount)
-		elif "hp" in owner_player and "max_hp" in owner_player:
-			owner_player.hp = mini(owner_player.hp + heal_amount, owner_player.max_hp)
-	
-	current_hp = mini(current_hp + heal_amount, max_hp)
-	
-	var allies := tree.get_nodes_in_group("summoned_allies")
-	for ally in allies:
-		if is_instance_valid(ally) and "current_hp" in ally and "max_hp" in ally:
-			ally.current_hp = mini(ally.current_hp + heal_amount, ally.max_hp)
-	
-	# Damage enemies
-	var enemies := tree.get_nodes_in_group("enemies")
-	for enemy in enemies:
-		if not is_instance_valid(enemy) or not enemy is Node2D:
-			continue
-		var dist := global_position.distance_to((enemy as Node2D).global_position)
-		if dist <= burst_radius and enemy.has_method("take_damage"):
-			enemy.take_damage(burst_damage, false, Vector2.ZERO, true)
-	
-	# Visual effect - golden nova
-	_spawn_burst_nova(Color(1.0, 0.9, 0.3, 0.8), burst_radius)
+	# Use the same burst effect as the player - full heal + stun all enemies
+	var effect = RapunzelBurstEffectScript.new()
+	effect.owner_node = self
+	effect.stun_duration = 4.0  # Base stun, no talent upgrade for allies
+	effect.grant_invuln = false  # No invulnerability for allies
+	get_parent().add_child(effect)
+	effect.global_position = global_position
 
 func _spawn_burst_nova(_color: Color, _radius: float) -> void:
 	# Burst visual is handled by screen flash if available, or just skip
@@ -818,6 +857,7 @@ func _draw() -> void:
 
 func take_damage(amount: int, _is_crit: bool = false, _direction: Vector2 = Vector2.ZERO, _from_burst: bool = false) -> void:
 	current_hp = maxi(0, current_hp - amount)
+	_update_health_bar()
 	
 	if current_hp <= 0:
 		_die()
@@ -841,9 +881,10 @@ func _expire() -> void:
 		ally_expired.emit()
 
 ## Setup the ally with owner and type
-func setup(player: Node2D, type: int) -> void:
+func setup(player: Node2D, type: int, level: int = 1) -> void:
 	owner_player = player
 	ally_type = type as AllyType
+	player_level = level
 	# Defer configuration until after _ready() has run
 	# This ensures _animator exists before we try to set sprite_frames
 

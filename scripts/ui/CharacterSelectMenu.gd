@@ -308,24 +308,29 @@ func _create_card(char_id: String, data: Resource) -> Control:
 		lock_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		card.add_child(lock_overlay)
 		
+		# CenterContainer to properly center the VBox
+		var lock_center := CenterContainer.new()
+		lock_center.set_anchors_preset(Control.PRESET_FULL_RECT)
+		lock_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(lock_center)
+		
 		# VBox to center lock icon and text vertically
 		var lock_vbox := VBoxContainer.new()
-		lock_vbox.set_anchors_preset(Control.PRESET_CENTER)
 		lock_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-		lock_vbox.add_theme_constant_override("separation", 2)
+		lock_vbox.add_theme_constant_override("separation", 6)
 		lock_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		card.add_child(lock_vbox)
+		lock_center.add_child(lock_vbox)
 		
 		var lock_icon := Label.new()
 		lock_icon.text = "🔒"
-		lock_icon.add_theme_font_size_override("font_size", 36)
+		lock_icon.add_theme_font_size_override("font_size", 72)
 		lock_icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lock_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		lock_vbox.add_child(lock_icon)
 		
 		var locked_text := Label.new()
 		locked_text.text = "LOCKED"
-		locked_text.add_theme_font_size_override("font_size", 12)
+		locked_text.add_theme_font_size_override("font_size", 24)
 		locked_text.add_theme_color_override("font_color", Color(0.9, 0.3, 0.3, 1.0))
 		locked_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		locked_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -445,6 +450,10 @@ func _apply_random_button_style(btn: Button) -> void:
 	btn.add_theme_color_override("font_color", Color(1.0, 0.95, 0.95))
 
 func _on_random_pressed() -> void:
+	# Disconnect squad_complete signal to prevent auto-transition
+	if _squad_slots.squad_complete.is_connected(_on_squad_complete):
+		_squad_slots.squad_complete.disconnect(_on_squad_complete)
+	
 	# Clear current squad
 	_squad_slots.clear()
 	_update_card_states()
@@ -462,6 +471,9 @@ func _on_random_pressed() -> void:
 		_squad_slots.add_character(unlocked_ids[i])
 	
 	_update_card_states()
+	
+	# Reconnect the signal
+	_squad_slots.squad_complete.connect(_on_squad_complete)
 
 func _apply_next_button_style(btn: Button) -> void:
 	var normal := StyleBoxFlat.new()

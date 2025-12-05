@@ -3,7 +3,7 @@ extends Node
 ## Saves/loads settings from user://settings.cfg
 ## Applies resolution, fullscreen, audio, and control bindings.
 
-const SETTINGS_PATH := "user://settings.cfg"
+const SaveManagerScript = preload("res://scripts/systems/SaveManager.gd")
 
 # Default values
 const DEFAULT_MUSIC_VOLUME := 0.8
@@ -36,7 +36,7 @@ func _ready() -> void:
 
 func load_settings() -> void:
 	var config := ConfigFile.new()
-	var err := config.load(SETTINGS_PATH)
+	var err := config.load(SaveManagerScript.SETTINGS_PATH)
 	
 	if err != OK:
 		print("[SettingsManager] No saved settings found, using defaults")
@@ -76,7 +76,7 @@ func save_settings() -> void:
 	_update_key_bindings_from_inputmap()
 	config.set_value("controls", "key_bindings", key_bindings)
 	
-	var err := config.save(SETTINGS_PATH)
+	var err := config.save(SaveManagerScript.SETTINGS_PATH)
 	if err == OK:
 		print("[SettingsManager] Settings saved successfully")
 	else:

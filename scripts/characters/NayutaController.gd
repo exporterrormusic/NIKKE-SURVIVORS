@@ -31,14 +31,9 @@ const BURST_STUN_DURATION := 8.0
 const BURST_DEBUFF_MULTIPLIER := 1.5
 
 func _on_initialize() -> void:
-	# Nayuta uses dual SMGs like Sin
-	max_ammo = 45
-	ammo = max_ammo
-	
-	# Set timings
-	data.reload_time = 2.0
-	data.attack_cooldown = 0.08  # Fast SMG fire rate
-	data.special_cooldown = 8.0  # Clone summon cooldown
+	# Ammo already set from CharacterRegistry by base class
+	# Clone summon cooldown
+	data.special_cooldown = 8.0
 
 func _on_process(_delta: float) -> void:
 	# Clean up dead clone references
@@ -105,8 +100,13 @@ func _summon_clone() -> void:
 	# Pick random weapon from pool
 	var weapon: String = _weapon_pool[randi() % _weapon_pool.size()]
 	
-	# Calculate clone stats (25% HP, 1/5 attack)
-	var clone_hp: int = maxi(1, player.max_hp / 4)
+	# Get player level for scaling (default to 1)
+	var player_level: int = player.get("level") if "level" in player else 1
+	
+	# Calculate clone stats (25% HP, 1/5 attack, scales with player level)
+	# HP scales: base 25% of player HP, +25% per level
+	var hp_level_mult := 1.0 + (player_level - 1) * 0.25
+	var clone_hp: int = maxi(1, int((player.max_hp / 4) * hp_level_mult))
 	var clone_attack: float = 0.2  # 1/5 damage multiplier
 	
 	# Create clone (CharacterBody2D required for NayutaClone)
@@ -120,8 +120,8 @@ func _summon_clone() -> void:
 	parent.add_child(clone)
 	clone.global_position = player.global_position + spawn_offset
 	
-	# Initialize clone with weapon from pool
-	clone.initialize(player, weapon, clone_hp, clone_attack, clone_heal_level > 0)
+	# Initialize clone with weapon from pool and player level for scaling
+	clone.initialize(player, weapon, clone_hp, clone_attack, clone_heal_level > 0, player_level)
 	
 	# Debug print weapon pool
 	print("[NayutaController] Summoned clone with weapon: %s (pool: %s)" % [weapon, _weapon_pool])

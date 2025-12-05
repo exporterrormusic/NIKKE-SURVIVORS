@@ -41,28 +41,28 @@ func set_map_bounds(bounds: Rect2) -> void:
 
 # Elite visual settings - 5x size, gold glow, has boss abilities
 const ELITE_SCALE := 3.25
-const ELITE_HP_MULT := 40.0
+const ELITE_HP_MULT := 10.0
 const ELITE_DAMAGE_MULT := 3.0
 const ELITE_SPEED_MULT := 0.8
 const ELITE_GLOW_COLOR := Color(1.0, 0.85, 0.2, 1.0)  # Gold glow
 
 # Tank settings - 2x size, red glow
 const TANK_SCALE := 2.0
-const TANK_HP_MULT := 15.0
+const TANK_HP_MULT := 5.0
 const TANK_SPEED_MULT := 1.0
 const TANK_DAMAGE_MULT := 2.0
 const TANK_GLOW_COLOR := Color(1.0, 0.2, 0.1, 1.0)  # Red glow
 
 # Boss settings - 4.5x size, purple glow
 const BOSS_SCALE := 4.5
-const BOSS_HP_MULT := 100.0
+const BOSS_HP_MULT := 50.0
 const BOSS_SPEED_MULT := 0.5  # 0.5x normal speed
 const BOSS_DAMAGE_MULT := 5.0
 const BOSS_GLOW_COLOR := Color(0.7, 0.2, 1.0, 1.0)  # Purple glow
 
 # Super Boss settings (Stage 2) - 5.5x size, red-purple glow
 const SUPER_BOSS_SCALE := 5.5
-const SUPER_BOSS_HP_MULT := 200.0
+const SUPER_BOSS_HP_MULT := 100.0
 const SUPER_BOSS_SPEED_MULT := 0.4
 const SUPER_BOSS_DAMAGE_MULT := 8.0
 const SUPER_BOSS_GLOW_COLOR := Color(1.0, 0.2, 0.5, 1.0)  # Red-purple glow
@@ -186,16 +186,18 @@ func _create_enemy(enemy_type: String, is_elite: bool = false) -> Node2D:
 	return enemy
 
 func _apply_basic_stats(enemy: Node2D) -> void:
-	# Apply wave health multiplier - basic enemies can shoot and melee
-	enemy.max_hp = int(enemy.max_hp * _health_multiplier)
+	# Apply wave health multiplier and difficulty multiplier
+	var difficulty_mult: int = GameState.difficulty_multiplier
+	enemy.max_hp = int(enemy.max_hp * _health_multiplier * difficulty_mult)
 	enemy.hp = enemy.max_hp
 	# Enable shooting
 	if enemy.has_method("set_can_shoot"):
 		enemy.set_can_shoot(true)
 
 func _apply_tank_stats(enemy: Node2D) -> void:
+	var difficulty_mult: int = GameState.difficulty_multiplier
 	enemy.scale = Vector2.ONE * TANK_SCALE
-	enemy.max_hp = int(enemy.max_hp * TANK_HP_MULT * _health_multiplier)
+	enemy.max_hp = int(enemy.max_hp * TANK_HP_MULT * _health_multiplier * difficulty_mult)
 	enemy.hp = enemy.max_hp
 	enemy.speed = int(enemy.speed * TANK_SPEED_MULT)
 	# Tanks can shoot missiles AND melee
@@ -205,6 +207,16 @@ func _apply_tank_stats(enemy: Node2D) -> void:
 	enemy.set_meta("enemy_tier", "tank")  # Track tier for frostburn reduction
 	# Red outline glow (respects sprite alpha) with enhanced core
 	_apply_outline_glow(enemy, TANK_GLOW_COLOR, true)
+	
+	# Goddess Fall mode: Tanks get missile ability like elites/bosses
+	if GameState.goddess_fall_mode:
+		var boss_ai = load("res://scripts/enemies/BossAI.gd")
+		if boss_ai:
+			var ai_node := Node.new()
+			ai_node.set_script(boss_ai)
+			ai_node.name = "BossAI"
+			ai_node.set_meta("tank_mode", true)  # Limited abilities for tanks
+			enemy.add_child(ai_node)
 	
 	# Add tank visual effects (ground cracks, stomp particles, proximity vignette)
 	var tank_fx := Node2D.new()
@@ -277,15 +289,18 @@ void fragment() {
 	return shader
 
 func _apply_boss_stats(enemy: Node2D) -> void:
-	print("[EnemySpawner] Applying BOSS stats: scale=", BOSS_SCALE, " hp_mult=", BOSS_HP_MULT, " health_mult=", _health_multiplier)
+	var difficulty_mult: int = GameState.difficulty_multiplier
+	print("[EnemySpawner] Applying BOSS stats: scale=", BOSS_SCALE, " hp_mult=", BOSS_HP_MULT, " health_mult=", _health_multiplier, " difficulty=", difficulty_mult)
 	enemy.scale = Vector2.ONE * BOSS_SCALE
-	enemy.max_hp = int(enemy.max_hp * BOSS_HP_MULT * _health_multiplier)
+	enemy.max_hp = int(enemy.max_hp * BOSS_HP_MULT * _health_multiplier * difficulty_mult)
 	enemy.hp = enemy.max_hp
 	enemy.speed = int(enemy.speed * BOSS_SPEED_MULT)
 	print("[EnemySpawner] Boss HP set to: ", enemy.max_hp, " speed=", enemy.speed, " scale=", enemy.scale)
 	enemy.add_to_group("boss")
 	enemy.set_meta("enemy_tier", "boss")
-	enemy.set_meta("pristine_core_drop", 1)  # Bosses drop 1 pristine core
+	# Bosses have 1/3 chance of dropping pristine cores, multiplied by difficulty
+	if randf() < 0.333:
+		enemy.set_meta("pristine_core_drop", difficulty_mult)
 	# Purple outline glow (respects sprite alpha) with enhanced core
 	_apply_outline_glow(enemy, BOSS_GLOW_COLOR, true)
 	
@@ -303,21 +318,26 @@ func _apply_boss_stats(enemy: Node2D) -> void:
 	boss_fx.name = "BossEffects"
 	enemy.add_child(boss_fx)
 	
+	# Goddess Fall mode: Boss enrage timer (60 seconds to kill or player dies)
+	if GameState.goddess_fall_mode:
+		_setup_boss_enrage_timer(enemy)
+	
 	# Show boss health bar
 	if _boss_health_bar and _boss_health_bar.has_method("show_boss"):
 		_boss_health_bar.show_boss(enemy, "RAPTURE TITAN")
 
 func _apply_super_boss_stats(enemy: Node2D) -> void:
-	print("[EnemySpawner] Applying SUPER BOSS stats: scale=", SUPER_BOSS_SCALE, " hp_mult=", SUPER_BOSS_HP_MULT)
+	var difficulty_mult: int = GameState.difficulty_multiplier
+	print("[EnemySpawner] Applying SUPER BOSS stats: scale=", SUPER_BOSS_SCALE, " hp_mult=", SUPER_BOSS_HP_MULT, " difficulty=", difficulty_mult)
 	enemy.scale = Vector2.ONE * SUPER_BOSS_SCALE
-	enemy.max_hp = int(enemy.max_hp * SUPER_BOSS_HP_MULT * _health_multiplier)
+	enemy.max_hp = int(enemy.max_hp * SUPER_BOSS_HP_MULT * _health_multiplier * difficulty_mult)
 	enemy.hp = enemy.max_hp
 	enemy.speed = int(enemy.speed * SUPER_BOSS_SPEED_MULT)
 	print("[EnemySpawner] Super Boss HP set to: ", enemy.max_hp, " speed=", enemy.speed, " scale=", enemy.scale)
 	enemy.add_to_group("boss")
 	enemy.add_to_group("super_boss")
 	enemy.set_meta("enemy_tier", "super_boss")
-	enemy.set_meta("pristine_core_drop", 3)  # Super bosses drop 3 pristine cores
+	enemy.set_meta("pristine_core_drop", difficulty_mult)  # Super bosses guaranteed cores * difficulty
 	# Red-purple outline glow
 	_apply_outline_glow(enemy, SUPER_BOSS_GLOW_COLOR, true)
 	
@@ -335,14 +355,20 @@ func _apply_super_boss_stats(enemy: Node2D) -> void:
 	boss_fx.name = "BossEffects"
 	enemy.add_child(boss_fx)
 	
+	# Goddess Fall mode: Super boss gets empowerment aura
+	if GameState.goddess_fall_mode:
+		_setup_super_boss_aura(enemy)
+		_setup_boss_enrage_timer(enemy)
+	
 	# Show boss health bar
 	if _boss_health_bar and _boss_health_bar.has_method("show_boss"):
 		_boss_health_bar.show_boss(enemy, "RAPTURE OVERLORD")
 
 func _apply_elite_modifier(enemy: Node2D) -> void:
-	print("[EnemySpawner] Applying ELITE modifier on top of existing HP: ", enemy.max_hp)
+	var difficulty_mult: int = GameState.difficulty_multiplier
+	print("[EnemySpawner] Applying ELITE modifier on top of existing HP: ", enemy.max_hp, " difficulty=", difficulty_mult)
 	enemy.scale = Vector2.ONE * ELITE_SCALE  # Fixed 5x scale, not multiplicative
-	enemy.max_hp = int(enemy.max_hp * ELITE_HP_MULT * _health_multiplier)
+	enemy.max_hp = int(enemy.max_hp * ELITE_HP_MULT * _health_multiplier * difficulty_mult)
 	enemy.hp = enemy.max_hp
 	enemy.speed = int(enemy.speed * ELITE_SPEED_MULT)
 	print("[EnemySpawner] Elite HP now: ", enemy.max_hp)
@@ -352,11 +378,14 @@ func _apply_elite_modifier(enemy: Node2D) -> void:
 	_apply_outline_glow(enemy, ELITE_GLOW_COLOR, true)
 	
 	# Add boss attack controller (missiles + beam) to elites
+	# In Goddess Fall mode, elites also get laser and rocket abilities
 	var boss_ai = load("res://scripts/enemies/BossAI.gd")
 	if boss_ai:
 		var ai_node := Node.new()
 		ai_node.set_script(boss_ai)
 		ai_node.name = "BossAI"
+		if GameState.goddess_fall_mode:
+			ai_node.set_meta("elite_enhanced", true)  # Full abilities in Goddess Fall
 		enemy.add_child(ai_node)
 	
 	# Add elite visual effects (golden aura, spark trail, glowing core)
@@ -475,3 +504,45 @@ func get_enemy_count() -> int:
 	if not _enemy_container:
 		return 0
 	return _enemy_container.get_child_count()
+
+
+# === GODDESS FALL MODE FUNCTIONS ===
+
+## Setup boss enrage timer - boss explodes after 60 seconds if not killed, killing the player
+func _setup_boss_enrage_timer(boss: Node2D) -> void:
+	var timer := Timer.new()
+	timer.name = "EnrageTimer"
+	timer.one_shot = true
+	timer.wait_time = 60.0
+	timer.timeout.connect(_on_boss_enrage_timeout.bind(boss))
+	boss.add_child(timer)
+	timer.start()
+	
+	# Add visual warning timer display
+	boss.set_meta("enrage_timer", timer)
+	boss.set_meta("enrage_start_time", Time.get_ticks_msec())
+	print("[EnemySpawner] Boss enrage timer started - 60 seconds to kill!")
+
+func _on_boss_enrage_timeout(boss: Node2D) -> void:
+	if not is_instance_valid(boss):
+		return
+	
+	print("[EnemySpawner] BOSS ENRAGED! Exploding and killing player!")
+	
+	# Find and kill the player
+	if _player and _player.has_method("take_damage"):
+		# Deal massive damage to ensure death
+		_player.take_damage(9999)
+	
+	# Create explosion effect at boss position
+	# The boss dies in the explosion too
+	if boss.has_method("take_damage"):
+		boss.take_damage(boss.max_hp * 10)
+
+## Setup super boss empowerment aura - buffs nearby enemies
+func _setup_super_boss_aura(boss: Node2D) -> void:
+	var aura_node := Node2D.new()
+	aura_node.name = "EmpowermentAura"
+	aura_node.set_script(load("res://scripts/enemies/effects/SuperBossAura.gd"))
+	boss.add_child(aura_node)
+	print("[EnemySpawner] Super boss empowerment aura active!")

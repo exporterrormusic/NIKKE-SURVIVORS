@@ -15,6 +15,7 @@ var _wave_ui: CanvasLayer = null
 var _enemy_container: Node2D = null
 var _combat_juice: Node = null
 var _score_ui: Control = null
+var _core_counter: CanvasLayer = null
 
 func _ready():
 	_rng.randomize()
@@ -23,6 +24,13 @@ func _ready():
 	# Reset run stats for new game
 	if GameState:
 		GameState.reset_run_stats()
+	
+	# Reset achievement session tracking
+	if has_node("/root/AchievementManager"):
+		get_node("/root/AchievementManager").reset_session()
+	
+	# Setup achievement notification UI
+	_setup_achievement_notification()
 	
 	# Setup pause menu immediately
 	_setup_pause_menu()
@@ -81,6 +89,13 @@ func _toggle_pause_menu() -> void:
 	else:
 		_pause_menu.show_pause()
 
+func _setup_achievement_notification() -> void:
+	var AchievementNotificationScript = load("res://scripts/ui/AchievementNotification.gd")
+	var notif := CanvasLayer.new()
+	notif.set_script(AchievementNotificationScript)
+	notif.name = "AchievementNotification"
+	add_child(notif)
+
 func _setup_pause_menu() -> void:
 	var PauseMenuScript = load("res://scripts/ui/PauseMenu.gd")
 	_pause_menu = CanvasLayer.new()
@@ -104,11 +119,25 @@ func _on_resume_requested() -> void:
 	pass
 
 func _on_settings_requested() -> void:
-	# Open settings menu
+	# Open settings menu in a CanvasLayer so it renders on top of everything
 	var settings_scene = load("res://scenes/ui/SettingsMenu.tscn")
 	if settings_scene:
+		var canvas_layer := CanvasLayer.new()
+		canvas_layer.layer = 101  # Above pause menu (layer 100)
+		canvas_layer.name = "SettingsLayer"
+		add_child(canvas_layer)
+		
 		var settings = settings_scene.instantiate()
-		add_child(settings)
+		settings.process_mode = Node.PROCESS_MODE_ALWAYS  # Work while paused
+		canvas_layer.add_child(settings)
+		
+		# Connect back signal to close settings
+		settings.back_requested.connect(_on_settings_closed.bind(canvas_layer))
+
+func _on_settings_closed(canvas_layer: CanvasLayer) -> void:
+	# Remove the settings menu and its canvas layer
+	if canvas_layer and is_instance_valid(canvas_layer):
+		canvas_layer.queue_free()
 
 func _on_character_select_requested() -> void:
 	get_tree().paused = false
@@ -184,19 +213,16 @@ func _initialize_stage_environment() -> void:
 	var biome: StringName
 	var time: StringName
 	
-	if not stage.is_empty():
+	# Use GameState.selected_biome and selected_time (set by map selector in StageSelector)
+	# These override the stage's default biome/time
+	if GameState.selected_biome != "" and GameState.selected_time != "":
+		biome = StringName(GameState.selected_biome)
+		time = StringName(GameState.selected_time)
+		print("[Level] Using selected map: biome=", biome, " time=", time)
+	elif not stage.is_empty():
 		biome = StringName(stage.biome)
 		time = StringName(stage.time)
-		print("[Level] Loading stage: ", stage.name, " (biome=", biome, " time=", time, ")")
-		
-		# Apply spawn rules to spawner and wave director
-		var spawn_rules: Dictionary = stage.get("spawn_rules", {})
-		if _enemy_spawner and spawn_rules.get("elite_only", false):
-			_enemy_spawner.set_elite_only_mode(true)
-			print("[Level] Elite-only mode enabled")
-		if _wave_director and spawn_rules.get("endless", false):
-			_wave_director.set_endless_mode(true)
-			print("[Level] Endless mode enabled")
+		print("[Level] Using stage default: ", stage.name, " (biome=", biome, " time=", time, ")")
 	else:
 		# Fallback to random if no stage selected
 		var biomes := [&"snowfield", &"sakura_grove", &"grasslands", &"dunes"]
@@ -204,6 +230,16 @@ func _initialize_stage_environment() -> void:
 		biome = biomes[_rng.randi() % biomes.size()]
 		time = times[_rng.randi() % times.size()]
 		print("[Level] No stage selected, using random: biome=", biome, " time=", time)
+	
+	# Apply spawn rules from stage to spawner and wave director
+	if not stage.is_empty():
+		var spawn_rules: Dictionary = stage.get("spawn_rules", {})
+		if _enemy_spawner and spawn_rules.get("elite_only", false):
+			_enemy_spawner.set_elite_only_mode(true)
+			print("[Level] Elite-only mode enabled")
+		if _wave_director and spawn_rules.get("endless", false):
+			_wave_director.set_endless_mode(true)
+			print("[Level] Endless mode enabled")
 	
 	# Initialize environment
 	environment.initialize_environment(0, biome, time)
@@ -368,6 +404,9 @@ func _setup_wave_system() -> void:
 	
 	# Setup score UI in top-right corner
 	_setup_score_ui()
+	
+	# Setup core counter in bottom-right corner
+	_setup_core_counter()
 
 func _setup_score_ui() -> void:
 	var ScoreUIScript = load("res://scripts/ui/ScoreUI.gd")
@@ -382,6 +421,113 @@ func _setup_score_ui() -> void:
 		_score_ui.name = "ScoreUI"
 		canvas.add_child(_score_ui)
 		print("[Level] Score UI initialized")
+
+func _setup_core_counter() -> void:
+	# Create core counter in bottom-right corner
+	_core_counter = CanvasLayer.new()
+	_core_counter.name = "CoreCounterLayer"
+	_core_counter.layer = 10
+	add_child(_core_counter)
+	
+	var counter := Control.new()
+	counter.name = "CoreCounter"
+	counter.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	counter.offset_left = -180
+	counter.offset_top = -70
+	counter.offset_right = -20
+	counter.offset_bottom = -20
+	_core_counter.add_child(counter)
+	
+	# Background panel
+	var panel := Panel.new()
+	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.05, 0.05, 0.08, 0.85)
+	style.border_color = Color(0.8, 0.25, 0.2, 0.9)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(8)
+	panel.add_theme_stylebox_override("panel", style)
+	counter.add_child(panel)
+	
+	# HBox for icon + label - use CenterContainer for proper vertical centering
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	counter.add_child(center)
+	
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 10)
+	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	center.add_child(hbox)
+	
+	# Pristine Core icon
+	var icon := _PristineCoreIcon.new()
+	icon.custom_minimum_size = Vector2(36, 36)
+	hbox.add_child(icon)
+	
+	# Core count label
+	var label := Label.new()
+	label.name = "CoreLabel"
+	label.text = str(GameState.get_pristine_cores())
+	label.add_theme_font_size_override("font_size", 32)
+	label.add_theme_color_override("font_color", Color(1.0, 0.35, 0.3, 1.0))
+	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	label.add_theme_constant_override("shadow_offset_x", 2)
+	label.add_theme_constant_override("shadow_offset_y", 2)
+	hbox.add_child(label)
+	
+	print("[Level] Core counter initialized")
+
+func _update_core_counter() -> void:
+	if not _core_counter:
+		return
+	var counter := _core_counter.get_node_or_null("CoreCounter")
+	if not counter:
+		return
+	var label := counter.get_node_or_null("HBoxContainer/CoreLabel") as Label
+	if not label:
+		# Try alternative path (hbox might be added directly)
+		for child in counter.get_children():
+			if child is HBoxContainer:
+				label = child.get_node_or_null("CoreLabel") as Label
+				break
+	if label and GameState:
+		label.text = str(GameState.get_pristine_cores())
+
+# Inner class for drawing the Pristine Core icon
+class _PristineCoreIcon extends Control:
+	func _draw() -> void:
+		var center: Vector2 = size / 2.0
+		var radius: float = minf(size.x, size.y) / 2.0 - 2.0
+		
+		# Outer glow
+		for i in range(6, 0, -1):
+			var glow_alpha: float = 0.12 * (1.0 - float(i) / 6.0)
+			var glow_radius: float = radius + float(i) * 1.5
+			draw_circle(center, glow_radius, Color(1.0, 0.2, 0.2, glow_alpha))
+		
+		# Main sphere gradient
+		var segments: int = 24
+		for i in range(segments, 0, -1):
+			var t: float = float(i) / float(segments)
+			var r: float = radius * t
+			var color := Color(0.6 + 0.4 * (1.0 - t), 0.1 + 0.2 * (1.0 - t), 0.1 + 0.1 * (1.0 - t))
+			draw_circle(center, r, color)
+		
+		# Inner glowing core
+		var core_radius: float = radius * 0.5
+		for i in range(12, 0, -1):
+			var t: float = float(i) / 12.0
+			var r: float = core_radius * t
+			var alpha: float = 0.8 * (1.0 - t * 0.5)
+			draw_circle(center, r, Color(1.0, 0.5, 0.3, alpha))
+		
+		# Hot center
+		draw_circle(center, radius * 0.15, Color(1.0, 0.9, 0.7, 1.0))
+		
+		# Specular highlight
+		var highlight_offset: Vector2 = Vector2(-radius * 0.25, -radius * 0.25)
+		var highlight_radius: float = radius * 0.2
+		draw_circle(center + highlight_offset, highlight_radius, Color(1.0, 1.0, 1.0, 0.6))
 
 func _process(_delta: float) -> void:
 	# Update wave director with current enemy count
@@ -408,7 +554,8 @@ func _on_enemy_spawn_requested(enemy_type: String, count: int, pattern: String) 
 			
 			# Check for boss death to notify director
 			if enemy.is_in_group("boss"):
-				enemy.tree_exiting.connect(_on_boss_died)
+				var is_super := enemy.is_in_group("super_boss")
+				enemy.tree_exiting.connect(_on_boss_died.bind(is_super))
 		else:
 			print("[Level] ERROR: spawn_enemy returned null!")
 
@@ -424,27 +571,32 @@ func _on_boss_incoming(_boss_type: String, time_until: float) -> void:
 	if _wave_ui:
 		_wave_ui.show_boss_warning(time_until)
 
-func _on_boss_died() -> void:
+func _on_boss_died(is_super_boss: bool = false) -> void:
 	if _wave_director:
-		_wave_director.notify_boss_defeated()
+		_wave_director.notify_boss_defeated(is_super_boss)
 
 func _on_run_complete(survived: bool, final_time: float) -> void:
 	@warning_ignore("integer_division")
 	var mins := int(final_time) / 60
 	var secs := int(final_time) % 60
 	if survived:
-		print("[Level] 🎉 RUN COMPLETE! Survived %d:%02d" % [mins, secs])
+		print("[Level] RUN COMPLETE! Survived %d:%02d" % [mins, secs])
 		# Mark stage as cleared
 		if GameState:
 			GameState.mark_stage_cleared(GameState.current_stage_id)
 			# Award Pristine Rapture Core for defeating the boss
 			GameState.add_pristine_cores(1)
+			_update_core_counter()
+			
+			# Track win achievement for all characters in squad
+			_track_win_achievement()
+		
 		# Show victory screen
 		var pause_menu = get_node_or_null("PauseMenu")
 		if pause_menu and pause_menu.has_method("show_victory"):
 			pause_menu.show_victory()
 	else:
-		print("[Level] 💀 Run ended at %d:%02d" % [mins, secs])
+		print("[Level] Run ended at %d:%02d" % [mins, secs])
 
 func _on_time_updated(elapsed: float, remaining: float) -> void:
 	if _wave_ui:
@@ -524,7 +676,29 @@ func _propagate_pause(node: Node, paused: bool) -> void:
 	# Call a custom pause hook if present
 	if node.has_method("on_game_paused"):
 		node.on_game_paused(paused)
-
+	
 	# Recurse into children
 	for child in node.get_children():
 		_propagate_pause(child, paused)
+
+
+## Track win achievement for all squad members
+func _track_win_achievement() -> void:
+	if not has_node("/root/AchievementManager"):
+		return
+	
+	var achievement_manager = get_node("/root/AchievementManager")
+	
+	# Get squad character IDs from GameState
+	var char_ids: Array = []
+	if GameState:
+		var registry = CharacterRegistry.get_instance()
+		if registry:
+			var all_ids: Array = registry.get_all_character_ids()
+			for idx in GameState.selected_character_indices:
+				if idx >= 0 and idx < all_ids.size():
+					char_ids.append(all_ids[idx])
+	
+	if char_ids.size() > 0:
+		print("[Level] Tracking win for squad: %s" % str(char_ids))
+		achievement_manager.on_game_won(char_ids)

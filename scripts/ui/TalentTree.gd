@@ -7,6 +7,8 @@ class_name TalentTree
 signal talent_unlocked(character_id: int, talent_id: String)
 signal tree_closed
 
+const UI := preload("res://scripts/ui/UITheme.gd")
+
 # Preload portraits at class level to avoid runtime loading issues
 var _portraits: Array[Texture2D] = []
 var _burst_portraits: Array[Texture2D] = []
@@ -16,16 +18,6 @@ var _main_panel: PanelContainer = null
 var _character_panel: VBoxContainer = null
 var _tree_panel: VBoxContainer = null
 var _current_character: int = -1
-
-# Colors
-const BG_COLOR := Color(0.02, 0.02, 0.04, 0.75)
-const PANEL_BG := Color(0.06, 0.06, 0.09, 0.98)
-const BORDER_COLOR := Color(0.7, 0.7, 0.75, 1.0)
-const HOVER_BORDER := Color(1.0, 0.85, 0.2, 1.0)
-const LOCKED_COLOR := Color(0.35, 0.35, 0.4, 1.0)
-const UNLOCKED_COLOR := Color(0.3, 0.9, 0.4, 1.0)
-const TITLE_COLOR := Color(1.0, 1.0, 1.0, 1.0)
-const DESC_COLOR := Color(0.7, 0.7, 0.75, 1.0)
 
 # Character data - loaded from CharacterRegistry
 var CHARACTER_NAMES: Array[String] = []
@@ -83,8 +75,8 @@ var TALENT_DATA := {
 		 "tooltip": "Heals 3% max HP/s for 9s. 10s cooldown."},
 		{"id": "special_power", "name": "Rejuvenation", "desc": "Healing: 10/17.5/25% max HP/s", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
 		 "tooltip": "Increases healing power dramatically."},
-		{"id": "special_size", "name": "Expanding Aura", "desc": "Zone size/duration +50/150/300%", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "Larger radius and longer duration."},
+		{"id": "special_size", "name": "Expanding Aura", "desc": "Zone size +50/150/300%", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
+		 "tooltip": "Larger healing radius."},
 		{"id": "burst", "name": "Garden of Shangri-La", "desc": "BURST: Massive heal + stun", "col": 1, "row": 2, "requires": ["special"], "max": 1, "cost": 1, "burst": true,
 		 "tooltip": "Full heal + 4s stun on all enemies."},
 		{"id": "burst_stun", "name": "Blinding Radiance", "desc": "Stun duration increased to 8s", "col": 0, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
@@ -314,7 +306,7 @@ func _load_character_data() -> void:
 func _build_ui() -> void:
 	# Full screen dark overlay
 	var overlay := ColorRect.new()
-	overlay.color = BG_COLOR
+	overlay.color = UI.BG_OVERLAY
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(overlay)
@@ -337,8 +329,8 @@ func _build_ui() -> void:
 	_main_panel = PanelContainer.new()
 	_main_panel.custom_minimum_size = Vector2(1000, 750)
 	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = PANEL_BG
-	panel_style.border_color = BORDER_COLOR
+	panel_style.bg_color = UI.BG_DEEP
+	panel_style.border_color = UI.ACCENT_PRIMARY_DIM
 	panel_style.set_border_width_all(3)
 	panel_style.set_corner_radius_all(12)
 	panel_style.set_content_margin_all(15)
@@ -478,8 +470,8 @@ func _build_stats_panel() -> PanelContainer:
 	panel.custom_minimum_size = Vector2(220, 750)
 	
 	var style := StyleBoxFlat.new()
-	style.bg_color = PANEL_BG
-	style.border_color = BORDER_COLOR
+	style.bg_color = UI.BG_DEEP
+	style.border_color = UI.ACCENT_PRIMARY_DIM
 	style.set_border_width_all(3)
 	style.set_corner_radius_all(12)
 	style.set_content_margin_all(15)
@@ -494,7 +486,7 @@ func _build_stats_panel() -> PanelContainer:
 	title.text = "STATS"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 32)
-	title.add_theme_color_override("font_color", TITLE_COLOR)
+	title.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
 	vbox.add_child(title)
 	
 	# Separator
@@ -508,7 +500,7 @@ func _build_stats_panel() -> PanelContainer:
 	char_label.text = "Current"
 	char_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	char_label.add_theme_font_size_override("font_size", 16)
-	char_label.add_theme_color_override("font_color", HOVER_BORDER)
+	char_label.add_theme_color_override("font_color", UI.TALENT_HOVER_BORDER)
 	vbox.add_child(char_label)
 	
 	# Small spacer
@@ -566,7 +558,7 @@ func _create_stat_row(label_text: String, value_text: String, value_color: Color
 	var name_label := Label.new()
 	name_label.text = label_text
 	name_label.add_theme_font_size_override("font_size", 18)
-	name_label.add_theme_color_override("font_color", DESC_COLOR)
+	name_label.add_theme_color_override("font_color", UI.TEXT_SECONDARY)
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(name_label)
 	
@@ -672,7 +664,7 @@ func _build_character_panel() -> void:
 	points.text = "   AVAILABLE SKILL POINTS: %d   " % _skill_points
 	points.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	points.add_theme_font_size_override("font_size", 32)
-	points.add_theme_color_override("font_color", HOVER_BORDER)
+	points.add_theme_color_override("font_color", UI.TALENT_HOVER_BORDER)
 	points_container.add_child(points)
 	
 	# Decorative right element
@@ -780,7 +772,7 @@ func _create_character_card(char_id: int) -> PanelContainer:
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	var font_size: int = 22 if char_name.length() <= 12 else 16
 	name_label.add_theme_font_size_override("font_size", font_size)
-	name_label.add_theme_color_override("font_color", TITLE_COLOR)
+	name_label.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
 	name_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	name_bar.add_child(name_label)
@@ -853,23 +845,23 @@ func _update_card_count(label: Label, char_id: int) -> void:
 	for talent in talent_list:
 		total += talent.get("max", 1)
 	label.text = "%d / %d Talents" % [unlocked, total]
-	label.add_theme_color_override("font_color", UNLOCKED_COLOR if unlocked == total else DESC_COLOR)
+	label.add_theme_color_override("font_color", UI.TALENT_UNLOCKED if unlocked == total else UI.TEXT_SECONDARY)
 
 func _update_card_status(label: Label, char_id: int) -> void:
 	# Check if character is unlocked via their talent tree "unlock" talent
 	var is_unlocked: bool = _unlocked_talents.get(char_id, {}).has("unlock")
 	if is_unlocked:
 		label.text = "★ UNLOCKED"
-		label.add_theme_color_override("font_color", UNLOCKED_COLOR)
+		label.add_theme_color_override("font_color", UI.TALENT_UNLOCKED)
 	else:
 		# Don't show LOCKED text - just show nothing or a subtle indicator
 		label.text = ""
-		label.add_theme_color_override("font_color", LOCKED_COLOR)
+		label.add_theme_color_override("font_color", UI.TALENT_LOCKED)
 
 func _style_button(btn: Button) -> void:
 	var normal := StyleBoxFlat.new()
 	normal.bg_color = Color(0.08, 0.08, 0.12, 1.0)
-	normal.border_color = BORDER_COLOR
+	normal.border_color = UI.ACCENT_PRIMARY_DIM
 	normal.set_border_width_all(2)
 	normal.set_corner_radius_all(6)
 	normal.set_content_margin_all(10)
@@ -877,7 +869,7 @@ func _style_button(btn: Button) -> void:
 	
 	var hover := StyleBoxFlat.new()
 	hover.bg_color = Color(0.12, 0.12, 0.18, 1.0)
-	hover.border_color = HOVER_BORDER
+	hover.border_color = UI.TALENT_HOVER_BORDER
 	hover.set_border_width_all(2)
 	hover.set_corner_radius_all(6)
 	hover.set_content_margin_all(10)
@@ -906,7 +898,7 @@ func _build_tree_view(char_id: int) -> void:
 	title.text = CHARACTER_NAMES[char_id] + " - TALENTS"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 42)
-	title.add_theme_color_override("font_color", TITLE_COLOR)
+	title.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
 	title_bar.add_child(title)
 	
 	# Skill points
@@ -914,7 +906,7 @@ func _build_tree_view(char_id: int) -> void:
 	points.name = "TreeSkillPoints"
 	points.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	points.add_theme_font_size_override("font_size", 22)
-	points.add_theme_color_override("font_color", HOVER_BORDER)
+	points.add_theme_color_override("font_color", UI.TALENT_HOVER_BORDER)
 	points.text = "Skill Points: %d" % _skill_points
 	_tree_panel.add_child(points)
 	
@@ -1125,7 +1117,7 @@ func _draw_talent_button(btn: Button) -> void:
 	
 	# Colors - default for regular talents
 	var bg_color := Color(0.08, 0.08, 0.1, 1.0)  # Dark gray when locked
-	var border_color := LOCKED_COLOR
+	var border_color := UI.TALENT_LOCKED
 	
 	# Determine talent type
 	var is_special: bool = talent.get("special", false)
@@ -1167,12 +1159,12 @@ func _draw_talent_button(btn: Button) -> void:
 		# Green for regular upgrades
 		if is_maxed:
 			bg_color = Color(0.15, 0.4, 0.15, 1.0)  # Bright green
-			border_color = UNLOCKED_COLOR
+			border_color = UI.TALENT_UNLOCKED
 		elif is_unlocked:
 			bg_color = Color(0.1, 0.25, 0.1, 1.0)  # Medium green
 			border_color = Color(0.6, 0.8, 0.3, 1.0)
 		elif can_unlock:
-			border_color = HOVER_BORDER if hovered else BORDER_COLOR
+			border_color = UI.TALENT_HOVER_BORDER if hovered else border_color
 			if hovered:
 				bg_color = Color(0.12, 0.12, 0.15, 1.0)
 	
@@ -1190,14 +1182,14 @@ func _draw_talent_button(btn: Button) -> void:
 		font = ThemeDB.fallback_font
 	
 	var name_text: String = talent["name"]
-	var name_color := TITLE_COLOR if (is_unlocked or can_unlock) else LOCKED_COLOR
+	var name_color := UI.TEXT_PRIMARY if (is_unlocked or can_unlock) else UI.TALENT_LOCKED
 	var name_size := font.get_string_size(name_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16)
 	var name_x := (btn.size.x - name_size.x) / 2.0
 	btn.draw_string(font, Vector2(name_x, 32), name_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, name_color)
 	
 	# Level
 	var level_text := "%d / %d" % [current_level, max_level]
-	var level_color := UNLOCKED_COLOR if is_maxed else (DESC_COLOR if is_unlocked else LOCKED_COLOR)
+	var level_color := UI.TALENT_UNLOCKED if is_maxed else (UI.TEXT_SECONDARY if is_unlocked else UI.TALENT_LOCKED)
 	var level_size := font.get_string_size(level_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 18)
 	var level_x := (btn.size.x - level_size.x) / 2.0
 	btn.draw_string(font, Vector2(level_x, 56), level_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, level_color)
@@ -1207,7 +1199,7 @@ func _draw_talent_button(btn: Button) -> void:
 		var cost_text := "Cost: %d" % talent["cost"]
 		var cost_size := font.get_string_size(cost_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 13)
 		var cost_x := (btn.size.x - cost_size.x) / 2.0
-		btn.draw_string(font, Vector2(cost_x, 78), cost_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, HOVER_BORDER)
+		btn.draw_string(font, Vector2(cost_x, 78), cost_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, UI.TALENT_HOVER_BORDER)
 
 func _can_unlock_talent(char_id: int, talent: Dictionary) -> bool:
 	var talent_id: String = talent["id"]
@@ -1350,7 +1342,7 @@ func _on_card_mouse_entered(char_id: int, card: PanelContainer) -> void:
 	
 	# Update border to glow
 	var style: StyleBoxFlat = card.get_theme_stylebox("panel").duplicate()
-	style.border_color = HOVER_BORDER
+	style.border_color = UI.TALENT_HOVER_BORDER
 	style.set_border_width_all(4)
 	style.set_corner_radius_all(14)
 	style.set_content_margin_all(4)  # Keep content margin for border visibility

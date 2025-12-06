@@ -3,6 +3,8 @@ class_name MainMenu
 ## Main menu screen with navigation options.
 ## Emits signals for menu transitions and handles keyboard navigation.
 
+const UI := preload("res://scripts/ui/UITheme.gd")
+
 signal play_selected
 signal achievements_selected
 signal settings_selected
@@ -17,7 +19,7 @@ const MENU_OPTIONS: Array[Dictionary] = [
 	{"id": "PLAY", "icon": "play", "label": "PLAY", "is_play": true},
 	{"id": "THE OUTPOST", "icon": "outpost", "label": "THE OUTPOST"},
 	{"id": "SETTINGS", "icon": "settings", "label": "SETTINGS"},
-	{"id": "QUIT", "icon": "quit", "label": "QUIT", "accent": Color(0.95, 0.41, 0.41, 1.0)}
+	{"id": "QUIT", "icon": "quit", "label": "QUIT", "accent": UI.COLOR_DANGER}
 ]
 
 const TITLE_TEXT := "KINGDOM CLEANUP"
@@ -166,7 +168,7 @@ func _show_quit_confirmation() -> void:
 	# Dark background
 	var overlay := ColorRect.new()
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	overlay.color = Color(0.0, 0.0, 0.0, 0.7)
+	overlay.color = UI.BG_OVERLAY
 	overlay.gui_input.connect(func(event): 
 		if event is InputEventMouseButton and event.pressed:
 			_hide_quit_dialog()
@@ -183,8 +185,8 @@ func _show_quit_confirmation() -> void:
 	panel.offset_bottom = 100
 	
 	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.08, 0.1, 0.14, 0.98)
-	panel_style.border_color = Color(0.95, 0.95, 0.98, 0.9)
+	panel_style.bg_color = UI.BG_MID
+	panel_style.border_color = UI.ACCENT_PRIMARY
 	panel_style.set_border_width_all(3)
 	panel_style.set_corner_radius_all(12)
 	panel.add_theme_stylebox_override("panel", panel_style)
@@ -205,7 +207,7 @@ func _show_quit_confirmation() -> void:
 	title.text = "QUIT GAME?"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 28)
-	title.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
+	title.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
 	vbox.add_child(title)
 	
 	# Spacer
@@ -237,28 +239,28 @@ func _create_dialog_button(text: String, is_danger: bool) -> Button:
 	
 	var normal := StyleBoxFlat.new()
 	if is_danger:
-		normal.bg_color = Color(0.6, 0.15, 0.15, 0.95)
-		normal.border_color = Color(0.9, 0.3, 0.3, 0.9)
+		normal.bg_color = UI.BTN_BACK_BG
+		normal.border_color = UI.COLOR_DANGER
 	else:
-		normal.bg_color = Color(0.12, 0.15, 0.2, 0.95)
-		normal.border_color = Color(0.5, 0.55, 0.65, 0.8)
+		normal.bg_color = UI.BG_MID
+		normal.border_color = UI.BORDER_DEFAULT
 	normal.set_border_width_all(2)
 	normal.set_corner_radius_all(8)
 	btn.add_theme_stylebox_override("normal", normal)
 	
 	var hover := StyleBoxFlat.new()
 	if is_danger:
-		hover.bg_color = Color(0.75, 0.2, 0.2, 1.0)
-		hover.border_color = Color(1.0, 0.4, 0.4)
+		hover.bg_color = UI.BTN_BACK_HOVER_BG
+		hover.border_color = UI.COLOR_DANGER
 	else:
-		hover.bg_color = Color(0.18, 0.22, 0.28, 1.0)
-		hover.border_color = Color(0.7, 0.75, 0.85, 1.0)
+		hover.bg_color = UI.BG_LIGHT
+		hover.border_color = UI.BORDER_HIGHLIGHT
 	hover.set_border_width_all(3)
 	hover.set_corner_radius_all(8)
 	btn.add_theme_stylebox_override("hover", hover)
 	
 	btn.add_theme_font_size_override("font_size", 16)
-	btn.add_theme_color_override("font_color", Color(0.95, 0.95, 0.98))
+	btn.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
 	
 	return btn
 
@@ -301,7 +303,7 @@ func _show_outpost_coming_soon() -> void:
 	# Dark background
 	var overlay := ColorRect.new()
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	overlay.color = Color(0.0, 0.0, 0.0, 0.7)
+	overlay.color = UI.BG_OVERLAY
 	overlay.gui_input.connect(func(event): 
 		if event is InputEventMouseButton and event.pressed:
 			_hide_outpost_dialog()
@@ -318,8 +320,8 @@ func _show_outpost_coming_soon() -> void:
 	panel.offset_bottom = 110
 	
 	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.08, 0.1, 0.14, 0.98)
-	panel_style.border_color = Color(0.95, 0.95, 0.98, 0.9)
+	panel_style.bg_color = UI.BG_MID
+	panel_style.border_color = UI.ACCENT_PRIMARY
 	panel_style.set_border_width_all(3)
 	panel_style.set_corner_radius_all(12)
 	panel.add_theme_stylebox_override("panel", panel_style)
@@ -340,7 +342,7 @@ func _show_outpost_coming_soon() -> void:
 	title.text = "COMING SOON!"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 36)
-	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4))
+	title.add_theme_color_override("font_color", UI.ACCENT_SECONDARY)
 	vbox.add_child(title)
 	
 	# Description
@@ -348,7 +350,7 @@ func _show_outpost_coming_soon() -> void:
 	desc.text = "The Outpost is still under construction."
 	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	desc.add_theme_font_size_override("font_size", 18)
-	desc.add_theme_color_override("font_color", Color(0.8, 0.8, 0.85))
+	desc.add_theme_color_override("font_color", UI.TEXT_SECONDARY)
 	vbox.add_child(desc)
 	
 	# Spacer
@@ -397,8 +399,8 @@ func _show_debug_notification(text: String) -> void:
 	var label := Label.new()
 	label.text = text
 	label.add_theme_font_size_override("font_size", 24)
-	label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.4))
-	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	label.add_theme_color_override("font_color", UI.COLOR_SUCCESS)
+	label.add_theme_color_override("font_shadow_color", UI.SHADOW_COLOR)
 	label.add_theme_constant_override("shadow_offset_x", 2)
 	label.add_theme_constant_override("shadow_offset_y", 2)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

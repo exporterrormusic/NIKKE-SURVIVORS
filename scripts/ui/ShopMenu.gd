@@ -5,27 +5,9 @@ class_name ShopMenu
 ## Characters can be unlocked here. Default unlocked: Snow White, Rapunzel, Scarlet.
 
 const SaveManagerScript = preload("res://scripts/systems/SaveManager.gd")
+const UI := preload("res://scripts/ui/UITheme.gd")
 
 signal back_requested
-
-# Visual constants - matching AchievementsMenu style
-const BACKGROUND_COLOR := Color(0.04, 0.055, 0.08, 0.95)
-const PANEL_BG_COLOR := Color(0.04, 0.055, 0.08, 0.97)
-const BORDER_COLOR := Color(0.95, 0.95, 0.98, 0.9)
-const ENTRY_BG_COLOR := Color(0.1, 0.1, 0.14, 0.95)
-const ENTRY_BORDER_COLOR := Color(0.95, 0.95, 0.98, 0.9)
-const SEPARATOR_COLOR := Color(0.95, 0.95, 0.98, 0.3)
-
-const HEADER_COLOR := Color(0.95, 0.95, 0.98, 1.0)
-const LABEL_COLOR := Color(0.784, 0.792, 0.878, 1.0)
-const UNLOCKED_COLOR := Color(0.392, 0.86, 0.549, 1.0)
-const LOCKED_COLOR := Color(0.4, 0.4, 0.45, 1.0)
-const CORE_COLOR := Color(1.0, 0.3, 0.3, 1.0)  # Red for Pristine Rapture Cores
-
-const CHARACTER_NORMAL_COLOR := Color(0.08, 0.08, 0.12, 0.95)
-const CHARACTER_HOVER_COLOR := Color(0.12, 0.12, 0.18, 0.98)
-const CHARACTER_SELECTED_COLOR := Color(0.18, 0.18, 0.25, 1.0)
-const CHARACTER_LOCKED_COLOR := Color(0.05, 0.05, 0.07, 0.95)
 
 const GENERAL_FILTER := "GENERAL"
 
@@ -51,11 +33,6 @@ var _cores_spent: Dictionary = {}  # "character_id" or "general" -> total cores 
 
 var _selected_filter: String = GENERAL_FILTER
 var _character_entries: Array[Dictionary] = []
-
-# Preload fonts at compile time for better performance
-const _futura_bold: Font = preload("res://resources/fonts/futura_condensed_extra_bold.tres")
-const _pretendard_bold: Font = preload("res://resources/fonts/pretendard_bold.tres")
-const _pretendard_medium: Font = preload("res://resources/fonts/pretendard_medium.tres")
 
 # UI references
 var _character_list: VBoxContainer = null
@@ -156,7 +133,7 @@ func _build_ui() -> void:
 	# Dark overlay
 	var overlay := ColorRect.new()
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	overlay.color = Color(0, 0, 0, 0.25)
+	overlay.color = UI.OVERLAY_LIGHT
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(overlay)
 	
@@ -175,11 +152,11 @@ func _build_ui() -> void:
 	title_label.text = "SHOP"
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	if _futura_bold:
-		title_label.add_theme_font_override("font", _futura_bold)
+	if UI.FONT_TITLE:
+		title_label.add_theme_font_override("font", UI.FONT_TITLE)
 	title_label.add_theme_font_size_override("font_size", 80)
-	title_label.add_theme_color_override("font_color", HEADER_COLOR)
-	title_label.add_theme_color_override("font_outline_color", Color(0.1, 0.1, 0.15, 1.0))
+	title_label.add_theme_color_override("font_color", UI.ACCENT_PRIMARY)
+	title_label.add_theme_color_override("font_outline_color", UI.SHOP_TITLE_OUTLINE)
 	title_label.add_theme_constant_override("outline_size", 3)
 	title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top_bar.add_child(title_label)
@@ -397,7 +374,7 @@ func _create_character_entry(code: String, _display_name: String, portrait: Text
 		tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		# Darken if locked
 		if not is_unlocked:
-			tex_rect.modulate = Color(0.3, 0.3, 0.35, 1.0)
+			tex_rect.modulate = UI.SHOP_PORTRAIT_LOCKED
 		portrait_panel.add_child(tex_rect)
 		
 		# Lock overlay for locked characters - ON TOP of portrait
@@ -418,10 +395,10 @@ func _create_character_entry(code: String, _display_name: String, portrait: Text
 			var locked_text := Label.new()
 			locked_text.text = "LOCKED"
 			locked_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			if _pretendard_bold:
-				locked_text.add_theme_font_override("font", _pretendard_bold)
+			if UI.FONT_BOLD:
+				locked_text.add_theme_font_override("font", UI.FONT_BOLD)
 			locked_text.add_theme_font_size_override("font_size", 14)
-			locked_text.add_theme_color_override("font_color", CORE_COLOR)
+			locked_text.add_theme_color_override("font_color", UI.COLOR_CORE)
 			locked_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			lock_overlay.add_child(locked_text)
 	else:
@@ -445,7 +422,7 @@ func _create_character_entry(code: String, _display_name: String, portrait: Text
 	
 	var divider := ColorRect.new()
 	divider.custom_minimum_size = Vector2(2, 100)
-	divider.color = Color(0.5, 0.5, 0.55, 0.25)  # Very subtle
+	divider.color = UI.DIVIDER_LIGHT
 	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	divider_container.add_child(divider)
 	
@@ -460,10 +437,10 @@ func _create_character_entry(code: String, _display_name: String, portrait: Text
 	count_label.text = "0"
 	count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	count_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	if _pretendard_bold:
-		count_label.add_theme_font_override("font", _pretendard_bold)
+	if UI.FONT_BOLD:
+		count_label.add_theme_font_override("font", UI.FONT_BOLD)
 	count_label.add_theme_font_size_override("font_size", 56)
-	count_label.add_theme_color_override("font_color", HEADER_COLOR)
+	count_label.add_theme_color_override("font_color", UI.ACCENT_PRIMARY)
 	count_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	count_container.add_child(count_label)
 	
@@ -479,18 +456,18 @@ func _create_character_entry(code: String, _display_name: String, portrait: Text
 
 
 func _apply_character_button_styles(button: Button, is_unlocked: bool) -> void:
-	var base_color := CHARACTER_NORMAL_COLOR if is_unlocked else CHARACTER_LOCKED_COLOR
+	var base_color := UI.CHAR_NORMAL if is_unlocked else UI.CHAR_LOCKED
 	button.add_theme_stylebox_override("normal", _make_char_button_style(base_color))
-	button.add_theme_stylebox_override("hover", _make_char_button_style(CHARACTER_HOVER_COLOR))
-	button.add_theme_stylebox_override("pressed", _make_char_button_style(CHARACTER_SELECTED_COLOR))
-	button.add_theme_stylebox_override("focus", _make_char_button_style(CHARACTER_HOVER_COLOR))
+	button.add_theme_stylebox_override("hover", _make_char_button_style(UI.CHAR_HOVER))
+	button.add_theme_stylebox_override("pressed", _make_char_button_style(UI.CHAR_SELECTED))
+	button.add_theme_stylebox_override("focus", _make_char_button_style(UI.CHAR_HOVER))
 
 
 func _make_char_button_style(color: Color) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	style.bg_color = color
 	style.set_border_width_all(2)
-	style.border_color = SEPARATOR_COLOR
+	style.border_color = UI.ENTRY_SEPARATOR
 	style.set_corner_radius_all(6)
 	style.set_content_margin_all(8)
 	return style
@@ -556,10 +533,10 @@ func _build_character_upgrades(char_id: String) -> void:
 	placeholder.text = "Character upgrades coming soon!"
 	placeholder.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	placeholder.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	if _pretendard_medium:
-		placeholder.add_theme_font_override("font", _pretendard_medium)
+	if UI.FONT_MEDIUM:
+		placeholder.add_theme_font_override("font", UI.FONT_MEDIUM)
 	placeholder.add_theme_font_size_override("font_size", 24)
-	placeholder.add_theme_color_override("font_color", LABEL_COLOR)
+	placeholder.add_theme_color_override("font_color", UI.TEXT_SECONDARY)
 	_upgrade_grid.add_child(placeholder)
 	
 	# Add reset button in bottom right
@@ -611,10 +588,10 @@ func _create_upgrade_card(upgrade: Dictionary, category: String) -> Control:
 	var name_label := Label.new()
 	name_label.text = upgrade["name"]
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	if _pretendard_bold:
-		name_label.add_theme_font_override("font", _pretendard_bold)
+	if UI.FONT_BOLD:
+		name_label.add_theme_font_override("font", UI.FONT_BOLD)
 	name_label.add_theme_font_size_override("font_size", 48)  # Much bigger text
-	name_label.add_theme_color_override("font_color", HEADER_COLOR)
+	name_label.add_theme_color_override("font_color", UI.ACCENT_PRIMARY)
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(name_label)
 	
@@ -622,10 +599,10 @@ func _create_upgrade_card(upgrade: Dictionary, category: String) -> Control:
 	var level_label := Label.new()
 	level_label.text = "Lv. %d / %d" % [current_level, max_level]
 	level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	if _pretendard_medium:
-		level_label.add_theme_font_override("font", _pretendard_medium)
+	if UI.FONT_MEDIUM:
+		level_label.add_theme_font_override("font", UI.FONT_MEDIUM)
 	level_label.add_theme_font_size_override("font_size", 36)  # Much bigger text
-	level_label.add_theme_color_override("font_color", UNLOCKED_COLOR if is_maxed else LABEL_COLOR)
+	level_label.add_theme_color_override("font_color", UI.COLOR_UNLOCKED if is_maxed else UI.TEXT_SECONDARY)
 	level_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(level_label)
 	
@@ -633,10 +610,10 @@ func _create_upgrade_card(upgrade: Dictionary, category: String) -> Control:
 	var desc_label := Label.new()
 	desc_label.text = upgrade["desc"]
 	desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	if _pretendard_medium:
-		desc_label.add_theme_font_override("font", _pretendard_medium)
+	if UI.FONT_MEDIUM:
+		desc_label.add_theme_font_override("font", UI.FONT_MEDIUM)
 	desc_label.add_theme_font_size_override("font_size", 28)  # Much bigger text
-	desc_label.add_theme_color_override("font_color", LABEL_COLOR)
+	desc_label.add_theme_color_override("font_color", UI.TEXT_SECONDARY)
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(desc_label)
@@ -657,10 +634,10 @@ func _create_upgrade_card(upgrade: Dictionary, category: String) -> Control:
 		var maxed_label := Label.new()
 		maxed_label.text = "MAXED"
 		maxed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		if _pretendard_bold:
-			maxed_label.add_theme_font_override("font", _pretendard_bold)
+		if UI.FONT_BOLD:
+			maxed_label.add_theme_font_override("font", UI.FONT_BOLD)
 		maxed_label.add_theme_font_size_override("font_size", 36)  # Much bigger text
-		maxed_label.add_theme_color_override("font_color", UNLOCKED_COLOR)
+		maxed_label.add_theme_color_override("font_color", UI.COLOR_UNLOCKED)
 		maxed_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		btn_center.add_child(maxed_label)
 	else:
@@ -689,22 +666,22 @@ func _create_core_cost_button(cost: int, upgrade_id: String, parent_card: _Upgra
 	var disabled := StyleBoxFlat.new()
 	
 	if can_afford:
-		normal.bg_color = Color(0.05, 0.02, 0.02, 0.95)
-		normal.border_color = Color(1.0, 0.25, 0.2, 0.9)
-		hover.bg_color = Color(0.1, 0.04, 0.04, 0.98)
-		hover.border_color = Color(1.0, 0.4, 0.35, 1.0)
-		pressed.bg_color = Color(0.15, 0.05, 0.05, 1.0)
-		pressed.border_color = Color(1.0, 0.5, 0.45, 1.0)
+		normal.bg_color = UI.SHOP_UNLOCK_AFFORD_BG
+		normal.border_color = UI.SHOP_UNLOCK_AFFORD_BORDER
+		hover.bg_color = UI.SHOP_UNLOCK_AFFORD_HOVER_BG
+		hover.border_color = UI.SHOP_UNLOCK_AFFORD_HOVER_BORDER
+		pressed.bg_color = UI.SHOP_UNLOCK_AFFORD_PRESSED_BG
+		pressed.border_color = UI.SHOP_UNLOCK_AFFORD_PRESSED_BORDER
 	else:
-		normal.bg_color = Color(0.04, 0.04, 0.05, 0.7)
-		normal.border_color = Color(0.4, 0.35, 0.35, 0.5)
-		hover.bg_color = Color(0.05, 0.05, 0.06, 0.8)
-		hover.border_color = Color(0.5, 0.45, 0.45, 0.6)
-		pressed.bg_color = Color(0.04, 0.04, 0.05, 0.7)
-		pressed.border_color = Color(0.4, 0.35, 0.35, 0.5)
+		normal.bg_color = UI.SHOP_UNLOCK_CANT_BG
+		normal.border_color = UI.SHOP_UNLOCK_CANT_BORDER
+		hover.bg_color = UI.SHOP_UNLOCK_CANT_HOVER_BG
+		hover.border_color = UI.SHOP_UNLOCK_CANT_HOVER_BORDER
+		pressed.bg_color = UI.SHOP_UNLOCK_CANT_BG
+		pressed.border_color = UI.SHOP_UNLOCK_CANT_BORDER
 	
-	disabled.bg_color = Color(0.03, 0.03, 0.04, 0.6)
-	disabled.border_color = Color(0.3, 0.3, 0.35, 0.4)
+	disabled.bg_color = UI.SHOP_UNLOCK_DISABLED_BG
+	disabled.border_color = UI.SHOP_UNLOCK_DISABLED_BORDER
 	
 	for style in [normal, hover, pressed, disabled]:
 		style.set_border_width_all(3)
@@ -737,7 +714,7 @@ func _create_core_cost_button(cost: int, upgrade_id: String, parent_card: _Upgra
 	# Divider line
 	var divider := ColorRect.new()
 	divider.custom_minimum_size = Vector2(2, 48)  # Taller divider
-	divider.color = Color(1.0, 0.3, 0.25, 0.5) if can_afford else Color(0.4, 0.4, 0.45, 0.3)
+	divider.color = UI.SHOP_DIVIDER_AFFORD if can_afford else UI.SHOP_DIVIDER_CANT
 	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	content.add_child(divider)
 	
@@ -749,10 +726,10 @@ func _create_core_cost_button(cost: int, upgrade_id: String, parent_card: _Upgra
 	
 	var cost_label := Label.new()
 	cost_label.text = str(cost)
-	if _pretendard_bold:
-		cost_label.add_theme_font_override("font", _pretendard_bold)
+	if UI.FONT_BOLD:
+		cost_label.add_theme_font_override("font", UI.FONT_BOLD)
 	cost_label.add_theme_font_size_override("font_size", 36)  # Much bigger text
-	cost_label.add_theme_color_override("font_color", CORE_COLOR if can_afford else LOCKED_COLOR)
+	cost_label.add_theme_color_override("font_color", UI.COLOR_CORE if can_afford else UI.COLOR_LOCKED)
 	cost_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cost_section.add_child(cost_label)
 	
@@ -781,30 +758,30 @@ func _create_unlock_panel() -> Control:
 	
 	# Style the button to look like a panel
 	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.08, 0.085, 0.12, 0.95)
+	normal.bg_color = UI.SHOP_UNLOCK_PANEL_BG
 	normal.set_border_width_all(3)
-	normal.border_color = Color(0.6, 0.15, 0.15, 0.8)
+	normal.border_color = UI.SHOP_UNLOCK_PANEL_BORDER
 	normal.set_corner_radius_all(12)
 	panel_btn.add_theme_stylebox_override("normal", normal)
 	
 	var hover := StyleBoxFlat.new()
-	hover.bg_color = Color(0.12, 0.1, 0.15, 0.98)
+	hover.bg_color = UI.SHOP_UNLOCK_PANEL_HOVER_BG
 	hover.set_border_width_all(4)
-	hover.border_color = Color(1.0, 0.3, 0.3, 0.95)
+	hover.border_color = UI.SHOP_UNLOCK_PANEL_HOVER_BORDER
 	hover.set_corner_radius_all(12)
 	panel_btn.add_theme_stylebox_override("hover", hover)
 	
 	var pressed := StyleBoxFlat.new()
-	pressed.bg_color = Color(0.15, 0.08, 0.1, 0.98)
+	pressed.bg_color = UI.SHOP_UNLOCK_PANEL_PRESSED_BG
 	pressed.set_border_width_all(4)
-	pressed.border_color = Color(1.0, 0.4, 0.4, 1.0)
+	pressed.border_color = UI.SHOP_UNLOCK_PANEL_PRESSED_BORDER
 	pressed.set_corner_radius_all(12)
 	panel_btn.add_theme_stylebox_override("pressed", pressed)
 	
 	var disabled := StyleBoxFlat.new()
-	disabled.bg_color = Color(0.06, 0.065, 0.09, 0.7)
+	disabled.bg_color = UI.SHOP_UNLOCK_PANEL_DISABLED_BG
 	disabled.set_border_width_all(2)
-	disabled.border_color = Color(0.3, 0.3, 0.35, 0.5)
+	disabled.border_color = UI.SHOP_UNLOCK_PANEL_DISABLED_BORDER
 	disabled.set_corner_radius_all(12)
 	panel_btn.add_theme_stylebox_override("disabled", disabled)
 	
@@ -832,10 +809,10 @@ func _create_unlock_panel() -> Control:
 	unlock_label.name = "UnlockLabel"
 	unlock_label.text = "CHARACTER LOCKED"
 	unlock_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	if _futura_bold:
-		unlock_label.add_theme_font_override("font", _futura_bold)
+	if UI.FONT_TITLE:
+		unlock_label.add_theme_font_override("font", UI.FONT_TITLE)
 	unlock_label.add_theme_font_size_override("font_size", 42)
-	unlock_label.add_theme_color_override("font_color", HEADER_COLOR)
+	unlock_label.add_theme_color_override("font_color", UI.ACCENT_PRIMARY)
 	unlock_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	content.add_child(unlock_label)
 	
@@ -852,10 +829,10 @@ func _create_unlock_panel() -> Control:
 	hint.name = "ClickHint"
 	hint.text = "Click to Unlock"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	if _pretendard_medium:
-		hint.add_theme_font_override("font", _pretendard_medium)
+	if UI.FONT_MEDIUM:
+		hint.add_theme_font_override("font", UI.FONT_MEDIUM)
 	hint.add_theme_font_size_override("font_size", 22)
-	hint.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75, 0.8))
+	hint.add_theme_color_override("font_color", UI.SHOP_HINT_DIM)
 	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	content.add_child(hint)
 	
@@ -898,10 +875,10 @@ func _update_unlock_panel(char_id: String) -> void:
 		
 		var cost_label := Label.new()
 		cost_label.text = "%d" % cost
-		if _futura_bold:
-			cost_label.add_theme_font_override("font", _futura_bold)
+		if UI.FONT_TITLE:
+			cost_label.add_theme_font_override("font", UI.FONT_TITLE)
 		cost_label.add_theme_font_size_override("font_size", 48)
-		cost_label.add_theme_color_override("font_color", CORE_COLOR)
+		cost_label.add_theme_color_override("font_color", UI.COLOR_CORE)
 		cost_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cost_row.add_child(cost_label)
 	
@@ -910,10 +887,10 @@ func _update_unlock_panel(char_id: String) -> void:
 	if hint:
 		if can_afford:
 			hint.text = "Click to Unlock"
-			hint.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95, 0.9))
+			hint.add_theme_color_override("font_color", UI.SHOP_HINT_BRIGHT)
 		else:
 			hint.text = "Not Enough Cores"
-			hint.add_theme_color_override("font_color", Color(0.5, 0.5, 0.55, 0.7))
+			hint.add_theme_color_override("font_color", UI.SHOP_HINT_MUTED)
 	
 	# Enable/disable button
 	panel_btn.disabled = not can_afford
@@ -1034,27 +1011,27 @@ func _add_reset_button_to_content(category: String) -> void:
 	reset_btn.focus_mode = Control.FOCUS_NONE
 	reset_btn.tooltip_text = "Reset " + ("General" if category == "general" else category.capitalize()) + " upgrades and refund cores"
 	reset_btn.add_theme_font_size_override("font_size", 36)
-	reset_btn.add_theme_color_override("font_color", Color(1, 1, 1))
+	reset_btn.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
 	
 	# Style the reset button as a big square
 	var reset_normal := StyleBoxFlat.new()
-	reset_normal.bg_color = Color(0.5, 0.15, 0.15, 0.9)
+	reset_normal.bg_color = UI.RESET_BTN_BG
 	reset_normal.set_border_width_all(3)
-	reset_normal.border_color = Color(0.8, 0.3, 0.3, 0.8)
+	reset_normal.border_color = UI.RESET_BTN_BORDER
 	reset_normal.set_corner_radius_all(10)
 	reset_btn.add_theme_stylebox_override("normal", reset_normal)
 	
 	var reset_hover := StyleBoxFlat.new()
-	reset_hover.bg_color = Color(0.7, 0.2, 0.2, 0.95)
+	reset_hover.bg_color = UI.RESET_BTN_HOVER_BG
 	reset_hover.set_border_width_all(3)
-	reset_hover.border_color = Color(1.0, 0.4, 0.4, 0.9)
+	reset_hover.border_color = UI.RESET_BTN_HOVER_BORDER
 	reset_hover.set_corner_radius_all(10)
 	reset_btn.add_theme_stylebox_override("hover", reset_hover)
 	
 	var reset_pressed := StyleBoxFlat.new()
-	reset_pressed.bg_color = Color(0.4, 0.1, 0.1, 0.95)
+	reset_pressed.bg_color = UI.RESET_BTN_PRESSED_BG
 	reset_pressed.set_border_width_all(3)
-	reset_pressed.border_color = Color(0.6, 0.2, 0.2, 0.9)
+	reset_pressed.border_color = UI.RESET_BTN_PRESSED_BORDER
 	reset_pressed.set_corner_radius_all(10)
 	reset_btn.add_theme_stylebox_override("pressed", reset_pressed)
 	
@@ -1113,11 +1090,11 @@ func _update_sidebar_counts() -> void:
 
 func _make_letterbox_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = BACKGROUND_COLOR
+	style.bg_color = UI.BG_DEEP
 	style.border_width_top = 3
 	style.border_width_bottom = 3
-	style.border_color = Color(0.75, 0.75, 0.8, 0.8)
-	style.shadow_color = Color(0, 0, 0, 0.35)
+	style.border_color = UI.SHOP_PANEL_BORDER
+	style.shadow_color = UI.SHOP_PANEL_SHADOW
 	style.shadow_size = 3
 	style.shadow_offset = Vector2(2, 2)
 	return style
@@ -1125,11 +1102,11 @@ func _make_letterbox_style() -> StyleBoxFlat:
 
 func _make_panel_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = PANEL_BG_COLOR
+	style.bg_color = UI.BG_DEEP
 	style.set_border_width_all(4)
-	style.border_color = BORDER_COLOR
+	style.border_color = UI.ENTRY_BORDER
 	style.set_corner_radius_all(12)
-	style.shadow_color = Color(0, 0, 0, 0.5)
+	style.shadow_color = UI.SHOP_PANEL_SHADOW_SELECTED
 	style.shadow_size = 6
 	style.shadow_offset = Vector2(3, 3)
 	return style
@@ -1137,42 +1114,42 @@ func _make_panel_style() -> StyleBoxFlat:
 
 func _make_sidebar_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.06, 0.065, 0.09, 0.95)
+	style.bg_color = UI.SHOP_PANEL_LOCKED_BG
 	style.set_border_width_all(2)
-	style.border_color = SEPARATOR_COLOR
+	style.border_color = UI.ENTRY_SEPARATOR
 	style.set_corner_radius_all(8)
 	return style
 
 
 func _make_content_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.05, 0.055, 0.08, 0.9)
+	style.bg_color = UI.SHOP_PANEL_UNLOCKED_BG
 	style.set_border_width_all(2)
-	style.border_color = SEPARATOR_COLOR
+	style.border_color = UI.ENTRY_SEPARATOR
 	style.set_corner_radius_all(8)
 	return style
 
 
 func _make_portrait_style(is_unlocked: bool) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.1, 0.1, 0.14, 1.0)
+	style.bg_color = UI.SHOP_PANEL_ACTIVE_BG
 	style.set_border_width_all(3)
 	if is_unlocked:
-		style.border_color = Color(1.0, 1.0, 1.0, 0.9)
+		style.border_color = UI.SHOP_PANEL_ACTIVE_BORDER_SELECTED
 	else:
-		style.border_color = Color(0.4, 0.4, 0.45, 0.7)
+		style.border_color = UI.SHOP_PANEL_ACTIVE_BORDER
 	style.set_corner_radius_all(8)
 	return style
 
 
 func _make_upgrade_card_style(is_maxed: bool) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = ENTRY_BG_COLOR
+	style.bg_color = UI.ENTRY_BG
 	style.set_border_width_all(2)
 	if is_maxed:
-		style.border_color = UNLOCKED_COLOR
+		style.border_color = UI.COLOR_UNLOCKED
 	else:
-		style.border_color = ENTRY_BORDER_COLOR.darkened(0.3)
+		style.border_color = UI.ENTRY_BORDER.darkened(0.3)
 	style.set_corner_radius_all(10)
 	return style
 
@@ -1234,13 +1211,7 @@ static func is_character_unlocked(char_id: String) -> bool:
 class _UpgradeCard extends Control:
 	signal card_clicked
 	
-	const NORMAL_BG := Color(0.1, 0.1, 0.14, 0.95)
-	const HOVER_BG := Color(0.14, 0.14, 0.2, 0.98)
-	const PURCHASED_BG := Color(0.25, 0.28, 0.3, 0.95)  # Light grey for purchased
-	const CANT_AFFORD_BG := Color(0.35, 0.08, 0.08, 0.95)  # Red flash
-	const BORDER_NORMAL := Color(0.4, 0.4, 0.45, 0.7)
-	const BORDER_HOVER := Color(0.7, 0.7, 0.75, 0.9)
-	const BORDER_MAXED := Color(0.392, 0.86, 0.549, 1.0)
+	const UI := preload("res://scripts/ui/UITheme.gd")
 	
 	var _is_maxed: bool = false
 	var _is_hovered: bool = false
@@ -1282,12 +1253,12 @@ class _UpgradeCard extends Control:
 		queue_redraw()
 	
 	func flash_purchased() -> void:
-		_flash_color = PURCHASED_BG
+		_flash_color = UI.SHOP_CARD_PURCHASED_BG
 		_flash_time = _flash_duration
 		queue_redraw()
 	
 	func flash_cant_afford() -> void:
-		_flash_color = CANT_AFFORD_BG
+		_flash_color = UI.SHOP_CARD_CANT_AFFORD_BG
 		_flash_time = _flash_duration * 0.5  # Shorter red flash
 		queue_redraw()
 	
@@ -1295,21 +1266,21 @@ class _UpgradeCard extends Control:
 		var rect := Rect2(Vector2.ZERO, size)
 		
 		# Calculate current background color
-		var bg_color: Color = NORMAL_BG
+		var bg_color: Color = UI.SHOP_CARD_BG
 		if _flash_time > 0.0:
 			var flash_t: float = _flash_time / _flash_duration
-			bg_color = NORMAL_BG.lerp(_flash_color, flash_t)
+			bg_color = UI.SHOP_CARD_BG.lerp(_flash_color, flash_t)
 		elif _is_hovered:
-			bg_color = HOVER_BG
+			bg_color = UI.SHOP_CARD_HOVER_BG
 		
 		# Border color
 		var border_color: Color
 		if _is_maxed:
-			border_color = BORDER_MAXED
+			border_color = UI.SHOP_CARD_MAXED_BORDER
 		elif _is_hovered:
-			border_color = BORDER_HOVER
+			border_color = UI.SHOP_CARD_HOVER_BORDER
 		else:
-			border_color = BORDER_NORMAL
+			border_color = UI.SHOP_CARD_BORDER
 		
 		# Draw rounded rectangle background
 		var corner_radius := 10.0
@@ -1325,7 +1296,7 @@ class _UpgradeCard extends Control:
 			for i in range(3, 0, -1):
 				var glow_alpha: float = 0.05 * (1.0 - float(i) / 3.0)
 				var glow_rect := Rect2(rect.position - Vector2(i, i) * 2, rect.size + Vector2(i, i) * 4)
-				_draw_rounded_rect(glow_rect, Color(0.8, 0.8, 0.9, glow_alpha), corner_radius + i * 2)
+				_draw_rounded_rect(glow_rect, Color(UI.ORB_CARD_GLOW.r, UI.ORB_CARD_GLOW.g, UI.ORB_CARD_GLOW.b, glow_alpha), corner_radius + i * 2)
 	
 	func _draw_rounded_rect(rect: Rect2, color: Color, radius: float) -> void:
 		# Simple rounded rect using polygon
@@ -1387,6 +1358,7 @@ class _UpgradeCard extends Control:
 # === GENERAL UPGRADE ICON (Inner class) - Animated star burst ===
 
 class _GeneralUpgradeIcon extends Control:
+	const UI := preload("res://scripts/ui/UITheme.gd")
 	var _time: float = 0.0
 	
 	func _ready() -> void:
@@ -1413,8 +1385,8 @@ class _GeneralUpgradeIcon extends Control:
 			for g in range(3, 0, -1):
 				var glow_alpha: float = 0.15 * float(g) / 3.0
 				var glow_width: float = ray_width + float(g) * 4.0
-				draw_line(start_pos, end_pos, Color(1.0, 0.85, 0.4, glow_alpha), glow_width)
-			draw_line(start_pos, end_pos, Color(1.0, 0.9, 0.5, 0.9), ray_width)
+				draw_line(start_pos, end_pos, Color(UI.ORB_RAY_GLOW.r, UI.ORB_RAY_GLOW.g, UI.ORB_RAY_GLOW.b, glow_alpha), glow_width)
+			draw_line(start_pos, end_pos, UI.ORB_RAY_CORE, ray_width)
 		
 		# Pulsing outer ring
 		var ring_pulse: float = 1.0 + sin(_time * 4.0) * 0.08
@@ -1422,8 +1394,8 @@ class _GeneralUpgradeIcon extends Control:
 		for i in range(4, 0, -1):
 			var alpha: float = 0.2 * float(i) / 4.0
 			var r: float = ring_radius + float(i) * 3.0
-			draw_arc(center, r, 0, TAU, 64, Color(1.0, 0.8, 0.3, alpha), 2.0)
-		draw_arc(center, ring_radius, 0, TAU, 64, Color(1.0, 0.9, 0.5, 0.7), 3.0)
+			draw_arc(center, r, 0, TAU, 64, Color(UI.ORB_RING_DIM.r, UI.ORB_RING_DIM.g, UI.ORB_RING_DIM.b, alpha), 2.0)
+		draw_arc(center, ring_radius, 0, TAU, 64, UI.ORB_RING_BRIGHT, 3.0)
 		
 		# Central glowing orb
 		var orb_pulse: float = 1.0 + sin(_time * 5.0) * 0.1
@@ -1433,7 +1405,7 @@ class _GeneralUpgradeIcon extends Control:
 		for i in range(10, 0, -1):
 			var glow_alpha: float = 0.12 * (1.0 - float(i) / 10.0)
 			var glow_radius: float = orb_radius + float(i) * 4.0
-			draw_circle(center, glow_radius, Color(1.0, 0.7, 0.2, glow_alpha))
+			draw_circle(center, glow_radius, Color(UI.ORB_GLOW.r, UI.ORB_GLOW.g, UI.ORB_GLOW.b, glow_alpha))
 		
 		# Orb gradient fill
 		var segments: int = 24
@@ -1445,8 +1417,8 @@ class _GeneralUpgradeIcon extends Control:
 		
 		# Hot white center
 		var core_pulse: float = 1.0 + sin(_time * 6.0) * 0.15
-		draw_circle(center, orb_radius * 0.35 * core_pulse, Color(1.0, 1.0, 0.9, 1.0))
-		draw_circle(center, orb_radius * 0.2 * core_pulse, Color(1.0, 1.0, 1.0, 1.0))
+		draw_circle(center, orb_radius * 0.35 * core_pulse, UI.ORB_CENTER_WHITE)
+		draw_circle(center, orb_radius * 0.2 * core_pulse, UI.ORB_CENTER_CORE)
 		
 		# Floating sparkles
 		var num_sparkles: int = 6
@@ -1456,12 +1428,13 @@ class _GeneralUpgradeIcon extends Control:
 			var sparkle_pos: Vector2 = center + Vector2(cos(sparkle_angle), sin(sparkle_angle)) * sparkle_dist
 			var sparkle_size: float = 4.0 + sin(_time * 4.0 + float(i)) * 2.0
 			var sparkle_alpha: float = 0.6 + sin(_time * 5.0 + float(i) * 0.7) * 0.3
-			draw_circle(sparkle_pos, sparkle_size, Color(1.0, 1.0, 0.8, sparkle_alpha))
+			draw_circle(sparkle_pos, sparkle_size, Color(UI.ORB_SPARKLE.r, UI.ORB_SPARKLE.g, UI.ORB_SPARKLE.b, sparkle_alpha))
 
 
 # === PRISTINE CORE ICON (Inner class) ===
 
 class _PristineCoreIcon extends Control:
+	const UI := preload("res://scripts/ui/UITheme.gd")
 	func _draw() -> void:
 		var center: Vector2 = size / 2.0
 		var radius: float = minf(size.x, size.y) / 2.0 - 2.0
@@ -1470,7 +1443,7 @@ class _PristineCoreIcon extends Control:
 		for i in range(8, 0, -1):
 			var glow_alpha: float = 0.15 * (1.0 - float(i) / 8.0)
 			var glow_radius: float = radius + float(i) * 2.0
-			draw_circle(center, glow_radius, Color(1.0, 0.2, 0.2, glow_alpha))
+			draw_circle(center, glow_radius, Color(UI.ORB_DANGER_GLOW.r, UI.ORB_DANGER_GLOW.g, UI.ORB_DANGER_GLOW.b, glow_alpha))
 		
 		# Main sphere gradient (darker red outer to bright inner)
 		var segments: int = 32
@@ -1486,30 +1459,25 @@ class _PristineCoreIcon extends Control:
 			var t: float = float(i) / 16.0
 			var r: float = core_radius * t
 			var alpha: float = 0.8 * (1.0 - t * 0.5)
-			draw_circle(center, r, Color(1.0, 0.5, 0.3, alpha))
+			draw_circle(center, r, Color(UI.ORB_DANGER_RING.r, UI.ORB_DANGER_RING.g, UI.ORB_DANGER_RING.b, alpha))
 		
 		# Hot center
-		draw_circle(center, radius * 0.15, Color(1.0, 0.9, 0.7, 1.0))
+		draw_circle(center, radius * 0.15, UI.ORB_DANGER_CENTER)
 		
 		# Specular highlight
 		var highlight_offset: Vector2 = Vector2(-radius * 0.25, -radius * 0.25)
 		var highlight_radius: float = radius * 0.2
-		draw_circle(center + highlight_offset, highlight_radius, Color(1.0, 1.0, 1.0, 0.6))
-		draw_circle(center + highlight_offset, highlight_radius * 0.5, Color(1.0, 1.0, 1.0, 0.9))
+		draw_circle(center + highlight_offset, highlight_radius, UI.ORB_DANGER_HIGHLIGHT)
+		draw_circle(center + highlight_offset, highlight_radius * 0.5, UI.ORB_DANGER_HIGHLIGHT_CORE)
 
 
 # Sci-fi danger container for Pristine Rapture Core display
 class _PristineCoreContainer extends Control:
-	const CONTAINER_WIDTH := 180.0  # Narrower
-	const CONTAINER_HEIGHT := 70.0
-	const BORDER_THICKNESS := 2.0
-	const CORNER_CUT := 8.0  # Smaller corner cuts
-	
-	const BG_COLOR := Color(0.05, 0.02, 0.02, 0.95)  # Very dark red-tinted
-	const BORDER_COLOR := Color(1.0, 0.25, 0.2, 0.9)  # Danger red
-	const GLOW_COLOR := Color(1.0, 0.2, 0.15, 0.4)  # Red glow
-	const DIVIDER_COLOR := Color(1.0, 0.3, 0.25, 0.6)  # Divider line
-	const TEXT_COLOR := Color(1.0, 0.35, 0.3, 1.0)  # Bright danger red
+	const UI := preload("res://scripts/ui/UITheme.gd")
+	const CONTAINER_WIDTH := 200.0  # Wider for padding
+	const CONTAINER_HEIGHT := 75.0
+	const BORDER_THICKNESS := 3.0  # Thicker border
+	const CORNER_CUT := 10.0  # Slightly larger corner cuts
 	
 	var _core_icon: Control = null
 	var _count_label: Label = null
@@ -1535,10 +1503,10 @@ class _PristineCoreContainer extends Control:
 		# Main content HBox
 		var content := HBoxContainer.new()
 		content.set_anchors_preset(Control.PRESET_FULL_RECT)
-		content.offset_left = 12
-		content.offset_right = -12
-		content.offset_top = 14  # Below the title
-		content.offset_bottom = -6
+		content.offset_left = 16
+		content.offset_right = -16
+		content.offset_top = 18  # Below the title with more padding
+		content.offset_bottom = -8
 		content.add_theme_constant_override("separation", 0)
 		content.alignment = BoxContainer.ALIGNMENT_CENTER
 		add_child(content)
@@ -1572,11 +1540,10 @@ class _PristineCoreContainer extends Control:
 		_count_label.text = "0"
 		_count_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		var font: Font = preload("res://resources/fonts/futura_condensed_extra_bold.tres")
-		_count_label.add_theme_font_override("font", font)
+		_count_label.add_theme_font_override("font", UI.FONT_TITLE)
 		_count_label.add_theme_font_size_override("font_size", 36)
-		_count_label.add_theme_color_override("font_color", TEXT_COLOR)
-		_count_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.8))
+		_count_label.add_theme_color_override("font_color", UI.SHOP_CORE_TEXT)
+		_count_label.add_theme_color_override("font_outline_color", UI.SHOP_COUNT_OUTLINE)
 		_count_label.add_theme_constant_override("outline_size", 2)
 		count_section.add_child(_count_label)
 	
@@ -1584,15 +1551,15 @@ class _PristineCoreContainer extends Control:
 		var w := size.x
 		var h := size.y
 		
-		# Pulsing glow effect
-		var glow_pulse: float = 0.4 + 0.15 * sin(_glow_time * 2.5)
+		# Pulsing glow effect - stronger
+		var glow_pulse: float = 0.5 + 0.2 * sin(_glow_time * 2.5)
 		
-		# Draw outer glow
-		for i in range(4, 0, -1):
-			var glow_alpha: float = glow_pulse * 0.06 * (1.0 - float(i) / 4.0)
-			var offset: float = float(i) * 1.5
+		# Draw outer glow - more intense red
+		for i in range(6, 0, -1):
+			var glow_alpha: float = glow_pulse * 0.08 * (1.0 - float(i) / 6.0)
+			var offset: float = float(i) * 2.0
 			var glow_rect := Rect2(-offset, -offset, w + offset * 2, h + offset * 2)
-			draw_rect(glow_rect, Color(GLOW_COLOR.r, GLOW_COLOR.g, GLOW_COLOR.b, glow_alpha))
+			draw_rect(glow_rect, Color(UI.SHOP_CORE_GLOW.r, UI.SHOP_CORE_GLOW.g, UI.SHOP_CORE_GLOW.b, glow_alpha))
 		
 		# Draw background with cut corners (sci-fi hexagonal look)
 		var bg_points := PackedVector2Array([
@@ -1605,31 +1572,29 @@ class _PristineCoreContainer extends Control:
 			Vector2(0, h - CORNER_CUT),
 			Vector2(0, CORNER_CUT)
 		])
-		draw_colored_polygon(bg_points, BG_COLOR)
+		draw_colored_polygon(bg_points, UI.SHOP_CORE_BG)
 		
-		# Draw border
+		# Draw border - use danger red color for more visible border
 		for i in range(bg_points.size()):
 			var p1: Vector2 = bg_points[i]
 			var p2: Vector2 = bg_points[(i + 1) % bg_points.size()]
-			draw_line(p1, p2, BORDER_COLOR, BORDER_THICKNESS, true)
+			draw_line(p1, p2, UI.SHOP_CORE_BORDER, BORDER_THICKNESS, true)
 		
 		# Draw vertical divider line in the middle
 		var divider_x := w * 0.42  # Position divider between icon and count
 		var divider_top := 16.0
 		var divider_bottom := h - 8.0
-		draw_line(Vector2(divider_x, divider_top), Vector2(divider_x, divider_bottom), DIVIDER_COLOR, 1.5)
+		draw_line(Vector2(divider_x, divider_top), Vector2(divider_x, divider_bottom), UI.SHOP_CORE_DIVIDER, 1.5)
 		
 		# Draw "PRISTINE CORE" title at top (shorter)
-		var title_font: Font = preload("res://resources/fonts/futura_condensed_extra_bold.tres")
 		var title_text := "PRISTINE CORE"
 		var title_size := 10
-		var title_color := Color(1.0, 0.4, 0.35, 0.9)
-		var title_width: float = title_font.get_string_size(title_text, HORIZONTAL_ALIGNMENT_LEFT, -1, title_size).x
+		var title_width: float = UI.FONT_TITLE.get_string_size(title_text, HORIZONTAL_ALIGNMENT_LEFT, -1, title_size).x
 		var title_x: float = (w - title_width) / 2.0
-		draw_string(title_font, Vector2(title_x, 12), title_text, HORIZONTAL_ALIGNMENT_LEFT, -1, title_size, title_color)
+		draw_string(UI.FONT_TITLE, Vector2(title_x, 12), title_text, HORIZONTAL_ALIGNMENT_LEFT, -1, title_size, UI.RESET_TITLE)
 		
 		# Draw subtle scan lines for tech effect
 		var scan_alpha: float = 0.03 + 0.02 * sin(_glow_time * 5.0)
 		for y_line in range(0, int(h), 4):
 			draw_line(Vector2(CORNER_CUT, y_line), Vector2(w - CORNER_CUT, y_line), 
-					 Color(1.0, 0.3, 0.2, scan_alpha), 1.0)
+					 Color(UI.RESET_SCAN_LINE.r, UI.RESET_SCAN_LINE.g, UI.RESET_SCAN_LINE.b, scan_alpha), 1.0)

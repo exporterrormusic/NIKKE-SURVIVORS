@@ -146,7 +146,7 @@ func _apply_frostburn(enemy: Node2D) -> void:
 	var burn_rates := [0.0, 0.34]  # Per second - index 0 unused, index 1 is the unlocked value
 	var elite_rates := [0.0, 0.12]  # Reduced for elite/boss
 	
-	var is_elite_or_boss: bool = enemy.has_meta("enemy_tier") and enemy.get_meta("enemy_tier") in ["elite", "boss", "tank"]
+	var is_elite_or_boss: bool = enemy.has_meta("enemy_tier") and enemy.get_meta("enemy_tier") in ["elite", "boss"]
 	var level_idx := mini(burn_level, 1)  # Cap at 1 for array access
 	var burn_rate: float = elite_rates[level_idx] if is_elite_or_boss else burn_rates[level_idx]
 	var burn_duration := 3.0

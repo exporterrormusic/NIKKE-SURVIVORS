@@ -92,18 +92,17 @@ func _draw() -> void:
 	if is_special or is_burst:
 		pulse = 1.0 + sin(_time * 10.0) * 0.3
 	
-	# === OUTER GLOW LAYERS - Very bright ===
-	# Outermost soft glow
-	var outer_glow := Color(color.r, color.g * 0.7, color.b * 0.5, 0.25 * pulse)
-	draw_circle(Vector2.ZERO, radius * 4.0, outer_glow)
+	# === OUTER GLOW LAYERS - Tighter and quicker falloff ===
+	# Outermost soft glow (reduced from 4.0x to 2.0x)
+	var outer_glow := Color(color.r, color.g * 0.7, color.b * 0.5, 0.15 * pulse)
+	draw_circle(Vector2.ZERO, radius * 2.0, outer_glow)
 	
-	# Middle glow layer
-	var mid_glow := Color(color.r, color.g * 0.8, color.b * 0.6, 0.45 * pulse)
-	draw_circle(Vector2.ZERO, radius * 2.8, mid_glow)
+	# Inner glow layer (reduced from 1.8x to 1.4x)
+	var inner_glow := Color(color.r, color.g * 0.9, color.b * 0.7, 0.4 * pulse)
+	draw_circle(Vector2.ZERO, radius * 1.4, inner_glow)
 	
-	# Inner glow layer
-	var inner_glow := Color(color.r, color.g * 0.9, color.b * 0.7, 0.65 * pulse)
-	draw_circle(Vector2.ZERO, radius * 1.8, inner_glow)
+	# === WHITE STROKE OUTLINE (like SMG bullets) ===
+	draw_arc(Vector2.ZERO, radius + 1.5, 0, TAU, 24, Color(1.0, 1.0, 1.0, 0.9), 2.0)
 	
 	# === CORE ===
 	# Main core - bright

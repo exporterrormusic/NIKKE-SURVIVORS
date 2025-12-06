@@ -196,18 +196,18 @@ func _switch_tab(tab_name: String) -> void:
 func _update_tab_colors() -> void:
 	# Create styles for active/inactive tabs
 	var active_style := StyleBoxFlat.new()
-	active_style.bg_color = Color(0.95, 0.95, 0.98, 1.0)
+	active_style.bg_color = UI.SETTINGS_TAB_ACTIVE_BG
 	active_style.set_border_width_all(0)
 	active_style.border_width_bottom = 4
-	active_style.border_color = Color(1.0, 1.0, 1.0, 1.0)
+	active_style.border_color = UI.SETTINGS_TAB_ACTIVE_BORDER
 	active_style.corner_radius_top_left = 4
 	active_style.corner_radius_top_right = 4
 	
 	var inactive_style := StyleBoxFlat.new()
-	inactive_style.bg_color = Color(0.082, 0.11, 0.157, 0.95)
+	inactive_style.bg_color = UI.SETTINGS_TAB_INACTIVE_BG
 	inactive_style.set_border_width_all(0)
 	inactive_style.border_width_bottom = 2
-	inactive_style.border_color = Color(0.4, 0.4, 0.45, 0.8)
+	inactive_style.border_color = UI.SETTINGS_TAB_INACTIVE_BORDER
 	inactive_style.corner_radius_top_left = 4
 	inactive_style.corner_radius_top_right = 4
 	
@@ -215,7 +215,7 @@ func _update_tab_colors() -> void:
 	var inactive_color := UI.TEXT_PRIMARY
 	var inactive_hover := UI.ACCENT_HOVER
 	var active_color := UI.TEXT_DARK
-	var active_hover := Color(0.05, 0.05, 0.08, 1.0)
+	var active_hover := UI.SETTINGS_TAB_ACTIVE_HOVER
 	
 	for tab_name in TAB_ORDER:
 		if not _tabs.has(tab_name):

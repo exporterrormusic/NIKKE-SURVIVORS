@@ -8,7 +8,7 @@ const UI := preload("res://scripts/ui/UITheme.gd")
 @export var option_id: String = "PLAY"
 @export var icon_type: String = "play"
 @export var label_text: String = "PLAY"
-@export var accent_color: Color = Color(0.0, 0.83, 1.0, 1.0)  # UI.ACCENT_PRIMARY
+@export var accent_color: Color = UI.ACCENT_PRIMARY
 @export var play_option: bool = false  # Special styling for the main "Play" button
 @export var danger_option: bool = false  # Red styling for quit/cancel
 
@@ -118,13 +118,13 @@ func _setup_styles() -> void:
 
 func _create_danger_hover_style() -> StyleBoxFlat:
 	var style := UI.create_panel_style(
-		Color(0.35, 0.1, 0.1, 1.0),
+		UI.BTN_DANGER_HOVER_FULL_BG,
 		UI.COLOR_DANGER,
 		UI.BORDER_THICK,
 		UI.CORNER_MEDIUM,
 		true
 	)
-	style.shadow_color = Color(1.0, 0.3, 0.3, 0.4)
+	style.shadow_color = UI.BTN_DANGER_HOVER_SHADOW
 	style.shadow_size = 6
 	return style
 

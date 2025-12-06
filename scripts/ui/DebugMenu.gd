@@ -5,6 +5,7 @@ class_name DebugMenu
 ## Provides toggles and buttons for testing/debugging
 
 const SaveManagerScript = preload("res://scripts/systems/SaveManager.gd")
+const UI := preload("res://scripts/ui/UITheme.gd")
 
 var _panel: PanelContainer
 var _vbox: VBoxContainer
@@ -27,7 +28,7 @@ func _ready() -> void:
 func _setup_ui() -> void:
 	# Dark semi-transparent background
 	var bg := ColorRect.new()
-	bg.color = Color(0, 0, 0, 0.5)
+	bg.color = UI.BG_OVERLAY
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(bg)
@@ -39,8 +40,8 @@ func _setup_ui() -> void:
 	_panel.position = Vector2(-150, -200)
 	
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.1, 0.1, 0.15, 0.95)
-	style.border_color = Color(0.8, 0.3, 0.3, 1.0)
+	style.bg_color = UI.DEBUG_PANEL_BG
+	style.border_color = UI.DEBUG_PANEL_BORDER
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(8)
 	style.set_content_margin_all(12)
@@ -60,7 +61,7 @@ func _setup_ui() -> void:
 	var title := Label.new()
 	title.text = "DEBUG MENU (F4)"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3, 1.0))
+	title.add_theme_color_override("font_color", UI.DEBUG_TITLE)
 	title.add_theme_font_size_override("font_size", 20)
 	_vbox.add_child(title)
 	
@@ -114,13 +115,13 @@ func _setup_ui() -> void:
 	var close_btn := Button.new()
 	close_btn.text = "CLOSE (F4 / ESC)"
 	close_btn.pressed.connect(_toggle_menu)
-	_style_button(close_btn, Color(0.5, 0.5, 0.5))
+	_style_button(close_btn, UI.DEBUG_BTN_CLOSE)
 	_vbox.add_child(close_btn)
 
 func _add_section_label(text: String) -> void:
 	var label := Label.new()
 	label.text = text
-	label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.8, 1.0))
+	label.add_theme_color_override("font_color", UI.DEBUG_SECTION_LABEL)
 	label.add_theme_font_size_override("font_size", 14)
 	_vbox.add_child(label)
 
@@ -133,7 +134,7 @@ func _add_button(text: String, callback: Callable) -> Button:
 	var btn := Button.new()
 	btn.text = text
 	btn.pressed.connect(callback)
-	_style_button(btn, Color(0.3, 0.5, 0.7))
+	_style_button(btn, UI.DEBUG_BTN_NORMAL)
 	_vbox.add_child(btn)
 	return btn
 
@@ -141,7 +142,7 @@ func _add_toggle_button(text: String, callback: Callable) -> Button:
 	var btn := Button.new()
 	btn.text = text + " [OFF]"
 	btn.pressed.connect(func(): callback.call(btn))
-	_style_button(btn, Color(0.5, 0.3, 0.3))
+	_style_button(btn, UI.DEBUG_BTN_TOGGLE)
 	btn.set_meta("base_text", text)
 	_vbox.add_child(btn)
 	return btn
@@ -150,7 +151,7 @@ func _add_danger_button(text: String, callback: Callable) -> Button:
 	var btn := Button.new()
 	btn.text = text
 	btn.pressed.connect(callback)
-	_style_button(btn, Color(0.7, 0.2, 0.2))
+	_style_button(btn, UI.DEBUG_BTN_DANGER)
 	_vbox.add_child(btn)
 	return btn
 
@@ -174,12 +175,12 @@ func _update_toggle_button(btn: Button, enabled: bool) -> void:
 	if enabled:
 		btn.text = base_text + " [ON]"
 		var style := btn.get_theme_stylebox("normal").duplicate() as StyleBoxFlat
-		style.bg_color = Color(0.2, 0.6, 0.3)
+		style.bg_color = UI.DEBUG_TOGGLE_ON
 		btn.add_theme_stylebox_override("normal", style)
 	else:
 		btn.text = base_text + " [OFF]"
 		var style := btn.get_theme_stylebox("normal").duplicate() as StyleBoxFlat
-		style.bg_color = Color(0.5, 0.3, 0.3)
+		style.bg_color = UI.DEBUG_TOGGLE_OFF
 		btn.add_theme_stylebox_override("normal", style)
 
 func _input(event: InputEvent) -> void:

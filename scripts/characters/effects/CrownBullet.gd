@@ -33,28 +33,6 @@ func _ready() -> void:
 	z_index = 50
 
 func _create_visual() -> void:
-	# Load shader - reuse for all Crown bullets
-	var shader = load("res://resources/shaders/crown_bullet.gdshader")
-	if shader:
-		# Create visual sprite
-		var sprite := Sprite2D.new()
-		sprite.name = "Visual"
-		# Use a simple white circle texture that the shader will transform
-		var img := Image.create(32, 32, false, Image.FORMAT_RGBA8)
-		img.fill(Color.WHITE)
-		sprite.texture = ImageTexture.create_from_image(img)
-		
-		var shader_material := ShaderMaterial.new()
-		shader_material.shader = shader
-		shader_material.set_shader_parameter("time_scale", 2.5)
-		shader_material.set_shader_parameter("primary_color", Color(1.0, 0.85, 0.2, 1.0))
-		shader_material.set_shader_parameter("secondary_color", Color(0.8, 0.5, 0.1, 1.0))
-		shader_material.set_shader_parameter("accent_color", Color(1.0, 1.0, 0.6, 1.0))
-		shader_material.set_shader_parameter("swirl_intensity", 3.5)
-		shader_material.set_shader_parameter("glow_intensity", 1.3)
-		sprite.material = shader_material
-		add_child(sprite)
-	
 	# Create collision shape
 	var collision = CollisionShape2D.new()
 	var shape = CircleShape2D.new()
@@ -130,11 +108,12 @@ func _hit_target(target: Node) -> void:
 	if target.is_in_group("charmed_allies"):
 		return
 	
-	# Roll for critical hit - base chance + shop bonus
+	# Roll for critical hit - base chance + shop bonus (capped at 100%)
 	var crit_chance := BASE_CRIT_CHANCE
 	var player = get_tree().get_first_node_in_group("player")
 	if player and player.has_method("get_crit_chance"):
 		crit_chance += player.get_crit_chance()
+	crit_chance = minf(crit_chance, 1.0)  # Cap at 100%
 	var is_crit := randf() < crit_chance
 	var damage := base_damage
 	if is_crit:

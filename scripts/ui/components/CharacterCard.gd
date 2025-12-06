@@ -3,6 +3,8 @@ class_name CharacterCard
 ## A selectable card showing a character's portrait and name.
 ## Used in the character selection menu.
 
+const UI := preload("res://scripts/ui/UITheme.gd")
+
 signal pressed(card: CharacterCard)
 signal hovered(card: CharacterCard)
 
@@ -11,12 +13,12 @@ signal hovered(card: CharacterCard)
 @export var is_random: bool = false
 @export var is_locked: bool = false
 
-const NORMAL_BG := Color(0.12, 0.12, 0.16, 0.95)
-const HOVER_BG := Color(0.18, 0.18, 0.24, 0.98)
-const SELECTED_BG := Color(0.26, 0.26, 0.34, 1.0)
-const BORDER_NORMAL := Color(0.4, 0.4, 0.5, 0.8)
-const BORDER_SELECTED := Color(0.7, 0.8, 1.0, 1.0)
-const LOCKED_TINT := Color(0.4, 0.4, 0.4, 1.0)
+const NORMAL_BG := UI.CHAR_CARD_NORMAL_BG
+const HOVER_BG := UI.CHAR_CARD_HOVER_BG
+const SELECTED_BG := UI.CHAR_CARD_SELECTED_BG
+const BORDER_NORMAL := UI.CHAR_CARD_BORDER_NORMAL
+const BORDER_SELECTED := UI.CHAR_CARD_BORDER_SELECTED
+const LOCKED_TINT := UI.CHAR_CARD_LOCKED_TINT
 
 var _character_data: CharacterData = null
 var _is_selected: bool = false

@@ -141,10 +141,16 @@ func _on_settings_closed(canvas_layer: CanvasLayer) -> void:
 
 func _on_character_select_requested() -> void:
 	get_tree().paused = false
+	# Record the run result before leaving (save score even if player didn't die)
+	if GameState:
+		GameState.record_run_result("")
 	get_tree().change_scene_to_file("res://scenes/ui/CharacterSelectMenu.tscn")
 
 func _on_quit_requested() -> void:
 	get_tree().paused = false
+	# Record the run result before quitting (save score even if player didn't die)
+	if GameState:
+		GameState.record_run_result("")
 	# Use MenuManager to return to main menu so signals get connected properly
 	if MenuManager:
 		MenuManager.return_to_main_menu()

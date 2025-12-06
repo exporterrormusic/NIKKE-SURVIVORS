@@ -107,10 +107,10 @@ func apply_all_settings() -> void:
 
 
 func apply_audio_settings() -> void:
+	# Apply music volume to Music bus (background music only)
 	_apply_bus_volume("Music", music_volume)
+	# Apply SFX volume to SFX bus (all sound effects: weapons, UI, etc.)
 	_apply_bus_volume("SFX", sfx_volume)
-	# Also apply to Master if specific buses don't exist
-	_apply_bus_volume("Master", music_volume)
 
 
 func _apply_bus_volume(bus_name: String, value: float) -> void:

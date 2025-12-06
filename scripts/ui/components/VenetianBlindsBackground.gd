@@ -4,15 +4,17 @@ class_name VenetianBlindsBackground
 ## Displays a carousel of background images with angled blind strips.
 ## Images are tinted with a monochrome blue cyberpunk aesthetic.
 
+const UI := preload("res://scripts/ui/UITheme.gd")
+
 @export var background_textures: PackedStringArray = []
 @export var blind_base_width: float = 540.0
 @export var blind_angle_degrees: float = 15.0
 @export var carousel_speed: float = 100.0
-@export var overlay_color: Color = Color(0.02, 0.05, 0.1, 0.25)  # Very light overlay
+@export var overlay_color: Color = UI.VFX_VENETIAN_OVERLAY
 
 # Monochrome tint - convert to grayscale then apply blue
 # This creates a unified look where all images have similar color tone
-const MONOCHROME_HUE := Color(0.75, 0.9, 1.0, 1.0)  # Brighter, lighter blue
+const MONOCHROME_HUE := UI.VFX_VENETIAN_HUE
 const DESATURATION := 0.6  # Lower = more original color shows through
 
 const SUPPORTED_EXTENSIONS := [".png", ".jpg", ".jpeg", ".webp"]
@@ -71,7 +73,7 @@ func _setup_hex_overlay() -> void:
 	_hex_overlay.name = "ScreenEffectOverlay"
 	_hex_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hex_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_hex_overlay.color = Color(0, 0, 0, 0)  # Transparent base
+	_hex_overlay.color = UI.TRANSPARENT
 	add_child(_hex_overlay)
 	
 	# Load and apply digital screen shader to the overlay
@@ -123,7 +125,7 @@ func _draw() -> void:
 	var textures = _get_active_textures()
 	if textures.is_empty():
 		# Dark blue base when no textures
-		draw_rect(Rect2(Vector2.ZERO, size), Color(0.06, 0.08, 0.12))
+		draw_rect(Rect2(Vector2.ZERO, size), UI.VFX_VENETIAN_BASE)
 		draw_rect(Rect2(Vector2.ZERO, size), overlay_color)
 		return
 
@@ -216,7 +218,7 @@ func _draw_blind_edges(points: PackedVector2Array) -> void:
 	if points.size() < 4:
 		return
 	# Subtle light edge for separation between blinds
-	var edge_color = Color(0.6, 0.8, 1.0, 0.15)
+	var edge_color = UI.VFX_VENETIAN_EDGE
 	var thickness = 1.5
 	
 	# Draw edge lines
@@ -314,7 +316,7 @@ func _create_prepared_texture(original: Texture2D, blind_width: int, angle_offse
 	image.resize(scaled_width, scaled_height, Image.INTERPOLATE_LANCZOS)
 	
 	var final_image = Image.create(target_width, target_height, false, image.get_format())
-	final_image.fill(Color(0, 0, 0, 0))
+	final_image.fill(UI.TRANSPARENT)
 	var dest_pos = Vector2i(int(round((target_width - scaled_width) / 2.0)), int(round((target_height - scaled_height) / 2.0)))
 	_blit_image_with_clipping(final_image, image, dest_pos)
 	

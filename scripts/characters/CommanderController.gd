@@ -335,7 +335,7 @@ func _play_ally_burst_sound(ally_type: int) -> void:
 		audio_player.name = "AllyBurstVoice_%d" % Time.get_ticks_msec()
 		audio_player.stream = sound
 		audio_player.volume_db = 8.0
-		audio_player.bus = "Master"
+		audio_player.bus = "SFX"  # Use SFX bus for voice lines
 		audio_player.process_mode = Node.PROCESS_MODE_ALWAYS
 		root.add_child(audio_player)
 		audio_player.play()

@@ -74,6 +74,11 @@ func _ready() -> void:
 	_rng.randomize()
 	_setup_screen_effects()
 
+## Calculate ATK multiplier based on difficulty
+## At difficulty 1 = 1.0x, at difficulty 2 = 1.25x, at difficulty 3 = 1.5x, etc.
+func _get_atk_multiplier() -> float:
+	return 1.0 + 0.25 * (GameState.difficulty_multiplier - 1)
+
 func _setup_screen_effects() -> void:
 	# Create screen effects overlay for tank vignette and boss darken
 	var ScreenEffectsScript = load("res://scripts/enemies/effects/EnemyScreenEffects.gd")
@@ -190,16 +195,20 @@ func _apply_basic_stats(enemy: Node2D) -> void:
 	var difficulty_mult: int = GameState.difficulty_multiplier
 	enemy.max_hp = int(enemy.max_hp * _health_multiplier * difficulty_mult)
 	enemy.hp = enemy.max_hp
+	# Apply Goddess Fall ATK multiplier
+	enemy.base_damage = int(enemy.base_damage * _get_atk_multiplier())
 	# Enable shooting
 	if enemy.has_method("set_can_shoot"):
 		enemy.set_can_shoot(true)
 
 func _apply_tank_stats(enemy: Node2D) -> void:
 	var difficulty_mult: int = GameState.difficulty_multiplier
+	var atk_mult: float = _get_atk_multiplier()
 	enemy.scale = Vector2.ONE * TANK_SCALE
 	enemy.max_hp = int(enemy.max_hp * TANK_HP_MULT * _health_multiplier * difficulty_mult)
 	enemy.hp = enemy.max_hp
 	enemy.speed = int(enemy.speed * TANK_SPEED_MULT)
+	enemy.base_damage = int(TANK_DAMAGE_MULT * atk_mult)
 	# Tanks can shoot missiles AND melee
 	if enemy.has_method("set_can_shoot"):
 		enemy.set_can_shoot(true)
@@ -290,11 +299,13 @@ void fragment() {
 
 func _apply_boss_stats(enemy: Node2D) -> void:
 	var difficulty_mult: int = GameState.difficulty_multiplier
+	var atk_mult: float = _get_atk_multiplier()
 	print("[EnemySpawner] Applying BOSS stats: scale=", BOSS_SCALE, " hp_mult=", BOSS_HP_MULT, " health_mult=", _health_multiplier, " difficulty=", difficulty_mult)
 	enemy.scale = Vector2.ONE * BOSS_SCALE
 	enemy.max_hp = int(enemy.max_hp * BOSS_HP_MULT * _health_multiplier * difficulty_mult)
 	enemy.hp = enemy.max_hp
 	enemy.speed = int(enemy.speed * BOSS_SPEED_MULT)
+	enemy.base_damage = int(BOSS_DAMAGE_MULT * atk_mult)
 	print("[EnemySpawner] Boss HP set to: ", enemy.max_hp, " speed=", enemy.speed, " scale=", enemy.scale)
 	enemy.add_to_group("boss")
 	enemy.set_meta("enemy_tier", "boss")
@@ -328,11 +339,13 @@ func _apply_boss_stats(enemy: Node2D) -> void:
 
 func _apply_super_boss_stats(enemy: Node2D) -> void:
 	var difficulty_mult: int = GameState.difficulty_multiplier
+	var atk_mult: float = _get_atk_multiplier()
 	print("[EnemySpawner] Applying SUPER BOSS stats: scale=", SUPER_BOSS_SCALE, " hp_mult=", SUPER_BOSS_HP_MULT, " difficulty=", difficulty_mult)
 	enemy.scale = Vector2.ONE * SUPER_BOSS_SCALE
 	enemy.max_hp = int(enemy.max_hp * SUPER_BOSS_HP_MULT * _health_multiplier * difficulty_mult)
 	enemy.hp = enemy.max_hp
 	enemy.speed = int(enemy.speed * SUPER_BOSS_SPEED_MULT)
+	enemy.base_damage = int(SUPER_BOSS_DAMAGE_MULT * atk_mult)
 	print("[EnemySpawner] Super Boss HP set to: ", enemy.max_hp, " speed=", enemy.speed, " scale=", enemy.scale)
 	enemy.add_to_group("boss")
 	enemy.add_to_group("super_boss")
@@ -366,14 +379,19 @@ func _apply_super_boss_stats(enemy: Node2D) -> void:
 
 func _apply_elite_modifier(enemy: Node2D) -> void:
 	var difficulty_mult: int = GameState.difficulty_multiplier
+	var atk_mult: float = _get_atk_multiplier()
 	print("[EnemySpawner] Applying ELITE modifier on top of existing HP: ", enemy.max_hp, " difficulty=", difficulty_mult)
 	enemy.scale = Vector2.ONE * ELITE_SCALE  # Fixed 5x scale, not multiplicative
 	enemy.max_hp = int(enemy.max_hp * ELITE_HP_MULT * _health_multiplier * difficulty_mult)
 	enemy.hp = enemy.max_hp
 	enemy.speed = int(enemy.speed * ELITE_SPEED_MULT)
+	enemy.base_damage = int(ELITE_DAMAGE_MULT * atk_mult)
 	print("[EnemySpawner] Elite HP now: ", enemy.max_hp)
 	enemy.add_to_group("elite")
 	enemy.set_meta("enemy_tier", "elite")  # Track tier for frostburn reduction
+	# In Goddess Fall mode, elites have 1/5 chance to drop cores
+	if GameState.goddess_fall_mode and randf() < 0.2:
+		enemy.set_meta("pristine_core_drop", difficulty_mult)
 	# Gold outline glow (respects sprite alpha) with enhanced core
 	_apply_outline_glow(enemy, ELITE_GLOW_COLOR, true)
 	
@@ -514,9 +532,10 @@ func _setup_boss_enrage_timer(boss: Node2D) -> void:
 	timer.name = "EnrageTimer"
 	timer.one_shot = true
 	timer.wait_time = 60.0
+	timer.autostart = true  # Use autostart so timer starts when added to tree
 	timer.timeout.connect(_on_boss_enrage_timeout.bind(boss))
 	boss.add_child(timer)
-	timer.start()
+	# Timer will auto-start when boss enters tree (no need to call start() here)
 	
 	# Add visual warning timer display
 	boss.set_meta("enrage_timer", timer)

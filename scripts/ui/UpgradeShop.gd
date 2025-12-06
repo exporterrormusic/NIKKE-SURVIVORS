@@ -5,6 +5,8 @@ extends Control
 
 signal upgrade_chosen(option_id)
 
+const UI := preload("res://scripts/ui/UITheme.gd")
+
 @export var option_a: String = ""
 @export var option_b: String = ""
 @export var option_c: String = ""
@@ -15,16 +17,6 @@ signal upgrade_chosen(option_id)
 var selected_option = -1
 var selected_text = ""
 var debug_centering: bool = false  # Kept for Player.gd compatibility
-
-# HoloCure color palette
-const CARD_BG_COLOR := Color(0.08, 0.08, 0.12, 0.95)
-const CARD_BORDER_COLOR := Color(1.0, 1.0, 1.0, 0.9)
-const CARD_HOVER_BORDER := Color(1.0, 0.85, 0.2, 1.0)  # Yellow/gold
-const CARD_HOVER_BG := Color(0.12, 0.12, 0.18, 0.98)
-const DIVIDER_COLOR := Color(1.0, 1.0, 1.0, 0.3)
-const TITLE_COLOR := Color(1.0, 1.0, 1.0, 1.0)
-const DESC_COLOR := Color(0.75, 0.75, 0.8, 1.0)
-const OVERLAY_COLOR := Color(0.0, 0.0, 0.0, 0.7)
 
 # Sizing - balanced for good readability (scaled 1.3x)
 const CARD_WIDTH := 754.0   # 580 * 1.3
@@ -41,14 +33,14 @@ var _hover_tweens: Dictionary = {}
 
 func _ready():
 	# Setup dark overlay background
-	$ColorRect.color = OVERLAY_COLOR
+	$ColorRect.color = UI.BG_OVERLAY
 	$ColorRect.visible = true
 	
 	# Style the title
 	var title = get_node_or_null("Center/VBoxContainer/Title")
 	if title:
 		title.add_theme_font_size_override("font_size", 54)  # 42 * 1.3
-		title.add_theme_color_override("font_color", TITLE_COLOR)
+		title.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
 	
 	call_deferred("setup_options")
 
@@ -130,8 +122,8 @@ func _on_card_draw(button: Button):
 	var icon: Texture2D = button.get_meta("icon", null)
 	
 	var rect := Rect2(Vector2.ZERO, button.size)
-	var bg_color := CARD_HOVER_BG if hovered else CARD_BG_COLOR
-	var border_color := CARD_HOVER_BORDER if hovered else CARD_BORDER_COLOR
+	var bg_color := UI.CHAR_HOVER if hovered else UI.CHAR_NORMAL
+	var border_color := UI.TALENT_HOVER_BORDER if hovered else UI.ACCENT_PRIMARY
 	var border_w := BORDER_WIDTH + (1 if hovered else 0)
 	
 	# Draw background with rounded corners
@@ -159,7 +151,7 @@ func _on_card_draw(button: Button):
 	button.draw_line(
 		Vector2(divider_x, divider_top),
 		Vector2(divider_x, divider_bottom),
-		DIVIDER_COLOR, 2.0
+		UI.ENTRY_SEPARATOR, 2.0
 	)
 	
 	# Text area
@@ -176,13 +168,13 @@ func _on_card_draw(button: Button):
 	var headline_y := button.size.y / 2 - 4
 	if description != "":
 		headline_y = button.size.y / 2 - 18
-	button.draw_string(font, Vector2(text_x, headline_y), headline, HORIZONTAL_ALIGNMENT_LEFT, text_width, headline_size, TITLE_COLOR)
+	button.draw_string(font, Vector2(text_x, headline_y), headline, HORIZONTAL_ALIGNMENT_LEFT, text_width, headline_size, UI.TEXT_PRIMARY)
 	
 	# Draw description
 	if description != "":
 		var desc_size := 20  # 16 * 1.3
 		var desc_y := button.size.y / 2 + 20
-		button.draw_string(font, Vector2(text_x, desc_y), description, HORIZONTAL_ALIGNMENT_LEFT, text_width, desc_size, DESC_COLOR)
+		button.draw_string(font, Vector2(text_x, desc_y), description, HORIZONTAL_ALIGNMENT_LEFT, text_width, desc_size, UI.TEXT_SECONDARY)
 
 func _on_card_hover(index: int):
 	_hover_states[index] = true

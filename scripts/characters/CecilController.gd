@@ -95,18 +95,9 @@ func _get_max_shield_hits() -> int:
 func _can_attack() -> bool:
 	return not is_reloading and ammo > 0
 
-# Preload the bullet shader
-var _bullet_shader: Shader = null
-
-func _get_bullet_shader() -> Shader:
-	if not _bullet_shader:
-		_bullet_shader = load("res://resources/shaders/cecil_bullet.gdshader")
-	return _bullet_shader
-
 func _perform_attack(direction: Vector2) -> void:
 	# Fire dual SMG bullets (same as Sin)
 	var bullet_scene = preload("res://scenes/effects/SMGBullet.tscn")
-	var shader := _get_bullet_shader()
 	
 	var perp := Vector2(-direction.y, direction.x).normalized()
 	var gun_offset := 18.0
@@ -122,7 +113,6 @@ func _perform_attack(direction: Vector2) -> void:
 	bullet_left.rotation = direction.angle()
 	bullet_left.owner_node = player
 	bullet_left.base_damage = bullet_damage
-	_apply_bullet_shader(bullet_left, shader)
 	
 	# Right gun bullet
 	var bullet_right = bullet_scene.instantiate()
@@ -132,20 +122,8 @@ func _perform_attack(direction: Vector2) -> void:
 	bullet_right.rotation = direction.angle()
 	bullet_right.owner_node = player
 	bullet_right.base_damage = bullet_damage
-	_apply_bullet_shader(bullet_right, shader)
 	
 	_play_sound("smg")
-
-func _apply_bullet_shader(bullet: Node, shader: Shader) -> void:
-	if not shader:
-		return
-	# Find the Sprite2D child and apply the shader
-	var sprite := bullet.get_node_or_null("Sprite2D") as Sprite2D
-	if sprite:
-		var mat := ShaderMaterial.new()
-		mat.shader = shader
-		sprite.material = mat
-		sprite.modulate = Color.WHITE  # Reset modulate so shader controls colors
 
 func try_absorb_damage() -> bool:
 	"""Try to have shield absorb incoming damage. Returns true if absorbed."""

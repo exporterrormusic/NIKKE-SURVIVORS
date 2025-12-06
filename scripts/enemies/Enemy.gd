@@ -6,6 +6,7 @@ extends CharacterBody2D
 var hp = 1
 var max_hp = 1
 var speed = 150
+var base_damage: int = 1  # Base contact damage (scaled by Goddess Fall ATK multiplier)
 var player
 
 # HP bar overlay for drawing text
@@ -171,7 +172,7 @@ func _physics_process(delta: float) -> void:
 		# Deal damage when close
 		if dist < DAMAGE_DISTANCE and _damage_timer <= 0:
 			if _current_target and _current_target.has_method("take_damage"):
-				_current_target.take_damage(1)
+				_current_target.take_damage(base_damage)
 			_damage_timer = DAMAGE_COOLDOWN
 		
 		# Attempt to start charging laser at target
@@ -289,7 +290,7 @@ func _fire_laser(direction: Vector2) -> void:
 	laser.set_direction(dir)
 	laser.speed = LASER_SPEED
 	laser.max_range = LASER_RANGE * 1.5  # Extended range
-	laser.damage = LASER_DAMAGE
+	laser.damage = base_damage  # Use scaled base_damage instead of constant
 	laser.lifetime = maxf((LASER_RANGE * 1.5) / LASER_SPEED, 1.0)
 	
 	# Spawn slightly in front of enemy
@@ -524,7 +525,7 @@ func _process_charmed_behavior(delta: float) -> void:
 	# Deal damage when close
 	if dist < DAMAGE_DISTANCE and _damage_timer <= 0:
 		if _charm_target.has_method("take_damage"):
-			_charm_target.take_damage(1)
+			_charm_target.take_damage(base_damage)
 		_damage_timer = DAMAGE_COOLDOWN
 	
 	# Animation

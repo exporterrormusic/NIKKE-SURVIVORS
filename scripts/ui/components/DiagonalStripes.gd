@@ -1,6 +1,8 @@
 extends Control
 ## Animated diagonal warning stripes effect - red/danger themed
 
+const UI := preload("res://scripts/ui/UITheme.gd")
+
 var _time: float = 0.0
 var _stripe_width: float = 400.0  # Very thick stripes (5x of 80)
 var _scroll_speed: float = 60.0  # pixels per second
@@ -24,8 +26,8 @@ func _draw() -> void:
 		return
 	
 	# Colors for warning stripes - red/black danger theme
-	var color_a := Color(1.0, 0.2, 0.15, 0.18)  # Red
-	var color_b := Color(0.0, 0.0, 0.0, 0.12)   # Dark/transparent
+	var color_a := UI.VFX_STRIPE_RED
+	var color_b := UI.VFX_STRIPE_DARK
 	
 	# Calculate stripe offset for animation (scrolling right)
 	var offset := fmod(_time * _scroll_speed, _stripe_width * 2.0)

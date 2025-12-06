@@ -5,24 +5,7 @@ class_name AchievementsMenu
 
 signal back_requested
 
-# Visual constants - matching LeaderboardMenu style
-const BACKGROUND_COLOR := Color(0.04, 0.055, 0.08, 0.95)
-const PANEL_BG_COLOR := Color(0.04, 0.055, 0.08, 0.97)
-const BORDER_COLOR := Color(0.95, 0.95, 0.98, 0.9)
-const ENTRY_BG_COLOR := Color(0.1, 0.1, 0.14, 0.95)
-const ENTRY_BORDER_COLOR := Color(0.95, 0.95, 0.98, 0.9)
-const SEPARATOR_COLOR := Color(0.95, 0.95, 0.98, 0.3)
-
-const HEADER_COLOR := Color(0.95, 0.95, 0.98, 1.0)
-const LABEL_COLOR := Color(0.784, 0.792, 0.878, 1.0)
-const UNLOCKED_COLOR := Color(0.392, 0.86, 0.549, 1.0)
-const LOCKED_COLOR := Color(0.6, 0.6, 0.65, 1.0)
-const PROGRESS_BG := Color(0.15, 0.15, 0.2, 1.0)
-const PROGRESS_FILL := Color(0.533, 0.611, 0.98, 1.0)
-
-const CHARACTER_NORMAL_COLOR := Color(0.08, 0.08, 0.12, 0.95)
-const CHARACTER_HOVER_COLOR := Color(0.12, 0.12, 0.18, 0.98)
-const CHARACTER_SELECTED_COLOR := Color(0.18, 0.18, 0.25, 1.0)
+const UI := preload("res://scripts/ui/UITheme.gd")
 
 const GENERAL_FILTER := "GENERAL"
 
@@ -34,16 +17,6 @@ var _achievements: Array[Dictionary] = []
 var _selected_filter: String = GENERAL_FILTER
 var _completion_filter: String = "ALL"  # ALL, COMPLETE, INCOMPLETE
 var _character_entries: Array[Dictionary] = []
-
-# Preload fonts at compile time for better performance
-const _futura_bold: Font = preload("res://resources/fonts/futura_condensed_extra_bold.tres")
-const _pretendard_bold: Font = preload("res://resources/fonts/pretendard_bold.tres")
-const _pretendard_medium: Font = preload("res://resources/fonts/pretendard_medium.tres")
-
-# Filter colors
-const FILTER_ALL_COLOR := Color(1.0, 1.0, 1.0, 1.0)  # White
-const FILTER_COMPLETE_COLOR := Color(0.392, 0.86, 0.549, 1.0)  # Green
-const FILTER_INCOMPLETE_COLOR := Color(0.9, 0.35, 0.35, 1.0)  # Red
 
 # UI references
 var _character_list: VBoxContainer = null
@@ -104,7 +77,7 @@ func _build_ui() -> void:
 	# Dark overlay
 	var overlay := ColorRect.new()
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	overlay.color = Color(0, 0, 0, 0.25)
+	overlay.color = UI.OVERLAY_LIGHT
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(overlay)
 	
@@ -124,11 +97,11 @@ func _build_ui() -> void:
 	title_label.text = "ACHIEVEMENTS"
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	if _futura_bold:
-		title_label.add_theme_font_override("font", _futura_bold)
+	if UI.FONT_TITLE:
+		title_label.add_theme_font_override("font", UI.FONT_TITLE)
 	title_label.add_theme_font_size_override("font_size", 80)
-	title_label.add_theme_color_override("font_color", HEADER_COLOR)
-	title_label.add_theme_color_override("font_outline_color", Color(0.1, 0.1, 0.15, 1.0))
+	title_label.add_theme_color_override("font_color", UI.ACCENT_PRIMARY)
+	title_label.add_theme_color_override("font_outline_color", UI.ACH_TITLE_OUTLINE)
 	title_label.add_theme_constant_override("outline_size", 3)
 	top_bar.add_child(title_label)
 	
@@ -214,9 +187,9 @@ func _build_ui() -> void:
 	right_vbox.add_child(filter_row)
 	
 	# Add filter buttons
-	_create_filter_button(filter_row, "ALL", FILTER_ALL_COLOR)
-	_create_filter_button(filter_row, "COMPLETE", FILTER_COMPLETE_COLOR)
-	_create_filter_button(filter_row, "INCOMPLETE", FILTER_INCOMPLETE_COLOR)
+	_create_filter_button(filter_row, "ALL", UI.ACCENT_PRIMARY)
+	_create_filter_button(filter_row, "COMPLETE", UI.COLOR_UNLOCKED)
+	_create_filter_button(filter_row, "INCOMPLETE", UI.COLOR_DANGER)
 	
 	# Spacer to push buttons left
 	var filter_spacer := Control.new()
@@ -242,10 +215,10 @@ func _build_ui() -> void:
 	_empty_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_empty_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_empty_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	if _pretendard_medium:
-		_empty_label.add_theme_font_override("font", _pretendard_medium)
+	if UI.FONT_MEDIUM:
+		_empty_label.add_theme_font_override("font", UI.FONT_MEDIUM)
 	_empty_label.add_theme_font_size_override("font_size", 24)
-	_empty_label.add_theme_color_override("font_color", LABEL_COLOR)
+	_empty_label.add_theme_color_override("font_color", UI.TEXT_SECONDARY)
 	_empty_label.visible = false
 	right_vbox.add_child(_empty_label)
 	
@@ -331,7 +304,7 @@ func _create_character_entry(code: String, display_name: String, portrait: Textu
 		tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		# Grey out if locked
 		if not is_unlocked:
-			tex_rect.modulate = Color(0.3, 0.3, 0.35, 1.0)
+			tex_rect.modulate = UI.ACH_PORTRAIT_LOCKED
 		portrait_panel.add_child(tex_rect)
 		
 		# Lock overlay for locked characters - ON TOP of portrait
@@ -352,10 +325,10 @@ func _create_character_entry(code: String, display_name: String, portrait: Textu
 			var locked_text := Label.new()
 			locked_text.text = "LOCKED"
 			locked_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			if _pretendard_bold:
-				locked_text.add_theme_font_override("font", _pretendard_bold)
+			if UI.FONT_BOLD:
+				locked_text.add_theme_font_override("font", UI.FONT_BOLD)
 			locked_text.add_theme_font_size_override("font_size", 14)
-			locked_text.add_theme_color_override("font_color", Color(0.95, 0.7, 0.2, 1.0))  # Gold color like shop
+			locked_text.add_theme_color_override("font_color", UI.ACH_LOCKED_TEXT)
 			locked_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			lock_overlay.add_child(locked_text)
 	else:
@@ -375,10 +348,10 @@ func _create_character_entry(code: String, display_name: String, portrait: Textu
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	if _pretendard_bold:
-		name_label.add_theme_font_override("font", _pretendard_bold)
+	if UI.FONT_BOLD:
+		name_label.add_theme_font_override("font", UI.FONT_BOLD)
 	name_label.add_theme_font_size_override("font_size", 20)
-	name_label.add_theme_color_override("font_color", HEADER_COLOR)
+	name_label.add_theme_color_override("font_color", UI.ACCENT_PRIMARY)
 	name_label.clip_text = true
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(name_label)
@@ -391,7 +364,7 @@ func _create_character_entry(code: String, display_name: String, portrait: Textu
 	
 	var divider := ColorRect.new()
 	divider.custom_minimum_size = Vector2(2, 100)
-	divider.color = Color(0.5, 0.5, 0.55, 0.25)  # Very subtle
+	divider.color = UI.ACH_DIVIDER
 	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	divider_container.add_child(divider)
 	
@@ -413,10 +386,10 @@ func _create_character_entry(code: String, display_name: String, portrait: Textu
 	count_label.text = "0/0"
 	count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	count_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	if _pretendard_bold:
-		count_label.add_theme_font_override("font", _pretendard_bold)
+	if UI.FONT_BOLD:
+		count_label.add_theme_font_override("font", UI.FONT_BOLD)
 	count_label.add_theme_font_size_override("font_size", 56)
-	count_label.add_theme_color_override("font_color", HEADER_COLOR)
+	count_label.add_theme_color_override("font_color", UI.ACCENT_PRIMARY)
 	count_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	count_container.add_child(count_label)
 	
@@ -432,17 +405,17 @@ func _create_character_entry(code: String, display_name: String, portrait: Textu
 
 
 func _apply_character_button_styles(button: Button) -> void:
-	button.add_theme_stylebox_override("normal", _make_char_button_style(CHARACTER_NORMAL_COLOR))
-	button.add_theme_stylebox_override("hover", _make_char_button_style(CHARACTER_HOVER_COLOR))
-	button.add_theme_stylebox_override("pressed", _make_char_button_style(CHARACTER_SELECTED_COLOR))
-	button.add_theme_stylebox_override("focus", _make_char_button_style(CHARACTER_HOVER_COLOR))
+	button.add_theme_stylebox_override("normal", _make_char_button_style(UI.CHAR_NORMAL))
+	button.add_theme_stylebox_override("hover", _make_char_button_style(UI.CHAR_HOVER))
+	button.add_theme_stylebox_override("pressed", _make_char_button_style(UI.CHAR_SELECTED))
+	button.add_theme_stylebox_override("focus", _make_char_button_style(UI.CHAR_HOVER))
 
 
 func _make_char_button_style(color: Color) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	style.bg_color = color
 	style.set_border_width_all(2)
-	style.border_color = SEPARATOR_COLOR
+	style.border_color = UI.ENTRY_SEPARATOR
 	style.set_corner_radius_all(6)
 	style.set_content_margin_all(8)
 	return style
@@ -458,14 +431,14 @@ func _create_filter_button(parent: HBoxContainer, filter_name: String, color: Co
 	
 	# Style the button
 	var normal_style := StyleBoxFlat.new()
-	normal_style.bg_color = Color(0.1, 0.1, 0.14, 0.9)
+	normal_style.bg_color = UI.ACH_FILTER_BG
 	normal_style.set_border_width_all(2)
 	normal_style.border_color = color.darkened(0.3)
 	normal_style.set_corner_radius_all(4)
 	normal_style.set_content_margin_all(8)
 	
 	var hover_style := StyleBoxFlat.new()
-	hover_style.bg_color = Color(0.15, 0.15, 0.2, 0.95)
+	hover_style.bg_color = UI.ACH_FILTER_HOVER_BG
 	hover_style.set_border_width_all(2)
 	hover_style.border_color = color
 	hover_style.set_corner_radius_all(4)
@@ -483,8 +456,8 @@ func _create_filter_button(parent: HBoxContainer, filter_name: String, color: Co
 	button.add_theme_stylebox_override("pressed", pressed_style)
 	button.add_theme_stylebox_override("focus", hover_style)
 	
-	if _pretendard_bold:
-		button.add_theme_font_override("font", _pretendard_bold)
+	if UI.FONT_BOLD:
+		button.add_theme_font_override("font", UI.FONT_BOLD)
 	button.add_theme_font_size_override("font_size", 18)
 	button.add_theme_color_override("font_color", color)
 	button.add_theme_color_override("font_hover_color", color)
@@ -636,10 +609,10 @@ func _create_achievement_item(achievement: Dictionary) -> Control:
 	var title_label := Label.new()
 	title_label.text = achievement.get("title", "")
 	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	if _pretendard_bold:
-		title_label.add_theme_font_override("font", _pretendard_bold)
+	if UI.FONT_BOLD:
+		title_label.add_theme_font_override("font", UI.FONT_BOLD)
 	title_label.add_theme_font_size_override("font_size", 24)
-	title_label.add_theme_color_override("font_color", UNLOCKED_COLOR if is_unlocked else HEADER_COLOR)
+	title_label.add_theme_color_override("font_color", UI.COLOR_UNLOCKED if is_unlocked else UI.ACCENT_PRIMARY)
 	title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	title_row.add_child(title_label)
 	
@@ -647,17 +620,17 @@ func _create_achievement_item(achievement: Dictionary) -> Control:
 		var check := Label.new()
 		check.text = "✓"
 		check.add_theme_font_size_override("font_size", 28)
-		check.add_theme_color_override("font_color", UNLOCKED_COLOR)
+		check.add_theme_color_override("font_color", UI.COLOR_UNLOCKED)
 		check.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		title_row.add_child(check)
 	
 	# Description
 	var desc_label := Label.new()
 	desc_label.text = achievement.get("desc", "")
-	if _pretendard_medium:
-		desc_label.add_theme_font_override("font", _pretendard_medium)
+	if UI.FONT_MEDIUM:
+		desc_label.add_theme_font_override("font", UI.FONT_MEDIUM)
 	desc_label.add_theme_font_size_override("font_size", 18)
-	desc_label.add_theme_color_override("font_color", LABEL_COLOR)
+	desc_label.add_theme_color_override("font_color", UI.TEXT_SECONDARY)
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(desc_label)
@@ -685,19 +658,19 @@ func _create_achievement_item(achievement: Dictionary) -> Control:
 		
 		var progress_label := Label.new()
 		progress_label.text = "%d / %d" % [progress, target]
-		if _pretendard_medium:
-			progress_label.add_theme_font_override("font", _pretendard_medium)
+		if UI.FONT_MEDIUM:
+			progress_label.add_theme_font_override("font", UI.FONT_MEDIUM)
 		progress_label.add_theme_font_size_override("font_size", 16)
-		progress_label.add_theme_color_override("font_color", LOCKED_COLOR)
+		progress_label.add_theme_color_override("font_color", UI.COLOR_LOCKED)
 		progress_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		progress_row.add_child(progress_label)
 	else:
 		var status_label := Label.new()
 		status_label.text = "Unlocked"
-		if _pretendard_medium:
-			status_label.add_theme_font_override("font", _pretendard_medium)
+		if UI.FONT_MEDIUM:
+			status_label.add_theme_font_override("font", UI.FONT_MEDIUM)
 		status_label.add_theme_font_size_override("font_size", 16)
-		status_label.add_theme_color_override("font_color", UNLOCKED_COLOR)
+		status_label.add_theme_color_override("font_color", UI.COLOR_UNLOCKED)
 		status_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		vbox.add_child(status_label)
 	
@@ -707,11 +680,11 @@ func _create_achievement_item(achievement: Dictionary) -> Control:
 # Style helper functions
 func _make_letterbox_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = BACKGROUND_COLOR
+	style.bg_color = UI.BG_DEEP
 	style.border_width_top = 3
 	style.border_width_bottom = 3
-	style.border_color = Color(0.75, 0.75, 0.8, 0.8)
-	style.shadow_color = Color(0, 0, 0, 0.35)
+	style.border_color = UI.ACH_LETTERBOX_BORDER
+	style.shadow_color = UI.ACH_LETTERBOX_SHADOW
 	style.shadow_size = 3
 	style.shadow_offset = Vector2(2, 2)
 	return style
@@ -719,11 +692,11 @@ func _make_letterbox_style() -> StyleBoxFlat:
 
 func _make_panel_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = PANEL_BG_COLOR
+	style.bg_color = UI.BG_DEEP
 	style.set_border_width_all(4)
-	style.border_color = BORDER_COLOR
+	style.border_color = UI.ENTRY_BORDER
 	style.set_corner_radius_all(12)
-	style.shadow_color = Color(0, 0, 0, 0.5)
+	style.shadow_color = UI.ACH_PANEL_SHADOW
 	style.shadow_size = 6
 	style.shadow_offset = Vector2(3, 3)
 	return style
@@ -731,50 +704,50 @@ func _make_panel_style() -> StyleBoxFlat:
 
 func _make_sidebar_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.06, 0.065, 0.09, 0.95)
+	style.bg_color = UI.ACH_SIDEBAR_BG
 	style.set_border_width_all(2)
-	style.border_color = SEPARATOR_COLOR
+	style.border_color = UI.ENTRY_SEPARATOR
 	style.set_corner_radius_all(8)
 	return style
 
 
 func _make_content_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.05, 0.055, 0.08, 0.9)
+	style.bg_color = UI.ACH_CONTENT_BG
 	style.set_border_width_all(2)
-	style.border_color = SEPARATOR_COLOR
+	style.border_color = UI.ENTRY_SEPARATOR
 	style.set_corner_radius_all(8)
 	return style
 
 
 func _make_portrait_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.1, 0.1, 0.14, 1.0)
+	style.bg_color = UI.ACH_PORTRAIT_BG
 	style.set_border_width_all(3)
-	style.border_color = Color(1.0, 1.0, 1.0, 0.9)  # White border like other portraits
+	style.border_color = UI.ACH_PORTRAIT_BORDER
 	style.set_corner_radius_all(8)  # Rounded corners, not circle
 	return style
 
 
 func _make_achievement_style(unlocked: bool) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = ENTRY_BG_COLOR.lightened(0.05) if unlocked else ENTRY_BG_COLOR
+	style.bg_color = UI.ENTRY_BG.lightened(0.05) if unlocked else UI.ENTRY_BG
 	style.set_border_width_all(2)
-	style.border_color = UNLOCKED_COLOR if unlocked else ENTRY_BORDER_COLOR.darkened(0.3)
+	style.border_color = UI.COLOR_UNLOCKED if unlocked else UI.ENTRY_BORDER.darkened(0.3)
 	style.set_corner_radius_all(8)
 	return style
 
 
 func _make_progress_bg_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = PROGRESS_BG
+	style.bg_color = UI.PROGRESS_BG
 	style.set_corner_radius_all(4)
 	return style
 
 
 func _make_progress_fill_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = PROGRESS_FILL
+	style.bg_color = UI.PROGRESS_FILL
 	style.set_corner_radius_all(4)
 	return style
 
@@ -790,10 +763,10 @@ func _make_achievement_hover_style(is_unlocked: bool) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	# Brighter background on hover
 	if is_unlocked:
-		style.bg_color = Color(0.14, 0.16, 0.22, 0.98)
+		style.bg_color = UI.ACH_ENTRY_UNLOCKED_HOVER_BG
 	else:
-		style.bg_color = Color(0.12, 0.12, 0.18, 0.98)
+		style.bg_color = UI.ACH_ENTRY_LOCKED_HOVER_BG
 	style.set_border_width_all(2)
-	style.border_color = ENTRY_BORDER_COLOR if is_unlocked else Color(0.5, 0.5, 0.55, 0.5)
+	style.border_color = UI.ENTRY_BORDER if is_unlocked else UI.ACH_ENTRY_LOCKED_HOVER_BORDER
 	style.set_corner_radius_all(8)
 	return style

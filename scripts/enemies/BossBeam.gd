@@ -9,8 +9,11 @@ signal beam_finished
 const BEAM_LENGTH := 2000.0
 const BEAM_WIDTH := 80.0
 const PREVIEW_WIDTH := 4.0
-const DAMAGE_PER_TICK := 1
+const BASE_DAMAGE_PER_TICK := 1
 const DAMAGE_INTERVAL := 0.2
+
+# Damage (can be scaled by Goddess Fall)
+var damage_per_tick: int = BASE_DAMAGE_PER_TICK
 
 # State
 enum BeamState { CHARGING, FIRING, FADING, DONE }
@@ -36,12 +39,13 @@ var _current_width := PREVIEW_WIDTH
 var _beam_color := Color(1.0, 0.2, 0.1, 1.0)
 var _preview_color := Color(1.0, 0.3, 0.1, 0.4)
 
-func initialize(boss: Node2D, player: Node2D, charge_time: float, fire_time: float, fade_time: float, is_boss: bool = true) -> void:
+func initialize(boss: Node2D, player: Node2D, charge_time: float, fire_time: float, fade_time: float, is_boss: bool = true, scaled_damage: int = BASE_DAMAGE_PER_TICK) -> void:
 	_boss = boss
 	_player = player
 	_charge_time = charge_time
 	_fire_time = fire_time
 	_fade_time = fade_time
+	damage_per_tick = scaled_damage
 	
 	# Boss beams track during charge and slowly during fire
 	# Elite beams lock direction at start of charge, no tracking
@@ -159,7 +163,7 @@ func _check_beam_hit() -> void:
 		var dist := _point_to_line_distance(player_pos, beam_start, beam_end)
 		if dist < BEAM_WIDTH / 2.0:
 			if _player.has_method("take_damage"):
-				_player.take_damage(DAMAGE_PER_TICK)
+				_player.take_damage(damage_per_tick)
 	
 	# Check charmed allies (they're fighting for the player, so enemies should damage them)
 	var tree := get_tree()
@@ -172,7 +176,7 @@ func _check_beam_hit() -> void:
 			var dist := _point_to_line_distance(ally_pos, beam_start, beam_end)
 			if dist < BEAM_WIDTH / 2.0:
 				if ally.has_method("take_damage"):
-					ally.take_damage(DAMAGE_PER_TICK)
+					ally.take_damage(damage_per_tick)
 
 func _point_to_line_distance(point: Vector2, line_start: Vector2, line_end: Vector2) -> float:
 	var line := line_end - line_start

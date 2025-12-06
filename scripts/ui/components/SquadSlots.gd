@@ -27,7 +27,7 @@ func _build_ui() -> void:
 	var title := Label.new()
 	title.text = "SQUAD"
 	title.add_theme_font_size_override("font_size", 24)
-	title.add_theme_color_override("font_color", Color(0.95, 0.95, 0.98))
+	title.add_theme_color_override("font_color", UITheme.ACCENT_PRIMARY)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.custom_minimum_size.y = 36
 	vbox.add_child(title)
@@ -63,7 +63,7 @@ func _create_slot(index: int) -> Panel:
 	empty_lbl.name = "EmptyLabel"
 	empty_lbl.text = "?"
 	empty_lbl.add_theme_font_size_override("font_size", 56)
-	empty_lbl.add_theme_color_override("font_color", Color(0.4, 0.4, 0.5, 0.5))
+	empty_lbl.add_theme_color_override("font_color", UITheme.TEXT_DISABLED)
 	empty_lbl.set_anchors_preset(Control.PRESET_CENTER)
 	empty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	empty_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -73,7 +73,7 @@ func _create_slot(index: int) -> Panel:
 	var badge_bg := ColorRect.new()
 	badge_bg.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	badge_bg.anchor_bottom = 0.18
-	badge_bg.color = Color(0.0, 0.0, 0.0, 0.7)
+	badge_bg.color = UITheme.BADGE_BG
 	badge_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	slot.add_child(badge_bg)
 	
@@ -81,7 +81,7 @@ func _create_slot(index: int) -> Panel:
 	badge.name = "Badge"
 	badge.text = "★ MAIN" if index == 0 else "SUPPORT %d" % index
 	badge.add_theme_font_size_override("font_size", 14)
-	badge.add_theme_color_override("font_color", Color(0.4, 1.0, 0.5) if index == 0 else Color(0.6, 0.5, 1.0))
+	badge.add_theme_color_override("font_color", UITheme.BADGE_LEADER if index == 0 else UITheme.BADGE_SUPPORT)
 	badge.set_anchors_preset(Control.PRESET_FULL_RECT)
 	badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -92,7 +92,7 @@ func _create_slot(index: int) -> Panel:
 	var name_bar := ColorRect.new()
 	name_bar.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	name_bar.anchor_top = 0.86
-	name_bar.color = Color(0.0, 0.0, 0.0, 0.85)
+	name_bar.color = UITheme.NAME_BAR_BG
 	name_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	slot.add_child(name_bar)
 	
@@ -100,7 +100,7 @@ func _create_slot(index: int) -> Panel:
 	name_lbl.name = "NameLabel"
 	name_lbl.text = "EMPTY"
 	name_lbl.add_theme_font_size_override("font_size", 16)
-	name_lbl.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
+	name_lbl.add_theme_color_override("font_color", UITheme.TEXT_MUTED)
 	name_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
 	name_lbl.offset_left = 4
 	name_lbl.offset_right = -4
@@ -120,8 +120,8 @@ func _create_slot(index: int) -> Panel:
 	border_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	border_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var border_style := StyleBoxFlat.new()
-	border_style.bg_color = Color(0, 0, 0, 0)  # Transparent background
-	border_style.border_color = Color(0.95, 0.95, 0.98, 1.0)
+	border_style.bg_color = UITheme.TRANSPARENT
+	border_style.border_color = UITheme.ACCENT_PRIMARY
 	border_style.set_border_width_all(3)
 	border_style.set_corner_radius_all(10)
 	border_overlay.add_theme_stylebox_override("panel", border_style)
@@ -133,7 +133,7 @@ func _create_slot(index: int) -> Panel:
 
 func _update_slot_style(slot: Panel, filled: bool) -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.08, 0.12, 0.9) if filled else Color(0.06, 0.06, 0.1, 0.8)
+	style.bg_color = UITheme.PANEL_DIFF_BG if filled else UITheme.PANEL_SCALE_BG
 	style.set_corner_radius_all(10)
 	slot.add_theme_stylebox_override("panel", style)
 
@@ -193,13 +193,13 @@ func _update_slot_visual(index: int) -> void:
 				portrait.texture = data.get_portrait()
 			if name_lbl:
 				name_lbl.text = data.display_name
-				name_lbl.add_theme_color_override("font_color", Color(0.95, 0.95, 0.98))
+				name_lbl.add_theme_color_override("font_color", UITheme.ACCENT_PRIMARY)
 	else:
 		if portrait:
 			portrait.texture = null
 		if name_lbl:
 			name_lbl.text = "EMPTY"
-			name_lbl.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
+			name_lbl.add_theme_color_override("font_color", UITheme.TEXT_MUTED)
 	
 	if empty_lbl:
 		empty_lbl.visible = not filled

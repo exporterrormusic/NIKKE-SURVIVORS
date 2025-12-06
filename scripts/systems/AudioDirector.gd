@@ -4,8 +4,8 @@ class_name AudioDirector
 ## Centralized audio playback and bus management.
 ## Add to autoloads for global access.
 
-const MUSIC_BUS := "Master"  # Use Master if no Music bus exists
-const SFX_BUS := "Master"    # Use Master if no SFX bus exists
+const MUSIC_BUS := "Music"  # Music bus for background music only
+const SFX_BUS := "SFX"      # SFX bus for all sound effects (weapons, UI, etc.)
 const BATTLE_MUSIC_DIR := "res://assets/sounds/music"
 
 const WEAPON_FILE_MAP := {
@@ -125,7 +125,7 @@ func play_burst_voice(sound: AudioStream) -> void:
 	# Create a fresh player at scene root for complete independence
 	var burst_player = AudioStreamPlayer.new()
 	burst_player.name = "BurstVoice_%d" % Time.get_ticks_msec()
-	burst_player.bus = "Master"
+	burst_player.bus = SFX_BUS  # Use SFX bus for voice lines
 	burst_player.process_mode = Node.PROCESS_MODE_ALWAYS
 	burst_player.stream = sound
 	burst_player.volume_db = 6.0

@@ -455,7 +455,7 @@ func _play_burst_voice() -> void:
 		audio_player.name = "BurstVoice_%d" % Time.get_ticks_msec()
 		audio_player.stream = sound
 		audio_player.volume_db = 10.0
-		audio_player.bus = "Master"
+		audio_player.bus = "SFX"  # Use SFX bus for voice lines
 		audio_player.process_mode = Node.PROCESS_MODE_ALWAYS
 		root.add_child(audio_player)
 		audio_player.play()

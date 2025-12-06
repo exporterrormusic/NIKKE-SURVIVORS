@@ -72,11 +72,11 @@ func _perform_special(direction: Vector2) -> void:
 	var power_bonuses := [0.0, 0.07, 0.145, 0.22]
 	cross.heal_percent = 0.03 + power_bonuses[mini(special_power_level, 3)]
 	
-	# Apply size bonus: 1x base multiplier for radius and lifespan
+	# Apply size bonus: 1x base multiplier for radius only
 	var size_multipliers := [1.0, 1.5, 2.5, 4.0]
 	var size_mult: float = size_multipliers[mini(special_size_level, 3)]
 	cross.heal_radius = 180.0 * size_mult
-	cross.lifespan = 9.0 * size_mult
+	cross.lifespan = 9.0  # Fixed duration, not affected by size talent
 	
 	player.get_parent().add_child(cross)
 	cross.global_position = player.global_position + direction * 60

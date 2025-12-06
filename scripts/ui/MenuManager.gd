@@ -2,6 +2,8 @@ extends Node
 ## Manages menu navigation and transitions between screens.
 ## Load this as an autoload or instantiate in your main scene.
 
+const UI := preload("res://scripts/ui/UITheme.gd")
+
 signal game_started(squad: Array[int], stage_id: String)
 
 # Menu scenes - load on demand instead of preload to speed up startup
@@ -125,7 +127,7 @@ func _show_intro_screen() -> void:
 	var title := Label.new()
 	title.text = "DISCLAIMER"
 	title.add_theme_font_size_override("font_size", 32)
-	title.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
+	title.add_theme_color_override("font_color", UI.TEXT_MUTED)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	center.add_child(title)
@@ -138,7 +140,7 @@ func _show_intro_screen() -> void:
 	# Disclaimer lines
 	var lines := [
 		"This is an unofficial, fan-made game based on Goddess of Victory: NIKKE.",
-		"It is not affiliated with, endorsed by, or sponsored by Shift Up or any official partners.",
+		"It is not affiliated with, endorsed by, or sponsored by ShiftUp or any official partners.",
 		"All trademarks and characters belong to their respective owners."
 	]
 	
@@ -148,7 +150,7 @@ func _show_intro_screen() -> void:
 		var line := Label.new()
 		line.text = lines[i]
 		line.add_theme_font_size_override("font_size", font_sizes[i])
-		line.add_theme_color_override("font_color", Color(0.85, 0.85, 0.9))
+		line.add_theme_color_override("font_color", UI.TEXT_SECONDARY)
 		line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -164,7 +166,7 @@ func _show_intro_screen() -> void:
 	var continue_lbl := Label.new()
 	continue_lbl.text = "Click anywhere to continue"
 	continue_lbl.add_theme_font_size_override("font_size", 16)
-	continue_lbl.add_theme_color_override("font_color", Color(0.5, 0.5, 0.55))
+	continue_lbl.add_theme_color_override("font_color", UI.TEXT_DISABLED)
 	continue_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	continue_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	center.add_child(continue_lbl)
@@ -335,7 +337,7 @@ func _add_loading_character() -> void:
 	_loading_character.scale = Vector2(0.25, 0.25)  # Scale down for UI
 	_loading_character.animation = "right"
 	_loading_character.play("right")
-	_loading_character.modulate = Color(1, 1, 1, 0.9)
+	_loading_character.modulate = UI.CHAR_PORTRAIT_UNLOCKED
 	
 	# Position at bottom-left of screen
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
@@ -422,7 +424,7 @@ func _get_or_load_scene(scene_key: String) -> PackedScene:
 func _setup_music() -> void:
 	_music_player = AudioStreamPlayer.new()
 	_music_player.name = "MenuMusic"
-	_music_player.bus = "Master"  # Ensure it uses Master bus
+	_music_player.bus = "Music"  # Use Music bus for background music
 	add_child(_music_player)
 	
 	# Try to get music from threaded load, fall back to sync load

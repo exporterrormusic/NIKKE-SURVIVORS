@@ -1,6 +1,8 @@
 extends Control
 ## Hologram scanline overlay effect with animated sweep - red/danger themed
 
+const UI := preload("res://scripts/ui/UITheme.gd")
+
 var _time: float = 0.0
 var _scanline_spacing: float = 3.0
 var _sweep_speed: float = 80.0  # pixels per second
@@ -25,7 +27,7 @@ func _draw() -> void:
 		return
 	
 	# Draw horizontal scanlines (subtle red tint)
-	var scanline_color := Color(1.0, 0.8, 0.8, 0.04)
+	var scanline_color := UI.VFX_SCANLINE
 	var y := 0.0
 	while y < h:
 		draw_line(Vector2(0, y), Vector2(w, y), scanline_color, 1.0)
@@ -50,10 +52,10 @@ func _draw() -> void:
 		var t := float(i) / float(sweep_segments - 1)
 		var alpha := sin(t * PI) * 0.3  # Peak in middle, stronger visibility
 		
-		var sweep_color := Color(1.0, 0.7, 0.6, alpha)  # Red/orange tint
+		var sweep_color := Color(UI.VFX_SCANLINE_SWEEP.r, UI.VFX_SCANLINE_SWEEP.g, UI.VFX_SCANLINE_SWEEP.b, alpha)
 		draw_rect(Rect2(0, seg_start, w, seg_size + 1), sweep_color)
 	
 	# Add subtle edge glow lines (red themed)
-	var edge_color := Color(1.0, 0.7, 0.6, 0.12)
+	var edge_color := UI.VFX_SCANLINE_EDGE
 	draw_line(Vector2(0, 0), Vector2(w, 0), edge_color, 1.0)
 	draw_line(Vector2(0, h - 1), Vector2(w, h - 1), edge_color, 1.0)

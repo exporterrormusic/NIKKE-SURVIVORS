@@ -3,11 +3,13 @@ class_name MainMenuIcon
 ## Procedurally drawn icons for main menu buttons.
 ## Draws various icons (crown, trophy, cog, play, etc.) using vector graphics.
 
-@export var icon_type: String = "play"
-@export var base_color: Color = Color(0.7, 0.7, 0.7)
-@export var selected_color: Color = Color(1, 1, 1)
+const UI := preload("res://scripts/ui/UITheme.gd")
 
-var _current_color: Color = base_color
+@export var icon_type: String = "play"
+@export var base_color: Color = UI.ICON_BASE
+@export var selected_color: Color = UI.ICON_SELECTED
+
+var _current_color: Color = UI.ICON_BASE
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -70,7 +72,7 @@ func _draw_crown(center: Vector2, icon_size: float, color: Color) -> void:
 			Vector2(peak_x + icon_size * 0.08, top + peak_height)
 		])
 		draw_polygon(points, PackedColorArray([color, color, color]))
-		draw_circle(Vector2(peak_x, top), icon_size * 0.045, Color(1, 1, 0.4))
+		draw_circle(Vector2(peak_x, top), icon_size * 0.045, UI.ICON_CROWN_GEM)
 
 
 func _draw_trophy(center: Vector2, icon_size: float, color: Color) -> void:

@@ -4,13 +4,7 @@ extends Control
 ## Clean red fill, white border, level badge, smooth fill animations
 ## Uses custom drawing to ensure border is always on top of fill
 
-# Colors - HoloCure style flat colors
-const BAR_FILL_COLOR := Color(0.2, 0.6, 1.0, 1.0)  # Bright blue
-const BAR_BG_COLOR := Color(0.12, 0.12, 0.15, 0.95)  # Dark background
-const BAR_BORDER_COLOR := Color(1.0, 1.0, 1.0, 0.9)  # White border
-const BADGE_BG_COLOR := Color(0.12, 0.12, 0.15, 0.95)
-const BADGE_BORDER_COLOR := Color(1.0, 1.0, 1.0, 0.9)
-const TEXT_COLOR := Color(1.0, 1.0, 1.0, 1.0)
+const UI := preload("res://scripts/ui/UITheme.gd")
 
 # Sizing
 const BAR_HEIGHT := 30.0
@@ -39,7 +33,7 @@ func _draw():
 	var bar_rect := Rect2(bar_left, 0, bar_width, size.y)
 	
 	# 1. Draw bar background
-	_draw_rounded_rect(bar_rect, BAR_BG_COLOR, CORNER_RADIUS)
+	_draw_rounded_rect(bar_rect, UI.XP_BAR_BG, CORNER_RADIUS)
 	
 	# 2. Draw fill (inset by border width)
 	var fill_inset := BORDER_WIDTH
@@ -56,15 +50,15 @@ func _draw():
 	if fill_percent > 0.0:
 		var filled_width := fill_rect.size.x * fill_percent
 		var filled_rect := Rect2(fill_rect.position, Vector2(filled_width, fill_rect.size.y))
-		_draw_rounded_rect(filled_rect, BAR_FILL_COLOR, maxi(1, CORNER_RADIUS - 2))
+		_draw_rounded_rect(filled_rect, UI.XP_BAR_FILL, maxi(1, CORNER_RADIUS - 2))
 	
 	# 3. Draw border ON TOP of everything
-	_draw_rounded_border(bar_rect, BAR_BORDER_COLOR, CORNER_RADIUS, BORDER_WIDTH)
+	_draw_rounded_border(bar_rect, UI.XP_BAR_BORDER, CORNER_RADIUS, BORDER_WIDTH)
 	
 	# 4. Draw level badge
 	var badge_rect := Rect2(0, 0, BADGE_WIDTH, size.y)
-	_draw_rounded_rect(badge_rect, BADGE_BG_COLOR, CORNER_RADIUS)
-	_draw_rounded_border(badge_rect, BADGE_BORDER_COLOR, CORNER_RADIUS, BORDER_WIDTH)
+	_draw_rounded_rect(badge_rect, UI.XP_BAR_BG, CORNER_RADIUS)
+	_draw_rounded_border(badge_rect, UI.XP_BAR_BORDER, CORNER_RADIUS, BORDER_WIDTH)
 	
 	# 5. Draw level text
 	var font := get_theme_font("font")
@@ -78,7 +72,7 @@ func _draw():
 		(badge_rect.size.x - text_size.x) / 2,
 		(badge_rect.size.y + text_size.y) / 2 - 2
 	)
-	draw_string(font, text_pos, level_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, TEXT_COLOR)
+	draw_string(font, text_pos, level_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, UI.TEXT_PRIMARY)
 
 func _draw_rounded_rect(rect: Rect2, color: Color, radius: int) -> void:
 	# Simple rounded rectangle using polygon
@@ -150,14 +144,14 @@ func flash_level_up():
 	tween.set_parallel(true)
 	
 	# Bright golden flash - peak brightness
-	tween.tween_property(self, "modulate", Color(2.0, 1.7, 0.5, 1.0), 0.08)
+	tween.tween_property(self, "modulate", UI.FLASH_GOLD, 0.08)
 	
 	# Then sustain a warm glow
-	tween.chain().tween_property(self, "modulate", Color(1.6, 1.4, 0.7, 1.0), 0.15)
+	tween.chain().tween_property(self, "modulate", UI.FLASH_GOLD_MID, 0.15)
 	
 	# Pulse brighter again
-	tween.chain().tween_property(self, "modulate", Color(1.8, 1.5, 0.6, 1.0), 0.1)
+	tween.chain().tween_property(self, "modulate", UI.FLASH_GOLD_ALT, 0.1)
 	
 	# Fade back smoothly
-	tween.chain().tween_property(self, "modulate", Color(1.3, 1.2, 0.9, 1.0), 0.2)
+	tween.chain().tween_property(self, "modulate", UI.FLASH_GOLD_DIM, 0.2)
 	tween.chain().tween_property(self, "modulate", Color.WHITE, 0.3)

@@ -105,11 +105,12 @@ func _on_body_entered(body: Node) -> void:
 	
 	_hit_nodes.append(body)
 	
-	# Roll for critical hit - base chance + shop bonus
+	# Roll for critical hit - base chance + shop bonus (capped at 100%)
 	var crit_chance := BASE_CRIT_CHANCE
 	var player = get_tree().get_first_node_in_group("player")
 	if player and player.has_method("get_crit_chance"):
 		crit_chance += player.get_crit_chance()
+	crit_chance = minf(crit_chance, 1.0)  # Cap at 100%
 	var is_crit := randf() < crit_chance
 	var final_damage := damage
 	if is_crit:

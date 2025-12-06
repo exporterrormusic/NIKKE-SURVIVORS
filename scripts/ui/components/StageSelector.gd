@@ -28,6 +28,10 @@ var _start_tween: Tween
 var _difficulty_slider: HSlider
 var _difficulty_label: Label
 var _goddess_fall_btn: Button
+var _hp_scale_label: Label
+var _atk_scale_label: Label
+var _core_scale_label: Label
+var _elite_core_label: Label
 
 func _ready() -> void:
 	_build_ui()
@@ -64,11 +68,11 @@ func _build_ui() -> void:
 	var header_panel := Panel.new()
 	header_panel.custom_minimum_size = Vector2(0, 100)
 	var header_style := StyleBoxFlat.new()
-	header_style.bg_color = Color(0.06, 0.05, 0.1, 0.95)
-	header_style.border_color = Color(0.5, 0.4, 0.7, 0.9)
+	header_style.bg_color = UITheme.PANEL_HEADER_BG
+	header_style.border_color = UITheme.PANEL_HEADER_BORDER
 	header_style.set_border_width_all(3)
 	header_style.set_corner_radius_all(12)
-	header_style.shadow_color = Color(0.4, 0.2, 0.6, 0.3)
+	header_style.shadow_color = UITheme.SHADOW_HEADER
 	header_style.shadow_size = 6
 	header_panel.add_theme_stylebox_override("panel", header_style)
 	left.add_child(header_panel)
@@ -77,8 +81,8 @@ func _build_ui() -> void:
 	stages_title.text = "⚔  MODIFIERS  ⚔"
 	stages_title.set_anchors_preset(Control.PRESET_FULL_RECT)
 	stages_title.add_theme_font_size_override("font_size", 42)
-	stages_title.add_theme_color_override("font_color", Color(0.95, 0.9, 1.0))
-	stages_title.add_theme_color_override("font_shadow_color", Color(0.4, 0.2, 0.6, 0.8))
+	stages_title.add_theme_color_override("font_color", UITheme.TEXT_PRIMARY)
+	stages_title.add_theme_color_override("font_shadow_color", UITheme.SHADOW_PURPLE)
 	stages_title.add_theme_constant_override("shadow_offset_x", 3)
 	stages_title.add_theme_constant_override("shadow_offset_y", 3)
 	stages_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -121,8 +125,8 @@ func _build_ui() -> void:
 	var preview_panel := Panel.new()
 	preview_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	var preview_style := StyleBoxFlat.new()
-	preview_style.bg_color = Color(0.05, 0.06, 0.09, 0.95)
-	preview_style.border_color = Color(0.4, 0.45, 0.55, 0.8)
+	preview_style.bg_color = UITheme.PANEL_PREVIEW_BG
+	preview_style.border_color = UITheme.PANEL_PREVIEW_BORDER
 	preview_style.set_border_width_all(3)
 	preview_style.set_corner_radius_all(10)
 	preview_panel.add_theme_stylebox_override("panel", preview_style)
@@ -147,8 +151,8 @@ func _build_ui() -> void:
 	banner.offset_top = 0
 	banner.offset_bottom = -4
 	var banner_style := StyleBoxFlat.new()
-	banner_style.bg_color = Color(0.0, 0.0, 0.0, 0.75)
-	banner_style.border_color = Color(0.8, 0.6, 0.2, 0.9)
+	banner_style.bg_color = UITheme.BANNER_BG
+	banner_style.border_color = UITheme.BANNER_BORDER
 	banner_style.border_width_top = 2
 	banner_style.border_width_bottom = 0
 	banner_style.border_width_left = 0
@@ -172,7 +176,7 @@ func _build_ui() -> void:
 	# Left arrow button
 	_map_left_btn = Button.new()
 	_map_left_btn.text = "◀"
-	_map_left_btn.custom_minimum_size = Vector2(50, 0)
+	_map_left_btn.custom_minimum_size = Vector2(70, 50)
 	_map_left_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_apply_arrow_button_style(_map_left_btn)
 	_map_left_btn.pressed.connect(_on_map_prev)
@@ -186,48 +190,59 @@ func _build_ui() -> void:
 	banner_hbox.add_child(banner_center)
 	
 	_stage_name_lbl = Label.new()
-	_stage_name_lbl.add_theme_font_size_override("font_size", 36)
-	_stage_name_lbl.add_theme_color_override("font_color", Color(1.0, 0.95, 0.8))
-	_stage_name_lbl.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.9))
+	_stage_name_lbl.add_theme_font_size_override("font_size", 48)
+	_stage_name_lbl.add_theme_color_override("font_color", UITheme.BANNER_TEXT)
+	_stage_name_lbl.add_theme_color_override("font_shadow_color", UITheme.SHADOW_COLOR)
 	_stage_name_lbl.add_theme_constant_override("shadow_offset_x", 3)
 	_stage_name_lbl.add_theme_constant_override("shadow_offset_y", 3)
 	_stage_name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	banner_center.add_child(_stage_name_lbl)
 	
 	_modifier_lbl = Label.new()
-	_modifier_lbl.add_theme_font_size_override("font_size", 18)
-	_modifier_lbl.add_theme_color_override("font_color", Color(0.9, 0.85, 0.7))
+	_modifier_lbl.add_theme_font_size_override("font_size", 26)
+	_modifier_lbl.add_theme_color_override("font_color", UITheme.BANNER_SUBTITLE)
 	_modifier_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	banner_center.add_child(_modifier_lbl)
 	
 	# Right arrow button
 	_map_right_btn = Button.new()
 	_map_right_btn.text = "▶"
-	_map_right_btn.custom_minimum_size = Vector2(50, 0)
+	_map_right_btn.custom_minimum_size = Vector2(70, 50)
 	_map_right_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_apply_arrow_button_style(_map_right_btn)
 	_map_right_btn.pressed.connect(_on_map_next)
 	banner_hbox.add_child(_map_right_btn)
 	
 	# Difficulty panel - compact horizontal layout
+	# Wrap difficulty + buttons in HBox with scaling info on right
+	var bottom_row := HBoxContainer.new()
+	bottom_row.add_theme_constant_override("separation", 12)
+	right.add_child(bottom_row)
+	
+	# Left side: difficulty + buttons stacked
+	var left_stack := VBoxContainer.new()
+	left_stack.add_theme_constant_override("separation", 8)
+	left_stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bottom_row.add_child(left_stack)
+	
 	var diff_panel := Panel.new()
-	diff_panel.custom_minimum_size.y = 70
+	diff_panel.custom_minimum_size.y = 55
 	var diff_style := StyleBoxFlat.new()
-	diff_style.bg_color = Color(0.08, 0.08, 0.12, 0.95)
-	diff_style.border_color = Color(0.4, 0.45, 0.55, 0.8)
+	diff_style.bg_color = UITheme.PANEL_DIFF_BG
+	diff_style.border_color = UITheme.PANEL_DIFF_BORDER
 	diff_style.set_border_width_all(2)
 	diff_style.set_corner_radius_all(8)
 	diff_panel.add_theme_stylebox_override("panel", diff_style)
-	right.add_child(diff_panel)
+	left_stack.add_child(diff_panel)
 	
 	# Horizontal layout: Labels | Slider | Value
 	var diff_hbox := HBoxContainer.new()
 	diff_hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
 	diff_hbox.offset_left = 12
 	diff_hbox.offset_right = -12
-	diff_hbox.offset_top = 8
-	diff_hbox.offset_bottom = -8
-	diff_hbox.add_theme_constant_override("separation", 12)
+	diff_hbox.offset_top = 6
+	diff_hbox.offset_bottom = -6
+	diff_hbox.add_theme_constant_override("separation", 10)
 	diff_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	diff_panel.add_child(diff_hbox)
 	
@@ -235,22 +250,16 @@ func _build_ui() -> void:
 	var diff_labels := VBoxContainer.new()
 	diff_labels.add_theme_constant_override("separation", 0)
 	diff_labels.alignment = BoxContainer.ALIGNMENT_CENTER
-	diff_labels.custom_minimum_size.x = 100
+	diff_labels.custom_minimum_size.x = 80
 	diff_hbox.add_child(diff_labels)
 	
 	var diff_title := Label.new()
 	diff_title.text = "DIFFICULTY"
-	diff_title.add_theme_font_size_override("font_size", 14)
-	diff_title.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
+	diff_title.add_theme_font_size_override("font_size", 12)
+	diff_title.add_theme_color_override("font_color", UITheme.TEXT_PRIMARY)
 	diff_labels.add_child(diff_title)
 	
-	var diff_desc := Label.new()
-	diff_desc.text = "HP & Core Drops"
-	diff_desc.add_theme_font_size_override("font_size", 9)
-	diff_desc.add_theme_color_override("font_color", Color(0.5, 0.55, 0.65))
-	diff_labels.add_child(diff_desc)
-	
-	# Center: Big, easy-to-click slider
+	# Center: Slider
 	_difficulty_slider = HSlider.new()
 	_difficulty_slider.min_value = 1
 	_difficulty_slider.max_value = 100
@@ -258,29 +267,29 @@ func _build_ui() -> void:
 	_difficulty_slider.step = 1
 	_difficulty_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_difficulty_slider.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_difficulty_slider.custom_minimum_size = Vector2(150, 32)
+	_difficulty_slider.custom_minimum_size = Vector2(120, 28)
 	_apply_slider_style(_difficulty_slider)
 	_difficulty_slider.value_changed.connect(_on_difficulty_changed)
 	diff_hbox.add_child(_difficulty_slider)
 	
-	# Right side: Large value display
+	# Right side: Value display
 	_difficulty_label = Label.new()
 	_difficulty_label.text = "x%d" % GameState.difficulty_multiplier
-	_difficulty_label.add_theme_font_size_override("font_size", 24)
+	_difficulty_label.add_theme_font_size_override("font_size", 20)
 	_difficulty_label.add_theme_color_override("font_color", _get_difficulty_color(GameState.difficulty_multiplier))
 	_difficulty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_difficulty_label.custom_minimum_size.x = 60
+	_difficulty_label.custom_minimum_size.x = 50
 	diff_hbox.add_child(_difficulty_label)
 	
 	# Buttons row: Back (left) | Start (right)
 	var btn_row := HBoxContainer.new()
-	btn_row.add_theme_constant_override("separation", 12)
+	btn_row.add_theme_constant_override("separation", 10)
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	right.add_child(btn_row)
+	left_stack.add_child(btn_row)
 	
 	var back_btn := Button.new()
 	back_btn.text = "BACK"
-	back_btn.custom_minimum_size = Vector2(140, 55)
+	back_btn.custom_minimum_size = Vector2(120, 45)
 	_apply_back_button_style(back_btn)
 	back_btn.pressed.connect(func(): back_requested.emit())
 	btn_row.add_child(back_btn)
@@ -288,39 +297,116 @@ func _build_ui() -> void:
 	_start_btn = Button.new()
 	_start_btn.text = "MISSION START"
 	_start_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_start_btn.custom_minimum_size = Vector2(200, 55)
-	_start_btn.add_theme_font_size_override("font_size", 20)
+	_start_btn.custom_minimum_size = Vector2(160, 45)
+	_start_btn.add_theme_font_size_override("font_size", 18)
 	_apply_start_button_style()
 	_start_btn.pressed.connect(_on_start_pressed)
-	# Set pivot to center for proper scaling animation
 	_start_btn.pivot_offset = _start_btn.custom_minimum_size / 2.0
 	btn_row.add_child(_start_btn)
+	
+	# Right side: Scaling info panel
+	var scale_panel := Panel.new()
+	scale_panel.custom_minimum_size = Vector2(150, 0)
+	var scale_style := StyleBoxFlat.new()
+	scale_style.bg_color = UITheme.PANEL_SCALE_BG
+	scale_style.border_color = UITheme.PANEL_SCALE_BORDER
+	scale_style.set_border_width_all(2)
+	scale_style.set_corner_radius_all(8)
+	scale_panel.add_theme_stylebox_override("panel", scale_style)
+	bottom_row.add_child(scale_panel)
+	
+	var scale_vbox := VBoxContainer.new()
+	scale_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scale_vbox.offset_left = 8
+	scale_vbox.offset_right = -8
+	scale_vbox.offset_top = 6
+	scale_vbox.offset_bottom = -6
+	scale_vbox.add_theme_constant_override("separation", 2)
+	scale_panel.add_child(scale_vbox)
+	
+	var scale_title := Label.new()
+	scale_title.text = "SCALING"
+	scale_title.add_theme_font_size_override("font_size", 14)
+	scale_title.add_theme_color_override("font_color", UITheme.TEXT_SECONDARY)
+	scale_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	scale_vbox.add_child(scale_title)
+	
+	# Spacer between title and stats
+	var title_spacer := Control.new()
+	title_spacer.custom_minimum_size = Vector2(0, 2)
+	scale_vbox.add_child(title_spacer)
+	
+	_hp_scale_label = Label.new()
+	_hp_scale_label.add_theme_font_size_override("font_size", 16)
+	_hp_scale_label.add_theme_color_override("font_color", UITheme.STAT_HP)
+	_hp_scale_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	scale_vbox.add_child(_hp_scale_label)
+	
+	_atk_scale_label = Label.new()
+	_atk_scale_label.add_theme_font_size_override("font_size", 16)
+	_atk_scale_label.add_theme_color_override("font_color", UITheme.STAT_ATK)
+	_atk_scale_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	scale_vbox.add_child(_atk_scale_label)
+	
+	_core_scale_label = Label.new()
+	_core_scale_label.add_theme_font_size_override("font_size", 16)
+	_core_scale_label.add_theme_color_override("font_color", UITheme.STAT_SPD)
+	_core_scale_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	scale_vbox.add_child(_core_scale_label)
+	
+	_elite_core_label = Label.new()
+	_elite_core_label.add_theme_font_size_override("font_size", 13)
+	_elite_core_label.add_theme_color_override("font_color", UITheme.STAT_CRIT)
+	_elite_core_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	scale_vbox.add_child(_elite_core_label)
+	
+	_update_scaling_labels(GameState.difficulty_multiplier)
 
 func _on_difficulty_changed(value: float) -> void:
 	GameState.difficulty_multiplier = int(value)
 	_difficulty_label.text = "x%d" % int(value)
 	_difficulty_label.add_theme_color_override("font_color", _get_difficulty_color(int(value)))
+	_update_scaling_labels(int(value))
+
+func _update_scaling_labels(difficulty: int) -> void:
+	# HP scales at 1x per difficulty level (x1, x2, x3...)
+	var hp_mult: float = float(difficulty)
+	# ATK scales at 0.25x per difficulty level (x1, x1.25, x1.5...)
+	var atk_mult: float = 1.0 + 0.25 * (difficulty - 1)
+	# Core drops scale at 1x per difficulty level (x1, x2, x3...)
+	var core_mult: float = float(difficulty)
+	
+	_hp_scale_label.text = "HP: x%.0f" % hp_mult
+	if atk_mult == int(atk_mult):
+		_atk_scale_label.text = "ATK: x%.0f" % atk_mult
+	else:
+		_atk_scale_label.text = "ATK: x%.2f" % atk_mult
+	_core_scale_label.text = "Cores: x%.0f" % core_mult
+	
+	# Elite core label no longer used - info moved to Goddess Fall button
+	_elite_core_label.visible = false
 
 func _on_goddess_fall_toggled(pressed: bool) -> void:
 	GameState.goddess_fall_mode = pressed
+	_update_scaling_labels(GameState.difficulty_multiplier)
 
 func _get_difficulty_color(value: int) -> Color:
 	if value <= 1:
-		return Color(0.7, 0.75, 0.85)  # Grey/white for normal
+		return UITheme.DIFF_NORMAL
 	elif value <= 10:
-		return Color(0.4, 0.9, 0.5)  # Green for easy boost
+		return UITheme.DIFF_EASY
 	elif value <= 25:
-		return Color(1.0, 0.85, 0.3)  # Yellow for medium
+		return UITheme.DIFF_MEDIUM
 	elif value <= 50:
-		return Color(1.0, 0.5, 0.2)  # Orange for hard
+		return UITheme.DIFF_HARD
 	else:
-		return Color(1.0, 0.2, 0.2)  # Red for extreme
+		return UITheme.DIFF_EXTREME
 
 # Modifier button definitions with icons and colors
 const MODIFIER_STYLES := {
-	"stage_1": {"icon": "⚔", "color": Color(0.3, 0.7, 0.4), "title": "STANDARD"},
-	"stage_2": {"icon": "👑", "color": Color(0.9, 0.6, 0.2), "title": "ELITE HUNT"},
-	"stage_3": {"icon": "∞", "color": Color(0.6, 0.4, 0.9), "title": "ENDLESS"},
+	"stage_1": {"icon": "⚔", "color": UITheme.MOD_STANDARD, "title": "STANDARD"},
+	"stage_2": {"icon": "👑", "color": UITheme.MOD_ELITE, "title": "ELITE HUNT"},
+	"stage_3": {"icon": "∞", "color": UITheme.MOD_ENDLESS, "title": "ENDLESS"},
 }
 
 func _create_modifier_button(stage: Dictionary) -> Button:
@@ -360,9 +446,9 @@ func _create_modifier_button(stage: Dictionary) -> Button:
 	# Icon on the left
 	var icon_lbl := Label.new()
 	icon_lbl.text = style_info.icon if is_unlocked else "🔒"
-	icon_lbl.add_theme_font_size_override("font_size", 42)
-	icon_lbl.add_theme_color_override("font_color", style_info.color if is_unlocked else Color(0.4, 0.4, 0.45))
-	icon_lbl.custom_minimum_size.x = 60
+	icon_lbl.add_theme_font_size_override("font_size", 52)
+	icon_lbl.add_theme_color_override("font_color", style_info.color if is_unlocked else UITheme.COLOR_LOCKED)
+	icon_lbl.custom_minimum_size.x = 70
 	icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	icon_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -379,16 +465,17 @@ func _create_modifier_button(stage: Dictionary) -> Button:
 	# Title
 	var title := Label.new()
 	title.text = style_info.title if is_unlocked else "???"
-	title.add_theme_font_size_override("font_size", 22)
-	title.add_theme_color_override("font_color", style_info.color if is_unlocked else Color(0.4, 0.4, 0.45))
+	title.add_theme_font_override("font", UITheme.FONT_BOLD)
+	title.add_theme_font_size_override("font_size", 42)
+	title.add_theme_color_override("font_color", style_info.color if is_unlocked else UITheme.COLOR_LOCKED)
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	text_vbox.add_child(title)
 	
 	# Description
 	var desc := Label.new()
 	desc.text = stage.get("description", "") if is_unlocked else "Clear previous stage to unlock"
-	desc.add_theme_font_size_override("font_size", 14)
-	desc.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75) if is_unlocked else Color(0.35, 0.35, 0.4))
+	desc.add_theme_font_size_override("font_size", 26)
+	desc.add_theme_color_override("font_color", UITheme.TEXT_MUTED if is_unlocked else UITheme.TEXT_DISABLED)
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	text_vbox.add_child(desc)
@@ -409,7 +496,7 @@ func _create_danger_divider() -> Control:
 	line.anchor_right = 0.9
 	line.offset_top = -1
 	line.offset_bottom = 1
-	line.color = Color(0.4, 0.4, 0.45, 0.5)
+	line.color = UITheme.DIVIDER_SUBTLE
 	container.add_child(line)
 	
 	return container
@@ -427,7 +514,7 @@ func _create_goddess_fall_card() -> Button:
 	_goddess_fall_btn = btn
 	
 	# Red/danger color scheme with glowing red background
-	var accent_color := Color(1.0, 0.3, 0.3)
+	var accent_color := UITheme.MOD_GODDESS
 	_apply_goddess_fall_style(btn, accent_color)
 	btn.toggled.connect(_on_goddess_fall_toggled)
 	
@@ -462,9 +549,9 @@ func _create_goddess_fall_card() -> Button:
 	# Icon
 	var icon_lbl := Label.new()
 	icon_lbl.text = "☠"
-	icon_lbl.add_theme_font_size_override("font_size", 42)
+	icon_lbl.add_theme_font_size_override("font_size", 52)
 	icon_lbl.add_theme_color_override("font_color", accent_color)
-	icon_lbl.custom_minimum_size.x = 60
+	icon_lbl.custom_minimum_size.x = 70
 	icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	icon_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -473,22 +560,23 @@ func _create_goddess_fall_card() -> Button:
 	# Text content
 	var text_vbox := VBoxContainer.new()
 	text_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	text_vbox.add_theme_constant_override("separation", 4)
+	text_vbox.add_theme_constant_override("separation", 6)
 	text_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	text_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	content.add_child(text_vbox)
 	
 	var title := Label.new()
 	title.text = "GODDESS FALL"
-	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_font_override("font", UITheme.FONT_BOLD)
+	title.add_theme_font_size_override("font_size", 42)
 	title.add_theme_color_override("font_color", accent_color)
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	text_vbox.add_child(title)
 	
 	var desc := Label.new()
-	desc.text = "Tanks fire missiles, elites get lasers, bosses enrage after 60s!"
-	desc.add_theme_font_size_override("font_size", 14)
-	desc.add_theme_color_override("font_color", Color(0.8, 0.6, 0.6))
+	desc.text = "Tanks fire missiles, elites get lasers & drop cores, bosses enrage!"
+	desc.add_theme_font_size_override("font_size", 26)
+	desc.add_theme_color_override("font_color", UITheme.TEXT_MUTED)
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	text_vbox.add_child(desc)
@@ -498,49 +586,46 @@ func _create_goddess_fall_card() -> Button:
 
 func _apply_goddess_fall_style(btn: Button, _accent_color: Color) -> void:
 	# Red danger background with glow effect like the divider
-	var danger_bg := Color(0.15, 0.04, 0.04, 0.98)
-	var glow_color := Color(1.0, 0.1, 0.1, 0.5)
-	
 	var normal := StyleBoxFlat.new()
-	normal.bg_color = danger_bg
-	normal.border_color = Color(1.0, 0.2, 0.2, 0.7)
+	normal.bg_color = UITheme.BTN_DANGER_BG
+	normal.border_color = UITheme.BTN_DANGER_BORDER
 	normal.set_border_width_all(2)
 	normal.set_corner_radius_all(10)
-	normal.shadow_color = glow_color
+	normal.shadow_color = UITheme.BTN_DANGER_GLOW
 	normal.shadow_size = 6
 	btn.add_theme_stylebox_override("normal", normal)
 	
 	var hover := StyleBoxFlat.new()
-	hover.bg_color = Color(0.2, 0.06, 0.06, 0.98)
-	hover.border_color = Color(1.0, 0.3, 0.3, 0.9)
+	hover.bg_color = UITheme.BTN_DANGER_HOVER_BG
+	hover.border_color = UITheme.BTN_DANGER_HOVER_BORDER
 	hover.set_border_width_all(2)
 	hover.set_corner_radius_all(10)
-	hover.shadow_color = Color(1.0, 0.15, 0.15, 0.6)
+	hover.shadow_color = UITheme.BTN_DANGER_GLOW
 	hover.shadow_size = 10
 	btn.add_theme_stylebox_override("hover", hover)
 	
 	# Pressed/toggled-on state - intense glowing effect
 	var pressed := StyleBoxFlat.new()
-	pressed.bg_color = Color(0.3, 0.08, 0.08, 1.0)
-	pressed.border_color = Color(1.0, 0.4, 0.4, 1.0)
-	pressed.set_border_width_all(3)
+	pressed.bg_color = UITheme.BTN_DANGER_PRESSED_BG
+	pressed.border_color = UITheme.BTN_DANGER_PRESSED_BORDER
+	pressed.set_border_width_all(4)
 	pressed.set_corner_radius_all(10)
-	pressed.shadow_color = Color(1.0, 0.2, 0.2, 0.7)
-	pressed.shadow_size = 12
+	pressed.shadow_color = UITheme.BTN_DANGER_PRESSED_GLOW
+	pressed.shadow_size = 20
 	btn.add_theme_stylebox_override("pressed", pressed)
 	
 	# Disabled state
 	var disabled := StyleBoxFlat.new()
-	disabled.bg_color = Color(0.08, 0.04, 0.04, 0.9)
-	disabled.border_color = Color(0.3, 0.15, 0.15, 0.6)
+	disabled.bg_color = UITheme.BTN_DISABLED_BG
+	disabled.border_color = UITheme.BTN_DISABLED_BORDER
 	disabled.set_border_width_all(2)
 	disabled.set_corner_radius_all(10)
 	btn.add_theme_stylebox_override("disabled", disabled)
 
 
 func _apply_modifier_card_style(btn: Button, accent_color: Color, is_unlocked: bool) -> void:
-	var base_bg := Color(0.06, 0.06, 0.09, 0.95) if is_unlocked else Color(0.04, 0.04, 0.06, 0.9)
-	var base_border := accent_color * 0.5 if is_unlocked else Color(0.2, 0.2, 0.25, 0.6)
+	var base_bg := UITheme.BTN_NORMAL_BG if is_unlocked else UITheme.BTN_DISABLED_BG
+	var base_border := accent_color * 0.5 if is_unlocked else UITheme.BTN_DISABLED_BORDER
 	
 	var normal := StyleBoxFlat.new()
 	normal.bg_color = base_bg
@@ -568,8 +653,8 @@ func _apply_modifier_card_style(btn: Button, accent_color: Color, is_unlocked: b
 	
 	# Disabled state
 	var disabled := StyleBoxFlat.new()
-	disabled.bg_color = Color(0.04, 0.04, 0.06, 0.9)
-	disabled.border_color = Color(0.15, 0.15, 0.2, 0.6)
+	disabled.bg_color = UITheme.BTN_DISABLED_BG
+	disabled.border_color = UITheme.BTN_DISABLED_BORDER
 	disabled.set_border_width_all(2)
 	disabled.set_corner_radius_all(10)
 	btn.add_theme_stylebox_override("disabled", disabled)
@@ -641,34 +726,34 @@ func _on_map_next() -> void:
 
 func _apply_arrow_button_style(btn: Button) -> void:
 	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.0, 0.0, 0.0, 0.5)
-	normal.border_color = Color(0.8, 0.6, 0.2, 0.8)
+	normal.bg_color = UITheme.MAP_BTN_BG
+	normal.border_color = UITheme.MAP_BTN_BORDER
 	normal.set_border_width_all(2)
 	normal.set_corner_radius_all(6)
 	btn.add_theme_stylebox_override("normal", normal)
 	
 	var hover := StyleBoxFlat.new()
-	hover.bg_color = Color(0.15, 0.12, 0.08, 0.8)
-	hover.border_color = Color(1.0, 0.8, 0.3, 1.0)
+	hover.bg_color = UITheme.MAP_BTN_HOVER_BG
+	hover.border_color = UITheme.MAP_BTN_HOVER_BORDER
 	hover.set_border_width_all(2)
 	hover.set_corner_radius_all(6)
 	btn.add_theme_stylebox_override("hover", hover)
 	
 	var pressed := StyleBoxFlat.new()
-	pressed.bg_color = Color(0.2, 0.15, 0.1, 0.9)
-	pressed.border_color = Color(1.0, 0.9, 0.5, 1.0)
+	pressed.bg_color = UITheme.MAP_BTN_PRESSED_BG
+	pressed.border_color = UITheme.MAP_BTN_PRESSED_BORDER
 	pressed.set_border_width_all(2)
 	pressed.set_corner_radius_all(6)
 	btn.add_theme_stylebox_override("pressed", pressed)
 	
-	btn.add_theme_font_size_override("font_size", 24)
-	btn.add_theme_color_override("font_color", Color(1.0, 0.9, 0.7))
+	btn.add_theme_font_size_override("font_size", 32)
+	btn.add_theme_color_override("font_color", UITheme.MAP_BTN_TEXT)
 
 
 func _apply_slider_style(slider: HSlider) -> void:
 	# Make a much taller, easier to click slider
 	var grabber := StyleBoxFlat.new()
-	grabber.bg_color = Color(0.4, 0.6, 0.9, 1.0)
+	grabber.bg_color = UITheme.SLIDER_GRABBER
 	grabber.set_corner_radius_all(8)
 	grabber.content_margin_left = 12
 	grabber.content_margin_right = 12
@@ -677,7 +762,7 @@ func _apply_slider_style(slider: HSlider) -> void:
 	slider.add_theme_stylebox_override("grabber_area", grabber)
 	
 	var grabber_highlight := StyleBoxFlat.new()
-	grabber_highlight.bg_color = Color(0.5, 0.7, 1.0, 1.0)
+	grabber_highlight.bg_color = UITheme.SLIDER_GRABBER_HIGHLIGHT
 	grabber_highlight.set_corner_radius_all(8)
 	grabber_highlight.content_margin_left = 12
 	grabber_highlight.content_margin_right = 12
@@ -687,7 +772,7 @@ func _apply_slider_style(slider: HSlider) -> void:
 	
 	# Slider track (background)
 	var slider_style := StyleBoxFlat.new()
-	slider_style.bg_color = Color(0.15, 0.15, 0.2, 0.9)
+	slider_style.bg_color = UITheme.SLIDER_BG
 	slider_style.set_corner_radius_all(6)
 	slider_style.content_margin_top = 12
 	slider_style.content_margin_bottom = 12
@@ -699,17 +784,17 @@ func _apply_slider_style(slider: HSlider) -> void:
 
 func _apply_start_button_style() -> void:
 	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.2, 0.7, 0.4, 1.0)
-	normal.border_color = Color(0.4, 1.0, 0.6)
+	normal.bg_color = UITheme.START_BTN_BG
+	normal.border_color = UITheme.START_BTN_BORDER
 	normal.set_border_width_all(4)
 	normal.set_corner_radius_all(12)
-	normal.shadow_color = Color(0.2, 0.8, 0.4, 0.4)
+	normal.shadow_color = UITheme.START_BTN_SHADOW
 	normal.shadow_size = 8
 	_start_btn.add_theme_stylebox_override("normal", normal)
 	
 	var hover := StyleBoxFlat.new()
-	hover.bg_color = Color(0.25, 0.8, 0.5, 1.0)
-	hover.border_color = Color(0.5, 1.0, 0.7)
+	hover.bg_color = UITheme.START_BTN_HOVER_BG
+	hover.border_color = UITheme.START_BTN_HOVER_BORDER
 	hover.set_border_width_all(4)
 	hover.set_corner_radius_all(12)
 	hover.shadow_size = 12
@@ -719,36 +804,36 @@ func _apply_start_button_style() -> void:
 
 func _apply_back_button_style(btn: Button) -> void:
 	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.12, 0.12, 0.16, 0.95)
-	normal.border_color = Color(0.4, 0.4, 0.5, 0.8)
+	normal.bg_color = UITheme.BACK_BTN_BG
+	normal.border_color = UITheme.BACK_BTN_BORDER
 	normal.set_border_width_all(2)
 	normal.set_corner_radius_all(8)
 	btn.add_theme_stylebox_override("normal", normal)
-	btn.add_theme_color_override("font_color", Color(0.85, 0.85, 0.9))
+	btn.add_theme_color_override("font_color", UITheme.BACK_BTN_TEXT)
 
 func _apply_goddess_button_style(btn: Button) -> void:
 	# Create impressive Goddess Fall toggle button with glowing effect
 	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.15, 0.08, 0.12, 0.95)
-	normal.border_color = Color(0.5, 0.25, 0.35, 0.8)
+	normal.bg_color = UITheme.GODDESS_BTN_BG
+	normal.border_color = UITheme.GODDESS_BTN_BORDER
 	normal.set_border_width_all(2)
 	normal.set_corner_radius_all(8)
 	btn.add_theme_stylebox_override("normal", normal)
 	
 	var hover := StyleBoxFlat.new()
-	hover.bg_color = Color(0.2, 0.1, 0.15, 1.0)
-	hover.border_color = Color(0.7, 0.35, 0.45, 0.9)
+	hover.bg_color = UITheme.GODDESS_BTN_HOVER_BG
+	hover.border_color = UITheme.GODDESS_BTN_HOVER_BORDER
 	hover.set_border_width_all(2)
 	hover.set_corner_radius_all(8)
 	btn.add_theme_stylebox_override("hover", hover)
 	
 	# Pressed/toggled-on state - bright red glow
 	var pressed := StyleBoxFlat.new()
-	pressed.bg_color = Color(0.35, 0.08, 0.12, 1.0)
-	pressed.border_color = Color(1.0, 0.3, 0.4, 1.0)
+	pressed.bg_color = UITheme.GODDESS_BTN_PRESSED_BG
+	pressed.border_color = UITheme.GODDESS_BTN_PRESSED_BORDER
 	pressed.set_border_width_all(3)
 	pressed.set_corner_radius_all(8)
-	pressed.shadow_color = Color(1.0, 0.2, 0.3, 0.5)
+	pressed.shadow_color = UITheme.GODDESS_BTN_SHADOW
 	pressed.shadow_size = 8
 	btn.add_theme_stylebox_override("pressed", pressed)
 	
@@ -769,21 +854,21 @@ func _apply_goddess_button_style(btn: Button) -> void:
 	var icon_lbl := Label.new()
 	icon_lbl.text = "☠"
 	icon_lbl.add_theme_font_size_override("font_size", 24)
-	icon_lbl.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+	icon_lbl.add_theme_color_override("font_color", UITheme.GODDESS_ICON)
 	icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(icon_lbl)
 	
 	var title := Label.new()
 	title.text = "GODDESS"
 	title.add_theme_font_size_override("font_size", 12)
-	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.85))
+	title.add_theme_color_override("font_color", UITheme.GODDESS_TITLE)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(title)
 	
 	var subtitle := Label.new()
 	subtitle.text = "FALL"
 	subtitle.add_theme_font_size_override("font_size", 11)
-	subtitle.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))
+	subtitle.add_theme_color_override("font_color", UITheme.GODDESS_SUBTITLE)
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(subtitle)
 

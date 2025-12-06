@@ -45,16 +45,23 @@ func _update_buffed_enemies() -> void:
 	var enemies := get_tree().get_nodes_in_group("enemies")
 	var boss_pos := _boss.global_position
 	
-	# Remove buffs from enemies that left the aura
-	for enemy in _buffed_enemies.duplicate():
+	# Remove buffs from enemies that left the aura or are no longer valid
+	var enemies_to_remove: Array[Node2D] = []
+	for enemy in _buffed_enemies:
 		if not is_instance_valid(enemy):
-			_buffed_enemies.erase(enemy)
+			enemies_to_remove.append(enemy)
 			continue
 		
 		var dist: float = enemy.global_position.distance_to(boss_pos)
 		if dist > AURA_RADIUS or enemy == _boss:
 			_remove_buff(enemy)
-			_buffed_enemies.erase(enemy)
+			enemies_to_remove.append(enemy)
+	
+	# Remove after iteration to avoid modifying array during loop
+	for enemy in enemies_to_remove:
+		var idx := _buffed_enemies.find(enemy)
+		if idx >= 0:
+			_buffed_enemies.remove_at(idx)
 	
 	# Add buffs to enemies that entered the aura
 	for enemy in enemies:
@@ -118,5 +125,6 @@ func _remove_buff(enemy: Node2D) -> void:
 func _exit_tree() -> void:
 	# Clean up all buffs when aura is destroyed
 	for enemy in _buffed_enemies:
-		_remove_buff(enemy)
+		if is_instance_valid(enemy):
+			_remove_buff(enemy)
 	_buffed_enemies.clear()

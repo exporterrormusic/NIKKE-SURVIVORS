@@ -5,13 +5,10 @@ class_name AchievementNotification
 ## Shows a toast-style notification when an achievement is unlocked.
 ## Auto-hides after a few seconds.
 
+const UI := preload("res://scripts/ui/UITheme.gd")
+
 const DISPLAY_TIME := 4.0
 const SLIDE_TIME := 0.3
-
-const BG_COLOR := Color(0.08, 0.08, 0.12, 0.95)
-const BORDER_COLOR := Color(0.9, 0.75, 0.2, 1.0)  # Gold border
-const TITLE_COLOR := Color(0.9, 0.75, 0.2, 1.0)  # Gold title
-const DESC_COLOR := Color(0.95, 0.95, 0.98, 1.0)
 
 var _panel: PanelContainer = null
 var _title_label: Label = null
@@ -19,10 +16,6 @@ var _desc_label: Label = null
 var _tween: Tween = null
 var _queue: Array[Dictionary] = []
 var _showing: bool = false
-
-# Preload fonts
-const _futura_bold: Font = preload("res://resources/fonts/futura_condensed_extra_bold.tres")
-const _pretendard_medium: Font = preload("res://resources/fonts/pretendard_medium.tres")
 
 
 func _ready() -> void:
@@ -48,9 +41,9 @@ func _build_ui() -> void:
 	_panel.offset_bottom = 0
 	
 	var style := StyleBoxFlat.new()
-	style.bg_color = BG_COLOR
+	style.bg_color = UI.ENTRY_BG
 	style.set_border_width_all(3)
-	style.border_color = BORDER_COLOR
+	style.border_color = UI.ACCENT_SECONDARY
 	style.set_corner_radius_all(8)
 	style.content_margin_left = 20
 	style.content_margin_right = 20
@@ -79,20 +72,18 @@ func _build_ui() -> void:
 	# Title
 	_title_label = Label.new()
 	_title_label.text = "ACHIEVEMENT UNLOCKED"
-	if _futura_bold:
-		_title_label.add_theme_font_override("font", _futura_bold)
+	_title_label.add_theme_font_override("font", UI.FONT_TITLE)
 	_title_label.add_theme_font_size_override("font_size", 24)
-	_title_label.add_theme_color_override("font_color", TITLE_COLOR)
+	_title_label.add_theme_color_override("font_color", UI.ACCENT_SECONDARY)
 	title_row.add_child(_title_label)
 	
 	# Description
 	_desc_label = Label.new()
 	_desc_label.text = ""
 	_desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	if _pretendard_medium:
-		_desc_label.add_theme_font_override("font", _pretendard_medium)
+	_desc_label.add_theme_font_override("font", UI.FONT_MEDIUM)
 	_desc_label.add_theme_font_size_override("font_size", 18)
-	_desc_label.add_theme_color_override("font_color", DESC_COLOR)
+	_desc_label.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
 	vbox.add_child(_desc_label)
 	
 	# Start hidden

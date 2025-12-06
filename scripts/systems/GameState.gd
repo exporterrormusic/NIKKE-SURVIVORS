@@ -29,9 +29,11 @@ var current_wave: int = 0
 var current_kills: int = 0
 
 # --- Leaderboard Data ---
-# Dictionary: character_id (String) -> { "best_score": int, "best_wave": int, "total_runs": int }
-var _leaderboard_data: Dictionary = {}
+# Array of top 10 runs: [{"character_id": String, "score": int, "wave": int, "difficulty": int, "goddess_fall": bool, "timestamp": int}]
+var _leaderboard_entries: Array = []
 var _total_score_all_time: int = 0
+var _total_runs_all_time: int = 0
+const MAX_LEADERBOARD_ENTRIES := 10
 
 # --- Meta Currency ---
 # Pristine Rapture Cores - earned by defeating bosses, used in main menu shop
@@ -76,16 +78,25 @@ func set_current_wave(wave: int) -> void:
 	current_wave = wave
 
 
+# Flag to prevent recording the same run multiple times
+var _run_already_recorded: bool = false
+
 ## Reset current run stats (call at start of new game)
 func reset_run_stats() -> void:
 	current_score = 0
 	current_wave = 0
 	current_kills = 0
+	_run_already_recorded = false
 
 
 ## Record the result of a completed run (call on game over)
 ## @param character_id: The character code/id that was played
 func record_run_result(character_id: String) -> void:
+	# Prevent duplicate recordings (e.g., death + quit triggers both)
+	if _run_already_recorded:
+		print("[GameState] Run already recorded, skipping duplicate")
+		return
+	_run_already_recorded = true
 	if character_id.is_empty():
 		# Try to get from current player character
 		_ensure_registry()
@@ -100,50 +111,55 @@ func record_run_result(character_id: String) -> void:
 	
 	print("[GameState] Recording run: character=%s, score=%d, wave=%d, kills=%d" % [character_id, current_score, current_wave, current_kills])
 	
-	# Get or create entry for this character
-	if not _leaderboard_data.has(character_id):
-		_leaderboard_data[character_id] = {
-			"best_score": 0,
-			"best_wave": 0,
-			"best_difficulty": 1,
-			"best_goddess_fall": false,
-			"total_runs": 0
-		}
-	
-	var entry: Dictionary = _leaderboard_data[character_id]
-	entry["total_runs"] = entry.get("total_runs", 0) + 1
-	
-	# Update best score if this run was better (also store the difficulty/goddess_fall settings)
-	if current_score > entry.get("best_score", 0):
-		entry["best_score"] = current_score
-		entry["best_difficulty"] = difficulty_multiplier
-		entry["best_goddess_fall"] = goddess_fall_mode
-		print("[GameState] New best score for %s: %d (difficulty=%d, goddess_fall=%s)" % [character_id, current_score, difficulty_multiplier, goddess_fall_mode])
-	
-	# Update best wave if this run went further
-	if current_wave > entry.get("best_wave", 0):
-		entry["best_wave"] = current_wave
-		print("[GameState] New best wave for %s: %d" % [character_id, current_wave])
-	
-	# Update total score
+	# Update totals
 	_total_score_all_time += current_score
+	_total_runs_all_time += 1
 	
-	_leaderboard_data[character_id] = entry
+	# Create new entry for this run
+	var new_entry := {
+		"character_id": character_id,
+		"score": current_score,
+		"wave": current_wave,
+		"difficulty": difficulty_multiplier,
+		"goddess_fall": goddess_fall_mode,
+		"timestamp": int(Time.get_unix_time_from_system())
+	}
+	
+	# Add to leaderboard if it qualifies (top 10 by score)
+	_leaderboard_entries.append(new_entry)
+	
+	# Sort by score descending
+	_leaderboard_entries.sort_custom(func(a, b): return a["score"] > b["score"])
+	
+	# Keep only top 10
+	if _leaderboard_entries.size() > MAX_LEADERBOARD_ENTRIES:
+		_leaderboard_entries = _leaderboard_entries.slice(0, MAX_LEADERBOARD_ENTRIES)
+	
+	# Check if this run made it to leaderboard
+	var made_leaderboard := false
+	for entry in _leaderboard_entries:
+		if entry["timestamp"] == new_entry["timestamp"] and entry["score"] == new_entry["score"]:
+			made_leaderboard = true
+			break
+	
+	if made_leaderboard:
+		print("[GameState] New leaderboard entry! Rank: %d" % (_leaderboard_entries.find(new_entry) + 1))
+	
 	_save_leaderboard()
 
 
 # --- Leaderboard Queries ---
 
 ## Get leaderboard entries sorted by best score
-## Returns array of dictionaries with display_name, code, best_score, best_wave
+## Returns array of dictionaries with character info, score, wave, difficulty, goddess_fall
 func get_leaderboard_entries(max_count: int = 10) -> Array:
 	var entries: Array = []
 	
 	_ensure_registry()
 	
-	# Build entries from all characters that have been played
-	for char_id in _leaderboard_data:
-		var data: Dictionary = _leaderboard_data[char_id]
+	# Build display entries from stored leaderboard data
+	for run in _leaderboard_entries:
+		var char_id: String = run.get("character_id", "")
 		var display_name: String = char_id.capitalize().replace("-", " ").replace("_", " ")
 		
 		# Try to get proper display name from registry
@@ -155,36 +171,14 @@ func get_leaderboard_entries(max_count: int = 10) -> Array:
 		entries.append({
 			"display_name": display_name,
 			"code": char_id,
-			"best_score": data.get("best_score", 0),
-			"best_wave": data.get("best_wave", 0),
-			"best_difficulty": data.get("best_difficulty", 1),
-			"best_goddess_fall": data.get("best_goddess_fall", false),
-			"total_runs": data.get("total_runs", 0)
+			"best_score": run.get("score", 0),
+			"best_wave": run.get("wave", 0),
+			"best_difficulty": run.get("difficulty", 1),
+			"best_goddess_fall": run.get("goddess_fall", false),
+			"timestamp": run.get("timestamp", 0)
 		})
 	
-	# Also add characters that haven't been played yet (with 0 scores)
-	if _character_registry:
-		var all_ids: Array = _character_registry.get_all_character_ids()
-		for char_id in all_ids:
-			if not _leaderboard_data.has(char_id):
-				var char_data = _character_registry.get_character(char_id)
-				var display_name: String = char_id.capitalize().replace("-", " ").replace("_", " ")
-				if char_data and char_data.display_name != "":
-					display_name = char_data.display_name
-				entries.append({
-					"display_name": display_name,
-					"code": char_id,
-					"best_score": 0,
-					"best_wave": 0,
-					"best_difficulty": 1,
-					"best_goddess_fall": false,
-					"total_runs": 0
-				})
-	
-	# Sort by best score descending
-	entries.sort_custom(func(a, b): return a["best_score"] > b["best_score"])
-	
-	# Limit to max_count
+	# Already sorted, just limit to max_count
 	if entries.size() > max_count:
 		entries = entries.slice(0, max_count)
 	
@@ -196,18 +190,23 @@ func get_total_score() -> int:
 	return _total_score_all_time
 
 
-## Get best score for a specific character
+## Get best score for a specific character (highest score with that character as main)
 func get_best_score(character_id: String) -> int:
-	if _leaderboard_data.has(character_id):
-		return _leaderboard_data[character_id].get("best_score", 0)
+	for entry in _leaderboard_entries:
+		if entry.get("character_id") == character_id:
+			return entry.get("score", 0)
 	return 0
 
 
-## Get best wave for a specific character
+## Get best wave for a specific character (highest wave with that character as main)
 func get_best_wave(character_id: String) -> int:
-	if _leaderboard_data.has(character_id):
-		return _leaderboard_data[character_id].get("best_wave", 0)
-	return 0
+	var best_wave := 0
+	for entry in _leaderboard_entries:
+		if entry.get("character_id") == character_id:
+			var wave: int = entry.get("wave", 0)
+			if wave > best_wave:
+				best_wave = wave
+	return best_wave
 
 
 # --- Meta Currency ---
@@ -244,17 +243,24 @@ func _save_leaderboard() -> void:
 	var config := ConfigFile.new()
 	
 	config.set_value("stats", "total_score", _total_score_all_time)
+	config.set_value("stats", "total_runs", _total_runs_all_time)
 	config.set_value("stats", "pristine_rapture_cores", pristine_rapture_cores)
+	config.set_value("stats", "entry_count", _leaderboard_entries.size())
 	
-	for char_id in _leaderboard_data:
-		var data: Dictionary = _leaderboard_data[char_id]
-		config.set_value("characters", char_id + "_best_score", data.get("best_score", 0))
-		config.set_value("characters", char_id + "_best_wave", data.get("best_wave", 0))
-		config.set_value("characters", char_id + "_total_runs", data.get("total_runs", 0))
+	# Save each leaderboard entry
+	for i in range(_leaderboard_entries.size()):
+		var entry: Dictionary = _leaderboard_entries[i]
+		var prefix := "entry_%d_" % i
+		config.set_value("leaderboard", prefix + "character_id", entry.get("character_id", ""))
+		config.set_value("leaderboard", prefix + "score", entry.get("score", 0))
+		config.set_value("leaderboard", prefix + "wave", entry.get("wave", 0))
+		config.set_value("leaderboard", prefix + "difficulty", entry.get("difficulty", 1))
+		config.set_value("leaderboard", prefix + "goddess_fall", entry.get("goddess_fall", false))
+		config.set_value("leaderboard", prefix + "timestamp", entry.get("timestamp", 0))
 	
 	var err := config.save(SaveManagerScript.LEADERBOARD_PATH)
 	if err == OK:
-		print("[GameState] Leaderboard saved")
+		print("[GameState] Leaderboard saved (%d entries)" % _leaderboard_entries.size())
 	else:
 		push_error("[GameState] Failed to save leaderboard: " + str(err))
 
@@ -268,32 +274,30 @@ func _load_leaderboard() -> void:
 		return
 	
 	_total_score_all_time = config.get_value("stats", "total_score", 0)
+	_total_runs_all_time = config.get_value("stats", "total_runs", 0)
 	pristine_rapture_cores = config.get_value("stats", "pristine_rapture_cores", 0)
 	
-	# Load character data
-	_leaderboard_data.clear()
+	# Load leaderboard entries
+	_leaderboard_entries.clear()
+	var entry_count: int = config.get_value("stats", "entry_count", 0)
 	
-	# Find all character keys
-	var keys: PackedStringArray = config.get_section_keys("characters") if config.has_section("characters") else PackedStringArray()
-	var processed_chars: Dictionary = {}
+	for i in range(entry_count):
+		var prefix := "entry_%d_" % i
+		var entry := {
+			"character_id": config.get_value("leaderboard", prefix + "character_id", ""),
+			"score": config.get_value("leaderboard", prefix + "score", 0),
+			"wave": config.get_value("leaderboard", prefix + "wave", 0),
+			"difficulty": config.get_value("leaderboard", prefix + "difficulty", 1),
+			"goddess_fall": config.get_value("leaderboard", prefix + "goddess_fall", false),
+			"timestamp": config.get_value("leaderboard", prefix + "timestamp", 0)
+		}
+		if entry["character_id"] != "":
+			_leaderboard_entries.append(entry)
 	
-	for key in keys:
-		# Keys are like "scarlet_best_score", extract character id
-		var parts := key.rsplit("_", true, 2)  # Split from right, max 2 splits
-		if parts.size() >= 3:
-			var char_id := parts[0]
-			for i in range(1, parts.size() - 2):
-				char_id += "_" + parts[i]
-			
-			if not processed_chars.has(char_id):
-				processed_chars[char_id] = true
-				_leaderboard_data[char_id] = {
-					"best_score": config.get_value("characters", char_id + "_best_score", 0),
-					"best_wave": config.get_value("characters", char_id + "_best_wave", 0),
-					"total_runs": config.get_value("characters", char_id + "_total_runs", 0)
-				}
+	# Ensure sorted by score
+	_leaderboard_entries.sort_custom(func(a, b): return a["score"] > b["score"])
 	
-	print("[GameState] Leaderboard loaded: %d characters, total score: %d, cores: %d" % [_leaderboard_data.size(), _total_score_all_time, pristine_rapture_cores])
+	print("[GameState] Leaderboard loaded: %d entries, total score: %d, total runs: %d, cores: %d" % [_leaderboard_entries.size(), _total_score_all_time, _total_runs_all_time, pristine_rapture_cores])
 
 ## Set the 3 characters selected for this run
 ## @param indices: Array of 3 character registry indices
@@ -322,6 +326,7 @@ func get_main_character() -> int:
 ## Set which character the player controls
 ## @param index: Character registry index
 func set_player_character(index: int) -> void:
+	print("[GameState] set_player_character called with index: %d (was %d)" % [index, player_character_index])
 	player_character_index = index
 
 ## Get the player's controlled character index
@@ -441,5 +446,3 @@ func _track_kill_for_achievement() -> void:
 		var char_id: String = char_ids[player_character_index]
 		if has_node("/root/AchievementManager"):
 			get_node("/root/AchievementManager").on_enemy_killed(char_id)
-		print("[GameState] No stage progress found, starting fresh")
-	player_character_index = 9  # Nayuta

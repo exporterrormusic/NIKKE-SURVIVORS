@@ -6,10 +6,10 @@ class_name BossMissile
 ## Launch animation: shoots out from boss, arcs up, then curves toward target
 
 # Missile settings
-const INITIAL_SPEED := 50.0      # Slow start
-const MAX_SPEED := 500.0         # Slightly slower than player missiles
-const ACCELERATION := 180.0      # Speed increase per second
-const LIFETIME := 8.0            # Max lifetime before self-destruct
+const INITIAL_SPEED := 80.0      # Faster start (was 50)
+const MAX_SPEED := 700.0         # Faster max speed (was 500)
+const ACCELERATION := 280.0      # Faster acceleration (was 180)
+const LIFETIME := 6.0            # Shorter lifetime (was 8)
 const AOE_RADIUS := 120.0        # Explosion radius (slightly smaller)
 const AOE_DAMAGE := 2            # Damage dealt by explosion
 const MISSILE_SCALE := 0.65      # Slightly smaller than player missiles
@@ -83,9 +83,13 @@ static var _cached_glow_texture: Texture2D = null
 # Redraw throttle
 var _redraw_frame: int = 0
 
-func initialize(player: Node2D, delay: float = 0.0, spread_index: int = 0, total_missiles: int = 1) -> void:
+# Damage (can be scaled by Goddess Fall)
+var damage: int = AOE_DAMAGE
+
+func initialize(player: Node2D, delay: float = 0.0, spread_index: int = 0, total_missiles: int = 1, scaled_damage: int = AOE_DAMAGE) -> void:
 	_player = player
 	_launch_delay = delay
+	damage = scaled_damage
 	
 	# Store boss position for launch animation
 	_boss_position = global_position
@@ -506,7 +510,7 @@ func _explode() -> void:
 	explosion.set_script(preload("res://scripts/enemies/BossMissileExplosion.gd"))
 	explosion.global_position = global_position
 	if explosion.has_method("initialize"):
-		explosion.initialize(AOE_RADIUS, AOE_DAMAGE, _player)
+		explosion.initialize(AOE_RADIUS, damage, _player)
 	
 	if get_parent():
 		get_parent().add_child(explosion)

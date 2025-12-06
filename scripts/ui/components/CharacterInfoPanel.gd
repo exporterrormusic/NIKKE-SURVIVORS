@@ -2,6 +2,7 @@ extends Panel
 class_name CharacterInfoPanel
 ## Shows character stats, special attack, and burst info when hovering.
 
+const UI := preload("res://scripts/ui/UITheme.gd")
 const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
 
 var _char_data: Resource = null
@@ -14,9 +15,11 @@ var _desc_lbl: Label
 var _stats_box: VBoxContainer
 var _special_title: Label
 var _special_desc: Label
+var _special_upgrades_title: Label
 var _special_upgrades_label: Label
 var _burst_title: Label
 var _burst_desc: Label
+var _burst_upgrades_title: Label
 var _burst_upgrades_label: Label
 
 func _ready() -> void:
@@ -25,11 +28,11 @@ func _ready() -> void:
 
 func _apply_style() -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.05, 0.06, 0.09, 0.97)
-	style.border_color = Color(0.95, 0.95, 0.98, 0.9)
+	style.bg_color = UI.BG_DEEP
+	style.border_color = UI.ACCENT_PRIMARY
 	style.set_border_width_all(3)
 	style.set_corner_radius_all(10)
-	style.shadow_color = Color(0, 0, 0, 0.4)
+	style.shadow_color = UI.SHADOW_COLOR
 	style.shadow_size = 4
 	add_theme_stylebox_override("panel", style)
 
@@ -67,7 +70,7 @@ func _build_ui() -> void:
 	clip_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	clip_panel.clip_children = Control.CLIP_CHILDREN_AND_DRAW
 	var clip_style := StyleBoxFlat.new()
-	clip_style.bg_color = Color(0.08, 0.08, 0.12)
+	clip_style.bg_color = UI.CHAR_NORMAL
 	clip_style.set_corner_radius_all(12)
 	clip_panel.add_theme_stylebox_override("panel", clip_style)
 	_portrait_container.add_child(clip_panel)
@@ -95,8 +98,8 @@ func _build_ui() -> void:
 	portrait_border.set_anchors_preset(Control.PRESET_FULL_RECT)
 	portrait_border.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var border_style := StyleBoxFlat.new()
-	border_style.bg_color = Color(0, 0, 0, 0)
-	border_style.border_color = Color(0.95, 0.95, 0.98, 1.0)
+	border_style.bg_color = UI.TRANSPARENT
+	border_style.border_color = UI.ACCENT_PRIMARY
 	border_style.set_border_width_all(3)
 	border_style.set_corner_radius_all(12)
 	portrait_border.add_theme_stylebox_override("panel", border_style)
@@ -104,7 +107,7 @@ func _build_ui() -> void:
 	
 	_name_lbl = Label.new()
 	_name_lbl.add_theme_font_size_override("font_size", 20)
-	_name_lbl.add_theme_color_override("font_color", Color(0.95, 0.95, 0.98))
+	_name_lbl.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
 	_name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_name_lbl.clip_text = true
 	_name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -112,7 +115,7 @@ func _build_ui() -> void:
 	
 	_desc_lbl = Label.new()
 	_desc_lbl.add_theme_font_size_override("font_size", 12)
-	_desc_lbl.add_theme_color_override("font_color", Color(0.6, 0.65, 0.7))
+	_desc_lbl.add_theme_color_override("font_color", UI.TEXT_MUTED)
 	_desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
 	left.add_child(_desc_lbl)
@@ -132,7 +135,7 @@ func _build_ui() -> void:
 	var stats_title := Label.new()
 	stats_title.text = "STATS"
 	stats_title.add_theme_font_size_override("font_size", 20)
-	stats_title.add_theme_color_override("font_color", Color(0.85, 0.85, 0.9))
+	stats_title.add_theme_color_override("font_color", UI.TEXT_SECONDARY)
 	stats_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_stats_box.add_child(stats_title)
 	
@@ -155,7 +158,7 @@ func _build_ui() -> void:
 	
 	_special_title = Label.new()
 	_special_title.add_theme_font_size_override("font_size", 24)
-	_special_title.add_theme_color_override("font_color", Color(1.0, 0.7, 0.2))
+	_special_title.add_theme_color_override("font_color", UI.COLOR_SPECIAL)
 	special_col.add_child(_special_title)
 	
 	var special_sep := HSeparator.new()
@@ -163,7 +166,7 @@ func _build_ui() -> void:
 	
 	_special_desc = Label.new()
 	_special_desc.add_theme_font_size_override("font_size", 16)
-	_special_desc.add_theme_color_override("font_color", Color(0.85, 0.85, 0.9))
+	_special_desc.add_theme_color_override("font_color", UI.TEXT_SECONDARY)
 	_special_desc.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_special_desc.custom_minimum_size.y = 50  # Fixed height for alignment
 	special_col.add_child(_special_desc)
@@ -174,15 +177,16 @@ func _build_ui() -> void:
 	special_col.add_child(special_spacer)
 	
 	# Special upgrades section
-	var special_upgrades_title := Label.new()
-	special_upgrades_title.text = "Upgrades:"
-	special_upgrades_title.add_theme_font_size_override("font_size", 14)
-	special_upgrades_title.add_theme_color_override("font_color", Color(0.7, 0.6, 0.4))
-	special_col.add_child(special_upgrades_title)
+	_special_upgrades_title = Label.new()
+	_special_upgrades_title.text = "Upgrades:"
+	_special_upgrades_title.add_theme_font_size_override("font_size", 14)
+	_special_upgrades_title.add_theme_color_override("font_color", UI.ACCENT_SECONDARY_DIM)
+	_special_upgrades_title.visible = false  # Hidden until character selected
+	special_col.add_child(_special_upgrades_title)
 	
 	_special_upgrades_label = Label.new()
 	_special_upgrades_label.add_theme_font_size_override("font_size", 13)
-	_special_upgrades_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
+	_special_upgrades_label.add_theme_color_override("font_color", UI.TEXT_MUTED)
 	_special_upgrades_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	special_col.add_child(_special_upgrades_label)
 	
@@ -194,7 +198,7 @@ func _build_ui() -> void:
 	
 	_burst_title = Label.new()
 	_burst_title.add_theme_font_size_override("font_size", 24)
-	_burst_title.add_theme_color_override("font_color", Color(0.6, 0.4, 1.0))
+	_burst_title.add_theme_color_override("font_color", UI.COLOR_BURST)
 	burst_col.add_child(_burst_title)
 	
 	var burst_sep := HSeparator.new()
@@ -202,7 +206,7 @@ func _build_ui() -> void:
 	
 	_burst_desc = Label.new()
 	_burst_desc.add_theme_font_size_override("font_size", 16)
-	_burst_desc.add_theme_color_override("font_color", Color(0.85, 0.85, 0.9))
+	_burst_desc.add_theme_color_override("font_color", UI.TEXT_SECONDARY)
 	_burst_desc.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_burst_desc.custom_minimum_size.y = 50  # Fixed height for alignment
 	burst_col.add_child(_burst_desc)
@@ -213,15 +217,16 @@ func _build_ui() -> void:
 	burst_col.add_child(burst_spacer)
 	
 	# Burst upgrades section
-	var burst_upgrades_title := Label.new()
-	burst_upgrades_title.text = "Upgrades:"
-	burst_upgrades_title.add_theme_font_size_override("font_size", 14)
-	burst_upgrades_title.add_theme_color_override("font_color", Color(0.5, 0.4, 0.7))
-	burst_col.add_child(burst_upgrades_title)
+	_burst_upgrades_title = Label.new()
+	_burst_upgrades_title.text = "Upgrades:"
+	_burst_upgrades_title.add_theme_font_size_override("font_size", 14)
+	_burst_upgrades_title.add_theme_color_override("font_color", UI.COLOR_BURST)
+	_burst_upgrades_title.visible = false  # Hidden until character selected
+	burst_col.add_child(_burst_upgrades_title)
 	
 	_burst_upgrades_label = Label.new()
 	_burst_upgrades_label.add_theme_font_size_override("font_size", 13)
-	_burst_upgrades_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
+	_burst_upgrades_label.add_theme_color_override("font_color", UI.TEXT_MUTED)
 	_burst_upgrades_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_burst_upgrades_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	burst_col.add_child(_burst_upgrades_label)
@@ -242,11 +247,11 @@ func set_character(data: Resource) -> void:
 		if child is HBoxContainer:
 			child.queue_free()
 	
-	_add_stat("HP", data.base_hp, 20, Color(0.4, 0.9, 0.5), "hp")
-	_add_stat("ATK", int(data.base_damage), 20, Color(1.0, 0.5, 0.4), "atk")
-	_add_stat("SPD", int(data.base_speed / 10), 50, Color(0.5, 0.7, 1.0), "speed")  # Divide by 10 for cleaner display
+	_add_stat("HP", data.base_hp, 20, UI.STAT_HP, "hp")
+	_add_stat("ATK", int(data.base_damage), 20, UI.STAT_ATK, "atk")
+	_add_stat("SPD", int(data.base_speed / 10), 50, UI.STAT_SPD, "speed")  # Divide by 10 for cleaner display
 	var crit_val: int = int(data.crit_chance * 100) if data.get("crit_chance") else 5
-	_add_stat("CRIT", crit_val, 100, Color(1.0, 0.85, 0.3), "crit")
+	_add_stat("CRIT", crit_val, 100, UI.STAT_CRIT, "crit")
 	
 	# Special
 	_special_title.text = "SPECIAL: " + (data.special_name if data.special_name else "None")
@@ -268,7 +273,7 @@ func _add_stat(stat_name: String, value: int, max_val: int, color: Color, upgrad
 	var lbl := Label.new()
 	lbl.text = stat_name
 	lbl.add_theme_font_size_override("font_size", 18)
-	lbl.add_theme_color_override("font_color", Color(0.7, 0.75, 0.8))
+	lbl.add_theme_color_override("font_color", UI.TEXT_MUTED)
 	lbl.custom_minimum_size.x = 50
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(lbl)
@@ -278,9 +283,9 @@ func _add_stat(stat_name: String, value: int, max_val: int, color: Color, upgrad
 	bar_bg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar_bg.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var bg_style := StyleBoxFlat.new()
-	bg_style.bg_color = Color(0.12, 0.12, 0.16)
+	bg_style.bg_color = UI.PROGRESS_BG
 	bg_style.set_corner_radius_all(6)
-	bg_style.border_color = Color(0.3, 0.3, 0.35)
+	bg_style.border_color = UI.BORDER_DEFAULT
 	bg_style.set_border_width_all(1)
 	bar_bg.add_theme_stylebox_override("panel", bg_style)
 	row.add_child(bar_bg)
@@ -325,7 +330,7 @@ func _add_stat(stat_name: String, value: int, max_val: int, color: Color, upgrad
 	var val_lbl := Label.new()
 	val_lbl.text = str(value)
 	val_lbl.add_theme_font_size_override("font_size", 16)
-	val_lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
+	val_lbl.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
 	val_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	val_container.add_child(val_lbl)
 	
@@ -334,8 +339,8 @@ func _add_stat(stat_name: String, value: int, max_val: int, color: Color, upgrad
 		var bonus_lbl := Label.new()
 		bonus_lbl.text = bonus_text
 		bonus_lbl.add_theme_font_size_override("font_size", 14)
-		bonus_lbl.add_theme_color_override("font_color", Color(1.0, 0.95, 0.8))  # White with slight gold tint
-		bonus_lbl.add_theme_color_override("font_outline_color", Color(1.0, 0.85, 0.4, 0.6))  # Gold glow
+		bonus_lbl.add_theme_color_override("font_color", UI.ACCENT_SECONDARY)
+		bonus_lbl.add_theme_color_override("font_outline_color", UI.ACCENT_SECONDARY_DIM)
 		bonus_lbl.add_theme_constant_override("outline_size", 2)
 		bonus_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		val_container.add_child(bonus_lbl)
@@ -351,9 +356,11 @@ func _clear() -> void:
 	_desc_lbl.text = ""
 	_special_title.text = "SPECIAL:"
 	_special_desc.text = ""
+	_special_upgrades_title.visible = false
 	_special_upgrades_label.text = ""
 	_burst_title.text = "BURST:"
 	_burst_desc.text = ""
+	_burst_upgrades_title.visible = false
 	_burst_upgrades_label.text = ""
 
 func _populate_upgrades(data: Resource) -> void:
@@ -398,6 +405,10 @@ func _populate_upgrades(data: Resource) -> void:
 	
 	_special_upgrades_label.text = "\n".join(special_upgrades)
 	_burst_upgrades_label.text = "\n".join(burst_upgrades)
+	
+	# Show upgrade titles now that we have content
+	_special_upgrades_title.visible = true
+	_burst_upgrades_title.visible = true
 
 func _get_character_index(char_id: String) -> int:
 	"""Map character ID to TalentTree index using CharacterRegistry."""

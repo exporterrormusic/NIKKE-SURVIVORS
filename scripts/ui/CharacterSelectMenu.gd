@@ -3,6 +3,8 @@ extends Control
 ## Layout: Grid (top-left) + Details (bottom-left) + Squad slots (right full height).
 ## When squad is complete, animates up to reveal stage selector.
 
+const UI := preload("res://scripts/ui/UITheme.gd")
+
 signal play_requested(squad: Array[int], stage_id: String)
 signal back_requested
 
@@ -44,7 +46,7 @@ func _ready() -> void:
 
 func _setup_burst_audio() -> void:
 	_burst_audio = AudioStreamPlayer.new()
-	_burst_audio.bus = "Master"
+	_burst_audio.bus = "SFX"  # Use SFX bus for burst preview sounds
 	add_child(_burst_audio)
 
 func _ensure_menu_music() -> void:
@@ -88,7 +90,7 @@ func _build_ui() -> void:
 	
 	var overlay := ColorRect.new()
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	overlay.color = Color(0, 0, 0, 0.4)
+	overlay.color = UI.OVERLAY_DARK
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(overlay)
 	
@@ -297,13 +299,13 @@ func _create_card(char_id: String, data: Resource) -> Control:
 	if data:
 		portrait.texture = data.get_portrait()
 	# Dim portrait if locked
-	portrait.modulate = Color(1, 1, 1, 0.95) if is_unlocked else Color(0.3, 0.3, 0.35, 0.8)
+	portrait.modulate = UI.CHAR_PORTRAIT_UNLOCKED if is_unlocked else UI.CHAR_LOCKED
 	card.add_child(portrait)
 	
 	# Lock overlay for locked characters
 	if not is_unlocked:
 		var lock_overlay := ColorRect.new()
-		lock_overlay.color = Color(0.0, 0.0, 0.0, 0.4)
+		lock_overlay.color = UI.BG_OVERLAY
 		lock_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 		lock_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		card.add_child(lock_overlay)
@@ -331,7 +333,7 @@ func _create_card(char_id: String, data: Resource) -> Control:
 		var locked_text := Label.new()
 		locked_text.text = "LOCKED"
 		locked_text.add_theme_font_size_override("font_size", 24)
-		locked_text.add_theme_color_override("font_color", Color(0.9, 0.3, 0.3, 1.0))
+		locked_text.add_theme_color_override("font_color", UI.COLOR_DANGER)
 		locked_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		locked_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		lock_vbox.add_child(locked_text)
@@ -339,7 +341,7 @@ func _create_card(char_id: String, data: Resource) -> Control:
 	var name_bg := ColorRect.new()
 	name_bg.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	name_bg.anchor_top = 0.86
-	name_bg.color = Color(0, 0, 0, 0.85)
+	name_bg.color = UI.NAME_BAR_BG
 	name_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.add_child(name_bg)
 	
@@ -352,7 +354,7 @@ func _create_card(char_id: String, data: Resource) -> Control:
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	name_lbl.add_theme_font_size_override("font_size", 16)
-	name_lbl.add_theme_color_override("font_color", Color(0.95, 0.95, 0.98) if is_unlocked else Color(0.5, 0.5, 0.55))
+	name_lbl.add_theme_color_override("font_color", UI.TEXT_PRIMARY if is_unlocked else UI.TEXT_MUTED)
 	name_lbl.text = data.display_name if data else char_id
 	name_lbl.clip_text = true
 	name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -365,8 +367,8 @@ func _create_card(char_id: String, data: Resource) -> Control:
 	border_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	border_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var border_style := StyleBoxFlat.new()
-	border_style.bg_color = Color(0, 0, 0, 0)  # Transparent background
-	border_style.border_color = Color(0.95, 0.95, 0.98, 1.0) if is_unlocked else Color(0.25, 0.25, 0.3, 0.7)
+	border_style.bg_color = UI.TRANSPARENT
+	border_style.border_color = UI.ACCENT_PRIMARY if is_unlocked else UI.COLOR_LOCKED
 	border_style.set_border_width_all(3 if is_unlocked else 2)
 	border_style.set_corner_radius_all(12)
 	border_overlay.add_theme_stylebox_override("panel", border_style)
@@ -381,8 +383,8 @@ func _create_card(char_id: String, data: Resource) -> Control:
 
 func _apply_panel_style(panel: Panel) -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.04, 0.055, 0.08, 0.95)
-	style.border_color = Color(0.95, 0.95, 0.98, 0.8)
+	style.bg_color = UI.BG_DEEP
+	style.border_color = UI.ACCENT_PRIMARY
 	style.set_border_width_all(3)
 	style.set_corner_radius_all(10)
 	panel.add_theme_stylebox_override("panel", style)
@@ -390,7 +392,7 @@ func _apply_panel_style(panel: Panel) -> void:
 func _apply_card_style(card: Panel, in_squad: bool, is_hovered: bool = false) -> void:
 	# Base panel style (no border, just background)
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.06, 0.07, 0.1, 0.95)
+	style.bg_color = UI.CHAR_NORMAL
 	style.set_corner_radius_all(12)
 	card.add_theme_stylebox_override("panel", style)
 	
@@ -398,56 +400,56 @@ func _apply_card_style(card: Panel, in_squad: bool, is_hovered: bool = false) ->
 	var border_overlay = card.get_meta("border_overlay") if card.has_meta("border_overlay") else null
 	if border_overlay:
 		var border_style := StyleBoxFlat.new()
-		border_style.bg_color = Color(0, 0, 0, 0)  # Transparent
+		border_style.bg_color = UI.TRANSPARENT
 		border_style.set_corner_radius_all(12)
 		
 		if in_squad:
-			border_style.border_color = Color(0.4, 0.9, 0.5, 1.0)
+			border_style.border_color = UI.COLOR_SUCCESS
 			border_style.set_border_width_all(4)
 		elif is_hovered:
-			border_style.border_color = Color(1.0, 1.0, 1.0, 1.0)
+			border_style.border_color = UI.ACCENT_HOVER
 			border_style.set_border_width_all(4)
 		else:
-			border_style.border_color = Color(0.95, 0.95, 0.98, 1.0)
+			border_style.border_color = UI.ACCENT_PRIMARY
 			border_style.set_border_width_all(3)
 		
 		border_overlay.add_theme_stylebox_override("panel", border_style)
 
 func _apply_button_style(btn: Button) -> void:
 	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.1, 0.1, 0.14, 0.95)
-	normal.border_color = Color(0.4, 0.4, 0.5, 0.8)
+	normal.bg_color = UI.ENTRY_BG
+	normal.border_color = UI.BORDER_DEFAULT
 	normal.set_border_width_all(2)
 	normal.set_corner_radius_all(8)
 	btn.add_theme_stylebox_override("normal", normal)
 	
 	var hover := StyleBoxFlat.new()
-	hover.bg_color = Color(0.15, 0.15, 0.2, 1.0)
-	hover.border_color = Color(0.95, 0.95, 0.98)
+	hover.bg_color = UI.BG_LIGHT
+	hover.border_color = UI.ACCENT_PRIMARY
 	hover.set_border_width_all(3)
 	hover.set_corner_radius_all(8)
 	btn.add_theme_stylebox_override("hover", hover)
 	
 	btn.add_theme_font_size_override("font_size", 16)
-	btn.add_theme_color_override("font_color", Color(0.9, 0.9, 0.95))
+	btn.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
 
 func _apply_random_button_style(btn: Button) -> void:
 	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.6, 0.15, 0.15, 0.95)
-	normal.border_color = Color(0.9, 0.3, 0.3, 0.9)
+	normal.bg_color = UI.BTN_BACK_BG
+	normal.border_color = UI.COLOR_DANGER
 	normal.set_border_width_all(2)
 	normal.set_corner_radius_all(8)
 	btn.add_theme_stylebox_override("normal", normal)
 	
 	var hover := StyleBoxFlat.new()
-	hover.bg_color = Color(0.75, 0.2, 0.2, 1.0)
-	hover.border_color = Color(1.0, 0.4, 0.4)
+	hover.bg_color = UI.BTN_BACK_HOVER_BG
+	hover.border_color = UI.COLOR_DANGER
 	hover.set_border_width_all(3)
 	hover.set_corner_radius_all(8)
 	btn.add_theme_stylebox_override("hover", hover)
 	
 	btn.add_theme_font_size_override("font_size", 16)
-	btn.add_theme_color_override("font_color", Color(1.0, 0.95, 0.95))
+	btn.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
 
 func _on_random_pressed() -> void:
 	# Disconnect squad_complete signal to prevent auto-transition
@@ -477,21 +479,21 @@ func _on_random_pressed() -> void:
 
 func _apply_next_button_style(btn: Button) -> void:
 	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.15, 0.5, 0.15, 0.95)
-	normal.border_color = Color(0.3, 0.8, 0.3, 0.9)
+	normal.bg_color = UI.BTN_SUCCESS_BG
+	normal.border_color = UI.BTN_SUCCESS_BORDER
 	normal.set_border_width_all(2)
 	normal.set_corner_radius_all(8)
 	btn.add_theme_stylebox_override("normal", normal)
 	
 	var hover := StyleBoxFlat.new()
-	hover.bg_color = Color(0.2, 0.65, 0.2, 1.0)
-	hover.border_color = Color(0.4, 1.0, 0.4)
+	hover.bg_color = UI.BTN_SUCCESS_HOVER_BG
+	hover.border_color = UI.BTN_SUCCESS_HOVER_BORDER
 	hover.set_border_width_all(3)
 	hover.set_corner_radius_all(8)
 	btn.add_theme_stylebox_override("hover", hover)
 	
 	btn.add_theme_font_size_override("font_size", 16)
-	btn.add_theme_color_override("font_color", Color(0.95, 1.0, 0.95))
+	btn.add_theme_color_override("font_color", UI.BTN_SUCCESS_TEXT)
 
 func _on_next_pressed() -> void:
 	# Only proceed if we have a full squad (3 characters)
@@ -575,7 +577,7 @@ func _update_card_states() -> void:
 		var card = _cards[char_id]
 		var in_squad: bool = _squad_slots.has_character(char_id)
 		_apply_card_style(card, in_squad, false)
-		card.modulate = Color(0.6, 0.6, 0.6, 0.85) if in_squad else Color.WHITE
+		card.modulate = UI.CHAR_IN_SQUAD if in_squad else Color.WHITE
 
 func _remove_from_squad(char_id: String) -> void:
 	_squad_slots.remove_character_by_id(char_id)

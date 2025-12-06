@@ -5,22 +5,10 @@ class_name LeaderboardMenu
 
 signal back_requested
 
-const BACKGROUND_COLOR := Color(0.08, 0.08, 0.12, 0.95)
-const BORDER_COLOR := Color(0.95, 0.95, 1.0, 1.0)
-const ENTRY_BG_COLOR := Color(0.1, 0.1, 0.14, 0.95)
-const ENTRY_BORDER_COLOR := Color(0.95, 0.95, 1.0, 0.9)
-const ENTRY_SEPARATOR_COLOR := Color(0.95, 0.95, 1.0, 0.3)
-const RANK_COLOR_PRIMARY := Color(0.996, 0.843, 0.392, 1.0)
-const LABEL_COLOR := Color(0.784, 0.792, 0.878, 1.0)
-const VALUE_COLOR := Color(0.996, 0.973, 0.902, 1.0)
-const MUTED_VALUE_COLOR := Color(0.592, 0.6, 0.694, 1.0)
+const UI := preload("res://scripts/ui/UITheme.gd")
+
 const MAX_VISIBLE_ENTRIES := 10
 const ENTRIES_PER_COLUMN := 5
-
-# Preload fonts at compile time for better performance
-const _futura_bold: Font = preload("res://resources/fonts/futura_condensed_extra_bold.tres")
-const _pretendard_bold: Font = preload("res://resources/fonts/pretendard_bold.tres")
-const _pretendard_medium: Font = preload("res://resources/fonts/pretendard_medium.tres")
 
 @onready var _left_column: VBoxContainer = %LeftColumn
 @onready var _right_column: VBoxContainer = %RightColumn
@@ -228,8 +216,7 @@ func _create_rank_block(rank: int) -> Control:
 	
 	var label := Label.new()
 	label.text = "#%d" % rank
-	if _futura_bold:
-		label.add_theme_font_override("font", _futura_bold)
+	label.add_theme_font_override("font", UI.FONT_TITLE)
 	label.add_theme_font_size_override("font_size", 40)
 	if rank >= 100:
 		label.add_theme_font_size_override("font_size", 28)
@@ -239,7 +226,7 @@ func _create_rank_block(rank: int) -> Control:
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	label.modulate = RANK_COLOR_PRIMARY if rank <= 3 else VALUE_COLOR
+	label.modulate = UI.RANK_GOLD if rank <= 3 else UI.TEXT_PRIMARY
 	container.add_child(label)
 	
 	return container
@@ -271,8 +258,7 @@ func _create_portrait_block(entry: Dictionary) -> Control:
 	if texture_rect.texture == null:
 		var fallback := Label.new()
 		fallback.text = _get_initial(entry)
-		if _pretendard_bold:
-			fallback.add_theme_font_override("font", _pretendard_bold)
+		fallback.add_theme_font_override("font", UI.FONT_BOLD)
 		fallback.add_theme_font_size_override("font_size", 44)
 		fallback.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		fallback.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -297,8 +283,7 @@ func _create_name_block(entry: Dictionary) -> Control:
 	var name_label := Label.new()
 	var display_name: String = String(entry.get("display_name", ""))
 	name_label.text = display_name
-	if _pretendard_bold:
-		name_label.add_theme_font_override("font", _pretendard_bold)
+	name_label.add_theme_font_override("font", UI.FONT_BOLD)
 	
 	# Scale font size based on name length to prevent clipping
 	var font_size := 42
@@ -338,12 +323,11 @@ func _create_score_block(entry: Dictionary) -> Control:
 	
 	var label := Label.new()
 	label.text = "SCORE"
-	if _pretendard_medium:
-		label.add_theme_font_override("font", _pretendard_medium)
+	label.add_theme_font_override("font", UI.FONT_MEDIUM)
 	label.add_theme_font_size_override("font_size", 20)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.modulate = LABEL_COLOR
+	label.modulate = UI.TEXT_SECONDARY
 	container.add_child(label)
 	
 	var value_label := Label.new()
@@ -351,12 +335,11 @@ func _create_score_block(entry: Dictionary) -> Control:
 	if best_score > 0:
 		value_label.text = _format_number(best_score)
 		value_label.tooltip_text = _format_full_number(best_score)
-		value_label.modulate = VALUE_COLOR
+		value_label.modulate = UI.TEXT_PRIMARY
 	else:
 		value_label.text = "NO DATA"
-		value_label.modulate = MUTED_VALUE_COLOR
-	if _futura_bold:
-		value_label.add_theme_font_override("font", _futura_bold)
+		value_label.modulate = UI.TEXT_MUTED
+	value_label.add_theme_font_override("font", UI.FONT_TITLE)
 	value_label.add_theme_font_size_override("font_size", 40)
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	value_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -383,12 +366,11 @@ func _create_wave_block(entry: Dictionary) -> Control:
 	
 	var label := Label.new()
 	label.text = "WAVE"
-	if _pretendard_medium:
-		label.add_theme_font_override("font", _pretendard_medium)
+	label.add_theme_font_override("font", UI.FONT_MEDIUM)
 	label.add_theme_font_size_override("font_size", 20)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.modulate = LABEL_COLOR
+	label.modulate = UI.TEXT_SECONDARY
 	container.add_child(label)
 	
 	# HBox for wave value and goddess fall badge
@@ -406,25 +388,24 @@ func _create_wave_block(entry: Dictionary) -> Control:
 		# Format: "difficulty-wave" (e.g., "5-12" for difficulty 5, wave 12)
 		value_label.text = "%d-%d" % [best_difficulty, best_wave]
 		value_label.tooltip_text = "Difficulty %d, Wave %d" % [best_difficulty, best_wave]
-		value_label.modulate = Color(0.588, 0.949, 0.588, 1.0)  # Green tint
+		value_label.modulate = UI.RANK_GREEN_TINT
 	else:
 		value_label.text = "--"
-		value_label.modulate = MUTED_VALUE_COLOR
-	if _futura_bold:
-		value_label.add_theme_font_override("font", _futura_bold)
+		value_label.modulate = UI.TEXT_MUTED
+	value_label.add_theme_font_override("font", UI.FONT_TITLE)
 	value_label.add_theme_font_size_override("font_size", 40)  # Same as score
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	value_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	value_label.mouse_filter = Control.MOUSE_FILTER_PASS  # Enable tooltip
 	value_hbox.add_child(value_label)
 	
-	# Add wing badge for Goddess Fall runs
+# Add wing badge for Goddess Fall runs
 	if goddess_fall and best_wave > 0:
 		var wing_label := Label.new()
-		wing_label.text = "🪽"  # Wing emoji for Goddess Fall
+		wing_label.text = "🫅"  # Wing emoji for Goddess Fall
 		wing_label.add_theme_font_size_override("font_size", 28)
 		wing_label.tooltip_text = "Goddess Fall"
-		wing_label.modulate = Color(1.0, 0.85, 0.4, 1.0)  # Golden tint
+		wing_label.modulate = UI.RANK_GOLD_TINT
 		wing_label.mouse_filter = Control.MOUSE_FILTER_PASS
 		value_hbox.add_child(wing_label)
 	
@@ -433,7 +414,7 @@ func _create_wave_block(entry: Dictionary) -> Control:
 
 func _create_separator() -> Control:
 	var separator := ColorRect.new()
-	separator.color = ENTRY_SEPARATOR_COLOR
+	separator.color = UI.ENTRY_SEPARATOR
 	separator.custom_minimum_size = Vector2(2, 80)
 	separator.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	separator.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -443,8 +424,8 @@ func _create_separator() -> Control:
 
 func _make_entry_stylebox(is_top_rank: bool) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = ENTRY_BG_COLOR.lightened(0.06) if is_top_rank else ENTRY_BG_COLOR
-	style.border_color = BORDER_COLOR if is_top_rank else ENTRY_BORDER_COLOR
+	style.bg_color = UI.ENTRY_BG.lightened(0.06) if is_top_rank else UI.ENTRY_BG
+	style.border_color = UI.ACCENT_PRIMARY if is_top_rank else UI.ENTRY_BORDER
 	style.border_width_left = 2
 	style.border_width_top = 2
 	style.border_width_right = 2
@@ -458,8 +439,8 @@ func _make_entry_stylebox(is_top_rank: bool) -> StyleBoxFlat:
 
 func _make_portrait_stylebox() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = BACKGROUND_COLOR.darkened(0.2)
-	style.border_color = BORDER_COLOR
+	style.bg_color = UI.BG_DEEP.darkened(0.2)
+	style.border_color = UI.ACCENT_PRIMARY
 	style.border_width_left = 2
 	style.border_width_top = 2
 	style.border_width_right = 2

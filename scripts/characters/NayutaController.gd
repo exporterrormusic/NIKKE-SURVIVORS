@@ -346,12 +346,10 @@ func _on_burst_end() -> void:
 	pass
 
 func _on_cleanup() -> void:
-	# Clean up clones
-	for ref in _active_clones:
-		var clone: Node = ref.get_ref() if ref is WeakRef else null
-		if clone and is_instance_valid(clone):
-			clone.queue_free()
-	_active_clones.clear()
+	# Note: Clones are NOT cleaned up on character switch
+	# They persist and expire on their own timers
+	# Only clean up dead clone references
+	_cleanup_clones()
 
 func _play_sound(weapon_type: String) -> void:
 	if player.audio_director:

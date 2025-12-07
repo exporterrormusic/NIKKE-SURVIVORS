@@ -286,12 +286,10 @@ func _on_cleanup() -> void:
 	if _freeze_active:
 		_end_freeze()
 	
-	# Clean up any remaining allies
-	for ref in _active_allies:
-		var ally: Node = ref.get_ref() if ref is WeakRef else null
-		if ally and is_instance_valid(ally):
-			ally.queue_free()
-	_active_allies.clear()
+	# Note: Allies are NOT cleaned up on character switch
+	# They persist and expire on their own timers
+	# Only clean up dead ally references
+	_cleanup_allies()
 
 func _play_sound(weapon_type: String) -> void:
 	if player.audio_director:

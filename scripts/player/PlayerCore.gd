@@ -599,7 +599,9 @@ func is_burst_ready() -> bool:
 func use_burst() -> bool:
 	if not is_burst_ready():
 		return false
-	burst_current = 0.0
+	# Debug: don't consume burst if infinite burst enabled
+	if not (has_meta("debug_infinite_burst") and get_meta("debug_infinite_burst")):
+		burst_current = 0.0
 	if player_hud:
 		player_hud.update_burst(burst_current, burst_max, true)
 	if overhead_hud:
@@ -1007,12 +1009,16 @@ func _process(delta: float) -> void:
 		_current_controller.process(delta)
 	
 	# Stamina management
-	if running and not dashing:
+	var infinite_stamina: bool = has_meta("debug_infinite_stamina") and get_meta("debug_infinite_stamina")
+	if running and not dashing and not infinite_stamina:
 		stamina = max(stamina - running_stamina_drain * delta, 0)
 		if player_hud:
 			player_hud.update_stamina(stamina, max_stamina, true)
 	else:
-		stamina = min(stamina + stamina_regen * delta, max_stamina)
+		if infinite_stamina:
+			stamina = max_stamina
+		else:
+			stamina = min(stamina + stamina_regen * delta, max_stamina)
 		if player_hud:
 			player_hud.update_stamina(stamina, max_stamina, false)
 	

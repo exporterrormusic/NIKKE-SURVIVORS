@@ -308,13 +308,12 @@ func shoot():
 		rocket.ground_fire_enabled = false
 		rocket.homing_enabled = true  # Enable homing for turret rockets
 		rocket.homing_strength = 10.0  # Strong homing
-		# Set proper damage values for turret rockets with level scaling
-		# Base: 2 damage, 2 explosion damage, scales with player level
+		# Turret damage = 50% of player's calculated damage
 		var player_node = get_parent().get_node_or_null("Player")
-		if player_node and player_node.has_method("calculate_damage"):
-			# Use player's calculate_damage which includes level scaling
-			rocket.damage = player_node.calculate_damage(2)
-			rocket.explosion_damage = player_node.calculate_damage(2)
+		if player_node and player_node.has_method("calc_damage"):
+			var turret_damage: int = maxi(1, int(player_node.calc_damage() * 0.5))
+			rocket.damage = turret_damage
+			rocket.explosion_damage = turret_damage
 		else:
 			# Fallback if player not found
 			rocket.damage = 2

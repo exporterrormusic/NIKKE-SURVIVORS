@@ -61,7 +61,7 @@ func _spawn_drones() -> void:
 		
 		# Initialize drone - position them on opposite sides (0 and PI)
 		var angle_offset = (TAU / DRONE_COUNT) * i  # 0 and PI for 2 drones
-		drone.initialize(player, i, angle_offset, _get_drone_speed_multiplier(), _get_drone_damage_multiplier())
+		drone.initialize(player, i, angle_offset, _get_drone_speed_multiplier())
 		drone.set_mode(_drone_mode)
 		
 		_drones.append(drone)
@@ -83,10 +83,6 @@ func _get_drone_speed_multiplier() -> float:
 	# 1.0 base, then +50% per level (1.5, 2.0, 3.0)
 	var multipliers := [1.0, 1.5, 2.0, 3.0]
 	return multipliers[mini(drone_upgrade_level, 3)]
-
-func _get_drone_damage_multiplier() -> float:
-	# Same as speed multiplier
-	return _get_drone_speed_multiplier()
 
 func _get_max_shield_hits() -> int:
 	# 1 base, +1 per upgrade level
@@ -371,20 +367,22 @@ func apply_talent(talent_id: String) -> void:
 		"special":
 			special_unlocked = true
 			special_timer = 0.0
-		"drone_upgrade":
+		"special_speed":
+			# Overclock - drone speed upgrade
 			drone_upgrade_level = mini(drone_upgrade_level + 1, 3)
-			# Update existing drones
+			# Update existing drones with new speed
 			for drone in _drones:
 				if is_instance_valid(drone):
-					drone.set_multipliers(_get_drone_speed_multiplier(), _get_drone_damage_multiplier())
-		"shield_upgrade":
+					drone.set_speed_multiplier(_get_drone_speed_multiplier())
+		"special_shield":
+			# Barrier Protocol - shield upgrade
 			shield_upgrade_level = mini(shield_upgrade_level + 1, 3)
 			# Update shield max hits
 			if is_instance_valid(_shield):
 				_shield.set_max_hits(_get_max_shield_hits())
-		"burst_damage_boost":
+		"burst_damage":
 			burst_damage_boost = true
-		"burst_boss_damage":
+		"burst_boss":
 			burst_boss_damage = true
 
 func is_invincible() -> bool:

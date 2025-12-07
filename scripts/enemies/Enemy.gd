@@ -357,6 +357,11 @@ func take_damage(dmg, is_crit: bool = false, hit_direction: Vector2 = Vector2.ZE
 	# Track killer source for burst/shield charging
 	_killer_source = killer_source
 	
+	# Debug: One-hit kill check
+	var debug_player = get_tree().get_first_node_in_group("player")
+	if debug_player and debug_player.has_meta("debug_one_hit_kill") and debug_player.get_meta("debug_one_hit_kill"):
+		dmg = 999999
+	
 	# Apply vulnerability debuff if present (from Scarlet's Expose Weakness talent)
 	var actual_dmg: int = dmg
 	if has_meta("damage_vulnerability"):

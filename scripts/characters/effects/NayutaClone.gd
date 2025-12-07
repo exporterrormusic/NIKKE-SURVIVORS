@@ -429,17 +429,15 @@ func _attack_smg(direction: Vector2) -> void:
 	bullet.velocity = direction * 900.0
 	bullet.rotation = direction.angle()
 	bullet.owner_node = self
-	# Scale damage with player level (base 2 damage * attack_mult * level scaling)
-	var level_mult := 1.0 + (player_level - 1) * 0.15  # +15% per level
-	bullet.base_damage = maxi(1, int(2 * attack_multiplier * level_mult))
+	# SMG base damage 2, scaled by player's full multiplier × attack_multiplier (0.5)
+	bullet.base_damage = maxi(1, int(_get_scaled_damage(2) * attack_multiplier))
 
 func _attack_sword(direction: Vector2) -> void:
 	var slash = ProjectileCache.create_slash()
 	slash.rotation = direction.angle()
 	slash.owner_node = self
-	# Scale damage with player level
-	var level_mult := 1.0 + (player_level - 1) * 0.15  # +15% per level
-	slash.base_damage = maxi(1, int(10 * attack_multiplier * level_mult))
+	# Sword base damage 10, scaled by player's full multiplier × attack_multiplier (0.5)
+	slash.base_damage = maxi(1, int(_get_scaled_damage(10) * attack_multiplier))
 	add_child(slash)
 	slash.position = Vector2.ZERO
 
@@ -451,6 +449,9 @@ func _attack_rocket(direction: Vector2) -> void:
 	rocket.direction = direction
 	rocket.target_position = _target_enemy.global_position if _target_enemy else global_position + direction * 400
 	rocket.speed = 400.0
+	# Rocket base damage 10, scaled by player's full multiplier × attack_multiplier (0.5)
+	rocket.damage = maxi(1, int(_get_scaled_damage(10) * attack_multiplier))
+	rocket.explosion_damage = rocket.damage
 	
 	get_parent().add_child(rocket)
 	rocket.global_position = global_position + direction * 40
@@ -464,10 +465,17 @@ func _attack_sniper(direction: Vector2) -> void:
 	bullet.velocity = direction * 1650.0
 	bullet.rotation = direction.angle()
 	bullet.owner_node = self
-	# Scale damage with player level
-	var level_mult := 1.0 + (player_level - 1) * 0.15  # +15% per level
-	bullet.base_damage = maxi(1, int(15 * attack_multiplier * level_mult))
+	# Sniper base damage 15, scaled by player's full multiplier × attack_multiplier (0.5)
+	bullet.base_damage = maxi(1, int(_get_scaled_damage(15) * attack_multiplier))
 	bullet.pierce_all = true
+
+## Get damage scaled by player's full multiplier (level + shop ATK bonus)
+func _get_scaled_damage(base_damage: int) -> int:
+	if owner_player and is_instance_valid(owner_player) and owner_player.has_method("calculate_damage"):
+		return owner_player.calculate_damage(base_damage)
+	# Fallback: just use level scaling
+	var level_mult := 1.0 + (player_level - 1) * 0.25
+	return maxi(1, int(base_damage * level_mult))
 
 func _apply_separation() -> void:
 	var tree := get_tree()

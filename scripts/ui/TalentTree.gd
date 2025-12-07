@@ -88,7 +88,7 @@ var TALENT_DATA := {
 	3: [  # Nayuta - SMG with Clone Summoning & Galaxy Burst
 		{"id": "unlock", "name": "Unlock Nayuta", "desc": "Add Nayuta to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
 		 "tooltip": "SMG user. 30 ammo, high fire rate. Summons clones."},
-		{"id": "special", "name": "SUMMON CLONE", "desc": "Summon a fighting clone", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
+		{"id": "special", "name": "Summon Clone", "desc": "Summon a fighting clone", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
 		 "tooltip": "Summons clone with 1/2 HP/attack. Lives until killed. 8s cooldown."},
 		{"id": "special_heal", "name": "NIMPH Return", "desc": "Clone death heals 20/35/50%", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
 		 "tooltip": "When clone dies, gold sparkles travel to you and heal % max HP."},
@@ -595,37 +595,59 @@ func _update_stats_panel(char_id: int = -1) -> void:
 	var char_name: String = CHARACTER_NAMES[display_char] if display_char >= 0 and display_char < CHARACTER_NAMES.size() else "Current"
 	_set_char_label(char_name)
 	
-	# Get character base stats from CharacterRegistry
-	var base_hp: int = 10
-	var base_speed: float = 400.0
-	var base_crit: float = 0.2
-	var base_damage: int = 1
-	var burst_rate: float = 5.0  # Default burst gen rate
-	
-	if _character_registry:
-		var char_data = _character_registry.get_character_by_index(display_char)
-		if char_data:
-			base_hp = char_data.base_hp
-			base_speed = char_data.base_speed
-			base_crit = char_data.crit_chance if "crit_chance" in char_data else 0.2
-			base_damage = char_data.base_damage
-	
-	# Get level from player if available, else show base level
+	# Get current stats from player if available, otherwise use base stats
 	var current_level: int = 1
-	if _player_ref:
-		current_level = _player_ref.level
+	var display_damage: int = 1
+	var display_hp: int = 10
+	var display_speed: int = 400
+	var display_crit: float = 0.2
+	var burst_rate: float = 5.0
 	
-	# Get burst gen rate from player if available
-	if _player_ref and "burst_per_hit" in _player_ref:
-		burst_rate = _player_ref.burst_per_hit
+	if _player_ref and is_instance_valid(_player_ref):
+		# Get actual player values
+		current_level = _player_ref.level if "level" in _player_ref else 1
+		
+		# Get calculated damage (includes level + shop ATK bonuses)
+		if _player_ref.has_method("calc_damage"):
+			display_damage = _player_ref.calc_damage()
+		elif "base_damage" in _player_ref:
+			display_damage = _player_ref.base_damage
+		
+		# Get max HP (includes shop HP bonus)
+		if "max_hp" in _player_ref:
+			display_hp = _player_ref.max_hp
+		
+		# Get speed (includes shop speed bonus)
+		if "move_speed" in _player_ref:
+			display_speed = int(_player_ref.move_speed)
+		
+		# Get crit rate (includes shop crit bonus)
+		if _player_ref.has_method("get_crit_chance"):
+			display_crit = _player_ref.get_crit_chance()
+		elif "_shop_crit_bonus" in _player_ref:
+			display_crit = _player_ref._shop_crit_bonus
+		
+		# Get burst gen rate
+		if "burst_per_hit" in _player_ref:
+			burst_rate = _player_ref.burst_per_hit
+	else:
+		# Fallback to base character stats from CharacterRegistry
+		if _character_registry:
+			var char_data = _character_registry.get_character_by_index(display_char)
+			if char_data:
+				display_damage = char_data.base_damage
+				display_hp = char_data.base_hp
+				display_speed = int(char_data.base_speed)
+				display_crit = char_data.crit_chance if "crit_chance" in char_data else 0.2
 	
-	# Update labels - show base character stats
+	# Update labels with current values
 	_set_stat_value("LevelRow", str(current_level))
-	_set_stat_value("AtkRow", str(base_damage))
-	_set_stat_value("HpRow", str(base_hp))
+	_set_stat_value("AtkRow", str(display_damage))
+	_set_stat_value("HpRow", str(display_hp))
 	_set_stat_value("BurstRow", "%.0f%%" % burst_rate)
-	_set_stat_value("SpeedRow", str(int(base_speed / 10)))  # Display as /10 for readability
-	_set_stat_value("CritRow", "%.0f%%" % (base_crit * 100.0))
+	@warning_ignore("integer_division")
+	_set_stat_value("SpeedRow", str(display_speed / 10))  # Display as /10 for readability
+	_set_stat_value("CritRow", "%.0f%%" % (display_crit * 100.0))
 
 func _set_char_label(char_name: String) -> void:
 	if _stats_panel == null:

@@ -197,24 +197,24 @@ func _configure_ally_type() -> void:
 			_configure_rapunzel()
 
 func _configure_scarlet() -> void:
-	# HP and damage scale with player level (+25% HP, +25% damage per level)
-	var level_mult := 1.0 + (player_level - 1) * 0.25
+	# HP scales with player level
 	var hp_mult := 1.0 + (player_level - 1) * 0.25
 	max_hp = int(60 * hp_mult)
 	move_speed = 280.0  # Fast melee rusher
-	attack_damage = int(10 * level_mult)  # Matches Scarlet's base_damage
+	# Damage uses player's full multiplier (level + shop ATK) × weapon base
+	attack_damage = _get_scaled_damage(10)  # Scarlet's base_damage
 	attack_range = 120.0  # Melee
 	attack_cooldown = 1.0  # 1 second between slashes for animation
 	_special_cooldown = 3.0
 	_load_sprite("scarlet")
 
 func _configure_snow_white() -> void:
-	# HP and damage scale with player level (+25% HP, +25% damage per level)
-	var level_mult := 1.0 + (player_level - 1) * 0.25
+	# HP scales with player level
 	var hp_mult := 1.0 + (player_level - 1) * 0.25
 	max_hp = int(45 * hp_mult)
 	move_speed = 200.0  # Mobile sniper
-	attack_damage = int(7 * level_mult)  # Matches Snow White's base_damage
+	# Damage uses player's full multiplier (level + shop ATK) × weapon base
+	attack_damage = _get_scaled_damage(7)  # Snow White's base_damage
 	attack_range = 600.0  # Sniper
 	attack_cooldown = 0.5  # Slower sniper shots (was 0.2)
 	_special_cooldown = 6.0
@@ -225,12 +225,12 @@ func _configure_snow_white() -> void:
 	_load_sprite("snow_white")
 
 func _configure_rapunzel() -> void:
-	# HP and damage scale with player level (+25% HP, +25% damage per level)
-	var level_mult := 1.0 + (player_level - 1) * 0.25
+	# HP scales with player level
 	var hp_mult := 1.0 + (player_level - 1) * 0.25
 	max_hp = int(55 * hp_mult)
 	move_speed = 220.0  # Mobile launcher
-	attack_damage = int(10 * level_mult)  # Matches Rapunzel's base_damage
+	# Damage uses player's full multiplier (level + shop ATK) × weapon base
+	attack_damage = _get_scaled_damage(10)  # Rapunzel's base_damage
 	attack_range = 500.0  # Rockets
 	attack_cooldown = 1.5  # Slower rockets (was 0.3)
 	_special_cooldown = 4.0
@@ -240,6 +240,15 @@ func _configure_rapunzel() -> void:
 	_rapunzel_ammo = int(base_ammo * 1.5)
 	_rapunzel_max_ammo = _rapunzel_ammo
 	_load_sprite("rapunzel")
+
+## Get damage scaled by player's full multiplier (level + shop ATK bonus)
+func _get_scaled_damage(base_damage: int) -> int:
+	if owner_player and is_instance_valid(owner_player) and owner_player.has_method("calculate_damage"):
+		# Use player's calculate_damage to get full scaling (level + shop ATK)
+		return owner_player.calculate_damage(base_damage)
+	# Fallback: just use level scaling
+	var level_mult := 1.0 + (player_level - 1) * 0.25
+	return maxi(1, int(base_damage * level_mult))
 
 func _load_sprite(character_id: String) -> void:
 	# Map character ID to sprite paths

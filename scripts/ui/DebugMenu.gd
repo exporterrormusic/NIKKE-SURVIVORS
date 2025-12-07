@@ -448,6 +448,9 @@ func _on_toggle_infinite_burst(btn: Button) -> void:
 	
 	if _player:
 		_player.set_meta("debug_infinite_burst", _infinite_burst_enabled)
+		# Also fill burst gauge to max when enabling
+		if _infinite_burst_enabled and "burst_current" in _player and "burst_max" in _player:
+			_player.burst_current = _player.burst_max
 	
 	print("[DEBUG] Infinite Burst: ", _infinite_burst_enabled)
 
@@ -546,12 +549,23 @@ func _on_kill_all_enemies() -> void:
 	print("[DEBUG] Killed %d enemies" % count)
 
 func _on_skip_wave() -> void:
+	# Try to access WaveDirector through Level
+	if _level and "_wave_director" in _level:
+		var wave_director = _level._wave_director
+		if wave_director and wave_director.has_method("debug_skip_wave"):
+			wave_director.debug_skip_wave()
+			print("[DEBUG] Skipped to next wave via WaveDirector")
+			return
+	
+	# Fallback: try legacy methods
 	if _level and _level.has_method("_advance_wave"):
 		_level._advance_wave()
 		print("[DEBUG] Skipped to next wave")
 	elif _enemy_spawner and "current_wave" in _enemy_spawner:
 		_enemy_spawner.current_wave += 1
 		print("[DEBUG] Advanced wave counter")
+	else:
+		print("[DEBUG] Could not find wave system to skip")
 
 # === PROGRESS CALLBACKS ===
 
@@ -570,25 +584,82 @@ func _on_unlock_all_stages() -> void:
 		print("[DEBUG] All stages unlocked!")
 
 func _on_unlock_all_characters() -> void:
-	var CharacterRegistryScript = load("res://scripts/systems/CharacterRegistry.gd")
-	if CharacterRegistryScript and "ALL_CHARACTERS" in CharacterRegistryScript:
-		var all_ids: Array = []
-		for char_data in CharacterRegistryScript.ALL_CHARACTERS:
-			all_ids.append(char_data["id"])
-		
-		var config := ConfigFile.new()
-		if config.load(SaveManagerScript.SHOP_PATH) == OK:
-			config.set_value("characters", "unlocked", all_ids)
-			config.save(SaveManagerScript.SHOP_PATH)
-		print("[DEBUG] All characters unlocked!")
+	# Get all character IDs from the CharacterRegistry CONTROLLER_SCRIPTS
+	var CharacterRegistryScript = load("res://scripts/characters/CharacterRegistry.gd")
+	if not CharacterRegistryScript:
+		print("[DEBUG] Failed to load CharacterRegistry")
+		return
+	
+	# Get character IDs from CONTROLLER_SCRIPTS keys
+	var all_ids: Array = []
+	if "CONTROLLER_SCRIPTS" in CharacterRegistryScript:
+		for char_id in CharacterRegistryScript.CONTROLLER_SCRIPTS.keys():
+			all_ids.append(char_id)
+	
+	if all_ids.is_empty():
+		print("[DEBUG] No character IDs found")
+		return
+	
+	# Save to shop data - only save non-default characters as per shop format
+	var default_unlocked: Array = []
+	if "DEFAULT_UNLOCKED" in CharacterRegistryScript:
+		default_unlocked = Array(CharacterRegistryScript.DEFAULT_UNLOCKED)
+	
+	var extra_unlocked: Array = []
+	for char_id in all_ids:
+		if char_id not in default_unlocked:
+			extra_unlocked.append(char_id)
+	
+	var config := ConfigFile.new()
+	# Load existing data first to preserve upgrades
+	config.load(SaveManagerScript.SHOP_PATH)
+	config.set_value("characters", "unlocked", extra_unlocked)
+	var err := config.save(SaveManagerScript.SHOP_PATH)
+	
+	if err == OK:
+		print("[DEBUG] All characters unlocked! (%d total, %d non-default saved)" % [all_ids.size(), extra_unlocked.size()])
+	else:
+		print("[DEBUG] Failed to save character unlocks: %d" % err)
 
 func _on_complete_achievements() -> void:
 	var achievement_manager := get_node_or_null("/root/AchievementManager")
-	if achievement_manager and achievement_manager.has_method("debug_complete_all"):
-		achievement_manager.debug_complete_all()
-		print("[DEBUG] All achievements completed!")
-	else:
-		print("[DEBUG] AchievementManager not available or missing method")
+	if not achievement_manager:
+		print("[DEBUG] AchievementManager not available")
+		return
+	
+	# Get all character IDs from registry
+	var CharacterRegistryScript = load("res://scripts/characters/CharacterRegistry.gd")
+	if not CharacterRegistryScript or not "CONTROLLER_SCRIPTS" in CharacterRegistryScript:
+		print("[DEBUG] Failed to load CharacterRegistry")
+		return
+	
+	var char_ids: Array = CharacterRegistryScript.CONTROLLER_SCRIPTS.keys()
+	var count := 0
+	
+	# Unlock all achievements for each character
+	for char_id in char_ids:
+		# Achievement types: unlock (non-default only), kills, all_skills, win
+		var achievement_types := ["kills", "all_skills", "win"]
+		
+		# Add unlock achievement for non-default characters
+		if "DEFAULT_UNLOCKED" in CharacterRegistryScript:
+			if char_id not in CharacterRegistryScript.DEFAULT_UNLOCKED:
+				achievement_types.insert(0, "unlock")
+		
+		for ach_type in achievement_types:
+			var ach_id: String = "%s_%s" % [ach_type, char_id]
+			achievement_manager._achievements[ach_id] = {
+				"unlocked": true,
+				"progress": 10000 if ach_type == "kills" else 1,
+				"unlocked_at": int(Time.get_unix_time_from_system())
+			}
+			count += 1
+	
+	# Save achievements
+	if achievement_manager.has_method("_save_achievements"):
+		achievement_manager._save_achievements()
+	
+	print("[DEBUG] Completed %d achievements!" % count)
 
 func _on_add_pristine_core() -> void:
 	if GameState and GameState.has_method("add_pristine_cores"):
@@ -618,7 +689,7 @@ func _on_reset_shop() -> void:
 	
 	var config := ConfigFile.new()
 	config.set_value("currency", "pristine_cores", 0)
-	var CharacterRegistryScript = load("res://scripts/systems/CharacterRegistry.gd")
+	var CharacterRegistryScript = load("res://scripts/characters/CharacterRegistry.gd")
 	if CharacterRegistryScript and "DEFAULT_UNLOCKED" in CharacterRegistryScript:
 		config.set_value("characters", "unlocked", CharacterRegistryScript.DEFAULT_UNLOCKED.duplicate())
 	config.set_value("upgrades", "data", {})

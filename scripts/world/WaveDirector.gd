@@ -243,6 +243,29 @@ func _update_spawn_bracket() -> void:
 func get_current_wave() -> int:
 	return _current_wave
 
+## Debug function to skip to the next wave by advancing elapsed time
+func debug_skip_wave() -> void:
+	if not _active:
+		return
+	
+	# Calculate time to start of next wave
+	var current_bracket_time: float = SPAWN_BRACKETS[_current_bracket_index]["time"]
+	var next_bracket_time: float
+	
+	if _current_bracket_index < SPAWN_BRACKETS.size() - 1:
+		next_bracket_time = SPAWN_BRACKETS[_current_bracket_index + 1]["time"]
+	else:
+		# Already at last bracket, advance by WAVE_DURATION
+		next_bracket_time = current_bracket_time + WAVE_DURATION
+	
+	# Set elapsed time to just past next bracket start
+	_elapsed_time = next_bracket_time + 0.1
+	
+	# Update bracket immediately
+	_update_spawn_bracket()
+	
+	print("[WaveDirector] DEBUG: Skipped to wave ", _current_wave)
+
 func get_health_multiplier() -> float:
 	# Wave 1: 1x, Wave 2: 2x, Wave 3: 3x, Wave 4: 4x, etc. (linear +1 per wave)
 	return float(_current_wave)

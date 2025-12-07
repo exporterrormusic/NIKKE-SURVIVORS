@@ -16,14 +16,12 @@ var hunt_speed: float = 400.0  # Faster hunting speed
 
 # Combat
 var attack_range: float = 400.0  # Much longer range
-var fire_cooldown: float = 0.6  # Balanced firing rate
+var fire_cooldown: float = 0.92  # Balanced firing rate (35% slower than 0.6)
 var _fire_timer: float = 0.0
-var laser_damage: int = 3
 var laser_speed: float = 800.0  # Faster projectiles
 
 # Multipliers from upgrades
 var speed_multiplier: float = 1.0
-var damage_multiplier: float = 1.0
 
 # Mode
 var _mode: String = "hunt"  # "hunt" or "shield"
@@ -41,13 +39,12 @@ var drone_scale: float = 1.5
 var _sprite: Sprite2D = null
 var _glow: PointLight2D = null
 
-func initialize(player: Node2D, index: int, angle_offset: float, speed_mult: float, damage_mult: float) -> void:
+func initialize(player: Node2D, index: int, angle_offset: float, speed_mult: float) -> void:
 	owner_player = player
 	drone_index = index
 	base_angle_offset = angle_offset
 	current_angle = angle_offset
 	speed_multiplier = speed_mult
-	damage_multiplier = damage_mult
 	
 	# Start at orbit position
 	if owner_player:
@@ -273,12 +270,17 @@ func _fire_laser_at(target: Node2D) -> void:
 	
 	var direction := (target.global_position - global_position).normalized()
 	
+	# Calculate damage as 50% of player's damage
+	var laser_damage: int = 3  # Fallback
+	if owner_player and is_instance_valid(owner_player) and owner_player.has_method("calc_damage"):
+		laser_damage = maxi(1, int(owner_player.calc_damage() * 0.5))
+	
 	# Create laser projectile
 	var laser := Node2D.new()
 	laser.set_script(_get_laser_script())
 	laser.set("direction", direction)
 	laser.set("speed", laser_speed * speed_multiplier)
-	laser.set("damage", int(laser_damage * damage_multiplier))
+	laser.set("damage", laser_damage)
 	laser.global_position = global_position + direction * 15.0
 	
 	get_parent().add_child(laser)
@@ -356,6 +358,5 @@ func set_mode(mode: String, on_arrived: Callable = Callable()) -> void:
 func is_returning() -> bool:
 	return _is_returning
 
-func set_multipliers(speed_mult: float, damage_mult: float) -> void:
+func set_speed_multiplier(speed_mult: float) -> void:
 	speed_multiplier = speed_mult
-	damage_multiplier = damage_mult

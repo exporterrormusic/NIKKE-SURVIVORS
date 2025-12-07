@@ -20,7 +20,7 @@ const STAGES := [
 		"name": "Elite Hunt",
 		"biome": "snowfield",
 		"time": "night",
-		"unlock_after": "stage_1",
+		"unlock_after": null,  # Always unlocked
 		"spawn_rules": {
 			"elite_only": true,  # Normal enemies become elites, elites become bosses
 		},
@@ -31,7 +31,7 @@ const STAGES := [
 		"name": "Endless",
 		"biome": "sakura_grove",
 		"time": "night",
-		"unlock_after": "stage_2",
+		"unlock_after": null,  # Always unlocked
 		"spawn_rules": {
 			"endless": true,  # No wave limit
 		},

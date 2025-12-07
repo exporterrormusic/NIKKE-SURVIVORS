@@ -1,6 +1,6 @@
-[gd_scene load_steps=2 format=3 uid="uid://cshop_menu"]
+[gd_scene load_steps=2 format=3 uid="uid://chuntv1ii8li4"]
 
-[ext_resource type="Script" path="res://scripts/ui/ShopMenu.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://dnnafthi8xsv6" path="res://scripts/ui/ShopMenu.gd" id="1_script"]
 
 [node name="ShopMenu" type="Control"]
 layout_mode = 3

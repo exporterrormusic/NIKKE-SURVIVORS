@@ -1,20 +1,38 @@
 extends CanvasLayer
 class_name DebugMenu
 
-## Debug menu accessible via F5 key
+## Debug menu accessible via F4 key
 ## Provides toggles and buttons for testing/debugging
+## Organized with tabs for better navigation
 
 const SaveManagerScript = preload("res://scripts/systems/SaveManager.gd")
 # UITheme loaded lazily in _setup_ui to avoid blocking startup
 var UI = null
 
+# Tab constants
+const TAB_TOGGLES := "toggles"
+const TAB_PLAYER := "player"
+const TAB_SPAWN := "spawn"
+const TAB_PROGRESS := "progress"
+const TAB_DATA := "data"
+const TAB_ORDER := [TAB_TOGGLES, TAB_PLAYER, TAB_SPAWN, TAB_PROGRESS, TAB_DATA]
+
 var _panel: PanelContainer
-var _vbox: VBoxContainer
+var _tab_container: HBoxContainer
+var _content_container: Control
+var _tabs: Dictionary = {}
+var _panels: Dictionary = {}
+var _current_tab: String = ""
 var _is_visible: bool = false
 
 # Toggle states
 var _invincibility_enabled: bool = false
 var _infinite_burst_enabled: bool = false
+var _one_hit_kill_enabled: bool = false
+var _infinite_stamina_enabled: bool = false
+
+# Toggle button references for state updates
+var _toggle_buttons: Dictionary = {}
 
 # References
 var _player: Node2D = null
@@ -38,11 +56,11 @@ func _setup_ui() -> void:
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(bg)
 	
-	# Main panel
+	# Main panel - wider to accommodate tabs
 	_panel = PanelContainer.new()
 	_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_panel.custom_minimum_size = Vector2(300, 400)
-	_panel.position = Vector2(-150, -200)
+	_panel.custom_minimum_size = Vector2(420, 580)
+	_panel.position = Vector2(-210, -290)
 	
 	var style := StyleBoxFlat.new()
 	style.bg_color = UI.DEBUG_PANEL_BG
@@ -53,111 +71,243 @@ func _setup_ui() -> void:
 	_panel.add_theme_stylebox_override("panel", style)
 	add_child(_panel)
 	
-	# Scrollable container
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(280, 380)
-	_panel.add_child(scroll)
+	# Main vertical layout
+	var main_vbox := VBoxContainer.new()
+	main_vbox.add_theme_constant_override("separation", 8)
+	_panel.add_child(main_vbox)
 	
-	_vbox = VBoxContainer.new()
-	_vbox.add_theme_constant_override("separation", 8)
-	scroll.add_child(_vbox)
+	# Title row with close button
+	var title_row := HBoxContainer.new()
+	main_vbox.add_child(title_row)
 	
-	# Title
 	var title := Label.new()
-	title.text = "DEBUG MENU (F4)"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.text = "DEBUG MENU"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	title.add_theme_color_override("font_color", UI.DEBUG_TITLE)
 	title.add_theme_font_size_override("font_size", 20)
-	_vbox.add_child(title)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_row.add_child(title)
 	
-	_add_separator()
-	
-	# === TOGGLES SECTION ===
-	_add_section_label("TOGGLES")
-	
-	_add_toggle_button("Player Invincibility", _on_toggle_invincibility)
-	_add_toggle_button("Infinite Burst", _on_toggle_infinite_burst)
-	
-	_add_separator()
-	
-	# === PLAYER SECTION ===
-	_add_section_label("PLAYER")
-	
-	_add_button("Fill Burst Gauge", _on_fill_burst)
-	_add_button("Force Level Up", _on_force_level_up)
-	_add_button("Add 1000 XP", _on_add_xp)
-	_add_button("Full Heal", _on_full_heal)
-	
-	_add_separator()
-	
-	# === SPAWN SECTION ===
-	_add_section_label("SPAWN ENEMIES")
-	
-	_add_button("Spawn Tank", _on_spawn_tank)
-	_add_button("Spawn Elite", _on_spawn_elite)
-	_add_button("Spawn Boss", _on_spawn_boss)
-	_add_button("Spawn 10 Basic", _on_spawn_basic_wave)
-	
-	_add_separator()
-	
-	# === PROGRESS SECTION ===
-	_add_section_label("PROGRESS")
-	
-	_add_button("Unlock All Stages", _on_unlock_all_stages)
-	_add_button("+1 Pristine Core", _on_add_pristine_core)
-	_add_button("+10 Pristine Cores", _on_add_pristine_cores_10)
-	_add_button("Reset Shop Data", _on_reset_shop)
-	
-	_add_separator()
-	
-	# === DANGER ZONE ===
-	_add_section_label("⚠️ DANGER ZONE")
-	_add_danger_button("RESET ALL DATA", _on_reset_all_data)
-	
-	_add_separator()
-	
-	# Close button
 	var close_btn := Button.new()
-	close_btn.text = "CLOSE (F4 / ESC)"
+	close_btn.text = "✕"
 	close_btn.pressed.connect(_toggle_menu)
+	close_btn.custom_minimum_size = Vector2(32, 32)
 	_style_button(close_btn, UI.DEBUG_BTN_CLOSE)
-	_vbox.add_child(close_btn)
+	title_row.add_child(close_btn)
+	
+	# Tab bar
+	_tab_container = HBoxContainer.new()
+	_tab_container.add_theme_constant_override("separation", 4)
+	main_vbox.add_child(_tab_container)
+	
+	# Create tab buttons
+	for tab_name in TAB_ORDER:
+		var tab_btn := Button.new()
+		tab_btn.text = _get_tab_display_name(tab_name)
+		tab_btn.toggle_mode = true
+		tab_btn.focus_mode = Control.FOCUS_NONE
+		tab_btn.pressed.connect(_on_tab_pressed.bind(tab_name))
+		tab_btn.custom_minimum_size = Vector2(70, 28)
+		_tab_container.add_child(tab_btn)
+		_tabs[tab_name] = tab_btn
+	
+	# Separator under tabs
+	var tab_separator := HSeparator.new()
+	tab_separator.add_theme_constant_override("separation", 4)
+	main_vbox.add_child(tab_separator)
+	
+	# Content area with scroll
+	_content_container = Control.new()
+	_content_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_content_container.custom_minimum_size = Vector2(396, 440)
+	main_vbox.add_child(_content_container)
+	
+	# Create panels for each tab
+	_create_toggles_panel()
+	_create_player_panel()
+	_create_spawn_panel()
+	_create_progress_panel()
+	_create_data_panel()
+	
+	# Hide all panels initially
+	for panel in _panels.values():
+		panel.visible = false
+	
+	# Bottom row with shortcut hint
+	var hint := Label.new()
+	hint.text = "Press F4 or ESC to close"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_color_override("font_color", Color(0.5, 0.5, 0.6, 0.8))
+	hint.add_theme_font_size_override("font_size", 12)
+	main_vbox.add_child(hint)
+	
+	# Switch to first tab
+	_switch_tab(TAB_TOGGLES)
 
-func _add_section_label(text: String) -> void:
+func _get_tab_display_name(tab_name: String) -> String:
+	match tab_name:
+		TAB_TOGGLES: return "Cheats"
+		TAB_PLAYER: return "Player"
+		TAB_SPAWN: return "Spawn"
+		TAB_PROGRESS: return "Progress"
+		TAB_DATA: return "Data"
+		_: return tab_name.capitalize()
+
+func _create_panel_base() -> ScrollContainer:
+	var scroll := ScrollContainer.new()
+	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_content_container.add_child(scroll)
+	
+	var vbox := VBoxContainer.new()
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_theme_constant_override("separation", 8)
+	scroll.add_child(vbox)
+	
+	scroll.set_meta("vbox", vbox)
+	return scroll
+
+func _create_toggles_panel() -> void:
+	var scroll := _create_panel_base()
+	var vbox: VBoxContainer = scroll.get_meta("vbox")
+	_panels[TAB_TOGGLES] = scroll
+	
+	_add_section_label(vbox, "CHEAT TOGGLES")
+	_add_description(vbox, "Enable cheats for testing. These persist until you close the menu.")
+	
+	_toggle_buttons["invincibility"] = _add_toggle_button(vbox, "Player Invincibility", "Take no damage", _on_toggle_invincibility)
+	_toggle_buttons["infinite_burst"] = _add_toggle_button(vbox, "Infinite Burst", "Burst gauge never depletes", _on_toggle_infinite_burst)
+	_toggle_buttons["one_hit_kill"] = _add_toggle_button(vbox, "One-Hit Kill", "Enemies die in one hit", _on_toggle_one_hit_kill)
+	_toggle_buttons["infinite_stamina"] = _add_toggle_button(vbox, "Infinite Stamina", "Dash and run without limit", _on_toggle_infinite_stamina)
+
+func _create_player_panel() -> void:
+	var scroll := _create_panel_base()
+	var vbox: VBoxContainer = scroll.get_meta("vbox")
+	_panels[TAB_PLAYER] = scroll
+	
+	_add_section_label(vbox, "PLAYER ACTIONS")
+	_add_description(vbox, "Instant player buffs and stat modifications.")
+	
+	_add_button(vbox, "Fill Burst Gauge", "Max out burst energy", _on_fill_burst)
+	_add_button(vbox, "Force Level Up", "Instantly gain a level", _on_force_level_up)
+	_add_button(vbox, "Add 1000 XP", "Gain 1000 experience points", _on_add_xp)
+	_add_button(vbox, "Full Heal", "Restore HP to maximum", _on_full_heal)
+	_add_button(vbox, "Restore Stamina", "Refill stamina bar", _on_restore_stamina)
+	
+	_add_separator(vbox)
+	_add_section_label(vbox, "SKILL POINTS")
+	_add_button(vbox, "+5 Skill Points", "Add skill points for talent tree", _on_add_skill_points)
+
+func _create_spawn_panel() -> void:
+	var scroll := _create_panel_base()
+	var vbox: VBoxContainer = scroll.get_meta("vbox")
+	_panels[TAB_SPAWN] = scroll
+	
+	_add_section_label(vbox, "SPAWN ENEMIES")
+	_add_description(vbox, "Spawn enemies for testing combat.")
+	
+	_add_button(vbox, "Spawn 10 Basic", "Spawn a wave of basic enemies", _on_spawn_basic_wave)
+	_add_button(vbox, "Spawn Elite", "Spawn an elite enemy", _on_spawn_elite)
+	_add_button(vbox, "Spawn Tank", "Spawn a tank enemy", _on_spawn_tank)
+	_add_button(vbox, "Spawn Boss", "Spawn a boss enemy", _on_spawn_boss)
+	
+	_add_separator(vbox)
+	_add_section_label(vbox, "WAVE CONTROL")
+	_add_button(vbox, "Kill All Enemies", "Instantly kill all enemies on screen", _on_kill_all_enemies)
+	_add_button(vbox, "Skip to Next Wave", "Advance to the next wave", _on_skip_wave)
+
+func _create_progress_panel() -> void:
+	var scroll := _create_panel_base()
+	var vbox: VBoxContainer = scroll.get_meta("vbox")
+	_panels[TAB_PROGRESS] = scroll
+	
+	_add_section_label(vbox, "CURRENCY")
+	_add_description(vbox, "Add resources for testing shop purchases.")
+	
+	_add_button(vbox, "+1 Pristine Core", "Add 1 core", _on_add_pristine_core)
+	_add_button(vbox, "+10 Pristine Cores", "Add 10 cores", _on_add_pristine_cores_10)
+	_add_button(vbox, "+100 Pristine Cores", "Add 100 cores", _on_add_pristine_cores_100)
+	
+	_add_separator(vbox)
+	_add_section_label(vbox, "UNLOCKS")
+	_add_button(vbox, "Unlock All Stages", "Make all stages available", _on_unlock_all_stages)
+	_add_button(vbox, "Unlock All Characters", "Make all characters available", _on_unlock_all_characters)
+	_add_button(vbox, "Complete All Achievements", "Unlock all achievements", _on_complete_achievements)
+
+func _create_data_panel() -> void:
+	var scroll := _create_panel_base()
+	var vbox: VBoxContainer = scroll.get_meta("vbox")
+	_panels[TAB_DATA] = scroll
+	
+	_add_section_label(vbox, "SAVE DATA")
+	_add_description(vbox, "View and manage save files.")
+	
+	_add_button(vbox, "Open Save Folder", "Open save directory in explorer", _on_open_save_folder)
+	
+	_add_separator(vbox)
+	_add_section_label(vbox, "DANGER ZONE")
+	_add_description(vbox, "These actions cannot be undone!")
+	
+	_add_danger_button(vbox, "Reset Shop Data", "Reset purchases and currency", _on_reset_shop)
+	_add_danger_button(vbox, "Reset Achievements", "Clear all achievement progress", _on_reset_achievements)
+	_add_danger_button(vbox, "RESET ALL DATA", "Delete all save data", _on_reset_all_data)
+
+# === UI BUILDER HELPERS ===
+
+func _add_section_label(parent: Control, text: String) -> void:
 	var label := Label.new()
 	label.text = text
 	label.add_theme_color_override("font_color", UI.DEBUG_SECTION_LABEL)
 	label.add_theme_font_size_override("font_size", 14)
-	_vbox.add_child(label)
+	parent.add_child(label)
 
-func _add_separator() -> void:
+func _add_description(parent: Control, text: String) -> void:
+	var label := Label.new()
+	label.text = text
+	label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7, 0.9))
+	label.add_theme_font_size_override("font_size", 11)
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	parent.add_child(label)
+
+func _add_separator(parent: Control) -> void:
 	var sep := HSeparator.new()
-	sep.add_theme_constant_override("separation", 4)
-	_vbox.add_child(sep)
+	sep.add_theme_constant_override("separation", 8)
+	parent.add_child(sep)
 
-func _add_button(text: String, callback: Callable) -> Button:
+func _add_button(parent: Control, text: String, tooltip: String, callback: Callable) -> Button:
 	var btn := Button.new()
 	btn.text = text
+	btn.tooltip_text = tooltip
 	btn.pressed.connect(callback)
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_style_button(btn, UI.DEBUG_BTN_NORMAL)
-	_vbox.add_child(btn)
+	parent.add_child(btn)
 	return btn
 
-func _add_toggle_button(text: String, callback: Callable) -> Button:
+func _add_toggle_button(parent: Control, text: String, tooltip: String, callback: Callable) -> Button:
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 8)
+	parent.add_child(hbox)
+	
 	var btn := Button.new()
-	btn.text = text + " [OFF]"
+	btn.text = text + "  [OFF]"
+	btn.tooltip_text = tooltip
 	btn.pressed.connect(func(): callback.call(btn))
-	_style_button(btn, UI.DEBUG_BTN_TOGGLE)
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.set_meta("base_text", text)
-	_vbox.add_child(btn)
+	_style_button(btn, UI.DEBUG_BTN_TOGGLE)
+	hbox.add_child(btn)
+	
 	return btn
 
-func _add_danger_button(text: String, callback: Callable) -> Button:
+func _add_danger_button(parent: Control, text: String, tooltip: String, callback: Callable) -> Button:
 	var btn := Button.new()
 	btn.text = text
+	btn.tooltip_text = tooltip
 	btn.pressed.connect(callback)
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_style_button(btn, UI.DEBUG_BTN_DANGER)
-	_vbox.add_child(btn)
+	parent.add_child(btn)
 	return btn
 
 func _style_button(btn: Button, base_color: Color) -> void:
@@ -178,15 +328,77 @@ func _style_button(btn: Button, base_color: Color) -> void:
 func _update_toggle_button(btn: Button, enabled: bool) -> void:
 	var base_text: String = btn.get_meta("base_text", "Toggle")
 	if enabled:
-		btn.text = base_text + " [ON]"
+		btn.text = base_text + "  [ON]"
 		var style := btn.get_theme_stylebox("normal").duplicate() as StyleBoxFlat
 		style.bg_color = UI.DEBUG_TOGGLE_ON
 		btn.add_theme_stylebox_override("normal", style)
+		var hover := style.duplicate()
+		hover.bg_color = UI.DEBUG_TOGGLE_ON.lightened(0.15)
+		btn.add_theme_stylebox_override("hover", hover)
 	else:
-		btn.text = base_text + " [OFF]"
+		btn.text = base_text + "  [OFF]"
 		var style := btn.get_theme_stylebox("normal").duplicate() as StyleBoxFlat
 		style.bg_color = UI.DEBUG_TOGGLE_OFF
 		btn.add_theme_stylebox_override("normal", style)
+		var hover := style.duplicate()
+		hover.bg_color = UI.DEBUG_TOGGLE_OFF.lightened(0.15)
+		btn.add_theme_stylebox_override("hover", hover)
+
+# === TAB NAVIGATION ===
+
+func _on_tab_pressed(tab_name: String) -> void:
+	_switch_tab(tab_name)
+
+func _switch_tab(tab_name: String) -> void:
+	if _current_tab == tab_name:
+		return
+	
+	# Hide current panel and deactivate tab
+	if _panels.has(_current_tab):
+		_panels[_current_tab].visible = false
+	if _tabs.has(_current_tab):
+		_tabs[_current_tab].button_pressed = false
+	
+	_current_tab = tab_name
+	
+	# Show new panel and activate tab
+	if _panels.has(_current_tab):
+		_panels[_current_tab].visible = true
+	if _tabs.has(_current_tab):
+		_tabs[_current_tab].button_pressed = true
+	
+	_update_tab_styles()
+
+func _update_tab_styles() -> void:
+	for tab_name in TAB_ORDER:
+		if not _tabs.has(tab_name):
+			continue
+		var btn: Button = _tabs[tab_name]
+		var active: bool = _current_tab == tab_name
+		
+		var style := StyleBoxFlat.new()
+		if active:
+			style.bg_color = UI.DEBUG_TITLE.darkened(0.3)
+			style.border_color = UI.DEBUG_TITLE
+		else:
+			style.bg_color = Color(0.2, 0.2, 0.25, 0.8)
+			style.border_color = Color(0.4, 0.4, 0.5, 0.5)
+		
+		style.set_border_width_all(0)
+		style.border_width_bottom = 2 if active else 1
+		style.set_corner_radius_all(4)
+		style.corner_radius_bottom_left = 0
+		style.corner_radius_bottom_right = 0
+		style.set_content_margin_all(4)
+		
+		btn.add_theme_stylebox_override("normal", style)
+		btn.add_theme_stylebox_override("hover", style)
+		btn.add_theme_stylebox_override("pressed", style)
+		
+		btn.add_theme_color_override("font_color", UI.DEBUG_TITLE if active else Color(0.7, 0.7, 0.8))
+		btn.add_theme_font_size_override("font_size", 11)
+
+# === INPUT HANDLING ===
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.is_echo():
@@ -212,7 +424,6 @@ func _find_references() -> void:
 	_player = get_tree().get_first_node_in_group("player")
 	_level = get_tree().get_first_node_in_group("level")
 	if not _level:
-		# Try to find Level node directly
 		_level = get_tree().current_scene
 	
 	if _level and _level.has_node("EnemySpawner"):
@@ -240,6 +451,24 @@ func _on_toggle_infinite_burst(btn: Button) -> void:
 	
 	print("[DEBUG] Infinite Burst: ", _infinite_burst_enabled)
 
+func _on_toggle_one_hit_kill(btn: Button) -> void:
+	_one_hit_kill_enabled = not _one_hit_kill_enabled
+	_update_toggle_button(btn, _one_hit_kill_enabled)
+	
+	if _player:
+		_player.set_meta("debug_one_hit_kill", _one_hit_kill_enabled)
+	
+	print("[DEBUG] One-Hit Kill: ", _one_hit_kill_enabled)
+
+func _on_toggle_infinite_stamina(btn: Button) -> void:
+	_infinite_stamina_enabled = not _infinite_stamina_enabled
+	_update_toggle_button(btn, _infinite_stamina_enabled)
+	
+	if _player:
+		_player.set_meta("debug_infinite_stamina", _infinite_stamina_enabled)
+	
+	print("[DEBUG] Infinite Stamina: ", _infinite_stamina_enabled)
+
 # === PLAYER CALLBACKS ===
 
 func _on_fill_burst() -> void:
@@ -253,7 +482,6 @@ func _on_fill_burst() -> void:
 
 func _on_force_level_up() -> void:
 	if _player and _player.has_method("add_xp"):
-		# Get XP needed to level up
 		var xp_needed: int = 100
 		if "xp_to_next_level" in _player:
 			xp_needed = _player.xp_to_next_level - _player.current_xp + 1
@@ -272,6 +500,16 @@ func _on_full_heal() -> void:
 			_player._update_hp_bar()
 		print("[DEBUG] Fully healed")
 
+func _on_restore_stamina() -> void:
+	if _player and "stamina" in _player and "max_stamina" in _player:
+		_player.stamina = _player.max_stamina
+		print("[DEBUG] Stamina restored")
+
+func _on_add_skill_points() -> void:
+	if _player and "skill_points" in _player:
+		_player.skill_points += 5
+		print("[DEBUG] Added 5 skill points")
+
 # === SPAWN CALLBACKS ===
 
 func _on_spawn_tank() -> void:
@@ -281,7 +519,7 @@ func _on_spawn_tank() -> void:
 
 func _on_spawn_elite() -> void:
 	if _enemy_spawner and _enemy_spawner.has_method("spawn_enemy"):
-		_enemy_spawner.spawn_enemy("basic", "elite")  # Use pattern="elite" to apply elite modifier
+		_enemy_spawner.spawn_enemy("basic", "elite")
 		print("[DEBUG] Spawned Elite")
 
 func _on_spawn_boss() -> void:
@@ -294,6 +532,26 @@ func _on_spawn_basic_wave() -> void:
 		for i in range(10):
 			_enemy_spawner.spawn_enemy("basic", "ring")
 		print("[DEBUG] Spawned 10 basic enemies")
+
+func _on_kill_all_enemies() -> void:
+	var enemies := get_tree().get_nodes_in_group("enemies")
+	var count := 0
+	for enemy in enemies:
+		if enemy.has_method("die"):
+			enemy.die()
+			count += 1
+		elif enemy.has_method("take_damage"):
+			enemy.take_damage(99999)
+			count += 1
+	print("[DEBUG] Killed %d enemies" % count)
+
+func _on_skip_wave() -> void:
+	if _level and _level.has_method("_advance_wave"):
+		_level._advance_wave()
+		print("[DEBUG] Skipped to next wave")
+	elif _enemy_spawner and "current_wave" in _enemy_spawner:
+		_enemy_spawner.current_wave += 1
+		print("[DEBUG] Advanced wave counter")
 
 # === PROGRESS CALLBACKS ===
 
@@ -311,6 +569,27 @@ func _on_unlock_all_stages() -> void:
 		GameState._save_stage_progress()
 		print("[DEBUG] All stages unlocked!")
 
+func _on_unlock_all_characters() -> void:
+	var CharacterRegistryScript = load("res://scripts/systems/CharacterRegistry.gd")
+	if CharacterRegistryScript and "ALL_CHARACTERS" in CharacterRegistryScript:
+		var all_ids: Array = []
+		for char_data in CharacterRegistryScript.ALL_CHARACTERS:
+			all_ids.append(char_data["id"])
+		
+		var config := ConfigFile.new()
+		if config.load(SaveManagerScript.SHOP_PATH) == OK:
+			config.set_value("characters", "unlocked", all_ids)
+			config.save(SaveManagerScript.SHOP_PATH)
+		print("[DEBUG] All characters unlocked!")
+
+func _on_complete_achievements() -> void:
+	var achievement_manager := get_node_or_null("/root/AchievementManager")
+	if achievement_manager and achievement_manager.has_method("debug_complete_all"):
+		achievement_manager.debug_complete_all()
+		print("[DEBUG] All achievements completed!")
+	else:
+		print("[DEBUG] AchievementManager not available or missing method")
+
 func _on_add_pristine_core() -> void:
 	if GameState and GameState.has_method("add_pristine_cores"):
 		GameState.add_pristine_cores(1)
@@ -321,36 +600,61 @@ func _on_add_pristine_cores_10() -> void:
 		GameState.add_pristine_cores(10)
 		print("[DEBUG] Added 10 Pristine Cores. Total: %d" % GameState.get_pristine_cores())
 
+func _on_add_pristine_cores_100() -> void:
+	if GameState and GameState.has_method("add_pristine_cores"):
+		GameState.add_pristine_cores(100)
+		print("[DEBUG] Added 100 Pristine Cores. Total: %d" % GameState.get_pristine_cores())
+
+# === DATA CALLBACKS ===
+
+func _on_open_save_folder() -> void:
+	var save_path := OS.get_user_data_dir()
+	OS.shell_open(save_path)
+	print("[DEBUG] Opened save folder: %s" % save_path)
+
 func _on_reset_shop() -> void:
-	# Reset cores to 0 and lock all non-default characters
 	if GameState:
 		GameState.set_pristine_cores(0)
 	
 	var config := ConfigFile.new()
 	config.set_value("currency", "pristine_cores", 0)
-	config.set_value("characters", "unlocked", CharacterRegistry.DEFAULT_UNLOCKED.duplicate())
+	var CharacterRegistryScript = load("res://scripts/systems/CharacterRegistry.gd")
+	if CharacterRegistryScript and "DEFAULT_UNLOCKED" in CharacterRegistryScript:
+		config.set_value("characters", "unlocked", CharacterRegistryScript.DEFAULT_UNLOCKED.duplicate())
 	config.set_value("upgrades", "data", {})
 	config.save(SaveManagerScript.SHOP_PATH)
 	
 	print("[DEBUG] Shop data reset!")
 
+func _on_reset_achievements() -> void:
+	var achievement_manager := get_node_or_null("/root/AchievementManager")
+	if achievement_manager:
+		if "_character_progress" in achievement_manager:
+			achievement_manager._character_progress.clear()
+		if "_achievements" in achievement_manager:
+			achievement_manager._achievements.clear()
+		if achievement_manager.has_method("_save"):
+			achievement_manager._save()
+	
+	# Also delete the file
+	if FileAccess.file_exists(SaveManagerScript.ACHIEVEMENTS_PATH):
+		DirAccess.remove_absolute(SaveManagerScript.ACHIEVEMENTS_PATH)
+	
+	print("[DEBUG] Achievements reset!")
+
 func _on_reset_all_data() -> void:
-	# Use SaveManager to get all save paths and delete them
 	var results := SaveManagerScript.delete_all_saves()
 	
-	# Log results
 	for path in results:
 		if results[path]:
 			print("[DEBUG] Deleted: %s" % path)
 		else:
 			print("[DEBUG] Failed to delete: %s" % path)
 	
-	# Reset in-memory state
 	if GameState:
 		GameState.set_pristine_cores(0)
 		GameState.stages_cleared.clear()
 	
-	# Reset achievement progress in memory
 	var achievement_manager := get_node_or_null("/root/AchievementManager")
 	if achievement_manager:
 		if "_character_progress" in achievement_manager:

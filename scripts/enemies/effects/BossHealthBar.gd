@@ -7,11 +7,14 @@ var _container: Control = null
 var _bar_background: ColorRect = null
 var _bar_fill: Control = null
 var _name_label: Label = null
+var _timer_label: Label = null  # Enrage timer display
 var _boss: Node2D = null
 var _target_fill: float = 1.0
 var _current_fill: float = 1.0
 var _shake_offset: Vector2 = Vector2.ZERO
 var _shake_timer: float = 0.0
+var _is_goddess_fall: bool = false
+var _flash_time: float = 0.0  # For timer flashing effect
 
 const BAR_WIDTH := 600.0
 const BAR_HEIGHT := 24.0
@@ -67,6 +70,21 @@ func _setup_ui() -> void:
 	_bar_fill.size = Vector2(BAR_WIDTH, BAR_HEIGHT)
 	_bar_fill.draw.connect(_draw_bar)
 	_container.add_child(_bar_fill)
+	
+	# Enrage timer label (Goddess Fall mode only)
+	_timer_label = Label.new()
+	_timer_label.name = "EnrageTimer"
+	_timer_label.text = ""
+	_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_timer_label.add_theme_font_size_override("font_size", 22)
+	_timer_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3))
+	_timer_label.add_theme_color_override("font_shadow_color", Color(0.3, 0.1, 0.0, 0.9))
+	_timer_label.add_theme_constant_override("shadow_offset_x", 2)
+	_timer_label.add_theme_constant_override("shadow_offset_y", 2)
+	_timer_label.position = Vector2(0, 52)
+	_timer_label.size = Vector2(BAR_WIDTH, 28)
+	_timer_label.visible = false
+	_container.add_child(_timer_label)
 
 func _draw_bar() -> void:
 	if not _bar_fill:
@@ -114,6 +132,10 @@ func show_boss(boss: Node2D, boss_name: String = "BOSS") -> void:
 	_target_fill = 1.0
 	visible = true
 	
+	# Check if Goddess Fall mode - show enrage timer
+	_is_goddess_fall = GameState and GameState.goddess_fall_mode
+	_timer_label.visible = _is_goddess_fall
+	
 	# Entrance animation - slide down from above
 	_container.modulate.a = 0.0
 	_container.position.y = 85
@@ -142,12 +164,18 @@ func _process(delta: float) -> void:
 	if not visible:
 		return
 	
+	_flash_time += delta
+	
 	# Check if boss is still alive
 	if _boss and is_instance_valid(_boss):
 		if "hp" in _boss and "max_hp" in _boss:
 			update_health(_boss.hp, _boss.max_hp)
 			if _boss.hp <= 0:
 				call_deferred("hide_boss")
+		
+		# Update enrage timer display in Goddess Fall mode
+		if _is_goddess_fall and _timer_label.visible:
+			_update_enrage_timer_display()
 	elif _boss:
 		# Boss died
 		call_deferred("hide_boss")
@@ -164,3 +192,41 @@ func _process(delta: float) -> void:
 	
 	if _bar_fill:
 		_bar_fill.queue_redraw()
+
+func _update_enrage_timer_display() -> void:
+	if not _boss or not is_instance_valid(_boss):
+		return
+	
+	# Get remaining time from boss's enrage timer
+	var enrage_timer: Timer = _boss.get_node_or_null("EnrageTimer")
+	if not enrage_timer:
+		_timer_label.visible = false
+		return
+	
+	var time_remaining: float = enrage_timer.time_left
+	var seconds := int(time_remaining)
+	var tenths := int((time_remaining - seconds) * 10)
+	
+	# Format timer text
+	_timer_label.text = "⚠ %d.%d ⚠" % [seconds, tenths]
+	
+	# Determine color and flashing based on time remaining
+	if time_remaining <= 3.0:
+		# Solid intense red for last 3 seconds
+		_timer_label.add_theme_color_override("font_color", Color(1.0, 0.1, 0.1, 1.0))
+		_timer_label.add_theme_font_size_override("font_size", 26)  # Larger
+	elif time_remaining <= 10.0:
+		# Flashing red - speed increases as time decreases
+		# Flash frequency: starts at 1Hz at 10s, increases to 5Hz at 3s
+		var urgency := 1.0 - (time_remaining - 3.0) / 7.0  # 0 at 10s, 1 at 3s
+		var flash_speed := 2.0 + urgency * 8.0  # 2Hz to 10Hz
+		var flash := sin(_flash_time * flash_speed * PI) * 0.5 + 0.5
+		
+		# Lerp between yellow and red based on flash
+		var color := Color(1.0, 0.9 - flash * 0.8, 0.3 - flash * 0.3, 1.0)
+		_timer_label.add_theme_color_override("font_color", color)
+		_timer_label.add_theme_font_size_override("font_size", 22 + int(flash * 4))
+	else:
+		# Normal yellow color
+		_timer_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3, 1.0))
+		_timer_label.add_theme_font_size_override("font_size", 22)

@@ -35,7 +35,7 @@ var _killer_source: String = "player"
 
 # Laser shooting parameters
 const LASER_RANGE := 500.0           # Distance at which enemy can shoot
-const LASER_FIRE_INTERVAL := 3.0     # Seconds between shots
+const LASER_FIRE_INTERVAL := 3.0     # Seconds between shots (base)
 const LASER_SPEED := 500.0           # Laser projectile speed
 const LASER_DAMAGE := 1              # Damage per laser hit
 const LASER_CHARGE_TIME := 1.0       # Seconds to charge before firing
@@ -43,6 +43,18 @@ var _laser_cooldown := 0.0
 var _can_shoot := true               # Toggle for enabling/disabling shooting
 var _is_charging := false
 var _charge_timer := 0.0
+
+# Get laser fire interval (30% faster in Goddess Fall mode)
+func _get_laser_fire_interval() -> float:
+	if GameState and GameState.goddess_fall_mode:
+		return LASER_FIRE_INTERVAL * 0.7  # 30% faster
+	return LASER_FIRE_INTERVAL
+
+# Get laser charge time (30% faster in Goddess Fall mode)
+func _get_laser_charge_time() -> float:
+	if GameState and GameState.goddess_fall_mode:
+		return LASER_CHARGE_TIME * 0.7  # 30% faster
+	return LASER_CHARGE_TIME
 var _charge_direction := Vector2.ZERO
 var _charge_effect: Node2D = null
 
@@ -78,7 +90,7 @@ func _ready():
 	_apply_glow_shader()
 	
 	# Randomize initial cooldown so enemies don't all fire at once
-	_laser_cooldown = randf_range(0.0, LASER_FIRE_INTERVAL)
+	_laser_cooldown = randf_range(0.0, _get_laser_fire_interval())
 
 func _create_shadow() -> void:
 	var shadow := Sprite2D.new()
@@ -107,10 +119,11 @@ func _setup_hp_label() -> void:
 	# Create a Node2D overlay that draws text on top of the HP bar
 	_hp_overlay = Node2D.new()
 	_hp_overlay.z_index = 10
-	# Position at the center of the HP bar (bar is at -69 to -59, so center is -64)
-	_hp_overlay.position = Vector2(0, -64)
-	add_child(_hp_overlay)
+	# Position at the center of the HP bar (bar is at -47 to -37, so center is -42)
+	_hp_overlay.position = Vector2(0, -42)
+	# Set script BEFORE adding to tree so _ready() is called properly
 	_hp_overlay.set_script(preload("res://scripts/enemies/EnemyHPLabel.gd"))
+	add_child(_hp_overlay)
 	_hp_overlay.setup(self)
 
 func _update_hp_label() -> void:
@@ -172,10 +185,10 @@ func _physics_process(delta: float) -> void:
 		# Update charge effect position and direction
 		_update_charge_effect()
 		# Fire when charge is complete
-		if _charge_timer >= LASER_CHARGE_TIME:
+		if _charge_timer >= _get_laser_charge_time():
 			_fire_laser(_charge_direction)
 			_end_charging()
-			_laser_cooldown = LASER_FIRE_INTERVAL
+			_laser_cooldown = _get_laser_fire_interval()
 		# Don't move while charging
 		velocity = Vector2.ZERO
 	else:
@@ -276,13 +289,13 @@ func _start_charging(direction: Vector2) -> void:
 	_charge_effect.set_script(preload("res://scripts/enemies/EnemyChargeEffect.gd"))
 	add_child(_charge_effect)
 	_charge_effect.position = _charge_direction * 25.0
-	_charge_effect.start_charge(LASER_CHARGE_TIME)
+	_charge_effect.start_charge(_get_laser_charge_time())
 
 func _update_charge_effect() -> void:
 	if _charge_effect and is_instance_valid(_charge_effect):
 		_charge_effect.position = _charge_direction * 25.0
 		if _charge_effect.has_method("set_progress"):
-			_charge_effect.set_progress(_charge_timer / LASER_CHARGE_TIME)
+			_charge_effect.set_progress(_charge_timer / _get_laser_charge_time())
 
 func _end_charging() -> void:
 	_is_charging = false
@@ -480,11 +493,14 @@ func die():
 	if GameState:
 		GameState.add_score(score_value)
 	
-	# Drop pristine cores if boss/super_boss
-	if has_meta("pristine_core_drop") and GameState:
-		var cores_to_drop: int = get_meta("pristine_core_drop")
-		GameState.add_pristine_cores(cores_to_drop)
-		print("[Enemy] Dropped ", cores_to_drop, " Pristine Rapture Core(s)!")
+	# Drop pristine cores if boss/super_boss - spawn visual orb
+	# Don't drop if dying from enrage timer (player loses)
+	if has_meta("pristine_core_drop"):
+		var killed_by_enrage: bool = GameState != null and GameState.has_meta("killed_by_enrage") and GameState.get_meta("killed_by_enrage") == true
+		if not killed_by_enrage:
+			var cores_to_drop: int = get_meta("pristine_core_drop")
+			_spawn_pristine_core_orb(cores_to_drop)
+			print("[Enemy] Spawned Pristine Core orb worth ", cores_to_drop, " core(s)!")
 	
 	# Register kill with combat juice for momentum
 	CombatJuice.register_kill(overkill_multiplier)
@@ -513,6 +529,15 @@ func die():
 		get_parent().add_child(orb)
 		orb.global_position = global_position + Vector2(randf_range(-20, 20), randf_range(-20, 20))
 	call_deferred("queue_free")
+
+func _spawn_pristine_core_orb(cores_value: int) -> void:
+	# Spawn a visual orb that flies to the core counter
+	var orb_script := preload("res://scripts/world/PristineCoreOrb.gd")
+	var orb := Area2D.new()
+	orb.set_script(orb_script)
+	orb.cores_value = cores_value
+	orb.global_position = global_position
+	get_parent().add_child(orb)
 
 # --- Charm system ---
 func set_charmed(charm_owner: Node, charmed: bool = true) -> void:

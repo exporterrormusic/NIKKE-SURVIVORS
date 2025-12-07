@@ -390,6 +390,10 @@ func _update_scaling_labels(difficulty: int) -> void:
 	_elite_core_label.visible = false
 
 func _on_goddess_fall_toggled(pressed: bool) -> void:
+	if pressed:
+		UISounds.play_select()
+	else:
+		UISounds.play_back()
 	GameState.goddess_fall_mode = pressed
 	_update_scaling_labels(GameState.difficulty_multiplier)
 
@@ -577,7 +581,7 @@ func _create_goddess_fall_card() -> Button:
 	text_vbox.add_child(title)
 	
 	var desc := Label.new()
-	desc.text = "Tanks fire missiles, elites get lasers & drop cores, bosses enrage!"
+	desc.text = "Enemies 30% faster. Elites drop cores (20%). Tanks fire missiles. Bosses enrage!"
 	desc.add_theme_font_size_override("font_size", 26)
 	desc.add_theme_color_override("font_color", UITheme.TEXT_MUTED)
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

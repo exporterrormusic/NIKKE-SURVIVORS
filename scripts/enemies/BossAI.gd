@@ -75,6 +75,16 @@ func _ready() -> void:
 	# Start with half cooldown
 	_missile_timer = _missile_cooldown / 2.0
 	
+	# Goddess Fall: 30% faster attack rates
+	if GameState.goddess_fall_mode:
+		_missile_cooldown *= 0.7
+	
+	# Goddess Fall: 30% faster charge times (beam)
+	var _beam_charge_time := BEAM_CHARGE_TIME
+	if GameState.goddess_fall_mode:
+		_beam_charge_time = BEAM_CHARGE_TIME * 0.7
+	set_meta("beam_charge_time", _beam_charge_time)
+	
 	# Find player
 	_player = get_tree().get_first_node_in_group("player")
 	
@@ -174,10 +184,13 @@ func _fire_beam() -> void:
 	# Check if this is a true boss (not an elite)
 	var is_true_boss: bool = _boss.has_meta("enemy_tier") and _boss.get_meta("enemy_tier") == "boss"
 	
+	# Get charge time (reduced by 30% in Goddess Fall)
+	var charge_time: float = get_meta("beam_charge_time") if has_meta("beam_charge_time") else BEAM_CHARGE_TIME
+	
 	# Initialize beam with boss reference and timing
 	if _current_beam.has_method("initialize"):
 		var damage: int = _boss.base_damage if "base_damage" in _boss else 1
-		_current_beam.initialize(_boss, _player, BEAM_CHARGE_TIME, BEAM_FIRE_TIME, BEAM_FADE_TIME, is_true_boss, damage)
+		_current_beam.initialize(_boss, _player, charge_time, BEAM_FIRE_TIME, BEAM_FADE_TIME, is_true_boss, damage)
 	
 	# Connect beam finished signal
 	if _current_beam.has_signal("beam_finished"):

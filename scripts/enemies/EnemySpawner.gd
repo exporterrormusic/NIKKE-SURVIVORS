@@ -197,6 +197,9 @@ func _apply_basic_stats(enemy: Node2D) -> void:
 	enemy.hp = enemy.max_hp
 	# Apply Goddess Fall ATK multiplier
 	enemy.base_damage = int(enemy.base_damage * _get_atk_multiplier())
+	# Goddess Fall: 30% speed boost
+	if GameState.goddess_fall_mode:
+		enemy.speed = int(enemy.speed * 1.3)
 	# Enable shooting
 	if enemy.has_method("set_can_shoot"):
 		enemy.set_can_shoot(true)
@@ -207,7 +210,11 @@ func _apply_tank_stats(enemy: Node2D) -> void:
 	enemy.scale = Vector2.ONE * TANK_SCALE
 	enemy.max_hp = int(enemy.max_hp * TANK_HP_MULT * _health_multiplier * difficulty_mult)
 	enemy.hp = enemy.max_hp
-	enemy.speed = int(enemy.speed * TANK_SPEED_MULT)
+	# Goddess Fall: 30% speed boost on top of tank speed
+	var speed_mult := TANK_SPEED_MULT
+	if GameState.goddess_fall_mode:
+		speed_mult *= 1.3
+	enemy.speed = int(enemy.speed * speed_mult)
 	enemy.base_damage = int(TANK_DAMAGE_MULT * atk_mult)
 	# Tanks can shoot missiles AND melee
 	if enemy.has_method("set_can_shoot"):
@@ -305,6 +312,9 @@ func _apply_boss_stats(enemy: Node2D) -> void:
 	enemy.max_hp = int(enemy.max_hp * BOSS_HP_MULT * _health_multiplier * difficulty_mult)
 	enemy.hp = enemy.max_hp
 	enemy.speed = int(enemy.speed * BOSS_SPEED_MULT)
+	# Goddess Fall: 30% speed boost on top of boss speed
+	if GameState.goddess_fall_mode:
+		enemy.speed = int(enemy.speed * 1.3)
 	enemy.base_damage = int(BOSS_DAMAGE_MULT * atk_mult)
 	print("[EnemySpawner] Boss HP set to: ", enemy.max_hp, " speed=", enemy.speed, " scale=", enemy.scale)
 	enemy.add_to_group("boss")
@@ -345,6 +355,9 @@ func _apply_super_boss_stats(enemy: Node2D) -> void:
 	enemy.max_hp = int(enemy.max_hp * SUPER_BOSS_HP_MULT * _health_multiplier * difficulty_mult)
 	enemy.hp = enemy.max_hp
 	enemy.speed = int(enemy.speed * SUPER_BOSS_SPEED_MULT)
+	# Goddess Fall: 30% speed boost on top of super boss speed
+	if GameState.goddess_fall_mode:
+		enemy.speed = int(enemy.speed * 1.3)
 	enemy.base_damage = int(SUPER_BOSS_DAMAGE_MULT * atk_mult)
 	print("[EnemySpawner] Super Boss HP set to: ", enemy.max_hp, " speed=", enemy.speed, " scale=", enemy.scale)
 	enemy.add_to_group("boss")
@@ -392,6 +405,9 @@ func _apply_elite_modifier(enemy: Node2D) -> void:
 	# In Goddess Fall mode, elites have 1/5 chance to drop cores
 	if GameState.goddess_fall_mode and randf() < 0.2:
 		enemy.set_meta("pristine_core_drop", difficulty_mult)
+	# Goddess Fall: 30% speed boost on top of elite speed
+	if GameState.goddess_fall_mode:
+		enemy.speed = int(enemy.speed * 1.3)
 	# Gold outline glow (respects sprite alpha) with enhanced core
 	_apply_outline_glow(enemy, ELITE_GLOW_COLOR, true)
 	
@@ -546,17 +562,119 @@ func _on_boss_enrage_timeout(boss: Node2D) -> void:
 	if not is_instance_valid(boss):
 		return
 	
-	print("[EnemySpawner] BOSS ENRAGED! Exploding and killing player!")
+	var is_super_boss := boss.is_in_group("super_boss")
+	print("[EnemySpawner] BOSS ENRAGED! Creating massive explosion!")
 	
-	# Find and kill the player
-	if _player and _player.has_method("take_damage"):
-		# Deal massive damage to ensure death
-		_player.take_damage(9999)
+	# Mark that player is being killed by enrage (no core drop)
+	if GameState:
+		GameState.set_meta("killed_by_enrage", true)
 	
-	# Create explosion effect at boss position
-	# The boss dies in the explosion too
+	# Create screen-wide explosion effect
+	_create_enrage_explosion(boss.global_position, is_super_boss)
+	
+	# Deal damage to player
+	if _player:
+		if is_super_boss:
+			# Super boss: 100% max HP, ignores everything - guaranteed kill
+			print("[EnemySpawner] Super boss enrage - guaranteed kill!")
+			if _player.has_method("die"):
+				_player.die()
+			elif _player.has_method("take_damage"):
+				# Force death by setting HP to 0 directly
+				if "current_hp" in _player:
+					_player.current_hp = 0
+				_player.take_damage(99999)
+		else:
+			# Regular boss: 90% of max HP
+			var damage: int = int(_player.max_hp * 0.9)
+			print("[EnemySpawner] Boss enrage - dealing %d damage (90%% of %d max HP)" % [damage, _player.max_hp])
+			if _player.has_method("take_damage"):
+				_player.take_damage(damage)
+	
+	# Kill the boss in the explosion
 	if boss.has_method("take_damage"):
 		boss.take_damage(boss.max_hp * 10)
+
+func _create_enrage_explosion(center: Vector2, is_super_boss: bool) -> void:
+	# Create a massive screen-wide explosion effect
+	var explosion := Node2D.new()
+	explosion.name = "EnrageExplosion"
+	explosion.global_position = center
+	explosion.z_index = 100
+	
+	# Add to level so it persists
+	var level := get_tree().current_scene
+	if level:
+		level.add_child(explosion)
+	else:
+		add_child(explosion)
+	
+	# Create the visual effect
+	var effect_script := GDScript.new()
+	effect_script.source_code = _get_enrage_explosion_script(is_super_boss)
+	effect_script.reload()
+	explosion.set_script(effect_script)
+
+func _get_enrage_explosion_script(is_super_boss: bool) -> String:
+	var color_str := "Color(1.0, 0.1, 0.0)" if not is_super_boss else "Color(0.8, 0.0, 0.2)"
+	var core_color := "Color(1.0, 0.5, 0.2)" if not is_super_boss else "Color(1.0, 0.2, 0.4)"
+	return '''
+extends Node2D
+
+var _time := 0.0
+var _max_radius := 2000.0
+var _duration := 1.5
+var _flash_alpha := 1.0
+
+func _ready() -> void:
+	# Screen flash
+	var flash := ColorRect.new()
+	flash.name = "Flash"
+	flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	flash.color = ''' + color_str + '''
+	flash.color.a = 0.8
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	
+	var canvas := CanvasLayer.new()
+	canvas.layer = 100
+	add_child(canvas)
+	canvas.add_child(flash)
+	
+	# Camera shake
+	var camera := get_viewport().get_camera_2d()
+	if camera and camera.has_method("add_trauma"):
+		camera.add_trauma(1.0)
+
+func _process(delta: float) -> void:
+	_time += delta
+	queue_redraw()
+	
+	# Fade out flash
+	var flash_node := get_node_or_null("CanvasLayer/Flash")
+	if flash_node:
+		var fade_t := clampf(_time / _duration, 0.0, 1.0)
+		flash_node.color.a = 0.8 * (1.0 - fade_t)
+	
+	if _time >= _duration:
+		queue_free()
+
+func _draw() -> void:
+	var t := clampf(_time / _duration, 0.0, 1.0)
+	var radius := _max_radius * ease(t, 0.3)
+	var alpha := 1.0 - t
+	
+	# Expanding ring
+	var ring_color := ''' + color_str + '''
+	ring_color.a = alpha * 0.8
+	draw_arc(Vector2.ZERO, radius, 0, TAU, 64, ring_color, 30.0 * (1.0 - t) + 5.0)
+	
+	# Inner glow
+	var core_color := ''' + core_color + '''
+	core_color.a = alpha * 0.6
+	for i in range(5):
+		var r := radius * (0.2 + i * 0.15) * (1.0 - t * 0.5)
+		draw_arc(Vector2.ZERO, r, 0, TAU, 48, core_color, 20.0 * (1.0 - t))
+'''
 
 ## Setup super boss empowerment aura - buffs nearby enemies
 func _setup_super_boss_aura(boss: Node2D) -> void:

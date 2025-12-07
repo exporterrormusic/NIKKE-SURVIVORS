@@ -438,48 +438,17 @@ func _setup_core_counter() -> void:
 	var counter := Control.new()
 	counter.name = "CoreCounter"
 	counter.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	counter.offset_left = -180
-	counter.offset_top = -70
+	counter.offset_left = -220
+	counter.offset_top = -85
 	counter.offset_right = -20
 	counter.offset_bottom = -20
 	_core_counter.add_child(counter)
 	
-	# Background panel
-	var panel := Panel.new()
-	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.05, 0.05, 0.08, 0.85)
-	style.border_color = Color(0.8, 0.25, 0.2, 0.9)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(8)
-	panel.add_theme_stylebox_override("panel", style)
-	counter.add_child(panel)
-	
-	# HBox for icon + label - use CenterContainer for proper vertical centering
-	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	counter.add_child(center)
-	
-	var hbox := HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 10)
-	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	center.add_child(hbox)
-	
-	# Pristine Core icon
-	var icon := _PristineCoreIcon.new()
-	icon.custom_minimum_size = Vector2(36, 36)
-	hbox.add_child(icon)
-	
-	# Core count label
-	var label := Label.new()
-	label.name = "CoreLabel"
-	label.text = str(GameState.get_pristine_cores())
-	label.add_theme_font_size_override("font_size", 32)
-	label.add_theme_color_override("font_color", Color(1.0, 0.35, 0.3, 1.0))
-	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
-	label.add_theme_constant_override("shadow_offset_x", 2)
-	label.add_theme_constant_override("shadow_offset_y", 2)
-	hbox.add_child(label)
+	# Use the styled container like the shop
+	var styled_container: Control = _PristineCoreContainer.new()
+	styled_container.name = "StyledContainer"
+	styled_container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	counter.add_child(styled_container)
 	
 	print("[Level] Core counter initialized")
 
@@ -489,15 +458,10 @@ func _update_core_counter() -> void:
 	var counter := _core_counter.get_node_or_null("CoreCounter")
 	if not counter:
 		return
-	var label := counter.get_node_or_null("HBoxContainer/CoreLabel") as Label
-	if not label:
-		# Try alternative path (hbox might be added directly)
-		for child in counter.get_children():
-			if child is HBoxContainer:
-				label = child.get_node_or_null("CoreLabel") as Label
-				break
-	if label and GameState:
-		label.text = str(GameState.get_pristine_cores())
+	# Find the styled container and update its label
+	var styled := counter.get_node_or_null("StyledContainer")
+	if styled and styled.has_method("update_count"):
+		styled.update_count(GameState.get_pristine_cores())
 
 # Inner class for drawing the Pristine Core icon
 class _PristineCoreIcon extends Control:
@@ -578,8 +542,32 @@ func _on_boss_incoming(_boss_type: String, time_until: float) -> void:
 		_wave_ui.show_boss_warning(time_until)
 
 func _on_boss_died(is_super_boss: bool = false) -> void:
+	# Don't award core if boss died from enrage (player loses)
+	if GameState and GameState.has_meta("killed_by_enrage") and GameState.get_meta("killed_by_enrage"):
+		print("[Level] Boss died from enrage - no core awarded")
+	else:
+		# Award Pristine Rapture Core for killing a boss - spawn visual orb
+		_spawn_pristine_core_orb_at_boss()
+	
 	if _wave_director:
 		_wave_director.notify_boss_defeated(is_super_boss)
+
+func _spawn_pristine_core_orb_at_boss() -> void:
+	# Spawn a core orb at the center of the screen (boss death location approximation)
+	# Since the boss is already freed, we spawn at center viewport
+	var camera := get_viewport().get_camera_2d()
+	if not camera:
+		return
+	
+	var spawn_pos := camera.global_position
+	
+	var orb_script := preload("res://scripts/world/PristineCoreOrb.gd")
+	var orb := Area2D.new()
+	orb.set_script(orb_script)
+	orb.cores_value = 1
+	orb.global_position = spawn_pos
+	_enemy_container.add_child(orb)
+	print("[Level] Spawned Pristine Core orb for boss kill")
 
 func _on_run_complete(survived: bool, final_time: float) -> void:
 	@warning_ignore("integer_division")
@@ -590,9 +578,7 @@ func _on_run_complete(survived: bool, final_time: float) -> void:
 		# Mark stage as cleared
 		if GameState:
 			GameState.mark_stage_cleared(GameState.current_stage_id)
-			# Award Pristine Rapture Core for defeating the boss
-			GameState.add_pristine_cores(1)
-			_update_core_counter()
+			# Core is awarded via orb when boss dies, no need to add here
 			
 			# Track win achievement for all characters in squad
 			_track_win_achievement()
@@ -720,3 +706,115 @@ func _track_win_achievement() -> void:
 	if char_ids.size() > 0:
 		print("[Level] Tracking win for squad: %s" % str(char_ids))
 		achievement_manager.on_game_won(char_ids)
+
+
+# Styled container for Pristine Rapture Cores (matching shop style)
+class _PristineCoreContainer extends Control:
+	const UI := preload("res://scripts/ui/UITheme.gd")
+	const CONTAINER_WIDTH := 200.0
+	const CONTAINER_HEIGHT := 65.0
+	const BORDER_THICKNESS := 2.0
+	const CORNER_CUT := 8.0
+	
+	var _count_label: Label = null
+	var _glow_time: float = 0.0
+	var _flash_time: float = 0.0  # Time remaining for collection flash
+	
+	func _init() -> void:
+		custom_minimum_size = Vector2(CONTAINER_WIDTH, CONTAINER_HEIGHT)
+	
+	func _ready() -> void:
+		_build_container()
+	
+	func _process(delta: float) -> void:
+		_glow_time += delta
+		if _flash_time > 0:
+			_flash_time -= delta
+		queue_redraw()
+	
+	func update_count(value: int) -> void:
+		if _count_label:
+			_count_label.text = str(value)
+	
+	func flash_collected() -> void:
+		_flash_time = 0.5  # Flash for 0.5 seconds
+	
+	func _build_container() -> void:
+		# Main content HBox
+		var content := HBoxContainer.new()
+		content.set_anchors_preset(Control.PRESET_FULL_RECT)
+		content.offset_left = 12
+		content.offset_right = -12
+		content.offset_top = 16
+		content.offset_bottom = -6
+		content.add_theme_constant_override("separation", 8)
+		content.alignment = BoxContainer.ALIGNMENT_CENTER
+		add_child(content)
+		
+		# Core icon
+		var icon := _PristineCoreIcon.new()
+		icon.custom_minimum_size = Vector2(32, 32)
+		content.add_child(icon)
+		
+		# Count label
+		_count_label = Label.new()
+		_count_label.text = str(GameState.get_pristine_cores()) if GameState else "0"
+		_count_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_count_label.add_theme_font_size_override("font_size", 28)
+		_count_label.add_theme_color_override("font_color", Color(1.0, 0.35, 0.3, 1.0))
+		_count_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+		_count_label.add_theme_constant_override("shadow_offset_x", 2)
+		_count_label.add_theme_constant_override("shadow_offset_y", 2)
+		content.add_child(_count_label)
+	
+	func _draw() -> void:
+		var w := size.x
+		var h := size.y
+		
+		# Calculate flash intensity
+		var flash_intensity: float = 0.0
+		if _flash_time > 0:
+			flash_intensity = _flash_time / 0.5  # 0 to 1 based on remaining time
+		
+		# Pulsing glow effect (enhanced during flash)
+		var base_pulse: float = 0.4 + 0.15 * sin(_glow_time * 2.5)
+		var glow_pulse: float = base_pulse + flash_intensity * 0.6
+		
+		# Draw outer glow (larger and more intense during flash)
+		var glow_layers := 4 + int(flash_intensity * 4)
+		for i in range(glow_layers, 0, -1):
+			var glow_alpha: float = glow_pulse * 0.08 * (1.0 - float(i) / float(glow_layers))
+			glow_alpha += flash_intensity * 0.15
+			var offset: float = float(i) * (2.0 + flash_intensity * 2.0)
+			var glow_rect := Rect2(-offset, -offset, w + offset * 2, h + offset * 2)
+			draw_rect(glow_rect, Color(1.0, 0.2 + flash_intensity * 0.3, 0.2, glow_alpha))
+		
+		# Draw background with cut corners (brighter during flash)
+		var bg_brightness := 0.05 + flash_intensity * 0.15
+		var bg_points := PackedVector2Array([
+			Vector2(CORNER_CUT, 0),
+			Vector2(w - CORNER_CUT, 0),
+			Vector2(w, CORNER_CUT),
+			Vector2(w, h - CORNER_CUT),
+			Vector2(w - CORNER_CUT, h),
+			Vector2(CORNER_CUT, h),
+			Vector2(0, h - CORNER_CUT),
+			Vector2(0, CORNER_CUT)
+		])
+		draw_colored_polygon(bg_points, Color(bg_brightness, bg_brightness * 0.8, bg_brightness * 0.8, 0.9))
+		
+		# Draw border (brighter during flash)
+		var border_brightness := 0.8 + flash_intensity * 0.2
+		for i in range(bg_points.size()):
+			var p1: Vector2 = bg_points[i]
+			var p2: Vector2 = bg_points[(i + 1) % bg_points.size()]
+			draw_line(p1, p2, Color(border_brightness, 0.25 + flash_intensity * 0.5, 0.2, 0.9), BORDER_THICKNESS + flash_intensity * 2.0, true)
+		
+		# Draw "PRISTINE RAPTURE CORES" title at top
+		var title_text := "PRISTINE RAPTURE CORES"
+		var title_size := 9
+		var font := ThemeDB.fallback_font
+		var title_width: float = font.get_string_size(title_text, HORIZONTAL_ALIGNMENT_LEFT, -1, title_size).x
+		var title_x: float = (w - title_width) / 2.0
+		draw_string(font, Vector2(title_x, 11), title_text, HORIZONTAL_ALIGNMENT_LEFT, -1, title_size, Color(0.7, 0.7, 0.7, 0.9))

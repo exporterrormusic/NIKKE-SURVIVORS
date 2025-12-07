@@ -103,8 +103,8 @@ func _on_button_pressed(option_id: String) -> void:
 			print("[MainMenu] Emitting settings_selected")
 			settings_selected.emit()
 		"QUIT":
-			print("[MainMenu] Emitting quit_selected")
-			quit_selected.emit()
+			print("[MainMenu] Showing quit confirmation")
+			_show_quit_confirmation()
 		"LEADERBOARDS":
 			print("[MainMenu] Emitting leaderboards_selected")
 			leaderboards_selected.emit()

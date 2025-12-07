@@ -18,10 +18,14 @@ const INDICATOR_RADIUS := 80.0   # Visual radius of ground indicator
 const SPREAD_ARC := PI * 1.2     # Total arc width for spreading missiles (about 216 degrees)
 
 # Launch phase settings (submarine-style launch)
-const LAUNCH_PHASE_DURATION := 0.4   # Time spent in initial launch phase
-const LAUNCH_SPEED := 350.0          # Speed during launch phase
-const LAUNCH_ARC_HEIGHT := 80.0      # How high the arc goes
-const TURN_PHASE_DURATION := 0.35    # Time spent turning toward target
+const BASE_LAUNCH_PHASE_DURATION := 0.4   # Time spent in initial launch phase
+const LAUNCH_SPEED := 350.0               # Speed during launch phase
+const LAUNCH_ARC_HEIGHT := 80.0           # How high the arc goes
+const BASE_TURN_PHASE_DURATION := 0.35    # Time spent turning toward target
+
+# Actual phase durations (reduced by 30% in Goddess Fall)
+var _launch_phase_duration := BASE_LAUNCH_PHASE_DURATION
+var _turn_phase_duration := BASE_TURN_PHASE_DURATION
 
 # Launch phase state
 enum MissilePhase { LAUNCH, TURN, CRUISE }
@@ -90,6 +94,11 @@ func initialize(player: Node2D, delay: float = 0.0, spread_index: int = 0, total
 	_player = player
 	_launch_delay = delay
 	damage = scaled_damage
+	
+	# Goddess Fall: 30% faster charge/launch times
+	if GameState and GameState.goddess_fall_mode:
+		_launch_phase_duration = BASE_LAUNCH_PHASE_DURATION * 0.7
+		_turn_phase_duration = BASE_TURN_PHASE_DURATION * 0.7
 	
 	# Store boss position for launch animation
 	_boss_position = global_position
@@ -217,7 +226,7 @@ func _process(delta: float) -> void:
 	match _phase:
 		MissilePhase.LAUNCH:
 			# Shoot out away from boss with slight arc
-			var launch_progress := _phase_timer / LAUNCH_PHASE_DURATION
+			var launch_progress: float = _phase_timer / _launch_phase_duration
 			_current_speed = LAUNCH_SPEED * (1.0 + launch_progress * 0.5)  # Accelerate slightly
 			
 			# Add slight upward arc (perpendicular to launch direction)
@@ -227,13 +236,13 @@ func _process(delta: float) -> void:
 			_velocity = _launch_direction * _current_speed
 			step = _velocity * delta + perp * arc_offset
 			
-			if _phase_timer >= LAUNCH_PHASE_DURATION:
+			if _phase_timer >= _launch_phase_duration:
 				_phase = MissilePhase.TURN
 				_phase_timer = 0.0
 		
 		MissilePhase.TURN:
 			# Smoothly turn from launch direction toward target
-			var turn_progress := _phase_timer / TURN_PHASE_DURATION
+			var turn_progress: float = _phase_timer / _turn_phase_duration
 			turn_progress = _ease_out_cubic(turn_progress)  # Smooth easing
 			
 			# Recalculate target direction (in case player moved slightly)
@@ -243,14 +252,14 @@ func _process(delta: float) -> void:
 			var current_angle := _launch_direction.angle()
 			var target_angle := target_dir.angle()
 			var angle_diff := wrapf(target_angle - current_angle, -PI, PI)
-			var interpolated_angle := current_angle + angle_diff * turn_progress
+			var interpolated_angle: float = current_angle + angle_diff * turn_progress
 			
 			var move_dir := Vector2.from_angle(interpolated_angle)
 			_current_speed = lerpf(LAUNCH_SPEED, INITIAL_SPEED * 2.0, turn_progress)
 			_velocity = move_dir * _current_speed
 			step = _velocity * delta
 			
-			if _phase_timer >= TURN_PHASE_DURATION:
+			if _phase_timer >= _turn_phase_duration:
 				_phase = MissilePhase.CRUISE
 				_current_speed = INITIAL_SPEED
 		

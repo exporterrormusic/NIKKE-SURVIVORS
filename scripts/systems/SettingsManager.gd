@@ -149,10 +149,12 @@ func apply_video_settings() -> void:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 		DisplayServer.window_set_size(resolution)
 		
-		# Center the window on screen
-		var screen_size := DisplayServer.screen_get_size()
+		# Center the window on the primary monitor
+		var primary_screen := DisplayServer.get_primary_screen()
+		var screen_pos := DisplayServer.screen_get_position(primary_screen)
+		var screen_size := DisplayServer.screen_get_size(primary_screen)
 		var window_size := DisplayServer.window_get_size()
-		var centered_pos := (screen_size - window_size) / 2
+		var centered_pos := screen_pos + (screen_size - window_size) / 2
 		DisplayServer.window_set_position(centered_pos)
 	
 	# Ensure content scales properly - update viewport stretch settings via code

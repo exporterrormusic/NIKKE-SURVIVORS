@@ -28,6 +28,11 @@ var _is_charmed := false
 var _charm_owner: Node = null
 var _charm_target: Node = null  # Current enemy target when charmed
 
+# Track who killed this enemy for burst/shield charging
+# Valid sources that charge burst: "player", "projectile", "cecil_drone"
+# Invalid sources: "charmed_enemy", "summon", "unknown"
+var _killer_source: String = "player"
+
 # Laser shooting parameters
 const LASER_RANGE := 500.0           # Distance at which enemy can shoot
 const LASER_FIRE_INTERVAL := 3.0     # Seconds between shots
@@ -43,6 +48,10 @@ var _charge_effect: Node2D = null
 
 # Preload laser scene
 const EnemyLaserScene = preload("res://scenes/projectiles/EnemyLaser.tscn")
+
+# Preload effect scripts (cached at class level for performance)
+const HitSparkScript = preload("res://scripts/effects/HitSpark.gd")
+const FloatingNumberScript = preload("res://scripts/effects/FloatingDamageNumber.gd")
 
 func _ready():
 	hp_bar.max_value = max_hp
@@ -108,9 +117,14 @@ func _update_hp_label() -> void:
 	if _hp_overlay and _hp_overlay.has_method("update_values"):
 		_hp_overlay.update_values(hp, max_hp)
 
-func _physics_process(delta: float) -> void:
-	# Process combat juice effects
+func _process(delta: float) -> void:
+	# Death anticipation MUST run in _process, not _physics_process
+	# because physics process gets disabled when enemies are frozen (Commander's freeze)
+	# but they still need to die when HP reaches 0
 	_process_death_anticipation(delta)
+
+func _physics_process(delta: float) -> void:
+	# Process knockback visual
 	_process_knockback_visual(delta)
 	
 	# Don't process anything else during death anticipation
@@ -300,6 +314,33 @@ func _fire_laser(direction: Vector2) -> void:
 	if get_parent():
 		get_parent().add_child(laser)
 
+func _fire_laser_at_enemy(direction: Vector2) -> void:
+	"""Fire a laser at another enemy (used by charmed enemies)."""
+	var dir := direction.normalized()
+	if dir == Vector2.ZERO:
+		dir = Vector2.RIGHT
+	
+	var laser = EnemyLaserScene.instantiate()
+	if laser == null:
+		return
+	
+	# Configure laser - friendly fire version (hits enemies, not player)
+	laser.set_direction(dir)
+	laser.speed = LASER_SPEED
+	laser.max_range = LASER_RANGE * 1.5
+	laser.damage = base_damage
+	laser.lifetime = maxf((LASER_RANGE * 1.5) / LASER_SPEED, 1.0)
+	
+	# Mark this laser as friendly (from charmed enemy)
+	laser.set_meta("from_charmed", true)
+	
+	# Spawn slightly in front of enemy
+	laser.global_position = global_position + dir * 20.0
+	
+	# Add to scene
+	if get_parent():
+		get_parent().add_child(laser)
+
 # Combat juice
 var _knockback_offset: Vector2 = Vector2.ZERO
 var _last_hit_direction: Vector2 = Vector2.ZERO
@@ -308,10 +349,13 @@ var _death_anticipation_timer: float = 0.0
 var _overkill_damage: int = 0  # Track excess damage for overkill effect
 const DEATH_ANTICIPATION_TIME := 0.12  # Longer freeze before death (MORE NOTICEABLE)
 
-func take_damage(dmg, is_crit: bool = false, hit_direction: Vector2 = Vector2.ZERO, from_burst: bool = false):
+func take_damage(dmg, is_crit: bool = false, hit_direction: Vector2 = Vector2.ZERO, from_burst: bool = false, killer_source: String = "player"):
 	# Don't take damage if already dying
 	if _death_anticipation:
 		return
+	
+	# Track killer source for burst/shield charging
+	_killer_source = killer_source
 	
 	# Apply vulnerability debuff if present (from Scarlet's Expose Weakness talent)
 	var actual_dmg: int = dmg
@@ -334,9 +378,8 @@ func take_damage(dmg, is_crit: bool = false, hit_direction: Vector2 = Vector2.ZE
 	# Knockback visual (just visual offset, not actual movement) - MORE NOTICEABLE
 	_knockback_offset = _last_hit_direction * 15.0
 	
-	# Spawn hit spark
-	var HitSparkScript = preload("res://scripts/effects/HitSpark.gd")
-	if get_parent() and HitSparkScript:
+	# Spawn hit spark (uses cached preload)
+	if get_parent():
 		if is_crit:
 			HitSparkScript.spawn_critical(get_parent(), global_position, _last_hit_direction)
 		else:
@@ -346,20 +389,23 @@ func take_damage(dmg, is_crit: bool = false, hit_direction: Vector2 = Vector2.ZE
 	if is_crit:
 		CombatJuice.camera_punch(-_last_hit_direction, 4.0)
 	
-	# Spawn floating damage number (higher up to avoid sprite/HP bar)
-	var FloatingNumber = preload("res://scripts/effects/FloatingDamageNumber.gd")
+	# Spawn floating damage number (uses cached preload)
 	if get_parent():
 		if is_crit:
-			FloatingNumber.spawn_critical(get_parent(), global_position + Vector2(0, -50), actual_dmg)
+			FloatingNumberScript.spawn_critical(get_parent(), global_position + Vector2(0, -50), actual_dmg)
 		else:
-			FloatingNumber.spawn_damage(get_parent(), global_position + Vector2(0, -50), actual_dmg)
+			FloatingNumberScript.spawn_damage(get_parent(), global_position + Vector2(0, -50), actual_dmg)
 	
 	if hp <= 0:
 		# Calculate overkill (excess damage beyond what was needed)
 		_overkill_damage = -hp  # hp is negative, so negate it
 		
-		# Only grant burst gauge if kill wasn't from a burst ability
-		if not from_burst and player and player.has_method("register_burst_hit"):
+		# Only grant burst gauge if kill was from valid source (not charmed enemies or generic summons)
+		# Also skip if this enemy was charmed (mind controlled) - they're on our side
+		# Valid sources: player, projectile, cecil_drone
+		var valid_burst_source: bool = _killer_source in ["player", "projectile", "cecil_drone"]
+		var is_charmed_enemy: bool = is_in_group("charmed_allies")
+		if not from_burst and valid_burst_source and not is_charmed_enemy and player and player.has_method("register_burst_hit"):
 			player.register_burst_hit()
 		
 		# Death anticipation - brief freeze before exploding
@@ -458,8 +504,7 @@ func die():
 			"super_boss": xp_orb_count = 40
 	
 	for i in xp_orb_count:
-		var orb_scene = preload("res://scenes/effects/XPOrb.tscn")
-		var orb = orb_scene.instantiate()
+		var orb = ProjectileCache.create_xp_orb()
 		get_parent().add_child(orb)
 		orb.global_position = global_position + Vector2(randf_range(-20, 20), randf_range(-20, 20))
 	call_deferred("queue_free")
@@ -502,6 +547,7 @@ func is_charmed() -> bool:
 func _process_charmed_behavior(delta: float) -> void:
 	"""Charmed enemies seek and attack other non-charmed enemies."""
 	_damage_timer -= delta
+	_laser_cooldown -= delta  # Also update laser cooldown for ranged attacks
 	
 	# Find a target enemy if we don't have one or it's invalid
 	if _charm_target == null or not is_instance_valid(_charm_target) or _charm_target._is_charmed:
@@ -518,18 +564,26 @@ func _process_charmed_behavior(delta: float) -> void:
 	var dist: float = to_target.length()
 	var dir: Vector2 = to_target.normalized() if dist > 0 else Vector2.ZERO
 	
-	# Chase the target
-	if dist > STOP_DISTANCE:
-		global_position += dir * speed * delta
+	# Ranged attack: shoot at target if in laser range
+	if dist <= LASER_RANGE and _laser_cooldown <= 0 and _can_shoot:
+		_fire_laser_at_enemy(dir)
+		_laser_cooldown = LASER_FIRE_INTERVAL
 	
-	# Deal damage when close
+	# Chase the target if out of laser range or can't shoot
+	if dist > LASER_RANGE * 0.8:  # Stay at comfortable shooting distance
+		global_position += dir * speed * delta
+	elif dist < STOP_DISTANCE * 2:  # Too close, back up a bit
+		global_position -= dir * speed * 0.5 * delta
+	
+	# Melee damage when very close (fallback)
 	if dist < DAMAGE_DISTANCE and _damage_timer <= 0:
 		if _charm_target.has_method("take_damage"):
-			_charm_target.take_damage(base_damage)
+			# Pass "charmed_enemy" as killer source - doesn't charge burst/shield
+			_charm_target.take_damage(base_damage, false, Vector2.ZERO, false, "charmed_enemy")
 		_damage_timer = DAMAGE_COOLDOWN
 	
 	# Animation
-	velocity = dir * speed if dist > STOP_DISTANCE else Vector2.ZERO
+	velocity = dir * speed if dist > LASER_RANGE * 0.8 else Vector2.ZERO
 	if _animator:
 		_animator.update_state(velocity, dir)
 

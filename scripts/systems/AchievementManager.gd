@@ -39,14 +39,38 @@ var _session_skills: Dictionary = {}  # char_index -> total skill purchases this
 
 
 func _ready() -> void:
+	# Wait for MenuManager's intro screen to render before doing heavy initialization
+	# CharacterRegistry has many preloads that cascade to other scripts
+	if MenuManager.intro_rendered:
+		_async_init()
+	else:
+		MenuManager.intro_ready.connect(_on_intro_ready, CONNECT_ONE_SHOT)
+
+
+func _on_intro_ready() -> void:
+	_async_init()
+
+
+func _async_init() -> void:
+	# Yield a frame to let animation continue
+	await get_tree().process_frame
 	_registry = CharacterRegistry.get_instance()
+	
+	await get_tree().process_frame
 	_load_achievements()
+
+
+func _ensure_registry() -> void:
+	# Ensure registry is loaded if accessed before deferred init completed
+	if _registry == null:
+		_registry = CharacterRegistry.get_instance()
 
 
 # --- Achievement Definition Helpers ---
 
 ## Get display name for a character
 func get_character_display_name(char_id: String) -> String:
+	_ensure_registry()
 	return _registry.get_character_name(char_id)
 
 
@@ -127,6 +151,7 @@ func get_character_achievements(char_id: String) -> Array[Dictionary]:
 
 ## Get all achievements across all characters
 func get_all_achievements() -> Array[Dictionary]:
+	_ensure_registry()
 	var all: Array[Dictionary] = []
 	var char_ids := _registry.get_all_character_ids()
 	for char_id in char_ids:
@@ -186,6 +211,7 @@ func on_enemy_killed(char_id: String) -> void:
 
 ## Call when a skill is purchased in talent tree (char_index is registry index, skill_id is the talent id)
 func on_skill_purchased(char_index: int, _skill_id: String) -> void:
+	_ensure_registry()
 	var char_count := _registry.get_character_count()
 	if char_index < 0 or char_index >= char_count:
 		return
@@ -208,6 +234,7 @@ func on_skill_purchased(char_index: int, _skill_id: String) -> void:
 
 ## Call when a game is won (pass array of squad character IDs)
 func on_game_won(squad_char_ids: Array) -> void:
+	_ensure_registry()
 	var all_char_ids := _registry.get_all_character_ids()
 	for char_id in squad_char_ids:
 		if char_id is String and char_id in all_char_ids:
@@ -309,6 +336,7 @@ func _save_achievements() -> void:
 
 ## Get total unlocked achievements count
 func get_unlocked_count() -> int:
+	_ensure_registry()
 	var count := 0
 	var char_ids := _registry.get_all_character_ids()
 	for char_id in char_ids:
@@ -321,6 +349,7 @@ func get_unlocked_count() -> int:
 
 ## Get total achievements count
 func get_total_count() -> int:
+	_ensure_registry()
 	var count := 0
 	var char_ids := _registry.get_all_character_ids()
 	for char_id in char_ids:

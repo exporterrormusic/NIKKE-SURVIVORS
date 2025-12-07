@@ -3,6 +3,8 @@ class_name SettingsMenu
 ## Settings menu with Audio, Video, and Controls tabs.
 ## Provides volume sliders, resolution options, fullscreen toggle, and key rebinding.
 
+const UISounds := preload("res://scripts/ui/UISoundManager.gd")
+
 signal back_requested
 signal master_volume_changed(value: float)
 signal music_volume_changed(value: float)
@@ -161,6 +163,7 @@ func _initialize_dropdowns() -> void:
 
 
 func _on_tab_pressed(tab_name: String) -> void:
+	UISounds.play_select()
 	_switch_tab(tab_name)
 
 
@@ -324,6 +327,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	
 	# Handle escape/back to return to previous menu
 	if is_escape:
+		UISounds.play_back()
 		emit_signal("back_requested")
 		get_viewport().set_input_as_handled()
 
@@ -338,6 +342,7 @@ func _input(event: InputEvent) -> void:
 	
 	var is_escape: bool = key_event.physical_keycode == KEY_ESCAPE or key_event.keycode == KEY_ESCAPE
 	if is_escape and _capturing_action == "":
+		UISounds.play_back()
 		emit_signal("back_requested")
 		get_viewport().set_input_as_handled()
 

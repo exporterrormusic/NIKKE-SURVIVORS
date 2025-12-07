@@ -15,6 +15,7 @@ class_name ExplosiveProjectile
 @export var explosion_radius: float = 150.0
 @export var explosion_color: Color = Color(1.0, 0.5, 0.2, 0.8)
 @export var owner_node: Node = null
+var killer_source_override: String = ""  # Override killer_source if set (for summon-spawned turrets)
 @export var render_style: String = "grenade" # "grenade" | "rocket"
 @export var special_attack: bool = false
 @export var trail_enabled: bool = false
@@ -43,9 +44,7 @@ class_name ExplosiveProjectile
 @export var homing_enabled: bool = false
 @export var homing_strength: float = 8.0  # How fast the rocket turns toward target
 
-const ExplosionEffectScene := preload("res://scenes/effects/ExplosionEffect.tscn")
 const PROJECTILE_BASE_Z_INDEX := 900
-const GroundFireScene: PackedScene = preload("res://scenes/effects/GroundFire.tscn")
 const GroundFireScript := preload("res://scripts/effects/GroundFire.gd")
 
 var _age := 0.0
@@ -351,7 +350,13 @@ func _apply_explosion_damage() -> void:
 		var enemy_hitbox_bonus: float = 30.0 * (enemy_scale - 1.0)
 		var effective_radius: float = explosion_radius + enemy_hitbox_bonus
 		if distance <= effective_radius:
-			enemy_node.take_damage(explosion_damage)
+			# Determine killer source - use override if set, otherwise check owner type
+			var killer_source := "player"
+			if killer_source_override != "":
+				killer_source = killer_source_override
+			elif is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
+				killer_source = "summon"
+			enemy_node.take_damage(explosion_damage, false, Vector2.ZERO, false, killer_source)
 			if owner_node and is_instance_valid(owner_node) and owner_node.has_method("register_burst_hit"):
 				owner_node.register_burst_hit(enemy_node)
 	
@@ -393,9 +398,9 @@ func _apply_explosion_damage() -> void:
 					ally_node.apply_damage(explosion_damage)
 
 func _spawn_explosion_effect() -> void:
-	if ExplosionEffectScene == null:
+	var effect_instance = ProjectileCache.create_explosion_effect()
+	if effect_instance == null:
 		return
-	var effect_instance := ExplosionEffectScene.instantiate()
 	if not (effect_instance is ExplosionEffect):
 		effect_instance.queue_free()
 		return
@@ -412,11 +417,10 @@ func _spawn_explosion_effect() -> void:
 
 
 func _create_ground_fire_effect() -> GroundFire:
-	if GroundFireScene:
-		var instance: Node = GroundFireScene.instantiate()
-		if instance is GroundFire:
-			return instance as GroundFire
-		instance.queue_free()
+	var instance: Node = ProjectileCache.create_ground_fire()
+	if instance is GroundFire:
+		return instance as GroundFire
+	instance.queue_free()
 	if GroundFireScript:
 		return GroundFireScript.new()
 	return null

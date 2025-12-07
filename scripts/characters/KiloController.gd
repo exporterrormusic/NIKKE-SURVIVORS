@@ -88,8 +88,7 @@ func _fire_shotgun(direction: Vector2, is_special: bool, is_burst_shot: bool = f
 		var pellet_dir = Vector2.from_angle(base_angle + angle_offset)
 		
 		# Use KiloPellet for proper orange/amber visuals
-		var pellet_scene = preload("res://scenes/effects/KiloPellet.tscn")
-		var pellet = pellet_scene.instantiate()
+		var pellet = ProjectileCache.create_kilo_pellet()
 		pellet.global_position = player.global_position + pellet_dir * 30
 		pellet.velocity = pellet_dir * 850
 		pellet.owner_node = player

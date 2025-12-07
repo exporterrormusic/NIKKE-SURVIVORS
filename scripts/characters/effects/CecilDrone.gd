@@ -334,7 +334,7 @@ func _physics_process(_delta: float) -> void:
 		var collider = result.get(\"collider\")
 		if collider and collider.is_in_group(\"enemies\"):
 			if collider.has_method(\"take_damage\"):
-				collider.take_damage(damage, false, direction)
+				collider.take_damage(damage, false, direction, false, \"cecil_drone\")
 			queue_free()
 			return
 """

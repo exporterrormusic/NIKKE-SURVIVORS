@@ -13,6 +13,7 @@ signal quit_requested
 enum MenuMode { PAUSE, DEFEAT, VICTORY }
 
 const UIThemeScript = preload("res://scripts/ui/UITheme.gd")
+const UISounds = preload("res://scripts/ui/UISoundManager.gd")
 
 # Menu state
 var _menu_mode: int = MenuMode.PAUSE
@@ -251,24 +252,30 @@ func _unhandled_input(event: InputEvent) -> void:
 	
 	# Only allow ESC to close if it's a pause menu (not defeat/victory)
 	if event.is_action_pressed("ui_cancel") and _menu_mode == MenuMode.PAUSE:
+		UISounds.play_back()
 		hide_menu()
 		get_viewport().set_input_as_handled()
 
 func _on_restart_pressed() -> void:
+	UISounds.play_confirm()
 	hide_menu()
 	restart_requested.emit()
 
 func _on_resume_pressed() -> void:
+	UISounds.play_back()
 	hide_menu()
 	resume_requested.emit()
 
 func _on_settings_pressed() -> void:
+	# No sound for pause menu options - they have their own transitions
 	settings_requested.emit()
 
 func _on_character_select_pressed() -> void:
+	# No sound for pause menu options - they have their own transitions
 	hide_menu()
 	character_select_requested.emit()
 
 func _on_quit_pressed() -> void:
+	UISounds.play_back()
 	hide_menu()
 	quit_requested.emit()

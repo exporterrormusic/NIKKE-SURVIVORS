@@ -14,6 +14,9 @@ static var _projectile_glow_shader: Shader = null
 # Simple unshaded shader for effects
 static var _unshaded_shader: Shader = null
 
+# Shared additive blend material (for XP orbs, sparkles, glows)
+static var _additive_material: CanvasItemMaterial = null
+
 # Glow shader code - unshaded with brightness boost
 const GLOW_SHADER_CODE := """
 shader_type canvas_item;
@@ -93,6 +96,15 @@ static func create_projectile_glow_material(tint: Color = Color(1.0, 0.8, 0.3), 
 	mat.set_shader_parameter("brightness_boost", brightness)
 	mat.set_shader_parameter("tint_color", Vector3(tint.r, tint.g, tint.b))
 	return mat
+
+
+static func get_additive_material() -> CanvasItemMaterial:
+	## Returns a SHARED additive blend material - do not modify!
+	## Use for XP orbs, sparkles, glows, and other additive effects
+	if _additive_material == null:
+		_additive_material = CanvasItemMaterial.new()
+		_additive_material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	return _additive_material
 
 
 static func get_unshaded_shader() -> Shader:

@@ -30,7 +30,23 @@ const AVAILABLE_RESOLUTIONS: Array[Vector2i] = [
 
 
 func _ready() -> void:
+	# Wait for MenuManager's intro screen to render before doing heavy initialization
+	if MenuManager.intro_rendered:
+		_async_init()
+	else:
+		MenuManager.intro_ready.connect(_on_intro_ready, CONNECT_ONE_SHOT)
+
+
+func _on_intro_ready() -> void:
+	_async_init()
+
+
+func _async_init() -> void:
+	# Yield a frame to let animation continue
+	await get_tree().process_frame
 	load_settings()
+	
+	await get_tree().process_frame
 	apply_all_settings()
 
 

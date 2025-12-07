@@ -4,11 +4,29 @@ class_name UITheme
 ## Combines NIKKE's sleek sci-fi aesthetic with Holocure's chunky, fun feel.
 
 # =============================================================================
-# FONTS - Centralized font resources
+# FONTS - Lazily loaded to avoid blocking startup
 # =============================================================================
-const FONT_TITLE: Font = preload("res://resources/fonts/futura_condensed_extra_bold.tres")
-const FONT_BOLD: Font = preload("res://resources/fonts/pretendard_bold.tres")
-const FONT_MEDIUM: Font = preload("res://resources/fonts/pretendard_medium.tres")
+static var _font_title: Font = null
+static var _font_bold: Font = null
+static var _font_medium: Font = null
+
+static var FONT_TITLE: Font:
+	get:
+		if _font_title == null:
+			_font_title = load("res://resources/fonts/futura_condensed_extra_bold.tres")
+		return _font_title
+
+static var FONT_BOLD: Font:
+	get:
+		if _font_bold == null:
+			_font_bold = load("res://resources/fonts/pretendard_bold.tres")
+		return _font_bold
+
+static var FONT_MEDIUM: Font:
+	get:
+		if _font_medium == null:
+			_font_medium = load("res://resources/fonts/pretendard_medium.tres")
+		return _font_medium
 
 # =============================================================================
 # COLOR PALETTE - NIKKE-inspired with vibrant accents

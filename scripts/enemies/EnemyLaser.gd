@@ -420,11 +420,26 @@ func _apply_damage_to(target: Node) -> void:
 		return
 	_hit_targets[instance_id] = true
 	
-	# Skip non-charmed enemies (enemy lasers shouldn't hurt regular enemies)
-	if target.is_in_group("enemies") and not target.is_in_group("charmed_allies"):
-		return
+	# Check if this laser was fired by a charmed enemy
+	var from_charmed: bool = has_meta("from_charmed") and get_meta("from_charmed")
 	
-	# Apply damage to player, charmed allies, or anything else with take_damage
+	if from_charmed:
+		# Charmed enemy laser: hit non-charmed enemies, skip player and charmed allies
+		if target.is_in_group("charmed_allies"):
+			return  # Don't hit other charmed allies
+		if target.is_in_group("player") or target.name == "Player":
+			return  # Don't hit the player
+		# Hit regular enemies - pass "charmed_enemy" as killer source (no burst/shield charge)
+		if target.is_in_group("enemies") and target.has_method("take_damage"):
+			target.take_damage(damage, false, Vector2.ZERO, false, "charmed_enemy")
+			_retire()
+			return
+	else:
+		# Normal enemy laser: skip non-charmed enemies (enemy lasers shouldn't hurt regular enemies)
+		if target.is_in_group("enemies") and not target.is_in_group("charmed_allies"):
+			return
+	
+	# Apply damage to valid targets
 	if target.has_method("take_damage"):
 		target.take_damage(damage)
 		_retire()

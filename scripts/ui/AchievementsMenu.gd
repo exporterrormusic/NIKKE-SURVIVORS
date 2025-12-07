@@ -6,6 +6,7 @@ class_name AchievementsMenu
 signal back_requested
 
 const UI := preload("res://scripts/ui/UITheme.gd")
+const UISounds := preload("res://scripts/ui/UISoundManager.gd")
 
 const GENERAL_FILTER := "GENERAL"
 
@@ -42,6 +43,7 @@ func _ready() -> void:
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel") and not event.is_echo():
 		get_viewport().set_input_as_handled()
+		UISounds.play_back()
 		emit_signal("back_requested")
 
 
@@ -474,11 +476,13 @@ func _create_filter_button(parent: HBoxContainer, filter_name: String, color: Co
 
 
 func _on_completion_filter_pressed(filter_name: String) -> void:
+	UISounds.play_select()
 	_completion_filter = filter_name
 	_rebuild_achievement_list()
 
 
 func _on_character_pressed(code: String) -> void:
+	UISounds.play_select()
 	_select_filter(code)
 
 

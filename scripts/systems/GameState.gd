@@ -57,7 +57,34 @@ var goddess_fall_mode: bool = false
 
 
 func _ready() -> void:
+	# Wait for MenuManager's intro screen to render before doing heavy initialization
+	# This prevents blocking the walking animation on the intro screen
+	if MenuManager.intro_rendered:
+		_start_async_init()
+	else:
+		MenuManager.intro_ready.connect(_on_intro_ready, CONNECT_ONE_SHOT)
+
+
+func _on_intro_ready() -> void:
+	_start_async_init()
+
+
+func _start_async_init() -> void:
+	# Start the async initialization coroutine
+	_async_init()
+
+
+func _async_init() -> void:
+	# Initialize ResourceManifest - generates manifest in editor, loads in exports
+	# Yield a frame to let animation continue
+	await get_tree().process_frame
+	ResourceManifest.ensure_initialized()
+	
+	# Yield another frame before next task
+	await get_tree().process_frame
 	_load_leaderboard()
+	
+	await get_tree().process_frame
 	_load_stage_progress()
 
 # --- Current Run Tracking ---

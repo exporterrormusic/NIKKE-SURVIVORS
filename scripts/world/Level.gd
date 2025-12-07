@@ -627,8 +627,20 @@ func _on_wave_changed(wave_number: int) -> void:
 		if wave_display:
 			wave_display.text = "WAVE %d" % wave_number
 
-func _on_enemy_died(_enemy: Node2D) -> void:
-	pass  # Tracking handled automatically by container child count
+func _on_enemy_died(enemy: Node2D) -> void:
+	# Skip upgrade benefits if the dying enemy was charmed (mind controlled)
+	# Charmed enemies are on our side, so their deaths shouldn't count as "kills"
+	if enemy.is_in_group("charmed_allies"):
+		return
+	
+	# Get killer source from enemy if available
+	var killer_source: String = "player"
+	if "_killer_source" in enemy:
+		killer_source = enemy._killer_source
+	
+	# Notify player for kill-based upgrades (Rapunzel healing, etc.)
+	if player and player.has_method("on_enemy_killed"):
+		player.on_enemy_killed(enemy, killer_source)
 
 # Legacy spawn function (kept for compatibility but no longer used by timer)
 func spawn_enemy():

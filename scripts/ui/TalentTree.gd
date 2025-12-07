@@ -8,6 +8,7 @@ signal talent_unlocked(character_id: int, talent_id: String)
 signal tree_closed
 
 const UI := preload("res://scripts/ui/UITheme.gd")
+const UISounds := preload("res://scripts/ui/UISoundManager.gd")
 
 # Preload portraits at class level to avoid runtime loading issues
 var _portraits: Array[Texture2D] = []
@@ -1248,6 +1249,9 @@ func _on_talent_clicked(btn: Button) -> void:
 	_unlocked_talents[char_id][talent_id] = current_level + 1
 	_skill_points -= talent["cost"]
 	
+	# Play confirm sound for successful purchase
+	UISounds.play_confirm()
+	
 	print("[TalentTree] UNLOCKED %s! New state: %s" % [talent_id, _unlocked_talents[char_id]])
 	
 	# Track skill purchase for achievement
@@ -1280,6 +1284,7 @@ func _refresh_tree() -> void:
 	_update_stats_panel()
 
 func _on_back_to_characters() -> void:
+	UISounds.play_back()
 	_tree_panel.visible = false
 	_character_panel.visible = true
 	_current_character = -1
@@ -1316,6 +1321,7 @@ func _refresh_character_cards() -> void:
 			char_points.text = "   AVAILABLE SKILL POINTS: %d   " % _skill_points
 
 func _on_close(with_delay: bool = false) -> void:
+	UISounds.play_back()
 	# Start close animation
 	_anim_state = 3
 	_anim_progress = 0.0

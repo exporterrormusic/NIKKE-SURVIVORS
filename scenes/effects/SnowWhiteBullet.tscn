@@ -1,0 +1,21 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Texture2D" uid="uid://c3hcccpyfdj3a" path="res://assets/projectiles/bullet.png" id="1"]
+[ext_resource type="Script" path="res://scripts/characters/effects/SnowWhiteBullet.gd" id="2"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
+size = Vector2(50, 12)
+
+[node name="SnowWhiteBullet" type="Area2D"]
+collision_layer = 4
+collision_mask = 2
+script = ExtResource("2")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+modulate = Color(0.6, 0.9, 1, 1)
+rotation = 3.14159
+scale = Vector2(0.5, 1)
+texture = ExtResource("1")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_1")

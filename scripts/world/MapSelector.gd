@@ -21,23 +21,14 @@ func _ready() -> void:
 	visible = false
 
 func _load_map_definitions() -> void:
-	var maps_dir := "res://resources/maps/"
-	var dir := DirAccess.open(maps_dir)
-	if dir == null:
-		push_warning("MapSelector: Could not open maps directory: %s" % maps_dir)
-		return
-	
-	dir.list_dir_begin()
-	var file_name := dir.get_next()
-	while file_name != "":
-		if file_name.ends_with(".tres"):
-			var map_path := maps_dir + file_name
+	# Use ResourceManifest for export-safe file listing
+	ResourceManifest.ensure_initialized()
+	for map_path in ResourceManifest.map_files:
+		if ResourceLoader.exists(map_path):
 			var map_def: MapDefinition = load(map_path)
 			if map_def:
 				_map_definitions[map_def.map_id] = map_def
 				print("[MapSelector] Loaded map: ", map_def.map_id)
-		file_name = dir.get_next()
-	dir.list_dir_end()
 	print("[MapSelector] Total maps loaded: ", _map_definitions.size())
 
 func _connect_signals() -> void:

@@ -8,6 +8,8 @@ class_name MarianController
 const MarianCharmEffectScript = preload("res://scripts/characters/effects/MarianCharmEffect.gd")
 const MarianBulletScript = preload("res://scripts/characters/effects/MarianBullet.gd")
 const MarianBeamScript = preload("res://scripts/characters/effects/MarianBeam.gd")
+const MarianBeamCannonScript = preload("res://scripts/characters/effects/MarianBeamCannon.gd")
+const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
 
 # Charm area indicator (similar to Sin)
 var _charm_indicator: Node2D = null
@@ -17,6 +19,10 @@ var bullet_speed: float = 1100.0
 var spinup_time: float = 0.3
 var _spinup_timer: float = 0.0
 var _is_spinning: bool = false
+
+# "Main Heroine" upgrade - replaces minigun with beam cannon
+var _has_beam_cannon_upgrade: bool = false
+var _beam_cannon: Node2D = null  # Persistent beam cannon instance
 
 # Special config (Charm - like Sin)
 var charm_radius: float = 150.0
@@ -35,12 +41,22 @@ var burst_trail_upgrade: bool = false    # Right: burning trail
 func _on_initialize() -> void:
 	# Ammo already set from CharacterRegistry by base class
 	data.special_cooldown = charm_cooldown
+	
+	# Check for "Main Heroine" upgrade
+	_has_beam_cannon_upgrade = ShopMenuScript.has_character_upgrade("marian", "basic_attack")
+	if _has_beam_cannon_upgrade:
+		print("[MarianController] 'Main Heroine' upgrade active - beam cannon enabled")
 
 func _on_cleanup() -> void:
 	# Remove charm indicator when switching away from Marian
 	if _charm_indicator and is_instance_valid(_charm_indicator):
 		_charm_indicator.queue_free()
 		_charm_indicator = null
+	
+	# Clean up beam cannon
+	if _beam_cannon and is_instance_valid(_beam_cannon):
+		_beam_cannon.queue_free()
+		_beam_cannon = null
 
 func _on_process(delta: float) -> void:
 	# Update spinup
@@ -55,6 +71,16 @@ func _on_process(delta: float) -> void:
 	
 	# Update charm indicator visibility
 	_update_charm_indicator()
+	
+	# Handle beam cannon firing state based on attack button
+	if _has_beam_cannon_upgrade and _beam_cannon and is_instance_valid(_beam_cannon):
+		if Input.is_action_pressed("attack") and _can_attack():
+			_beam_cannon.start_firing()
+			_is_spinning = true
+		else:
+			_beam_cannon.stop_firing()
+			if not Input.is_action_pressed("attack"):
+				_is_spinning = false
 
 func _create_charm_indicator() -> void:
 	if _charm_indicator and is_instance_valid(_charm_indicator):
@@ -161,12 +187,28 @@ func _update_charm_indicator() -> void:
 		_charm_indicator.call("hide_indicator")
 
 func _can_attack() -> bool:
+	# With beam cannon upgrade, always allow (beam handles its own state)
+	if _has_beam_cannon_upgrade:
+		return not burst_active
 	return not is_reloading and ammo > 0 and not burst_active
 
 func _perform_attack(direction: Vector2) -> void:
 	_is_spinning = true
 	
-	# Fire purple mystical bullet
+	# "Main Heroine" upgrade: continuous beam cannon (managed separately)
+	if _has_beam_cannon_upgrade:
+		# Create beam cannon if it doesn't exist
+		if not _beam_cannon or not is_instance_valid(_beam_cannon):
+			_beam_cannon = MarianBeamCannonScript.new()
+			player.get_parent().add_child(_beam_cannon)
+			# Pass self as controller_ref so beam can check ammo/reload state
+			_beam_cannon.initialize(player.calc_damage(), player, player, self)
+			print("[MarianController] Created beam cannon")
+		# The beam cannon fires continuously while mouse is held
+		# (controlled in _on_process)
+		return
+	
+	# Normal: Fire purple mystical bullet
 	var bullet = MarianBulletScript.new()
 	player.get_parent().add_child(bullet)
 	bullet.global_position = player.global_position + direction * 35
@@ -383,8 +425,9 @@ func _on_burst_start() -> void:
 	_active_beam.missile_upgrade = burst_missile_upgrade
 	_active_beam.trail_upgrade = burst_trail_upgrade
 	
-	# Calculate initial direction toward mouse
+	# Calculate initial direction toward mouse and set it BEFORE adding to scene
 	var aim_dir := (player.get_global_mouse_position() - player.global_position).normalized()
+	_active_beam.initial_direction = aim_dir
 	
 	player.get_parent().add_child(_active_beam)
 	# Start beam in front of player
@@ -441,6 +484,25 @@ func apply_talent(talent_id: String) -> void:
 
 func is_invincible() -> bool:
 	return burst_active  # Invincible during beam
+
+## Override start_reload to skip default reload sound when beam cannon is active
+## The beam cannon handles its own reload sound (beam_reload.wav)
+func start_reload() -> void:
+	if is_reloading or max_ammo <= 0:
+		return
+	if ammo >= max_ammo:
+		return
+	
+	is_reloading = true
+	reload_timer = data.reload_time
+	reload_started.emit(data.reload_time)
+	
+	# Only play reload sound if NOT using beam cannon
+	# Beam cannon has its own reload sound handling
+	if not _has_beam_cannon_upgrade:
+		if player and player.audio_director:
+			var weapon_type := _get_weapon_type_name()
+			player.audio_director.play_weapon_reload_sound(weapon_type)
 
 func _get_weapon_type_name() -> String:
 	return "Minigun"

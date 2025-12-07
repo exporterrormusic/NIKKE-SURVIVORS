@@ -4,6 +4,8 @@ var velocity = Vector2.ZERO
 var acceleration = 500
 var max_speed = 1200
 var player
+var owner_node: Node = null  # Track who fired this rocket
+var killer_source_override: String = ""  # Override killer_source if set (for summon-spawned turrets)
 var target_enemy = null
 var last_target_pos = Vector2.ZERO
 var time = 0.0
@@ -148,15 +150,22 @@ func _on_body_entered(body):
         return
     if body.has_method("take_damage"):
         var hit_direction = velocity.normalized()
-        body.take_damage(1, false, hit_direction)
+        # Determine killer source - use override if set, otherwise check owner type
+        var killer_source := "player"
+        if killer_source_override != "":
+            killer_source = killer_source_override
+        elif is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
+            killer_source = "summon"
+        body.take_damage(1, false, hit_direction, false, killer_source)
     call_deferred("explode")
 
 func explode():
     if _has_exploded:
         return
     _has_exploded = true
-    var explosion_scene = preload("res://scenes/effects/Explosion.tscn")
-    var explosion = explosion_scene.instantiate()
+    var explosion = ProjectileCache.create_explosion()
+    explosion.owner_node = owner_node  # Pass owner for killer_source tracking
+    explosion.killer_source_override = killer_source_override  # Pass override too
     get_parent().add_child(explosion)
     explosion.global_position = global_position
     call_deferred("queue_free")

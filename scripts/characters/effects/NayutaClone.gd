@@ -11,12 +11,6 @@ signal clone_died
 # Preload hologram shader
 const HologramShader = preload("res://resources/shaders/hologram_ally.gdshader")
 
-# Preload attack scenes for better performance
-const SMGBulletScene = preload("res://scenes/effects/SMGBullet.tscn")
-const SlashScene = preload("res://scenes/effects/Slash.tscn")
-const MissileScene = preload("res://scenes/effects/Missile.tscn")
-const BulletScene = preload("res://scenes/effects/Bullet.tscn")
-
 # Character registry for stats
 var _registry: CharacterRegistry = null
 
@@ -429,7 +423,7 @@ func _perform_attack() -> void:
 func _attack_smg(direction: Vector2) -> void:
 	ammo -= 1
 	
-	var bullet = SMGBulletScene.instantiate()
+	var bullet = ProjectileCache.create_smg_bullet()
 	get_parent().add_child(bullet)
 	bullet.global_position = global_position + direction * 30
 	bullet.velocity = direction * 900.0
@@ -440,8 +434,9 @@ func _attack_smg(direction: Vector2) -> void:
 	bullet.base_damage = maxi(1, int(2 * attack_multiplier * level_mult))
 
 func _attack_sword(direction: Vector2) -> void:
-	var slash = SlashScene.instantiate()
+	var slash = ProjectileCache.create_slash()
 	slash.rotation = direction.angle()
+	slash.owner_node = self
 	# Scale damage with player level
 	var level_mult := 1.0 + (player_level - 1) * 0.15  # +15% per level
 	slash.base_damage = maxi(1, int(10 * attack_multiplier * level_mult))
@@ -451,7 +446,7 @@ func _attack_sword(direction: Vector2) -> void:
 func _attack_rocket(direction: Vector2) -> void:
 	ammo -= 1
 	
-	var rocket = MissileScene.instantiate()
+	var rocket = ProjectileCache.create_missile()
 	rocket.owner_node = self
 	rocket.direction = direction
 	rocket.target_position = _target_enemy.global_position if _target_enemy else global_position + direction * 400
@@ -463,7 +458,7 @@ func _attack_rocket(direction: Vector2) -> void:
 func _attack_sniper(direction: Vector2) -> void:
 	ammo -= 1
 	
-	var bullet = BulletScene.instantiate()
+	var bullet = ProjectileCache.create_bullet()
 	get_parent().add_child(bullet)
 	bullet.global_position = global_position + direction * 50
 	bullet.velocity = direction * 1650.0
@@ -640,7 +635,7 @@ func _die() -> void:
 	
 	clone_died.emit()
 
-func initialize(player: Node2D, weapon: String, hp: int, atk_mult: float, heal_on_death: bool, level: int = 1) -> void:
+func initialize(player: Node2D, weapon: String, hp: int, atk_mult: float, heal_on_death: bool, level: int) -> void:
 	owner_player = player
 	weapon_type = weapon
 	max_hp = hp

@@ -17,6 +17,7 @@ var time_of_day_definitions: Array = []
 const GROUND_SHADER_PATH := "res://resources/shaders/procedural_ground.gdshader"
 const SNOW_SHADER_PATH := "res://resources/shaders/falling_snow.gdshader"
 const SAKURA_SHADER_PATH := "res://resources/shaders/falling_sakura.gdshader"
+const FLOWER_SHADER_PATH := "res://resources/shaders/flower_patches.gdshader"
 const ENABLE_SAKURA_OVERLAY := false
 const SNOW_IMPRINT_TEXTURE_SIZE := 1024
 const SNOW_IMPRINT_DEFAULT := 0.5
@@ -57,6 +58,7 @@ var _boulders: Array[Node2D] = []  # Active boulder instances
 @onready var _vignette_overlay: ColorRect = _ensure_vignette_overlay()
 @onready var _snow_overlay: Polygon2D = _ensure_snow_overlay()
 @onready var _sakura_overlay: Polygon2D = _ensure_sakura_overlay()
+@onready var _flower_overlay: Polygon2D = _ensure_flower_overlay()
 @onready var _snow_pile_container: Node2D = _ensure_snow_pile_container()
 @onready var _snow_particle_container: Node2D = _ensure_snow_particle_container()
 @onready var _canvas_modulate: CanvasModulate = _ensure_canvas_modulate()
@@ -114,34 +116,26 @@ func _collect_nodes_by_name(node: Node, name_to_find: String, out_list: Array) -
 
 func _load_biome_definitions() -> void:
 	biome_definitions.clear()
-	var dir := DirAccess.open(BIOMES_DIR)
-	if dir:
-		dir.list_dir_begin()
-		var file_name := dir.get_next()
-		while file_name != "":
-			if not dir.current_is_dir() and file_name.ends_with(".tres"):
-				var resource := load(BIOMES_DIR + file_name)
-				if resource is BiomeDefinition:
-					biome_definitions.append(resource)
-					print("[Environment] Loaded biome: ", file_name)
-			file_name = dir.get_next()
-		dir.list_dir_end()
+	# Use ResourceManifest for export-safe file listing
+	ResourceManifest.ensure_initialized()
+	for file_path in ResourceManifest.biome_files:
+		if ResourceLoader.exists(file_path):
+			var resource := load(file_path)
+			if resource is BiomeDefinition:
+				biome_definitions.append(resource)
+				print("[Environment] Loaded biome: ", file_path.get_file())
 	print("[Environment] Total biomes loaded: ", biome_definitions.size())
 
 func _load_time_of_day_definitions() -> void:
 	time_of_day_definitions.clear()
-	var dir := DirAccess.open(TIME_OF_DAY_DIR)
-	if dir:
-		dir.list_dir_begin()
-		var file_name := dir.get_next()
-		while file_name != "":
-			if not dir.current_is_dir() and file_name.ends_with(".tres"):
-				var resource := load(TIME_OF_DAY_DIR + file_name)
-				if resource is TimeOfDayDefinition:
-					time_of_day_definitions.append(resource)
-					print("[Environment] Loaded time of day: ", file_name)
-			file_name = dir.get_next()
-		dir.list_dir_end()
+	# Use ResourceManifest for export-safe file listing
+	ResourceManifest.ensure_initialized()
+	for file_path in ResourceManifest.time_of_day_files:
+		if ResourceLoader.exists(file_path):
+			var resource := load(file_path)
+			if resource is TimeOfDayDefinition:
+				time_of_day_definitions.append(resource)
+				print("[Environment] Loaded time of day: ", file_path.get_file())
 	print("[Environment] Total time of day presets loaded: ", time_of_day_definitions.size())
 
 func _process(delta: float) -> void:
@@ -174,6 +168,13 @@ func _process(delta: float) -> void:
 			var wind_vector := Vector2(wind_strength * 0.35, -fall_speed)
 			sakura_material.set_shader_parameter("wind_direction", wind_vector)
 			sakura_material.set_shader_parameter("drift_amplitude", clampf(0.25 + wind_strength * 0.25, 0.15, 0.85))
+	# DISABLED: Flower overlay causing shader errors
+	#if _flower_overlay and _flower_overlay.material and _flower_overlay.visible:
+	#	var flower_material := _flower_overlay.material as ShaderMaterial
+	#	if flower_material:
+	#		flower_material.set_shader_parameter("time_flow", _time_flow)
+	#		flower_material.set_shader_parameter("view_size", _get_camera_view_size())
+	#		flower_material.set_shader_parameter("world_offset", _compute_camera_world_offset())
 	_update_overlay_transform()
 	_update_decoration_animations(delta)
 	
@@ -236,6 +237,7 @@ func set_world_bounds(bounds: Rect2) -> void:
 	_update_border_overlay()
 	_update_snow_overlay_polygon(_get_camera_global_position())
 	_update_sakura_overlay_polygon(_get_camera_global_position())
+	_update_flower_overlay_polygon(_get_camera_global_position())
 	# Respawn boulders when bounds change (e.g., when entering a map)
 	if _active_biome != null:
 		_spawn_boulders()
@@ -485,6 +487,37 @@ func _ensure_sakura_overlay() -> Polygon2D:
 		sakura_overlay.owner = get_tree().edited_scene_root
 	return sakura_overlay
 
+func _ensure_flower_overlay() -> Polygon2D:
+	if _overlay_canvas == null:
+		return null
+	var flower_shader := load(FLOWER_SHADER_PATH)
+	var node := _overlay_canvas.get_node_or_null("FlowerOverlay")
+	if node and node is Polygon2D:
+		var flowers := node as Polygon2D
+		flowers.color = Color(1.0, 1.0, 1.0, 0.0)  # Ensure transparent base
+		if flowers.material == null or not (flowers.material is ShaderMaterial):
+			if flower_shader:
+				var flower_material := ShaderMaterial.new()
+				flower_material.shader = flower_shader
+				flowers.material = flower_material
+		return flowers
+	var flower_overlay := Polygon2D.new()
+	flower_overlay.name = "FlowerOverlay"
+	flower_overlay.z_index = -48  # Below ground level, so flowers appear on the ground
+	flower_overlay.color = Color(1.0, 1.0, 1.0, 0.0)  # Transparent base - shader handles all colors
+	var view_size := _get_view_size()
+	flower_overlay.polygon = _build_overlay_polygon(view_size)
+	if flower_shader:
+		var flower_material := ShaderMaterial.new()
+		flower_material.shader = flower_shader
+		flower_overlay.material = flower_material
+		(flower_overlay.material as ShaderMaterial).set_shader_parameter("view_size", view_size)
+	flower_overlay.visible = false  # Start hidden, enable when biome has flowers
+	_overlay_canvas.add_child(flower_overlay)
+	if Engine.is_editor_hint():
+		flower_overlay.owner = get_tree().edited_scene_root
+	return flower_overlay
+
 func _build_overlay_polygon(view_size: Vector2) -> PackedVector2Array:
 	var half := view_size * 0.5
 	return PackedVector2Array([
@@ -707,6 +740,15 @@ func _apply_biome_to_ground() -> void:
 		shader_material.set_shader_parameter("wave_speed", 0.45)
 		shader_material.set_shader_parameter("patchwork_strength", 0.3)
 		shader_material.set_shader_parameter("color_variation", 0.2)
+		# Procedural ground details (defaults off for null biome)
+		shader_material.set_shader_parameter("pebble_density", 0.0)
+		shader_material.set_shader_parameter("pebble_size", 0.08)
+		shader_material.set_shader_parameter("pebble_color", Color(0.35, 0.32, 0.28, 1.0))
+		shader_material.set_shader_parameter("crack_intensity", 0.0)
+		shader_material.set_shader_parameter("highlight_spots", 0.0)
+		shader_material.set_shader_parameter("spot_color", Color(0.85, 0.78, 0.35, 1.0))
+		shader_material.set_shader_parameter("ground_shadow_strength", 0.0)
+		shader_material.set_shader_parameter("shimmer_intensity", 0.0)
 		shader_material.set_shader_parameter("snow_cover", 0.0)
 		shader_material.set_shader_parameter("snow_brightness", 1.0)
 		shader_material.set_shader_parameter("snow_tint_color", Vector3(0.86, 0.92, 1.0))
@@ -718,6 +760,7 @@ func _apply_biome_to_ground() -> void:
 		shader_material.set_shader_parameter("snow_sparkle_intensity", 0.0)
 		_apply_snow_overlay_settings(null)
 		_apply_sakura_overlay_settings(null)
+		_apply_flower_overlay_settings(null)
 		_configure_snow_imprint_state(null)
 		return
 	
@@ -732,6 +775,17 @@ func _apply_biome_to_ground() -> void:
 	shader_material.set_shader_parameter("patchwork_strength", biome.patchwork_strength)
 	shader_material.set_shader_parameter("color_variation", biome.color_variation)
 	shader_material.set_shader_parameter("wind_strength", biome.wind_strength)
+	
+	# Procedural ground details
+	shader_material.set_shader_parameter("pebble_density", biome.pebble_density)
+	shader_material.set_shader_parameter("pebble_size", biome.pebble_size)
+	shader_material.set_shader_parameter("pebble_color", biome.pebble_color)
+	shader_material.set_shader_parameter("crack_intensity", biome.crack_intensity)
+	shader_material.set_shader_parameter("highlight_spots", biome.highlight_spots)
+	shader_material.set_shader_parameter("spot_color", biome.spot_color)
+	shader_material.set_shader_parameter("ground_shadow_strength", biome.ground_shadow_strength)
+	shader_material.set_shader_parameter("shimmer_intensity", biome.shimmer_intensity)
+	
 	shader_material.set_shader_parameter("snow_cover", biome.snow_cover)
 	shader_material.set_shader_parameter("snow_brightness", biome.snow_brightness)
 	shader_material.set_shader_parameter("snow_tint_color", Vector3(biome.snow_tint_color.r, biome.snow_tint_color.g, biome.snow_tint_color.b))
@@ -745,6 +799,7 @@ func _apply_biome_to_ground() -> void:
 		_background.color = biome.sky_color
 	_apply_snow_overlay_settings(biome)
 	_apply_sakura_overlay_settings(biome)
+	_apply_flower_overlay_settings(biome)
 	_configure_snow_imprint_state(biome)
 
 func _apply_time_of_day_settings() -> void:
@@ -1142,6 +1197,11 @@ func _apply_sakura_overlay_settings(biome: BiomeDefinition) -> void:
 	sakura_material.set_shader_parameter("world_offset", _compute_camera_world_offset())
 	sakura_material.set_shader_parameter("world_scale", 0.0021)
 
+func _apply_flower_overlay_settings(_biome: BiomeDefinition) -> void:
+	# DISABLED: Flower overlay causing shader errors - hiding for now
+	if _flower_overlay != null:
+		_flower_overlay.visible = false
+
 func _configure_snow_imprint_state(biome: BiomeDefinition) -> void:
 	var shader_material := _get_shader_material()
 	if shader_material == null:
@@ -1271,6 +1331,14 @@ func _update_overlay_layout() -> void:
 			_sakura_overlay.polygon = _build_overlay_polygon(view_size)
 		else:
 			_update_sakura_overlay_polygon(_get_camera_global_position())
+	if _flower_overlay:
+		var flower_material := _flower_overlay.material as ShaderMaterial
+		if flower_material:
+			flower_material.set_shader_parameter("view_size", view_size)
+		if _world_bounds.size == Vector2.ZERO:
+			_flower_overlay.polygon = _build_overlay_polygon(view_size)
+		else:
+			_update_flower_overlay_polygon(_get_camera_global_position())
 	if _vignette_overlay:
 		_vignette_overlay.size = view_size
 		_vignette_overlay.position = -view_size * 0.5
@@ -1290,6 +1358,7 @@ func _update_overlay_transform() -> void:
 	_overlay_canvas.global_scale = Vector2.ONE
 	_update_snow_overlay_polygon(camera_position)
 	_update_sakura_overlay_polygon(camera_position)
+	_update_flower_overlay_polygon(camera_position)
 
 func _get_camera_view_size() -> Vector2:
 	var viewport := get_viewport()
@@ -1365,6 +1434,13 @@ func _update_sakura_overlay_polygon(camera_position: Vector2) -> void:
 		Vector2(min_corner.x - camera_position.x, max_corner.y - camera_position.y)
 	])
 	_sakura_overlay.polygon = polygon
+
+func _update_flower_overlay_polygon(_camera_position: Vector2) -> void:
+	if _flower_overlay == null:
+		return
+	# Flower overlay always covers the screen - shader uses world_offset for positioning
+	var view_size := _get_camera_view_size()
+	_flower_overlay.polygon = _build_overlay_polygon(view_size)
 
 func _emit_snow_particles(world_position: Vector2, strength: float) -> void:
 	if _snow_particle_container == null:

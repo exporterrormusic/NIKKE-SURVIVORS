@@ -7,9 +7,15 @@ class_name SinController
 # Preload scripts
 const SinDebuffEffectScript = preload("res://scripts/characters/effects/SinDebuffEffect.gd")
 const SinCharmEffectScript = preload("res://scripts/characters/effects/SinCharmEffect.gd")
+const SinMagneticAuraScript = preload("res://scripts/characters/effects/SinMagneticAura.gd")
+const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
 
 # Charm area indicator
 var _charm_indicator: SinCharmAreaIndicator = null
+
+# "Magnetic Personality" upgrade - passive charm aura
+var _magnetic_aura: Node2D = null
+var _has_magnetic_upgrade: bool = false
 
 # SMG config
 var bullet_speed: float = 900.0
@@ -44,6 +50,28 @@ func _on_initialize() -> void:
 	# Ammo already set from CharacterRegistry by base class
 	data.special_cooldown = charm_cooldown
 	# Note: Indicator is created lazily in _on_process to ensure scene is ready
+	
+	# Check for "Magnetic Personality" upgrade
+	_has_magnetic_upgrade = ShopMenuScript.has_character_upgrade("sin", "basic_attack")
+	if _has_magnetic_upgrade:
+		print("[SinController] 'Magnetic Personality' upgrade active - creating aura")
+		# Aura will be created lazily when player parent is available
+
+func _create_magnetic_aura() -> void:
+	if not _has_magnetic_upgrade:
+		return
+	if _magnetic_aura and is_instance_valid(_magnetic_aura):
+		return
+	if not player or not is_instance_valid(player):
+		return
+	var parent = player.get_parent()
+	if not parent or not is_instance_valid(parent):
+		return
+	
+	_magnetic_aura = SinMagneticAuraScript.new()
+	_magnetic_aura.name = "SinMagneticAura"
+	parent.add_child(_magnetic_aura)
+	_magnetic_aura.initialize(player)
 
 func _create_charm_indicator() -> void:
 	if _charm_indicator and is_instance_valid(_charm_indicator):
@@ -78,6 +106,10 @@ func _on_process(delta: float) -> void:
 	if not _charm_indicator or not is_instance_valid(_charm_indicator):
 		_create_charm_indicator()
 	
+	# Ensure magnetic aura exists if upgrade is active
+	if _has_magnetic_upgrade and (not _magnetic_aura or not is_instance_valid(_magnetic_aura)):
+		_create_magnetic_aura()
+	
 	# Update charm indicator visibility
 	_update_charm_indicator()
 
@@ -105,7 +137,6 @@ func _can_attack() -> bool:
 
 func _perform_attack(direction: Vector2) -> void:
 	# Fire dual SMG bullets in akimbo style
-	var bullet_scene = preload("res://scenes/effects/SMGBullet.tscn")
 	
 	# Calculate perpendicular offset for dual guns
 	var perp := Vector2(-direction.y, direction.x).normalized()
@@ -115,7 +146,7 @@ func _perform_attack(direction: Vector2) -> void:
 	var bullet_damage: int = maxi(player.calc_damage(1.0 / player.get_base_damage()), 1)
 	
 	# Left gun bullet
-	var bullet_left = bullet_scene.instantiate()
+	var bullet_left = ProjectileCache.create_smg_bullet()
 	player.get_parent().add_child(bullet_left)
 	bullet_left.global_position = player.global_position + direction * 30 - perp * gun_offset
 	bullet_left.velocity = direction * bullet_speed
@@ -124,7 +155,7 @@ func _perform_attack(direction: Vector2) -> void:
 	bullet_left.base_damage = bullet_damage
 	
 	# Right gun bullet
-	var bullet_right = bullet_scene.instantiate()
+	var bullet_right = ProjectileCache.create_smg_bullet()
 	player.get_parent().add_child(bullet_right)
 	bullet_right.global_position = player.global_position + direction * 30 + perp * gun_offset
 	bullet_right.velocity = direction * bullet_speed
@@ -312,6 +343,10 @@ func _on_cleanup() -> void:
 	if is_instance_valid(_charm_indicator):
 		_charm_indicator.queue_free()
 		_charm_indicator = null
+	# Clean up magnetic aura
+	if is_instance_valid(_magnetic_aura):
+		_magnetic_aura.queue_free()
+		_magnetic_aura = null
 	_clear_burst_targets()
 
 func _clear_burst_targets() -> void:

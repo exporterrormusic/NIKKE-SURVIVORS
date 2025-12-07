@@ -4,6 +4,7 @@ extends Control
 ## When squad is complete, animates up to reveal stage selector.
 
 const UI := preload("res://scripts/ui/UITheme.gd")
+const UISounds := preload("res://scripts/ui/UISoundManager.gd")
 
 signal play_requested(squad: Array[int], stage_id: String)
 signal back_requested
@@ -71,6 +72,7 @@ func _handle_escape() -> void:
 		_go_back()
 
 func _go_back() -> void:
+	UISounds.play_back()
 	# If we came from Level (pause menu), use MenuManager to go to main menu
 	# Check if MenuManager exists and is the proper way back
 	if MenuManager:
@@ -452,6 +454,7 @@ func _apply_random_button_style(btn: Button) -> void:
 	btn.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
 
 func _on_random_pressed() -> void:
+	UISounds.play_select()
 	# Disconnect squad_complete signal to prevent auto-transition
 	if _squad_slots.squad_complete.is_connected(_on_squad_complete):
 		_squad_slots.squad_complete.disconnect(_on_squad_complete)
@@ -499,6 +502,7 @@ func _on_next_pressed() -> void:
 	# Only proceed if we have a full squad (3 characters)
 	if not _squad_slots.is_complete():
 		return
+	UISounds.play_confirm()
 	_transition_to_stage()
 
 func _on_card_input(event: InputEvent, char_id: String) -> void:
@@ -584,6 +588,7 @@ func _remove_from_squad(char_id: String) -> void:
 	_update_card_states()
 
 func _on_squad_complete() -> void:
+	UISounds.play_confirm()
 	_transition_to_stage()
 
 func _transition_to_stage() -> void:
@@ -602,6 +607,7 @@ func _transition_to_stage() -> void:
 	_transition_tween.tween_property(_stage_container, "modulate:a", 1.0, 0.4).set_delay(0.1)
 
 func _on_stage_back() -> void:
+	UISounds.play_back()
 	_transition_to_squad()
 
 func _transition_to_squad() -> void:

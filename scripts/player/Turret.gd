@@ -2,6 +2,8 @@ extends Node2D
 
 var ammo = 4
 var max_ammo = 4
+var spawned_by_summon := false  # Track if this turret was spawned by a SummonedAlly
+var spawner_node: Node = null  # The node that spawned this turret (for killer_source tracking)
 
 @onready var ammo_bar = $AmmoBar
 @onready var ammo_label = $AmmoLabel
@@ -276,8 +278,7 @@ func shoot():
 		ammo_bar.value = ammo
 		_update_ammo_label()
 		
-		var rocket_scene = preload("res://scenes/effects/Rocket.tscn")
-		var rocket = rocket_scene.instantiate()
+		var rocket = ProjectileCache.create_rocket()
 		get_parent().add_child(rocket)
 		
 		# Fire from the barrel tips
@@ -295,7 +296,14 @@ func shoot():
 		rocket.target_position = target_pos
 		rocket.explode_at_target = true
 		rocket.target_node = targets[i]
-		rocket.owner_node = get_parent().get_node("Player")
+		# Set owner_node and killer_source based on who spawned the turret
+		if spawned_by_summon:
+			# Set killer_source_override directly so it persists even after summon is freed
+			rocket.killer_source_override = "summon"
+			if is_instance_valid(spawner_node):
+				rocket.owner_node = spawner_node
+		else:
+			rocket.owner_node = get_parent().get_node_or_null("Player")
 		rocket.scale = Vector2(0.5, 0.5)
 		rocket.ground_fire_enabled = false
 		rocket.homing_enabled = true  # Enable homing for turret rockets

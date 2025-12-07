@@ -6,11 +6,17 @@ class_name PlayerOverheadHud
 
 const HEALTH_BAR_WIDTH := 112.0
 const HEALTH_BAR_HEIGHT := 12.0
+const SHIELD_BAR_HEIGHT := 8.0
 const AMMO_BAR_HEIGHT := 8.0
 const BURST_BAR_HEIGHT := 9.0
 const BAR_SPACING := 3.0
 const TOP_OFFSET_Y := -110.0  # Raised higher to avoid overlapping player sprite
 const BORDER_THICKNESS := 2.0
+
+# Shield bar colors (cyan/blue)
+@export var shield_fill_color: Color = Color(0.3, 0.85, 0.95, 1.0)
+@export var shield_background_color: Color = Color(0.08, 0.15, 0.2, 0.92)
+@export var shield_border_color: Color = Color(0.2, 0.6, 0.8, 1.0)
 
 @export var health_fill_color: Color = Color(0.32, 0.86, 0.48, 1.0)
 @export var health_background_color: Color = Color(0.11, 0.14, 0.18, 0.92)
@@ -46,6 +52,11 @@ var _burst_unlocked: bool = false  # Whether burst ability is unlocked
 var _scarlet_special_unlocked: bool = false  # Whether Scarlet's special attack is unlocked
 var _glow_time: float = 0.0
 var _initialized: bool = false
+
+# Shield bar (Kilo's upgrade or Cecil's shield)
+var _current_shield: int = 0
+var _max_shield: int = 0
+var _shield_visible: bool = false
 
 # Per-character reload progress tracking to prevent reset on swap
 # Supports all 10 characters: Scarlet, Commander, Rapunzel, Kilo, Marian, Crown, Snow White, Sin, Cecil, Nayuta
@@ -132,9 +143,20 @@ func _draw() -> void:
 		return
 	
 	var left_x := -HEALTH_BAR_WIDTH * 0.5
+	var current_y := TOP_OFFSET_Y
+	
+	# Draw shield bar above HP if active
+	if _shield_visible and _max_shield > 0:
+		var shield_rect := Rect2(Vector2(left_x, current_y - SHIELD_BAR_HEIGHT - BAR_SPACING), Vector2(HEALTH_BAR_WIDTH, SHIELD_BAR_HEIGHT))
+		_draw_bar(shield_rect, float(_current_shield), float(_max_shield), shield_background_color, shield_fill_color, shield_border_color)
+		
+		# Draw shield text
+		var shield_text := "%d" % _current_shield
+		var shield_center := Vector2(0, current_y - SHIELD_BAR_HEIGHT - BAR_SPACING + SHIELD_BAR_HEIGHT * 0.5)
+		_draw_bar_text(shield_text, shield_center, 7)
 	
 	# Draw health bar
-	var health_rect := Rect2(Vector2(left_x, TOP_OFFSET_Y), Vector2(HEALTH_BAR_WIDTH, HEALTH_BAR_HEIGHT))
+	var health_rect := Rect2(Vector2(left_x, current_y), Vector2(HEALTH_BAR_WIDTH, HEALTH_BAR_HEIGHT))
 	_draw_bar(health_rect, float(_current_health), float(_max_health), health_background_color, health_fill_color, health_border_color)
 	
 	# Draw health text (centered in bar)
@@ -946,6 +968,12 @@ func _connect_player_signals() -> void:
 func update_health(current: int, maximum: int) -> void:
 	_current_health = current
 	_max_health = maxi(1, maximum)
+	queue_redraw()
+
+func update_shield(current: int, maximum: int) -> void:
+	_current_shield = current
+	_max_shield = maxi(0, maximum)
+	_shield_visible = maximum > 0
 	queue_redraw()
 
 func update_burst(current: float, maximum: float) -> void:

@@ -2,12 +2,18 @@ extends "res://scripts/characters/CharacterController.gd"
 class_name SnowWhiteController
 ## Snow White - Sniper with piercing bullets and turret special
 
+# Shop upgrade reference
+const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
+
 # Turret special state
 var turret_charges: int = 0
 var turret_max_charges: int = 1
 var turret_recharging: bool = false
 var turret_timer: float = 0.0
 var turret_cooldown: float = 10.0
+
+# Shop upgrade state
+var _has_best_girl_upgrade: bool = false
 
 # Talent states
 var special_count_level: int = 0  # +2 max charges per level
@@ -21,6 +27,9 @@ const SnowWhiteBurstBeamScript = preload("res://scripts/characters/effects/SnowW
 func _on_initialize() -> void:
 	# Ammo already set from CharacterRegistry by base class
 	turret_charges = turret_max_charges
+	
+	# Check if "Best Girl" upgrade is purchased
+	_has_best_girl_upgrade = ShopMenuScript.has_character_upgrade("snow_white", "basic_attack")
 
 func _on_process(delta: float) -> void:
 	# Update turret recharge - fully refills all charges when timer expires
@@ -31,18 +40,30 @@ func _on_process(delta: float) -> void:
 			turret_recharging = false
 
 func _perform_attack(direction: Vector2) -> void:
-	# Fire piercing bullet
-	var bullet_scene = preload("res://scenes/effects/Bullet.tscn")
-	var bullet = bullet_scene.instantiate()
-	player.get_parent().add_child(bullet)
-	bullet.global_position = player.global_position + direction * 200  # Spawn far outside player sprite
-	bullet.velocity = direction * 2200
-	bullet.rotation = direction.angle()  # Sprite child already has PI rotation built-in
-	bullet.owner_node = player
-	bullet.pierce_all = true  # Snow White's bullets pierce
-	bullet.max_range = 0.0  # Sniper has unlimited range (despawns via lifetime only)
-	# Use character's base damage with level scaling
-	bullet.base_damage = player.calc_damage()
+	# Fire piercing bullet - use scene-based bullet for proper sprite
+	if _has_best_girl_upgrade:
+		# Use special bullet scene that leaves burn trail
+		var bullet = ProjectileCache.create_snow_white_bullet()
+		player.get_parent().add_child(bullet)
+		bullet.global_position = player.global_position + direction * 200
+		bullet.velocity = direction * 2200
+		bullet.rotation = direction.angle()
+		bullet.owner_node = player
+		bullet.pierce_all = true
+		bullet.max_range = 0.0
+		bullet.base_damage = player.calc_damage()
+		bullet.leave_burn_trail = true
+	else:
+		# Standard bullet
+		var bullet = ProjectileCache.create_bullet()
+		player.get_parent().add_child(bullet)
+		bullet.global_position = player.global_position + direction * 200
+		bullet.velocity = direction * 2200
+		bullet.rotation = direction.angle()
+		bullet.owner_node = player
+		bullet.pierce_all = true
+		bullet.max_range = 0.0
+		bullet.base_damage = player.calc_damage()
 	
 	_play_sound("sniper")
 
@@ -65,8 +86,7 @@ func _perform_special(_direction: Vector2) -> void:
 	turret_max_charges = 1 + special_count_level * 2
 	
 	# Spawn turret
-	var turret_scene = preload("res://scenes/effects/Turret.tscn")
-	var turret = turret_scene.instantiate()
+	var turret = ProjectileCache.create_turret()
 	
 	# Apply capacity bonus
 	turret.ammo = 4 + special_capacity_level * 2

@@ -55,6 +55,9 @@ var unlocked_characters: Array[int] = [0]  # Start with Main character unlocked
 # Burst sounds
 var _burst_sounds: Array = []
 
+# Level up sound
+var _level_up_sfx: AudioStream = null
+
 # Player state
 var hp: int = 10
 var max_hp: int = 10
@@ -87,6 +90,19 @@ var _shop_atk_bonus: float = 0.0  # Multiplier (e.g., 0.25 = +25%)
 var _shop_crit_bonus: float = 0.0  # Flat chance (e.g., 0.10 = +10%)
 var _shop_xp_bonus: float = 0.0  # Multiplier (e.g., 0.25 = +25%)
 
+# Character-specific shop upgrades (for squad-wide effects)
+var _has_rapunzel_healer_upgrade: bool = false  # "I'm a healer, but..." - heal 2% on kill
+var _has_commander_burst_upgrade: bool = false  # "Obviously Anderson" - 2x burst generation
+var _has_crown_xp_upgrade: bool = false  # "Royal Knowledge" - 2x XP
+var _has_cecil_lives_upgrade: bool = false  # "Three Wishes..." - 3 extra lives
+var _cecil_lives_remaining: int = 0  # Remaining extra lives
+var _cecil_revive_invincible_timer: float = 0.0  # 5s invincibility after revive
+var _has_kilo_shield_upgrade: bool = false  # "Protect Me Talos" - shield on kills
+var _kilo_shield_current: int = 0  # Current shield amount
+var _kilo_shield_max: int = 0  # Max shield (50% of max_hp)
+var _kilo_shield_visual: Node2D = null  # Visual shield effect
+var _has_nayuta_duplicity_upgrade: bool = false  # "Duplicity" - 10% clone spawn on kills
+
 func _ready() -> void:
 	add_to_group("player")
 	_create_shadow()
@@ -96,6 +112,7 @@ func _ready() -> void:
 	_init_ui()
 	update_sprite()
 	call_deferred("_update_hud")
+	_level_up_sfx = load("res://assets/sounds/sfx/ui/level.wav")
 
 func _apply_shop_upgrades() -> void:
 	"""Apply permanent shop upgrades to player stats."""
@@ -183,6 +200,138 @@ func _init_character_system() -> void:
 			_burst_sounds.append(sound)
 		else:
 			_burst_sounds.append(null)
+	
+	# Apply character-specific shop upgrades for selected squad
+	_apply_character_shop_upgrades(all_ids)
+
+func _apply_character_shop_upgrades(all_ids: Array) -> void:
+	"""Apply character-specific shop upgrades based on selected squad.
+	   Only applies if the character's slot is unlocked in the skill tree."""
+	for slot_idx in range(_selected_char_indices.size()):
+		var char_idx: int = _selected_char_indices[slot_idx]
+		if char_idx < 0 or char_idx >= all_ids.size():
+			continue
+		
+		# Check if this character slot is unlocked in the skill tree
+		# Support characters (slots 1, 2) must be unlocked during gameplay
+		if slot_idx not in unlocked_characters:
+			continue
+		
+		var char_id: String = all_ids[char_idx]
+		
+		# Check each character's basic_attack upgrade
+		match char_id:
+			"rapunzel":
+				if ShopMenuScript.has_character_upgrade("rapunzel", "basic_attack"):
+					_has_rapunzel_healer_upgrade = true
+					print("[PlayerCore] Rapunzel 'I'm a healer, but...' upgrade active")
+			"commander":
+				if ShopMenuScript.has_character_upgrade("commander", "basic_attack"):
+					_has_commander_burst_upgrade = true
+					print("[PlayerCore] Commander 'Obviously Anderson' upgrade active")
+			"crown":
+				if ShopMenuScript.has_character_upgrade("crown", "basic_attack"):
+					_has_crown_xp_upgrade = true
+					print("[PlayerCore] Crown 'Royal Knowledge' upgrade active")
+			"cecil":
+				if ShopMenuScript.has_character_upgrade("cecil", "basic_attack"):
+					_has_cecil_lives_upgrade = true
+					_cecil_lives_remaining = 3
+					print("[PlayerCore] Cecil 'Three Wishes...' upgrade active (3 lives)")
+			"kilo":
+				if ShopMenuScript.has_character_upgrade("kilo", "basic_attack"):
+					_has_kilo_shield_upgrade = true
+					_kilo_shield_max = int(max_hp * 0.5)
+					_kilo_shield_current = 0  # Shield starts empty
+					_create_kilo_shield_visual()
+					# Update the HUD to show empty shield bar
+					call_deferred("_update_shield_display")
+					print("[PlayerCore] Kilo 'Protect Me Talos' upgrade active (max shield: %d)" % _kilo_shield_max)
+			"nayuta":
+				if ShopMenuScript.has_character_upgrade("nayuta", "basic_attack"):
+					_has_nayuta_duplicity_upgrade = true
+					print("[PlayerCore] Nayuta 'Duplicity' upgrade active (10% clone spawn)")
+
+func _apply_upgrade_for_character(char_idx: int) -> void:
+	"""Apply shop upgrade for a specific character when unlocked during gameplay."""
+	if not _registry:
+		return
+	var all_ids: Array = _registry.get_all_character_ids()
+	if char_idx < 0 or char_idx >= all_ids.size():
+		return
+	
+	var char_id: String = all_ids[char_idx]
+	
+	match char_id:
+		"rapunzel":
+			if ShopMenuScript.has_character_upgrade("rapunzel", "basic_attack"):
+				_has_rapunzel_healer_upgrade = true
+				print("[PlayerCore] Rapunzel 'I'm a healer, but...' upgrade now active (unlocked)")
+		"commander":
+			if ShopMenuScript.has_character_upgrade("commander", "basic_attack"):
+				_has_commander_burst_upgrade = true
+				print("[PlayerCore] Commander 'Obviously Anderson' upgrade now active (unlocked)")
+		"crown":
+			if ShopMenuScript.has_character_upgrade("crown", "basic_attack"):
+				_has_crown_xp_upgrade = true
+				print("[PlayerCore] Crown 'Royal Knowledge' upgrade now active (unlocked)")
+		"cecil":
+			if ShopMenuScript.has_character_upgrade("cecil", "basic_attack"):
+				_has_cecil_lives_upgrade = true
+				_cecil_lives_remaining = 3
+				print("[PlayerCore] Cecil 'Three Wishes...' upgrade now active (unlocked)")
+		"kilo":
+			if ShopMenuScript.has_character_upgrade("kilo", "basic_attack"):
+				_has_kilo_shield_upgrade = true
+				_kilo_shield_max = int(max_hp * 0.5)
+				_kilo_shield_current = 0  # Shield starts empty
+				_create_kilo_shield_visual()
+				call_deferred("_update_shield_display")
+				print("[PlayerCore] Kilo 'Protect Me Talos' upgrade now active (unlocked)")
+		"nayuta":
+			if ShopMenuScript.has_character_upgrade("nayuta", "basic_attack"):
+				_has_nayuta_duplicity_upgrade = true
+				print("[PlayerCore] Nayuta 'Duplicity' upgrade now active (unlocked)")
+
+func on_enemy_killed(_enemy: Node2D, killer_source: String = "player") -> void:
+	"""Called by Level when an enemy dies. Handles kill-based character upgrades.
+	   Only player kills (player, projectile, cecil_drone) grant benefits."""
+	# Check if this is a valid kill source for upgrades
+	# Valid: player, projectile, cecil_drone
+	# Invalid: charmed_enemy, summon
+	var valid_kill: bool = killer_source in ["player", "projectile", "cecil_drone"]
+	
+	# Rapunzel: "I'm a healer, but..." - Heal 2% HP on each kill (only valid kills)
+	if _has_rapunzel_healer_upgrade and valid_kill:
+		var heal_amount: int = int(max_hp * 0.02)
+		if heal_amount < 1:
+			heal_amount = 1
+		heal(heal_amount)
+	
+	# Kilo: "Protect Me Talos" - Gain 1% of max HP as shield per kill (only valid kills)
+	if _has_kilo_shield_upgrade and valid_kill:
+		var shield_gain: int = int(max_hp * 0.01)
+		if shield_gain < 1:
+			shield_gain = 1
+		_kilo_shield_current = min(_kilo_shield_current + shield_gain, _kilo_shield_max)
+		_update_shield_display()
+	
+	# Nayuta: "Duplicity" - 10% chance to spawn a clone when an enemy dies (any kill)
+	if _has_nayuta_duplicity_upgrade and randf() < 0.10:
+		_spawn_duplicity_clone()
+
+func _spawn_duplicity_clone() -> void:
+	"""Spawn a clone at the player's position for Nayuta's Duplicity upgrade."""
+	var NayutaCloneScript = preload("res://scripts/characters/effects/NayutaClone.gd")
+	var clone: Node2D = NayutaCloneScript.new()
+	get_parent().add_child(clone)
+	clone.global_position = global_position + Vector2(randf_range(-30, 30), randf_range(-30, 30))
+	
+	# Clone stats: 25% player HP, 20% damage multiplier, no heal on death
+	var clone_hp: int = maxi(1, max_hp / 4)
+	var clone_attack: float = 0.2
+	clone.call("initialize", self, "smg", clone_hp, clone_attack, false, level)
+	print("[PlayerCore] Duplicity clone spawned!")
 
 func _init_ui() -> void:
 	if overhead_hud:
@@ -339,6 +488,22 @@ func take_damage(dmg: int) -> void:
 			# Shield absorbed the hit
 			return
 	
+	# Check if Kilo's "Protect Me Talos" shield can absorb damage
+	if _has_kilo_shield_upgrade and _kilo_shield_current > 0:
+		if _kilo_shield_current >= dmg:
+			# Shield fully absorbs the hit
+			_kilo_shield_current -= dmg
+			_update_shield_display()
+			_spawn_shield_hit_effect()
+			return
+		else:
+			# Shield partially absorbs
+			dmg -= _kilo_shield_current
+			_kilo_shield_current = 0
+			_update_shield_display()
+			_spawn_shield_hit_effect()
+			# Continue with reduced damage
+	
 	var prev_hp = hp
 	hp -= dmg
 	
@@ -365,6 +530,18 @@ func take_damage(dmg: int) -> void:
 		_on_player_death()
 
 func _on_player_death() -> void:
+	# Cecil "Three Wishes..." upgrade: Use an extra life if available
+	if _has_cecil_lives_upgrade and _cecil_lives_remaining > 0:
+		_cecil_lives_remaining -= 1
+		hp = max_hp
+		_update_health_display(max_hp, false)
+		_spawn_revive_effect()
+		# Grant 5 seconds of invincibility
+		_cecil_revive_invincible_timer = 5.0
+		invincible = true
+		print("[PlayerCore] Cecil's extra life used! %d lives remaining (5s invincibility)" % _cecil_lives_remaining)
+		return
+	
 	# Record the run result to GameState for leaderboard
 	if GameState:
 		GameState.record_run_result("")
@@ -405,7 +582,12 @@ func register_burst_hit(_target = null, from_burst: bool = false) -> void:
 	if not is_burst_unlocked():
 		return
 	
-	burst_current = min(burst_current + burst_per_hit, burst_max)
+	# Commander "Obviously Anderson" upgrade: 2x burst generation
+	var burst_gain: float = burst_per_hit
+	if _has_commander_burst_upgrade:
+		burst_gain *= 2.0
+	
+	burst_current = min(burst_current + burst_gain, burst_max)
 	if player_hud:
 		player_hud.update_burst(burst_current, burst_max, true)
 	if overhead_hud:
@@ -465,7 +647,13 @@ func _play_burst_voice() -> void:
 
 func add_xp(amount: int) -> void:
 	# Apply shop XP bonus
-	var bonus_amount: int = int(float(amount) * (1.0 + _shop_xp_bonus))
+	var xp_multiplier: float = 1.0 + _shop_xp_bonus
+	
+	# Crown "Royal Knowledge" upgrade: 2x XP gain
+	if _has_crown_xp_upgrade:
+		xp_multiplier *= 2.0
+	
+	var bonus_amount: int = int(float(amount) * xp_multiplier)
 	xp += bonus_amount
 	var leveled_up := false
 	while xp >= xp_to_next:
@@ -478,8 +666,22 @@ func add_xp(amount: int) -> void:
 	if leveled_up:
 		if xp_ui and xp_ui.has_method("flash_level_up"):
 			xp_ui.flash_level_up()
+		# Play level up sound
+		_play_level_up_sound()
 		# Spawn WoW-style golden glow effect around player
 		_spawn_level_up_glow()
+
+func _play_level_up_sound() -> void:
+	## Plays the level up sound effect
+	if not _level_up_sfx:
+		return
+	var audio_player = AudioStreamPlayer.new()
+	audio_player.bus = "SFX"
+	audio_player.stream = _level_up_sfx
+	audio_player.volume_db = -10.0
+	add_child(audio_player)
+	audio_player.play()
+	audio_player.finished.connect(audio_player.queue_free)
 
 func _spawn_level_up_glow() -> void:
 	## Spawns the golden level-up glow effect around the player
@@ -487,6 +689,48 @@ func _spawn_level_up_glow() -> void:
 	var glow = LevelUpGlowScript.new()
 	get_parent().add_child(glow)
 	glow.attach_to_player(self)
+
+func _spawn_revive_effect() -> void:
+	## Spawns a blue revive effect when Cecil's extra life is used
+	var ReviveEffectScript = preload("res://scripts/effects/ReviveEffect.gd")
+	var effect = ReviveEffectScript.new()
+	get_parent().add_child(effect)
+	effect.global_position = global_position
+
+func _create_kilo_shield_visual() -> void:
+	## Creates the visual shield effect for Kilo's upgrade
+	if _kilo_shield_visual and is_instance_valid(_kilo_shield_visual):
+		return
+	
+	var KiloShieldVisualScript = preload("res://scripts/effects/KiloShieldVisual.gd")
+	_kilo_shield_visual = KiloShieldVisualScript.new()
+	_kilo_shield_visual.name = "KiloShieldVisual"
+	call_deferred("_add_kilo_shield_visual")
+
+func _add_kilo_shield_visual() -> void:
+	if _kilo_shield_visual and is_instance_valid(_kilo_shield_visual):
+		get_parent().add_child(_kilo_shield_visual)
+		_kilo_shield_visual.initialize(self)
+
+func _update_shield_display() -> void:
+	## Updates the overhead HUD and visual shield with current shield status
+	if overhead_hud and overhead_hud.has_method("update_shield"):
+		overhead_hud.update_shield(_kilo_shield_current, _kilo_shield_max)
+	
+	# Update visual shield
+	if _kilo_shield_visual and is_instance_valid(_kilo_shield_visual):
+		_kilo_shield_visual.update_shield(_kilo_shield_current, _kilo_shield_max)
+
+func _spawn_shield_hit_effect() -> void:
+	## Spawns a cyan shield hit effect when Kilo's shield absorbs damage
+	var ShieldHitScript = preload("res://scripts/effects/ShieldHitEffect.gd")
+	var effect = ShieldHitScript.new()
+	get_parent().add_child(effect)
+	effect.global_position = global_position
+	
+	# Also trigger flash on visual shield
+	if _kilo_shield_visual and is_instance_valid(_kilo_shield_visual) and _kilo_shield_visual.has_method("on_shield_hit"):
+		_kilo_shield_visual.on_shield_hit()
 
 func update_xp_bar() -> void:
 	if xp_ui and xp_ui.has_method("set_xp"):
@@ -529,6 +773,9 @@ func _on_talent_unlocked(char_id: int, talent_id: String) -> void:
 			unlocked_characters.append(slot_idx)
 			unlocked_characters.sort()
 			print("[PlayerCore] Unlocked character slot %d (registry %d)" % [slot_idx, char_id])
+			
+			# Apply shop upgrades for the newly unlocked character
+			_apply_upgrade_for_character(char_id)
 	
 	# Forward talent to controller - use slot index
 	if slot_idx >= 0 and slot_idx < _controllers.size():
@@ -778,6 +1025,14 @@ func _process(delta: float) -> void:
 func _physics_process(delta: float) -> void:
 	if shop_open:
 		return
+	
+	# Cecil revive invincibility timer
+	if _cecil_revive_invincible_timer > 0.0:
+		_cecil_revive_invincible_timer -= delta
+		if _cecil_revive_invincible_timer <= 0.0:
+			_cecil_revive_invincible_timer = 0.0
+			if not dashing:  # Don't remove invincibility if currently dashing
+				invincible = false
 	
 	# Grace timer for dash
 	if _dash_press_timer > 0.0:

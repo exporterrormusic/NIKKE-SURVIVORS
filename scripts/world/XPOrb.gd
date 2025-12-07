@@ -62,6 +62,9 @@ func _exit_tree() -> void:
 	_trail_particles.clear()
 
 func _create_glow_layers() -> void:
+	# Get shared additive material (cached, not created per orb)
+	var additive_mat := ShaderCache.get_additive_material()
+	
 	# Outer glow (large, soft)
 	_glow_sprite = Sprite2D.new()
 	_glow_sprite.texture = _glow_texture
@@ -69,9 +72,7 @@ func _create_glow_layers() -> void:
 	_glow_sprite.modulate = GLOW_COLOR
 	_glow_sprite.scale = Vector2(1.5, 1.5)
 	_glow_sprite.z_index = -1
-	var glow_mat := CanvasItemMaterial.new()
-	glow_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	_glow_sprite.material = glow_mat
+	_glow_sprite.material = additive_mat
 	add_child(_glow_sprite)
 	
 	# Inner glow (bright white/blue core)
@@ -81,9 +82,7 @@ func _create_glow_layers() -> void:
 	_inner_glow.modulate = Color(0.85, 0.9, 1.0, 0.9)  # Bright white-blue center
 	_inner_glow.scale = Vector2(0.6, 0.6)
 	_inner_glow.z_index = 1
-	var inner_mat := CanvasItemMaterial.new()
-	inner_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	_inner_glow.material = inner_mat
+	_inner_glow.material = additive_mat
 	add_child(_inner_glow)
 	
 	# Tint the main sprite
@@ -218,9 +217,8 @@ func _spawn_trail_particle() -> void:
 	var spark_color := SPARKLE_COLOR if _rng.randf() > 0.5 else PRIMARY_COLOR
 	particle.modulate = spark_color
 	
-	var mat := CanvasItemMaterial.new()
-	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	particle.material = mat
+	# Use shared additive material
+	particle.material = ShaderCache.get_additive_material()
 	
 	get_parent().add_child(particle)
 	
@@ -231,14 +229,11 @@ func _spawn_trail_particle() -> void:
 		"alpha": 1.0
 	})
 
-# Shared material for collection burst sparks (reused across all orbs)
-static var _burst_material: CanvasItemMaterial = null
+# Collection burst uses ShaderCache for shared material
 
 func _spawn_collection_burst() -> void:
-	# Create shared material once
-	if _burst_material == null:
-		_burst_material = CanvasItemMaterial.new()
-		_burst_material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	# Use shared additive material from ShaderCache
+	var additive_mat := ShaderCache.get_additive_material()
 	
 	# Spawn fewer sparkles for performance (4 instead of 8)
 	var burst_count := 4
@@ -251,7 +246,7 @@ func _spawn_collection_burst() -> void:
 		spark.global_position = global_position
 		spark.scale = Vector2(0.5, 0.5)
 		spark.modulate = SPARKLE_COLOR if i % 2 == 0 else PRIMARY_COLOR
-		spark.material = _burst_material  # Reuse shared material
+		spark.material = additive_mat
 		
 		get_parent().add_child(spark)
 		

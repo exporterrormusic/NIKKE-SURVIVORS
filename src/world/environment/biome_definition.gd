@@ -24,6 +24,19 @@ class_name BiomeDefinition
 @export_range(0.0, 720.0, 1.0) var decoration_spawn_radius: float = 560.0
 @export_range(0.0, 1.0, 0.01) var decoration_variation: float = 0.35
 @export_range(0.0, 5.0, 0.01) var wind_strength: float = 0.45
+
+# Procedural ground details - all default to 0 (disabled)
+@export_group("Ground Details")
+@export_range(0.0, 0.5, 0.01) var pebble_density: float = 0.0
+@export_range(0.02, 0.2, 0.01) var pebble_size: float = 0.08
+@export var pebble_color: Color = Color(0.35, 0.32, 0.28, 1.0)
+@export_range(0.0, 0.4, 0.01) var crack_intensity: float = 0.0
+@export_range(0.0, 0.3, 0.01) var highlight_spots: float = 0.0
+@export var spot_color: Color = Color(0.85, 0.78, 0.35, 1.0)
+@export_range(0.0, 0.4, 0.01) var ground_shadow_strength: float = 0.0
+@export_range(0.0, 0.2, 0.01) var shimmer_intensity: float = 0.0
+
+@export_group("Snow")
 @export_range(0.0, 1.0, 0.01) var snow_cover: float = 0.0
 @export_range(0.5, 2.0, 0.01) var snow_brightness: float = 1.0
 @export var snow_tint_color: Color = Color(0.86, 0.92, 1.0, 1.0)
@@ -41,6 +54,15 @@ class_name BiomeDefinition
 @export var sakura_secondary_color: Color = Color(1.0, 0.62, 0.8, 0.65)
 @export_range(0.0, 2.0, 0.01) var sakura_fall_speed: float = 0.85
 @export_range(0.0, 1.0, 0.01) var sakura_twinkle_strength: float = 0.35
+
+@export_group("Flower Patches")
+@export_range(0.0, 1.0, 0.01) var flower_density: float = 0.0
+@export_range(0.25, 3.0, 0.01) var flower_scale: float = 1.0
+@export var flower_primary_color: Color = Color(1.0, 0.85, 0.2, 1.0)      # Yellow
+@export var flower_secondary_color: Color = Color(1.0, 0.4, 0.5, 1.0)     # Pink
+@export var flower_tertiary_color: Color = Color(0.6, 0.4, 1.0, 1.0)      # Purple
+@export_range(0.0, 1.0, 0.01) var flower_wind_sway: float = 0.3
+@export_range(0.2, 1.0, 0.01) var flower_cluster_size: float = 0.5
 
 func has_decorations() -> bool:
 	return decoration_textures.size() > 0 and decoration_count > 0

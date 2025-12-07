@@ -6,6 +6,7 @@ class_name LeaderboardMenu
 signal back_requested
 
 const UI := preload("res://scripts/ui/UITheme.gd")
+const UISounds := preload("res://scripts/ui/UISoundManager.gd")
 
 const MAX_VISIBLE_ENTRIES := 10
 const ENTRIES_PER_COLUMN := 5
@@ -37,6 +38,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _handle_escape() -> void:
+	UISounds.play_back()
 	var viewport := get_viewport()
 	if viewport:
 		viewport.set_input_as_handled()

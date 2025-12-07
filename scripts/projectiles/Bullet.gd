@@ -130,7 +130,13 @@ func _on_body_entered(body):
 	
 	# Pass hit direction (bullet's travel direction) to enemy for knockback visual
 	var hit_direction = velocity.normalized()
-	body.take_damage(damage, is_crit, hit_direction)
+	
+	# Determine killer source based on owner type
+	var killer_source := "player"
+	if is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
+		killer_source = "summon"
+	
+	body.take_damage(damage, is_crit, hit_direction, false, killer_source)
 	_hit_nodes.append(body)
 
 	# If we are not piercing, or we have a limited pierce_count that reached 0, destroy

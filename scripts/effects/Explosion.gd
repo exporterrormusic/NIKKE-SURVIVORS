@@ -3,6 +3,8 @@ extends Area2D
 var time = 0.0
 var _light: PointLight2D = null
 var _damaged_bodies: Array = []  # Track who we've already damaged
+var owner_node: Node = null  # Track who spawned this explosion for killer_source
+var killer_source_override: String = ""  # Override killer_source if set
 
 # Performance: disable explosion lights (less impactful since they're short-lived)
 const ENABLE_EXPLOSION_LIGHTS := false
@@ -57,4 +59,10 @@ func _try_damage_body(body) -> void:
         return
     _damaged_bodies.append(body)
     var hit_direction = (body.global_position - global_position).normalized()
-    body.take_damage(1, false, hit_direction)
+    # Determine killer source - use override if set, otherwise check owner type
+    var killer_source := "player"
+    if killer_source_override != "":
+        killer_source = killer_source_override
+    elif is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
+        killer_source = "summon"
+    body.take_damage(1, false, hit_direction, false, killer_source)

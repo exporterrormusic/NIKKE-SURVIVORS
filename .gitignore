@@ -9,3 +9,6 @@ NIKKE-GODOT - Copy/
 *.import
 .godot/
 
+
+# Exported executables
+*.exe

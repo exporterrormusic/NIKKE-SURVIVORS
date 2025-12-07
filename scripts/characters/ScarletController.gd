@@ -2,6 +2,10 @@ extends "res://scripts/characters/CharacterController.gd"
 class_name ScarletController
 ## Scarlet - Melee fighter with sword attacks and dash abilities
 
+# Shop upgrade reference
+const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
+const RosePetalScript = preload("res://scripts/characters/effects/RosePetal.gd")
+
 # Scarlet-specific state
 var special_ammo: int = 1
 var special_max_ammo: int = 1
@@ -11,6 +15,9 @@ var special_reload_time: float = 4.0
 
 var damage_accumulator: float = 0.0  # Tracks fractional self-damage
 
+# Shop upgrade state
+var _has_roses_core_upgrade: bool = false
+
 # Talent states
 var special_cd_level: int = 0  # Quick Dash: reduces cooldown
 var special_heal_level: int = 0
@@ -19,14 +26,15 @@ var burst_vuln_unlocked: bool = false
 
 # Scripts for effects
 const ScarletBurstEffectScript = preload("res://scripts/characters/effects/ScarletBurstEffect.gd")
-const SlashScene = preload("res://scenes/effects/Slash.tscn")
-const ScarletWaveScene = preload("res://scenes/effects/ScarletWave.tscn")
 
 func _on_initialize() -> void:
 	# Scarlet has unlimited basic attacks (melee)
 	max_ammo = -1
 	ammo = -1
 	special_ammo = special_max_ammo
+	
+	# Check if "Rose's Core" upgrade is purchased
+	_has_roses_core_upgrade = ShopMenuScript.has_character_upgrade("scarlet", "basic_attack")
 
 func _on_process(delta: float) -> void:
 	# Update special reload
@@ -41,18 +49,47 @@ func _can_attack() -> bool:
 
 func _perform_attack(direction: Vector2) -> void:
 	# Fire sword slash (melee attack attached to player)
-	var slash = SlashScene.instantiate()
+	var slash = ProjectileCache.create_slash()
 	slash.rotation = direction.angle()
 	# Use character's base damage with level scaling
-	slash.base_damage = player.calc_damage()
+	var damage: int = player.calc_damage()
+	slash.base_damage = damage
 	player.add_child(slash)  # Attach to player, not parent
 	slash.position = Vector2.ZERO  # Centered on player
+	
+	# Rose's Core upgrade: shoot 5 rose petals from slash tip
+	if _has_roses_core_upgrade:
+		_spawn_rose_petals(direction, damage)
 	
 	# Play sword sound
 	_play_sound("sword")
 	
 	# Apply self-damage (3% of max HP per attack)
 	_apply_self_damage()
+
+func _spawn_rose_petals(direction: Vector2, damage: int) -> void:
+	const PETAL_COUNT := 5
+	const SPREAD_ANGLE := PI / 3  # 60 degrees spread total for wider coverage
+	const PETAL_SPEED := 1200.0  # Faster to fly further
+	const SLASH_TIP_OFFSET := 280.0  # Match slash radius
+	
+	var base_angle: float = direction.angle()
+	var start_angle: float = base_angle - SPREAD_ANGLE / 2
+	var angle_step: float = SPREAD_ANGLE / (PETAL_COUNT - 1) if PETAL_COUNT > 1 else 0.0
+	
+	var spawn_pos: Vector2 = player.global_position + direction * SLASH_TIP_OFFSET
+	
+	for i in range(PETAL_COUNT):
+		var angle: float = start_angle + angle_step * i
+		var petal_dir: Vector2 = Vector2.from_angle(angle)
+		
+		var petal = RosePetalScript.new()
+		player.get_parent().add_child(petal)
+		petal.global_position = spawn_pos
+		petal.velocity = petal_dir * PETAL_SPEED
+		petal.rotation = angle
+		petal.owner_node = player
+		petal.base_damage = maxi(1, int(damage * 0.5))  # Rose petals do half slash damage
 
 func _can_use_special() -> bool:
 	return special_ammo > 0 and not special_reloading
@@ -74,7 +111,7 @@ func _perform_special(direction: Vector2) -> void:
 	_start_special_reload()
 	
 	# Spawn forward piercing wave
-	var w = ScarletWaveScene.instantiate()
+	var w = ProjectileCache.create_scarlet_wave()
 	w.rotation = direction.angle()
 	w.owner_node = player
 	w.pierce_all = true

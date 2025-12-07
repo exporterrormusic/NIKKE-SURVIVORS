@@ -97,7 +97,6 @@ func _can_attack() -> bool:
 
 func _perform_attack(direction: Vector2) -> void:
 	# Fire dual SMG bullets (same as Sin)
-	var bullet_scene = preload("res://scenes/effects/SMGBullet.tscn")
 	
 	var perp := Vector2(-direction.y, direction.x).normalized()
 	var gun_offset := 18.0
@@ -106,7 +105,7 @@ func _perform_attack(direction: Vector2) -> void:
 	var bullet_damage: int = maxi(player.calc_damage(1.0 / player.get_base_damage()), 1)
 	
 	# Left gun bullet
-	var bullet_left = bullet_scene.instantiate()
+	var bullet_left = ProjectileCache.create_smg_bullet()
 	player.get_parent().add_child(bullet_left)
 	bullet_left.global_position = player.global_position + direction * 45 - perp * gun_offset
 	bullet_left.velocity = direction * bullet_speed
@@ -115,7 +114,7 @@ func _perform_attack(direction: Vector2) -> void:
 	bullet_left.base_damage = bullet_damage
 	
 	# Right gun bullet
-	var bullet_right = bullet_scene.instantiate()
+	var bullet_right = ProjectileCache.create_smg_bullet()
 	player.get_parent().add_child(bullet_right)
 	bullet_right.global_position = player.global_position + direction * 45 + perp * gun_offset
 	bullet_right.velocity = direction * bullet_speed

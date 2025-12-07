@@ -1,8 +1,5 @@
 extends Area2D
 
-# Preload effect scenes
-const GroundFireScene = preload("res://scenes/effects/GroundFire.tscn")
-
 var velocity = Vector2.ZERO
 var target_pos = Vector2.ZERO
 var acceleration = 1000
@@ -154,10 +151,14 @@ func explode():
             # Pass hit direction (from explosion center to enemy)
             var hit_direction = (enemy.global_position - global_position).normalized()
             if enemy.has_method("take_damage"):
-                enemy.take_damage(base_damage, false, hit_direction)
+                # Determine killer source based on owner type
+                var killer_source := "player"
+                if is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
+                    killer_source = "summon"
+                enemy.take_damage(base_damage, false, hit_direction, false, killer_source)
     # create explosion
-    var explosion_scene = preload("res://scenes/effects/Explosion.tscn")
-    var explosion = explosion_scene.instantiate()
+    var explosion = ProjectileCache.create_explosion()
+    explosion.owner_node = owner_node  # Pass owner for killer_source tracking
     get_parent().add_child(explosion)
     explosion.global_position = global_position
     
@@ -183,7 +184,7 @@ func _play_explosion_sound() -> void:
             audio.play_rocket_explosion_sound()
 
 func _spawn_burning_ground():
-    var fire = GroundFireScene.instantiate()
+    var fire = ProjectileCache.create_ground_fire()
     get_parent().add_child(fire)
     fire.global_position = global_position
     # Configure burning ground with missile's settings

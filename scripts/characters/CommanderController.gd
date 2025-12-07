@@ -55,8 +55,7 @@ func _perform_attack(direction: Vector2) -> void:
 
 func _fire_bullet(direction: Vector2) -> void:
 	# Fire assault rifle bullet with golden-brown style
-	var bullet_scene = preload("res://scenes/effects/AssaultBullet.tscn")
-	var bullet = bullet_scene.instantiate()
+	var bullet = ProjectileCache.create_assault_bullet()
 	
 	player.get_parent().add_child(bullet)
 	bullet.global_position = player.global_position + direction * 30

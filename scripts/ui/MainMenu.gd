@@ -4,6 +4,7 @@ class_name MainMenu
 ## Emits signals for menu transitions and handles keyboard navigation.
 
 const UI := preload("res://scripts/ui/UITheme.gd")
+const UISounds := preload("res://scripts/ui/UISoundManager.gd")
 
 signal play_selected
 signal achievements_selected
@@ -82,6 +83,15 @@ func _connect_signals() -> void:
 
 func _on_button_pressed(option_id: String) -> void:
 	print("[MainMenu] Button pressed: ", option_id)
+	# Play appropriate sound
+	match option_id:
+		"PLAY":
+			UISounds.play_select()
+		"QUIT":
+			UISounds.play_back()
+		_:
+			UISounds.play_select()
+	
 	match option_id:
 		"PLAY":
 			print("[MainMenu] Emitting play_selected")
@@ -155,6 +165,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _show_quit_confirmation() -> void:
+	UISounds.play_back()
 	if _quit_dialog:
 		_quit_dialog.visible = true
 		return
@@ -266,6 +277,7 @@ func _create_dialog_button(text: String, is_danger: bool) -> Button:
 
 
 func _hide_quit_dialog() -> void:
+	UISounds.play_back()
 	if _quit_dialog:
 		_quit_dialog.visible = false
 
@@ -369,6 +381,7 @@ func _show_outpost_coming_soon() -> void:
 
 
 func _hide_outpost_dialog() -> void:
+	UISounds.play_back()
 	if _outpost_dialog:
 		_outpost_dialog.visible = false
 

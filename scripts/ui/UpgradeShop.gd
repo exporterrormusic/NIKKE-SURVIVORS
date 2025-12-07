@@ -6,6 +6,7 @@ extends Control
 signal upgrade_chosen(option_id)
 
 const UI := preload("res://scripts/ui/UITheme.gd")
+const UISounds := preload("res://scripts/ui/UISoundManager.gd")
 
 @export var option_a: String = ""
 @export var option_b: String = ""
@@ -211,6 +212,7 @@ func _on_card_unhover(index: int):
 	button.queue_redraw()
 
 func _on_option_selected(option_id: int):
+	UISounds.play_confirm()
 	selected_option = option_id
 	selected_text = [option_a, option_b, option_c][option_id]
 	emit_signal("upgrade_chosen", selected_text)

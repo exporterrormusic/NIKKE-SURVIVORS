@@ -7,9 +7,6 @@ class_name MarianBeam
 
 signal beam_ended
 
-# Preload missile scene for homing upgrade
-const MissileScene = preload("res://scenes/effects/Missile.tscn")
-
 @export var duration: float = 5.0
 @export var beam_range: float = 1500.0
 @export var beam_width: float = 240.0
@@ -24,6 +21,7 @@ var edge_color := Color(0.3, 0.0, 0.6, 0.5)
 
 var owner_node: Node = null
 var player_ref: Node2D = null  # Reference to player for position tracking
+var initial_direction: Vector2 = Vector2.ZERO  # Set by controller before adding to scene
 var _age: float = 0.0
 var _damage_timer: float = 0.0
 var _beam_direction: Vector2 = Vector2.RIGHT
@@ -60,8 +58,11 @@ func _ready() -> void:
 		_shader_material = ShaderMaterial.new()
 		_shader_material.shader = shader
 	
-	# Initial direction toward mouse
-	if owner_node:
+	# Initial direction - use pre-set direction if available, otherwise calculate from mouse
+	if initial_direction != Vector2.ZERO:
+		_beam_direction = initial_direction.normalized()
+		_target_direction = _beam_direction
+	elif owner_node:
 		var mouse_pos := get_global_mouse_position()
 		_beam_direction = (mouse_pos - global_position).normalized()
 		_target_direction = _beam_direction
@@ -186,7 +187,7 @@ func _fire_homing_missiles() -> void:
 		if not is_instance_valid(target):
 			continue
 		
-		var missile = MissileScene.instantiate()
+		var missile = ProjectileCache.create_missile()
 		get_parent().add_child(missile)
 		
 		# Spawn from player position with offset

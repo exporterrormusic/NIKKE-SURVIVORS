@@ -2,6 +2,8 @@ extends Control
 class_name StageSelector
 ## Holocure-style stage selector with fixed stages, preview, and animated start button.
 
+const UISounds := preload("res://scripts/ui/UISoundManager.gd")
+
 signal stage_confirmed(stage_id: String)
 signal back_requested
 
@@ -40,6 +42,7 @@ func _ready() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
+		UISounds.play_back()
 		back_requested.emit()
 		get_viewport().set_input_as_handled()
 
@@ -291,7 +294,7 @@ func _build_ui() -> void:
 	back_btn.text = "BACK"
 	back_btn.custom_minimum_size = Vector2(120, 45)
 	_apply_back_button_style(back_btn)
-	back_btn.pressed.connect(func(): back_requested.emit())
+	back_btn.pressed.connect(func(): UISounds.play_back(); back_requested.emit())
 	btn_row.add_child(back_btn)
 	
 	_start_btn = Button.new()
@@ -668,6 +671,7 @@ func _on_modifier_toggled(is_pressed: bool, stage_id: String) -> void:
 	_updating_selection = true
 	
 	if is_pressed:
+		UISounds.play_select()
 		_selected_stage_id = stage_id
 		# Deselect other buttons
 		for card in _stage_cards:
@@ -880,5 +884,6 @@ func _start_pulse_animation() -> void:
 	_start_tween.tween_property(_start_btn, "scale", Vector2.ONE, 0.8).set_trans(Tween.TRANS_SINE)
 
 func _on_start_pressed() -> void:
+	UISounds.play_confirm()
 	# GameState.selected_biome and selected_time are already set by _update_preview
 	stage_confirmed.emit(_selected_stage_id)

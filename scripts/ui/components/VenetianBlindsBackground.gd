@@ -47,13 +47,9 @@ func _ready() -> void:
 	# Don't clear cache - reuse processed textures across menu transitions
 	_setup_hex_overlay()
 	
-	# Defer heavy texture loading to next frame for faster initial display
-	call_deferred("_deferred_load")
-
-
-func _deferred_load() -> void:
-	_load_textures()
-	_prepare_textures()
+	# Just load textures synchronously - they're small and fast
+	# Skip all preparation - use raw textures with simple UVs (vertical blinds)
+	_load_textures_sync()
 	
 	# Initialize random animation offset on first load
 	if not _animation_offset_initialized:
@@ -66,6 +62,36 @@ func _deferred_load() -> void:
 	queue_redraw()
 
 
+func _load_textures_sync() -> void:
+	# Simple synchronous texture loading - uses cache if available
+	if _textures_loaded and not _shared_textures.is_empty():
+		_textures = _shared_textures.duplicate()
+		return
+	
+	_textures.clear()
+	var texture_paths = background_textures
+	
+	if texture_paths.is_empty():
+		texture_paths = _build_default_texture_paths()
+	
+	background_textures = texture_paths
+	
+	for path in texture_paths:
+		if not ResourceLoader.exists(path):
+			continue
+		var texture: Texture2D = null
+		var status := ResourceLoader.load_threaded_get_status(path)
+		if status == ResourceLoader.THREAD_LOAD_LOADED:
+			texture = ResourceLoader.load_threaded_get(path) as Texture2D
+		else:
+			texture = load(path) as Texture2D
+		if texture:
+			_textures.append(texture)
+	
+	_shared_textures = _textures.duplicate()
+	_textures_loaded = true
+
+
 func _setup_hex_overlay() -> void:
 	# Create a separate overlay for digital screen effects
 	# This sits on top of the blinds and applies CRT/LCD effects
@@ -76,8 +102,15 @@ func _setup_hex_overlay() -> void:
 	_hex_overlay.color = UI.TRANSPARENT
 	add_child(_hex_overlay)
 	
-	# Load and apply digital screen shader to the overlay
-	var screen_shader = load("res://resources/shaders/hexagon_grid_overlay.gdshader")
+	# Load and apply digital screen shader to the overlay (use threaded if available)
+	var shader_path := "res://resources/shaders/hexagon_grid_overlay.gdshader"
+	var screen_shader: Shader = null
+	var status := ResourceLoader.load_threaded_get_status(shader_path)
+	if status == ResourceLoader.THREAD_LOAD_LOADED or status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+		screen_shader = ResourceLoader.load_threaded_get(shader_path) as Shader
+	else:
+		screen_shader = load(shader_path) as Shader
+	
 	if screen_shader:
 		var screen_material = ShaderMaterial.new()
 		screen_material.shader = screen_shader
@@ -96,8 +129,7 @@ func _setup_hex_overlay() -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
-		_prepare_textures()
-		# Update shader screen size
+		# Only update shader, skip heavy texture preparation
 		if _hex_overlay and _hex_overlay.material:
 			_hex_overlay.material.set_shader_parameter("screen_size", size)
 		queue_redraw()
@@ -130,6 +162,7 @@ func _draw() -> void:
 		return
 
 	var blind_width = _get_blind_width()
+	# Always use angle offset - tilted effect is achieved via UV coordinates
 	var angle_offset = size.y * tan(deg_to_rad(blind_angle_degrees))
 	var total_width = blind_width * textures.size()
 	if total_width <= 0.0:
@@ -155,6 +188,115 @@ func set_background_textures(paths: PackedStringArray) -> void:
 	queue_redraw()
 
 
+func _load_textures_fast() -> void:
+	# Load textures but skip heavy preprocessing - call this for non-blocking startup
+	# Use cached textures if already loaded (shared across menu instances)
+	if _textures_loaded and not _shared_textures.is_empty():
+		_textures = _shared_textures.duplicate()
+		return
+	
+	_textures.clear()
+	var texture_paths = background_textures
+	
+	if texture_paths.is_empty():
+		texture_paths = _build_default_texture_paths()
+	
+	background_textures = texture_paths
+	
+	for path in texture_paths:
+		if not ResourceLoader.exists(path):
+			continue
+		# Use threaded loading if available (MenuManager pre-requests these)
+		var texture: Texture2D = null
+		var status := ResourceLoader.load_threaded_get_status(path)
+		if status == ResourceLoader.THREAD_LOAD_LOADED:
+			texture = ResourceLoader.load_threaded_get(path) as Texture2D
+		elif status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			texture = ResourceLoader.load_threaded_get(path) as Texture2D
+		else:
+			texture = load(path) as Texture2D
+		
+		if texture:
+			_textures.append(texture)
+	
+	# Cache for reuse
+	_shared_textures = _textures.duplicate()
+	_textures_loaded = true
+	# NOTE: No _prepare_textures() call - caller is responsible for async prep
+
+
+func _load_textures_async() -> void:
+	# Load textures asynchronously, yielding between each one to avoid frame freezes
+	# Use cached textures if already loaded (shared across menu instances)
+	if _textures_loaded and not _shared_textures.is_empty():
+		_textures = _shared_textures.duplicate()
+		return
+	
+	_textures.clear()
+	var texture_paths = background_textures
+	
+	if texture_paths.is_empty():
+		texture_paths = _build_default_texture_paths()
+	
+	background_textures = texture_paths
+	
+	for path in texture_paths:
+		if not ResourceLoader.exists(path):
+			continue
+		
+		# Check status - if still loading, yield until ready
+		var status := ResourceLoader.load_threaded_get_status(path)
+		while status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			await get_tree().process_frame
+			status = ResourceLoader.load_threaded_get_status(path)
+		
+		var texture: Texture2D = null
+		if status == ResourceLoader.THREAD_LOAD_LOADED:
+			texture = ResourceLoader.load_threaded_get(path) as Texture2D
+		else:
+			# Fallback to sync load if not pre-requested
+			texture = load(path) as Texture2D
+		
+		if texture:
+			_textures.append(texture)
+		
+		# Yield a frame between each texture load
+		await get_tree().process_frame
+	
+	# Cache for reuse
+	_shared_textures = _textures.duplicate()
+	_textures_loaded = true
+
+
+func _async_prepare_textures() -> void:
+	# Prepare textures asynchronously, yielding between each one
+	# Uses fast path (no monochrome CPU processing) to avoid frame freezes
+	if size.y <= 0.0:
+		return
+	if _textures.is_empty():
+		return
+	
+	var blind_width = int(round(_get_blind_width()))
+	var angle_offset: int = int(round(abs(size.y * tan(deg_to_rad(blind_angle_degrees)))))
+	var target_height = int(round(max(size.y, 1.0)))
+	
+	if blind_width <= 0 or target_height <= 0:
+		return
+	
+	_prepared_textures.clear()
+	
+	for original in _textures:
+		# Yield a frame between each texture to keep animation smooth
+		await get_tree().process_frame
+		
+		# Use fast path that skips expensive monochrome CPU processing
+		var prepared = _create_prepared_texture_fast(original, blind_width, angle_offset, target_height)
+		if not prepared.is_empty():
+			_prepared_textures.append(prepared)
+		
+		queue_redraw()
+
+
 func _load_textures() -> void:
 	# Use cached textures if already loaded (shared across menu instances)
 	if _textures_loaded and not _shared_textures.is_empty():
@@ -172,8 +314,19 @@ func _load_textures() -> void:
 	for path in texture_paths:
 		if not ResourceLoader.exists(path):
 			continue
-		var texture = load(path)
-		if texture is Texture2D:
+		# Use threaded loading if available (MenuManager pre-requests these)
+		var texture: Texture2D = null
+		var status := ResourceLoader.load_threaded_get_status(path)
+		if status == ResourceLoader.THREAD_LOAD_LOADED:
+			texture = ResourceLoader.load_threaded_get(path) as Texture2D
+		elif status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			# Wait for threaded load to complete (still better than sync load)
+			texture = ResourceLoader.load_threaded_get(path) as Texture2D
+		else:
+			# Fallback to sync load if not pre-requested
+			texture = load(path) as Texture2D
+		
+		if texture:
 			_textures.append(texture)
 	
 	# Cache for reuse
@@ -202,8 +355,10 @@ func _draw_blind(texture_entry: Dictionary, start_x: float, blind_width: float, 
 		Vector2(start_x + angle_offset, size.y)
 	])
 
-	# Images are already processed with monochrome effect, use white to show them as-is
-	var colors = PackedColorArray([Color.WHITE, Color.WHITE, Color.WHITE, Color.WHITE])
+	# Apply monochrome blue tint via vertex colors (GPU-efficient)
+	# This multiplies the texture by the tint color, giving a blue-ish aesthetic
+	var tint = MONOCHROME_HUE
+	var colors = PackedColorArray([tint, tint, tint, tint])
 
 	draw_polygon(points, colors, uvs, texture)
 	_draw_blind_edges(points)
@@ -234,19 +389,55 @@ func _get_blind_width() -> float:
 
 
 func _get_active_textures() -> Array:
-	if not _prepared_textures.is_empty():
+	# Only use prepared textures if ALL are ready (same count as raw textures)
+	# This prevents flickering during async preparation
+	if not _prepared_textures.is_empty() and _prepared_textures.size() >= _textures.size():
 		return _prepared_textures
 	if _textures.is_empty():
 		return []
+	# Calculate tilted UV coordinates that crop a parallelogram from the texture
+	# This achieves the tilted blinds effect without CPU image processing
+	var blind_width = _get_blind_width()
+	var angle_offset_pixels = size.y * tan(deg_to_rad(blind_angle_degrees))
 	var entries: Array = []
-	for texture in _textures:
+	
+	for i in range(_textures.size()):
+		var texture = _textures[i]
 		if texture:
+			var tex_size = texture.get_size()
+			if tex_size.x <= 0 or tex_size.y <= 0:
+				continue
+			
+			# Calculate the effective width needed (blind + angle offset)
+			var effective_width = blind_width + abs(angle_offset_pixels)
+			
+			# Calculate UV width to maintain proper aspect ratio
+			var target_aspect = effective_width / size.y
+			var tex_aspect = tex_size.x / tex_size.y
+			var uv_total_width = target_aspect / tex_aspect if tex_aspect > 0 else 1.0
+			uv_total_width = min(uv_total_width, 1.0)
+			
+			# Calculate the UV offset for the angle (how much to shift bottom vs top)
+			var uv_angle_offset = (abs(angle_offset_pixels) / effective_width) * uv_total_width
+			var uv_blind_width = (blind_width / effective_width) * uv_total_width
+			
+			# Center the crop horizontally
+			var uv_start = (1.0 - uv_total_width) / 2.0
+			
+			# Top edge: starts at uv_start, width = uv_blind_width
+			var top_left_u = uv_start
+			var top_right_u = uv_start + uv_blind_width
+			
+			# Bottom edge: shifted by uv_angle_offset
+			var bottom_left_u = uv_start + uv_angle_offset
+			var bottom_right_u = uv_start + uv_angle_offset + uv_blind_width
+			
 			entries.append({
 				"texture": texture,
-				"uv_top_left": Vector2(0.0, 0.0),
-				"uv_top_right": Vector2(1.0, 0.0),
-				"uv_bottom_right": Vector2(1.0, 1.0),
-				"uv_bottom_left": Vector2(0.0, 1.0)
+				"uv_top_left": Vector2(top_left_u, 0.0),
+				"uv_top_right": Vector2(top_right_u, 0.0),
+				"uv_bottom_right": Vector2(bottom_right_u, 1.0),
+				"uv_bottom_left": Vector2(bottom_left_u, 1.0)
 			})
 	return entries
 
@@ -322,6 +513,80 @@ func _create_prepared_texture(original: Texture2D, blind_width: int, angle_offse
 	
 	# Apply monochrome effect - convert to grayscale and tint
 	_apply_monochrome_effect(final_image)
+	
+	var safe_width: int = max(target_width, 1)
+	var top_left_u: float = 0.0
+	var top_right_u: float = float(blind_width) / float(safe_width)
+	var bottom_left_u: float = float(angle_offset) / float(safe_width)
+	var bottom_right_u: float = float(angle_offset + blind_width) / float(safe_width)
+	
+	var prepared_texture = ImageTexture.create_from_image(final_image)
+	var entry: Dictionary = {
+		"texture": prepared_texture,
+		"uv_top_left": Vector2(top_left_u, 0.0),
+		"uv_top_right": Vector2(top_right_u, 0.0),
+		"uv_bottom_right": Vector2(bottom_right_u, 1.0),
+		"uv_bottom_left": Vector2(bottom_left_u, 1.0)
+	}
+	_prepared_cache[cache_key] = entry
+	return entry
+
+
+## Fast version that skips expensive CPU-based monochrome processing.
+## Used during async loading to avoid frame freezes. Still does resizing for correct UVs.
+func _create_prepared_texture_fast(original: Texture2D, blind_width: int, angle_offset: int, target_height: int) -> Dictionary:
+	if original == null:
+		return {}
+	
+	# Fast path uses a simpler cache key since we skip monochrome
+	var cache_key: String = _build_cache_key(original, blind_width, angle_offset, target_height) + "_fast"
+	if _prepared_cache.has(cache_key):
+		return _prepared_cache[cache_key]
+	
+	var source_image = original.get_image()
+	if source_image == null or source_image.is_empty():
+		var fallback: Dictionary = _make_texture_entry(original)
+		_prepared_cache[cache_key] = fallback
+		return fallback
+	
+	var image = source_image.duplicate()
+	if image.is_compressed():
+		var decompress_error: Error = image.decompress()
+		if decompress_error != OK:
+			var fallback_decompress: Dictionary = _make_texture_entry(original)
+			_prepared_cache[cache_key] = fallback_decompress
+			return fallback_decompress
+	
+	if image.get_format() != Image.FORMAT_RGBA8:
+		image.convert(Image.FORMAT_RGBA8)
+	
+	var original_size: Vector2i = image.get_size()
+	if original_size.x <= 0 or original_size.y <= 0:
+		var fallback_empty: Dictionary = _make_texture_entry(original)
+		_prepared_cache[cache_key] = fallback_empty
+		return fallback_empty
+	
+	var effective_width: int = max(1, blind_width + abs(angle_offset))
+	var target_width: int = effective_width
+	var scale_x: float = float(effective_width) / float(original_size.x)
+	var scale_y: float = float(target_height) / float(original_size.y)
+	var scale_factor: float = max(scale_x, scale_y)
+	
+	if scale_factor <= 0.0:
+		scale_factor = 1.0
+	
+	var scaled_width: int = max(1, int(round(original_size.x * scale_factor)))
+	var scaled_height: int = max(1, int(round(original_size.y * scale_factor)))
+	# Use faster interpolation for speed (BILINEAR instead of LANCZOS)
+	image.resize(scaled_width, scaled_height, Image.INTERPOLATE_BILINEAR)
+	
+	var final_image = Image.create(target_width, target_height, false, image.get_format())
+	final_image.fill(UI.TRANSPARENT)
+	var dest_pos = Vector2i(int(round((target_width - scaled_width) / 2.0)), int(round((target_height - scaled_height) / 2.0)))
+	_blit_image_with_clipping(final_image, image, dest_pos)
+	
+	# SKIP monochrome effect for speed - images will have original colors
+	# The overlay color in _draw provides some tinting anyway
 	
 	var safe_width: int = max(target_width, 1)
 	var top_left_u: float = 0.0
@@ -437,41 +702,15 @@ func _build_default_texture_paths() -> PackedStringArray:
 	var character_paths: Array[String] = []
 	var paths := PackedStringArray()
 	
-	# Look for background/environment images in the backgrounds directory
-	if DirAccess.dir_exists_absolute(BACKGROUNDS_DIRECTORY):
-		var dir := DirAccess.open(BACKGROUNDS_DIRECTORY)
-		if dir:
-			dir.list_dir_begin()
-			var entry := dir.get_next()
-			while entry != "":
-				if not dir.current_is_dir():
-					var lower = entry.to_lower()
-					for ext in SUPPORTED_EXTENSIONS:
-						if lower.ends_with(ext):
-							environment_paths.append("%s/%s" % [BACKGROUNDS_DIRECTORY, entry])
-							break
-				entry = dir.get_next()
-			dir.list_dir_end()
+	# Use ResourceManifest for export-safe file listing
+	ResourceManifest.ensure_initialized()
+	for bg_path in ResourceManifest.background_files:
+		if ResourceLoader.exists(bg_path):
+			environment_paths.append(bg_path)
 	
-	# Check character folders for burst images
-	var characters_dir := "res://assets/characters"
-	if DirAccess.dir_exists_absolute(characters_dir):
-		var dir := DirAccess.open(characters_dir)
-		if dir:
-			var folders: Array[String] = []
-			dir.list_dir_begin()
-			var entry := dir.get_next()
-			while entry != "":
-				if dir.current_is_dir() and not entry.begins_with("."):
-					folders.append(entry)
-				entry = dir.get_next()
-			dir.list_dir_end()
-			folders.sort()
-			
-			for folder_name in folders:
-				var burst_path := "%s/%s/burst.png" % [characters_dir, folder_name]
-				if ResourceLoader.exists(burst_path):
-					character_paths.append(burst_path)
+	for burst_path in ResourceManifest.character_burst_files:
+		if ResourceLoader.exists(burst_path):
+			character_paths.append(burst_path)
 	
 	# Shuffle both arrays for random order each time
 	character_paths.shuffle()

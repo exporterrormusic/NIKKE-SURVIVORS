@@ -14,14 +14,6 @@ const ScarletBurstEffectScript = preload("res://scripts/characters/effects/Scarl
 const SnowWhiteBurstBeamScript = preload("res://scripts/characters/effects/SnowWhiteBurstBeam.gd")
 const RapunzelBurstEffectScript = preload("res://scripts/characters/effects/RapunzelBurstEffect.gd")
 
-# Preload combat scenes for better performance
-const SlashScene = preload("res://scenes/effects/Slash.tscn")
-const BulletScene = preload("res://scenes/effects/Bullet.tscn")
-const MissileScene = preload("res://scenes/effects/Missile.tscn")
-const ScarletWaveScene = preload("res://scenes/effects/ScarletWave.tscn")
-const TurretScene = preload("res://scenes/effects/Turret.tscn")
-const HealingCrossScene = preload("res://scenes/effects/HealingCross.tscn")
-
 # Character registry for stats
 var _registry: CharacterRegistry = null
 
@@ -482,9 +474,15 @@ func _perform_attack() -> void:
 
 func _attack_scarlet(direction: Vector2) -> void:
 	# Melee slash attack using the scene
-	var slash = SlashScene.instantiate()
+	var slash = ProjectileCache.create_slash()
+	
+	# Safety check - if scene failed to instantiate, skip this attack
+	if slash == null:
+		return
+	
 	slash.rotation = direction.angle()
 	slash.base_damage = attack_damage
+	slash.owner_node = self  # Set owner for killer_source tracking
 	add_child(slash)  # Attach to self
 	slash.position = Vector2.ZERO
 	
@@ -500,7 +498,11 @@ func _attack_snow_white(direction: Vector2) -> void:
 	_snow_white_ammo -= 1
 	
 	# Fire piercing sniper bullet like player Snow White uses
-	var bullet = BulletScene.instantiate()
+	var bullet = ProjectileCache.create_snow_white_bullet()
+	
+	# Safety check - if bullet failed to instantiate, skip this attack
+	if bullet == null:
+		return
 	
 	# Spawn well outside the ally's collision
 	get_parent().add_child(bullet)
@@ -521,7 +523,12 @@ func _attack_rapunzel(direction: Vector2) -> void:
 	_rapunzel_ammo -= 1
 	
 	# Fire rocket using Missile scene
-	var rocket = MissileScene.instantiate()
+	var rocket = ProjectileCache.create_missile()
+	
+	# Safety check - if scene failed to instantiate, skip this attack
+	if rocket == null:
+		return
+	
 	rocket.owner_node = self  # Set self as owner so rocket ignores us
 	rocket.direction = direction
 	rocket.target_position = _target_enemy.global_position if _target_enemy else global_position + direction * 400
@@ -582,7 +589,7 @@ func _special_scarlet() -> void:
 	if direction.length() < 0.5:
 		direction = Vector2.RIGHT
 	
-	var wave = ScarletWaveScene.instantiate()
+	var wave = ProjectileCache.create_scarlet_wave()
 	wave.rotation = direction.angle()
 	wave.owner_node = self
 	wave.pierce_all = true
@@ -596,10 +603,13 @@ func _special_snow_white() -> void:
 	var spawn_pos := _find_spaced_position("Turret", 120.0)
 	
 	# Place a turret only (no healing crosses - that's Rapunzel's job)
-	var turret = TurretScene.instantiate()
+	var turret = ProjectileCache.create_turret()
 	# Upgraded turret with more ammo
 	turret.ammo = 12
 	turret.max_ammo = 12
+	# Mark turret as spawned by summon for killer_source tracking
+	turret.spawned_by_summon = true
+	turret.spawner_node = self
 	
 	get_parent().add_child(turret)
 	turret.global_position = spawn_pos
@@ -656,7 +666,7 @@ func _special_rapunzel() -> void:
 	var spawn_pos := _find_spaced_position("HealingCross", 80.0)
 	
 	# Spawn one healing cross
-	var heal_item = HealingCrossScene.instantiate()
+	var heal_item = ProjectileCache.create_healing_cross()
 	get_parent().add_child(heal_item)
 	heal_item.global_position = spawn_pos
 	

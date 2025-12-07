@@ -116,8 +116,14 @@ func _on_body_entered(body: Node) -> void:
 	if is_crit:
 		final_damage = int(damage * CRIT_MULTIPLIER)
 	
+	# Determine killer source based on owner type
+	var hit_direction := velocity.normalized() if velocity.length() > 0 else Vector2.RIGHT
+	var killer_source := "player"
+	if is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
+		killer_source = "summon"
+	
 	# Apply damage to enemy
-	body.take_damage(final_damage, is_crit)
+	body.take_damage(final_damage, is_crit, hit_direction, false, killer_source)
 	
 	# Vampiric Slash: also heal owner per enemy hit
 	if heal_mode and owner_node and owner_node.has_method("heal"):

@@ -14,7 +14,6 @@ var burst_invuln_unlocked: bool = false
 
 # Scripts for effects
 const RapunzelBurstEffectScript = preload("res://scripts/characters/effects/RapunzelBurstEffect.gd")
-const HealingCrossScene = preload("res://scenes/effects/HealingCross.tscn")
 
 func _on_initialize() -> void:
 	# Ammo already set from CharacterRegistry by base class
@@ -29,8 +28,7 @@ func _on_process(delta: float) -> void:
 func _perform_attack(direction: Vector2) -> void:
 	# Fire homing missile
 	var mouse_pos = player.get_global_mouse_position()
-	var missile_scene = preload("res://scenes/effects/Missile.tscn")
-	var missile = missile_scene.instantiate()
+	var missile = ProjectileCache.create_missile()
 	player.get_parent().add_child(missile)
 	missile.global_position = player.global_position + direction * 100
 	missile.target_position = mouse_pos
@@ -66,7 +64,7 @@ func use_special(direction: Vector2) -> bool:
 
 func _perform_special(direction: Vector2) -> void:
 	# Spawn healing cross
-	var cross = HealingCrossScene.instantiate()
+	var cross = ProjectileCache.create_healing_cross()
 	
 	# Apply power bonus: 3% base + 7/14.5/22% per level
 	var power_bonuses := [0.0, 0.07, 0.145, 0.22]

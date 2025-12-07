@@ -5,7 +5,8 @@ class_name DebugMenu
 ## Provides toggles and buttons for testing/debugging
 
 const SaveManagerScript = preload("res://scripts/systems/SaveManager.gd")
-const UI := preload("res://scripts/ui/UITheme.gd")
+# UITheme loaded lazily in _setup_ui to avoid blocking startup
+var UI = null
 
 var _panel: PanelContainer
 var _vbox: VBoxContainer
@@ -26,6 +27,10 @@ func _ready() -> void:
 	hide()
 
 func _setup_ui() -> void:
+	# Load UITheme lazily (not at script parse time)
+	if UI == null:
+		UI = load("res://scripts/ui/UITheme.gd")
+	
 	# Dark semi-transparent background
 	var bg := ColorRect.new()
 	bg.color = UI.BG_OVERLAY

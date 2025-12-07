@@ -6,6 +6,7 @@ class_name ShopMenu
 
 const SaveManagerScript = preload("res://scripts/systems/SaveManager.gd")
 const UI := preload("res://scripts/ui/UITheme.gd")
+const UISounds := preload("res://scripts/ui/UISoundManager.gd")
 
 signal back_requested
 
@@ -25,6 +26,40 @@ const GENERAL_UPGRADES := [
 	{"id": "crit", "name": "CRIT", "desc": "+2% Critical Chance", "max_level": 99, "base_cost": 1, "icon": "💥"},
 	{"id": "xp", "name": "XP", "desc": "+5% Experience Gain", "max_level": 99, "base_cost": 2, "icon": "⭐"},
 ]
+
+# Character-specific "Basic Attack" upgrades - cost 50 cores, max level 1
+const CHARACTER_UPGRADES := {
+	"snow_white": [
+		{"id": "basic_attack", "name": "Best Girl", "desc": "Attacks leave burning trails for 1.5s. Enemies take 3% HP/s burn damage for 10s. Bosses take 1% HP/s.", "max_level": 1, "base_cost": 10, "icon": "🔥"},
+	],
+	"scarlet": [
+		{"id": "basic_attack", "name": "Rose's Core", "desc": "Sword slashes release 5 rose petal projectiles dealing full damage.", "max_level": 1, "base_cost": 10, "icon": "🌹"},
+	],
+	"rapunzel": [
+		{"id": "basic_attack", "name": "I'm a healer, but...", "desc": "All squad kills heal player for 2% max HP.", "max_level": 1, "base_cost": 10, "icon": "💖"},
+	],
+	"nayuta": [
+		{"id": "basic_attack", "name": "Duplicity", "desc": "10% chance on kill to spawn a Nayuta clone with current upgrades.", "max_level": 1, "base_cost": 10, "icon": "👥"},
+	],
+	"commander": [
+		{"id": "basic_attack", "name": "Obviously Anderson", "desc": "All squad attacks generate Burst gauge at 2x rate.", "max_level": 1, "base_cost": 10, "icon": "⚡"},
+	],
+	"marian": [
+		{"id": "basic_attack", "name": "Main Heroine", "desc": "Replace minigun with a continuous purple beam cannon.", "max_level": 1, "base_cost": 10, "icon": "💜"},
+	],
+	"crown": [
+		{"id": "basic_attack", "name": "Royal Knowledge", "desc": "All squad members earn XP at 2x rate.", "max_level": 1, "base_cost": 10, "icon": "👑"},
+	],
+	"kilo": [
+		{"id": "basic_attack", "name": "Protect Me Talos", "desc": "Kills generate shield HP. Max 50% of HP, +1% per kill.", "max_level": 1, "base_cost": 10, "icon": "🛡️"},
+	],
+	"cecil": [
+		{"id": "basic_attack", "name": "Three Wishes...", "desc": "Gain 3 extra lives. Revive at full HP with 5s invincibility.", "max_level": 1, "base_cost": 10, "icon": "✨"},
+	],
+	"sin": [
+		{"id": "basic_attack", "name": "Magnetic Personality", "desc": "Passive aura permanently mind-controls nearby regular enemies.", "max_level": 1, "base_cost": 10, "icon": "🔮"},
+	],
+}
 
 # Shop data persistence
 var _unlocked_characters: Array[String] = []
@@ -59,6 +94,7 @@ func _ready() -> void:
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel") and not event.is_echo():
 		get_viewport().set_input_as_handled()
+		UISounds.play_back()
 		emit_signal("back_requested")
 	
 	# All debug keys moved to F5 Debug Menu in Level.gd
@@ -340,8 +376,7 @@ func _create_character_entry(code: String, _display_name: String, portrait: Text
 	_apply_character_button_styles(button, is_unlocked)
 	
 	var hbox := HBoxContainer.new()
-	hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
 	hbox.add_theme_constant_override("separation", 8)
 	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	button.add_child(hbox)
@@ -474,6 +509,7 @@ func _make_char_button_style(color: Color) -> StyleBoxFlat:
 
 
 func _on_character_pressed(code: String) -> void:
+	UISounds.play_select()
 	_select_filter(code)
 
 
@@ -528,16 +564,23 @@ func _build_general_upgrades() -> void:
 
 
 func _build_character_upgrades(char_id: String) -> void:
-	# For now, show a placeholder - character-specific upgrades can be added later
-	var placeholder := Label.new()
-	placeholder.text = "Character upgrades coming soon!"
-	placeholder.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	placeholder.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	if UI.FONT_MEDIUM:
-		placeholder.add_theme_font_override("font", UI.FONT_MEDIUM)
-	placeholder.add_theme_font_size_override("font_size", 24)
-	placeholder.add_theme_color_override("font_color", UI.TEXT_SECONDARY)
-	_upgrade_grid.add_child(placeholder)
+	# Get character-specific upgrades
+	if char_id in CHARACTER_UPGRADES:
+		var upgrades: Array = CHARACTER_UPGRADES[char_id]
+		for upgrade in upgrades:
+			var card := _create_upgrade_card(upgrade, char_id)
+			_upgrade_grid.add_child(card)
+	else:
+		# Fallback for characters without upgrades yet
+		var placeholder := Label.new()
+		placeholder.text = "No upgrades available"
+		placeholder.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		placeholder.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		if UI.FONT_MEDIUM:
+			placeholder.add_theme_font_override("font", UI.FONT_MEDIUM)
+		placeholder.add_theme_font_size_override("font_size", 24)
+		placeholder.add_theme_color_override("font_color", UI.TEXT_SECONDARY)
+		_upgrade_grid.add_child(placeholder)
 	
 	# Add reset button in bottom right
 	_add_reset_button_to_content(char_id)
@@ -553,8 +596,9 @@ func _create_upgrade_card(upgrade: Dictionary, category: String) -> Control:
 	
 	# Use interactive card class for hover effects
 	var card := _UpgradeCard.new()
-	card.custom_minimum_size = Vector2(200, 560)  # Twice as tall
+	card.custom_minimum_size = Vector2(200, 560)  # Minimum height
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.size_flags_vertical = Control.SIZE_EXPAND_FILL  # Expand to fill container
 	card.setup(is_maxed)
 	card.set_can_purchase(can_afford and not is_maxed)
 	
@@ -566,9 +610,9 @@ func _create_upgrade_card(upgrade: Dictionary, category: String) -> Control:
 	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
 	vbox.offset_left = 16
 	vbox.offset_right = -16
-	vbox.offset_top = 24
-	vbox.offset_bottom = -24
-	vbox.add_theme_constant_override("separation", 20)
+	vbox.offset_top = 20
+	vbox.offset_bottom = -20
+	vbox.add_theme_constant_override("separation", 12)
 	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.add_child(vbox)
 	
@@ -580,7 +624,7 @@ func _create_upgrade_card(upgrade: Dictionary, category: String) -> Control:
 	
 	var icon := Label.new()
 	icon.text = upgrade["icon"]
-	icon.add_theme_font_size_override("font_size", 96)  # Much bigger icon
+	icon.add_theme_font_size_override("font_size", 80)  # Slightly smaller icon
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon_center.add_child(icon)
 	
@@ -590,9 +634,10 @@ func _create_upgrade_card(upgrade: Dictionary, category: String) -> Control:
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if UI.FONT_BOLD:
 		name_label.add_theme_font_override("font", UI.FONT_BOLD)
-	name_label.add_theme_font_size_override("font_size", 48)  # Much bigger text
+	name_label.add_theme_font_size_override("font_size", 40)  # Slightly smaller
 	name_label.add_theme_color_override("font_color", UI.ACCENT_PRIMARY)
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(name_label)
 	
 	# Level indicator centered
@@ -601,30 +646,33 @@ func _create_upgrade_card(upgrade: Dictionary, category: String) -> Control:
 	level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if UI.FONT_MEDIUM:
 		level_label.add_theme_font_override("font", UI.FONT_MEDIUM)
-	level_label.add_theme_font_size_override("font_size", 36)  # Much bigger text
+	level_label.add_theme_font_size_override("font_size", 28)
 	level_label.add_theme_color_override("font_color", UI.COLOR_UNLOCKED if is_maxed else UI.TEXT_SECONDARY)
 	level_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(level_label)
 	
-	# Description centered
+	# Description in a container that expands but clips overflow
+	var desc_container := Control.new()
+	desc_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	desc_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	desc_container.clip_contents = true
+	desc_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(desc_container)
+	
 	var desc_label := Label.new()
 	desc_label.text = upgrade["desc"]
 	desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	if UI.FONT_MEDIUM:
 		desc_label.add_theme_font_override("font", UI.FONT_MEDIUM)
-	desc_label.add_theme_font_size_override("font_size", 28)  # Much bigger text
+	desc_label.add_theme_font_size_override("font_size", 24)
 	desc_label.add_theme_color_override("font_color", UI.TEXT_SECONDARY)
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(desc_label)
+	desc_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	desc_container.add_child(desc_label)
 	
-	# Spacer
-	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(spacer)
-	
-	# Buy button or maxed label - centered
+	# Buy button or maxed label - centered, always at bottom
 	var btn_center := CenterContainer.new()
 	btn_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -636,7 +684,7 @@ func _create_upgrade_card(upgrade: Dictionary, category: String) -> Control:
 		maxed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		if UI.FONT_BOLD:
 			maxed_label.add_theme_font_override("font", UI.FONT_BOLD)
-		maxed_label.add_theme_font_size_override("font_size", 36)  # Much bigger text
+		maxed_label.add_theme_font_size_override("font_size", 32)
 		maxed_label.add_theme_color_override("font_color", UI.COLOR_UNLOCKED)
 		maxed_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		btn_center.add_child(maxed_label)
@@ -908,14 +956,15 @@ func _on_upgrade_purchased(upgrade_id: String, cost: int) -> void:
 
 func _on_upgrade_purchased_with_card(upgrade_id: String, cost: int, card: _UpgradeCard) -> void:
 	if GameState.spend_pristine_cores(cost):
+		UISounds.play_confirm()
 		_upgrade_levels[upgrade_id] = _upgrade_levels.get(upgrade_id, 0) + 1
 		
-		# Track cores spent - general upgrades go to "general", character upgrades to char_id
-		var category: String = "general"
-		if upgrade_id.begins_with("char_"):
-			var parts := upgrade_id.split("_")
-			if parts.size() >= 2:
-				category = parts[1]  # Extract char_id from "char_<char_id>_<upgrade>"
+		# Track cores spent - character upgrades go to char_id, others go to GENERAL_FILTER
+		var category: String = GENERAL_FILTER
+		for char_id in CHARACTER_UPGRADES.keys():
+			if upgrade_id.begins_with(char_id + "_"):
+				category = char_id
+				break
 		_cores_spent[category] = _cores_spent.get(category, 0) + cost
 		
 		# Flash card to show successful purchase
@@ -957,6 +1006,7 @@ func _on_character_unlock(char_id: String, cost: int) -> void:
 
 
 func _on_reset_pressed() -> void:
+	UISounds.play_select()
 	_reset_all_shop_data()
 
 
@@ -1058,6 +1108,13 @@ func _on_category_reset(category: String) -> void:
 	for key in keys_to_remove:
 		_upgrade_levels.erase(key)
 	
+	# If this is a character category (not "general"), re-lock the character if it was purchased
+	# Default unlocked characters cannot be re-locked
+	if category != "general" and category not in CharacterRegistry.DEFAULT_UNLOCKED:
+		if category in _unlocked_characters:
+			_unlocked_characters.erase(category)
+			print("[ShopMenu] Re-locked character: %s" % category)
+	
 	# Reset cores spent for this category
 	_cores_spent.erase(category)
 	
@@ -1066,6 +1123,7 @@ func _on_category_reset(category: String) -> void:
 	
 	# Update UI
 	_update_currency_display()
+	_build_character_list()  # Rebuild to show re-locked status
 	_update_sidebar_counts()
 	_rebuild_content()
 	
@@ -1204,6 +1262,17 @@ static func is_character_unlocked(char_id: String) -> bool:
 	
 	var unlocked = config.get_value("characters", "unlocked", [])
 	return char_id in unlocked
+
+
+## Check if a character-specific upgrade is purchased
+static func has_character_upgrade(char_id: String, upgrade_id: String) -> bool:
+	var config := ConfigFile.new()
+	if config.load(SaveManagerScript.SHOP_PATH) != OK:
+		return false
+	
+	var full_id := char_id + "_" + upgrade_id
+	var level: int = config.get_value("upgrades", full_id, 0)
+	return level > 0
 
 
 # === UPGRADE CARD (Inner class) - Interactive card with hover/flash effects ===

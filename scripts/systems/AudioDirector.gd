@@ -60,13 +60,15 @@ func initialize() -> void:
 		add_child(_music_player)
 
 func play_random_battle_track(fade_time: float = 0.5) -> void:
-	var candidates := _list_files_in_directory(BATTLE_MUSIC_DIR)
+	# Use ResourceManifest for export-safe file listing
+	ResourceManifest.ensure_initialized()
+	var candidates: Array[String] = ResourceManifest.battle_music.duplicate()
 	if candidates.is_empty():
-		push_warning("AudioDirector: No battle music files found in %s" % BATTLE_MUSIC_DIR)
+		push_warning("AudioDirector: No battle music files in manifest")
 		return
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
-	var choice := candidates[rng.randi_range(0, candidates.size() - 1)]
+	var choice: String = candidates[rng.randi_range(0, candidates.size() - 1)]
 	play_music_by_path(choice, true, fade_time)
 
 func play_music_by_path(path: String, loop: bool = true, fade_time: float = 0.5) -> void:

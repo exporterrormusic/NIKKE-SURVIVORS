@@ -10,16 +10,17 @@ config_version=5
 
 [application]
 
-config/name="movement-test"
+config/name="NIKKE-VIVOR"
 run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.5", "Forward Plus")
 config/icon="res://icon.svg"
+config/windows_native_icon="res://icon.ico"
 
 [autoload]
 
+MenuManager="*res://scripts/ui/MenuManager.gd"
 GameState="*res://scripts/systems/GameState.gd"
 StageRegistry="*res://scripts/systems/StageRegistry.gd"
-MenuManager="*res://scripts/ui/MenuManager.gd"
 SettingsManager="*res://scripts/systems/SettingsManager.gd"
 AchievementManager="*res://scripts/systems/AchievementManager.gd"
 

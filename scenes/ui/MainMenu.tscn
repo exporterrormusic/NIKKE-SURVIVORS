@@ -235,7 +235,7 @@ script = ExtResource("4")
 base_color = Color(0.4, 0.4, 0.4, 1)
 
 [node name="Label" type="Label" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/PLAY/Content"]
-modulate = Color(0.231373, 0.231373, 0.231373, 1)
+modulate = Color(1, 1, 1, 1)
 layout_mode = 2
 theme_override_font_sizes/font_size = 16
 text = "PLAY"

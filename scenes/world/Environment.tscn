@@ -29,12 +29,6 @@ z_index = 60
 top_level = true
 z_as_relative = false
 
-[node name="VignetteOverlay" type="ColorRect" parent="EnvironmentOverlay"]
-mouse_filter = 2
-visible = false
-color = Color(0, 0, 0, 0)
-z_index = 200
-
 [node name="SnowOverlay" type="Polygon2D" parent="EnvironmentOverlay"]
 z_index = 50
 

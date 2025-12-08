@@ -2,6 +2,7 @@ extends Node2D
 class_name EnvironmentController
 
 signal environment_changed(biome_id: StringName, time_id: StringName)
+signal modulate_changed(color: Color)
 
 const BIOMES_DIR := "res://resources/biomes/"
 const TIME_OF_DAY_DIR := "res://resources/time_of_day/"
@@ -47,13 +48,17 @@ var _current_ambient_path: String = ""
 var _world_bounds: Rect2 = Rect2()
 var _grass_field: Node2D = null  # PhysicalGrassField instance
 var _player_ref: Node2D = null  # Track player for grass interaction
+
+var current_modulate: Color = Color(1.0, 1.0, 1.0, 1.0)
 var _boulder_container: Node2D = null  # Container for boulders
 var _boulders: Array[Node2D] = []  # Active boulder instances
+var _lightning_timer: float = 0.0
 
 @onready var _background: Polygon2D = _ensure_background()
 @onready var _ground: Polygon2D = _ensure_ground()
 @onready var _decor_container: Node2D = _ensure_decor_container()
 @onready var _fog_overlay: ColorRect = _ensure_fog_overlay()
+@onready var _lightning_overlay: ColorRect = _ensure_lightning_overlay()
 @onready var _overlay_canvas: Node2D = _ensure_overlay_canvas()
 @onready var _vignette_overlay: ColorRect = _ensure_vignette_overlay()
 @onready var _snow_overlay: Polygon2D = _ensure_snow_overlay()
@@ -63,10 +68,11 @@ var _boulders: Array[Node2D] = []  # Active boulder instances
 @onready var _snow_particle_container: Node2D = _ensure_snow_particle_container()
 @onready var _canvas_modulate: CanvasModulate = _ensure_canvas_modulate()
 @onready var _sun_light: DirectionalLight2D = _ensure_sun_light()
-@onready var _audio_director: AudioDirector = _resolve_audio_director()
+@onready var _audio_director = get_node_or_null("/root/AudioDirector")
 @onready var _border_overlay: Node2D = _ensure_border_overlay()
 
 func _ready() -> void:
+	add_to_group("environment_controller")
 	_load_biome_definitions()
 	_load_time_of_day_definitions()
 	_update_ground_geometry()
@@ -83,6 +89,41 @@ func _ready() -> void:
 	# scenes. These could have been created earlier in-editor; proactively
 	# clear them so borders remain invisible at runtime.
 	_cleanup_saved_border_visuals()
+	
+	# Remove any old vignette overlays
+	if _overlay_canvas:
+		var old_vignette = _overlay_canvas.get_node_or_null("VignetteOverlay")
+		if old_vignette:
+			_overlay_canvas.remove_child(old_vignette)
+			old_vignette.queue_free()
+	var vignette_layer = get_node_or_null("VignetteLayer")
+	if vignette_layer:
+		remove_child(vignette_layer)
+		vignette_layer.queue_free()
+
+	# Temporary test hook: force night-mode at startup so we can reproduce
+	# and debug projectile compensation. Set to `false` to disable.
+	const TEST_FORCE_NIGHT: bool = true
+	if TEST_FORCE_NIGHT:
+		# Example night tint (dark bluish). This should exercise the
+		# compensation path for projectile visuals.
+		var test_night := Color(0.28, 0.32, 0.4, 1.0)
+		if _canvas_modulate:
+			_canvas_modulate.color = test_night
+			current_modulate = test_night
+			# Emit the same signal used at runtime so other nodes react
+			modulate_changed.emit(test_night)
+		# Ensure EffectsLayer gets its inverse modulate applied now
+		_on_modulate_changed(test_night)
+		# Tell projectile visuals it's night and set a stronger vignette and
+		# ambient compensation so compensation math is exercised during test.
+		BasicProjectileVisual.set_time_of_day(false)
+		BasicProjectileVisual.set_ambient_compensation(2.5)
+		var vp := get_viewport()
+		var view_size := Vector2.ZERO
+		if vp:
+			view_size = vp.get_visible_rect().size
+		BasicProjectileVisual.set_vignette_profile(0.85, 0.45, 0.35, view_size)
 
 
 func _cleanup_saved_border_visuals() -> void:
@@ -181,14 +222,25 @@ func _process(delta: float) -> void:
 	# Update grass with player position
 	if _grass_field and _player_ref and is_instance_valid(_player_ref):
 		_grass_field.update_player_position(_player_ref.global_position)
+	
+	# Update lightning
+	_update_lightning(delta)
 
 func _exit_tree() -> void:
 	_stop_ambient_audio()
 
 func initialize_environment(seed_override: int = 0, biome_id: StringName = &"", time_id: StringName = &"") -> void:
+	print("Initialize environment called with biome: ", str(biome_id))
 	_configure_rng(seed_override)
 	_active_biome = _select_biome(biome_id)
 	_active_time = _select_time_of_day(time_id)
+	_lightning_timer = 0.0  # Reset lightning timer for new biome
+	
+	# Remove fog overlay for storm map
+	if _active_biome and _active_biome.biome_id == &"rain_forest" and _fog_overlay:
+		_fog_overlay.queue_free()
+		_fog_overlay = null
+	
 	_apply_biome_to_ground()
 	_apply_time_of_day_settings()
 	_spawn_decorations()
@@ -351,13 +403,49 @@ func _ensure_fog_overlay() -> ColorRect:
 	var fog_overlay := ColorRect.new()
 	fog_overlay.name = "FogOverlay"
 	fog_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	fog_overlay.color = Color(0.8, 0.85, 0.95, 0.0)
-	fog_overlay.size = Vector2.ONE * _get_effective_ground_extent()
-	fog_overlay.position = -fog_overlay.size * 0.5
-	add_child(fog_overlay)
+	fog_overlay.color = Color(0.7, 0.75, 0.8, 0.7)  # Gray fog
+	fog_overlay.size = Vector2(1920, 1080)
+	fog_overlay.position = Vector2(0, 0)
+	fog_overlay.z_index = 50
+	
+	# Try to add to ScreenFlashLayer CanvasLayer for proper screen space
+	var screen_flash_layer = _find_screen_flash_layer()
+	if screen_flash_layer:
+		screen_flash_layer.add_child(fog_overlay)
+	else:
+		# Fallback: add as direct child with top_level
+		fog_overlay.top_level = true
+		add_child(fog_overlay)
+	
 	if Engine.is_editor_hint():
 		fog_overlay.owner = get_tree().edited_scene_root
 	return fog_overlay
+
+func _find_screen_flash_layer() -> CanvasLayer:
+	# Find the ScreenFlashLayer in the level
+	var level = get_parent()
+	while level and not (level is Node2D and level.name == "Level"):
+		level = level.get_parent()
+	if level:
+		return level.get_node_or_null("ScreenFlashLayer")
+	return null
+
+func _ensure_lightning_overlay() -> ColorRect:
+	var node := get_node_or_null("LightningOverlay")
+	if node and node is ColorRect:
+		var lightning := node as ColorRect
+		lightning.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		return lightning
+	var lightning_overlay := ColorRect.new()
+	lightning_overlay.name = "LightningOverlay"
+	lightning_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lightning_overlay.color = Color(1.0, 1.0, 1.0, 0.0)  # White flash, initially transparent
+	lightning_overlay.size = Vector2.ONE * _get_effective_ground_extent()
+	lightning_overlay.position = -lightning_overlay.size * 0.5
+	add_child(lightning_overlay)
+	if Engine.is_editor_hint():
+		lightning_overlay.owner = get_tree().edited_scene_root
+	return lightning_overlay
 
 func _ensure_overlay_canvas() -> Node2D:
 	var node := get_node_or_null("EnvironmentOverlay")
@@ -378,10 +466,25 @@ func _ensure_overlay_canvas() -> Node2D:
 	return environment_overlay
 
 func _ensure_vignette_overlay() -> ColorRect:
-	if _overlay_canvas == null:
-		return null
+	# Remove old vignette from overlay canvas if it exists
+	if _overlay_canvas:
+		var old_node = _overlay_canvas.get_node_or_null("VignetteOverlay")
+		if old_node:
+			_overlay_canvas.remove_child(old_node)
+			old_node.queue_free()
+	
 	var vignette_shader := load(VIGNETTE_SHADER_PATH)
-	var node := _overlay_canvas.get_node_or_null("VignetteOverlay")
+	# Check if VignetteLayer exists
+	var vignette_layer := get_node_or_null("VignetteLayer") as CanvasLayer
+	if vignette_layer == null:
+		vignette_layer = CanvasLayer.new()
+		vignette_layer.name = "VignetteLayer"
+		vignette_layer.layer = 0  # Below UI layers
+		add_child(vignette_layer)
+		if Engine.is_editor_hint():
+			vignette_layer.owner = get_tree().edited_scene_root
+	
+	var node := vignette_layer.get_node_or_null("VignetteOverlay")
 	if node and node is ColorRect:
 		var vignette := node as ColorRect
 		vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -395,12 +498,13 @@ func _ensure_vignette_overlay() -> ColorRect:
 	vignette_overlay.name = "VignetteOverlay"
 	vignette_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vignette_overlay.color = Color(0.0, 0.0, 0.0, 0.0)
-	vignette_overlay.z_index = 200
+	vignette_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vignette_overlay.size = Vector2.ZERO  # Full rect
 	if vignette_shader:
 		var shader_material := ShaderMaterial.new()
 		shader_material.shader = vignette_shader
 		vignette_overlay.material = shader_material
-	_overlay_canvas.add_child(vignette_overlay)
+	vignette_layer.add_child(vignette_overlay)
 	if Engine.is_editor_hint():
 		vignette_overlay.owner = get_tree().edited_scene_root
 	return vignette_overlay
@@ -414,8 +518,7 @@ func _configure_vignette_overlay(strength: float) -> void:
 		return
 	_vignette_overlay.visible = true
 	var view_size := _get_camera_view_size()
-	_vignette_overlay.size = view_size
-	_vignette_overlay.position = -view_size * 0.5
+	# No need to set size/position since it's full rect on CanvasLayer
 	var shader_material := _vignette_overlay.material as ShaderMaterial
 	var clamped_strength := clampf(strength, 0.0, 1.0)
 	var inner_radius := lerpf(0.38, 0.62, clampf(1.0 - clamped_strength, 0.0, 1.0))
@@ -425,6 +528,8 @@ func _configure_vignette_overlay(strength: float) -> void:
 		shader_material.set_shader_parameter("inner_radius", inner_radius)
 		shader_material.set_shader_parameter("softness", softness)
 		shader_material.set_shader_parameter("tint", Color(0.0, 0.0, 0.0, 1.0))
+		shader_material.set_shader_parameter("base_alpha", 0.0)
+	# Enable vignette compensation for projectiles
 	BasicProjectileVisual.set_vignette_profile(clamped_strength, inner_radius, softness, view_size)
 
 func _ensure_snow_overlay() -> Polygon2D:
@@ -562,6 +667,21 @@ func _ensure_canvas_modulate() -> CanvasModulate:
 	if Engine.is_editor_hint():
 		canvas_modulate.owner = get_tree().edited_scene_root
 	return canvas_modulate
+
+func _ensure_effects_layer() -> CanvasLayer:
+	var node := get_node_or_null("EffectsLayer")
+	if node and node is CanvasLayer:
+		return node
+	var effects_layer := CanvasLayer.new()
+	effects_layer.name = "EffectsLayer"
+	effects_layer.layer = 1
+	effects_layer.set("modulate", Color(1.0, 1.0, 1.0, 1.0))
+	add_child(effects_layer)
+	if Engine.is_editor_hint():
+		effects_layer.owner = get_tree().edited_scene_root
+	return effects_layer
+
+
 
 func _ensure_sun_light() -> DirectionalLight2D:
 	var node := get_node_or_null("SunLight")
@@ -762,8 +882,7 @@ func _apply_biome_to_ground() -> void:
 		_apply_sakura_overlay_settings(null)
 		_apply_flower_overlay_settings(null)
 		_configure_snow_imprint_state(null)
-		return
-	
+		
 	# Use biome's defined colors instead of hardcoded Spotify green
 	shader_material.set_shader_parameter("base_color", biome.base_color)
 	shader_material.set_shader_parameter("secondary_color", biome.secondary_color)
@@ -801,15 +920,21 @@ func _apply_biome_to_ground() -> void:
 	_apply_sakura_overlay_settings(biome)
 	_apply_flower_overlay_settings(biome)
 	_configure_snow_imprint_state(biome)
+	_update_ambient_audio()
 
 func _apply_time_of_day_settings() -> void:
 	var is_default_day := _active_time != null and _active_time.time_id == &"day"
 	if is_default_day:
+		# Disable global CanvasModulate - we apply darkness to specific sprites only
 		if _canvas_modulate:
-			# Slightly reduce daytime brightness to prevent washed-out look
-			var day_color := Color(0.95, 0.95, 0.95, 1.0)
-			_canvas_modulate.color = day_color
-			_update_projectile_ambient_compensation(day_color)
+			_canvas_modulate.color = Color(1.0, 1.0, 1.0, 1.0)  # Always white (no global effect)
+		var day_color := Color(0.95, 0.95, 0.95, 1.0)
+		current_modulate = day_color
+		modulate_changed.emit(day_color)
+		# Apply darkening to ground only
+		if _ground:
+			_ground.modulate = day_color
+		BasicProjectileVisual.set_time_of_day(true)
 		if _fog_overlay:
 			_fog_overlay.color = Color(1.0, 1.0, 1.0, 0.0)
 		if _background:
@@ -825,21 +950,44 @@ func _apply_time_of_day_settings() -> void:
 		# Adjust bloom for daytime (subtle)
 		_update_bloom_for_time_of_day(true)
 		return
-	if _canvas_modulate and _active_time:
-		var modulate_color := _active_time.get_canvas_modulate()
+	# Global CanvasModulate handles the base darkening
+	var modulate_color := Color(1.0, 1.0, 1.0, 1.0)
+	if _active_time:
+		modulate_color = _active_time.get_canvas_modulate()
+	
+	if _canvas_modulate:
 		_canvas_modulate.color = modulate_color
-		_update_projectile_ambient_compensation(modulate_color)
-	elif _canvas_modulate:
-		var default_color := Color(1.0, 1.0, 1.0, 1.0)
-		_canvas_modulate.color = default_color
-		_update_projectile_ambient_compensation(default_color)
+		
+	current_modulate = modulate_color
+	modulate_changed.emit(modulate_color)
+	
+	# Ground modulate is handled by CanvasModulate now, but we can add extra tint if needed
+	# For now, reset to white so it just takes the global darken
+	if _ground:
+		_ground.modulate = Color.WHITE
+	BasicProjectileVisual.set_time_of_day(_active_time == null or _active_time.time_id == &"day")
 	if _fog_overlay:
-		if _active_time:
-			var fog_color := _active_time.fog_color
-			fog_color.a = clamp(_active_time.fog_alpha, 0.0, 1.0)
+		var has_biome_fog := _active_biome and _active_biome.fog_density > 0.0 and _active_biome.biome_id != &"rain_forest"
+		var has_time_fog := _active_time and _active_time.fog_alpha > 0.0 and (_active_biome == null or _active_biome.biome_id != &"rain_forest")
+		if has_biome_fog or has_time_fog:
+			var fog_color := Color(0.8, 0.85, 0.95, 0.0)
+			if _active_time:
+				fog_color = _active_time.fog_color
+				fog_color.a = clamp(_active_time.fog_alpha, 0.0, 1.0)
+			# Blend with biome fog if present
+			if has_biome_fog:
+				var biome_fog_color: Color = _active_biome.fog_color
+				biome_fog_color.a = _active_biome.fog_density
+				# Use biome fog if it's denser, otherwise blend
+				if biome_fog_color.a > fog_color.a:
+					fog_color = biome_fog_color
+				else:
+					fog_color = fog_color.blend(biome_fog_color)
 			_fog_overlay.color = fog_color
+			_fog_overlay.visible = true
 		else:
-			_fog_overlay.color = Color(0.8, 0.85, 0.95, 0.0)
+			_fog_overlay.color = Color(0, 0, 0, 0)  # Fully transparent
+			_fog_overlay.visible = false
 	if _background and _active_time and _active_biome:
 		var tint_strength: float = clamp(_active_time.ambient_intensity, 0.0, 1.5)
 		var target := _active_biome.sky_color.lerp(_active_biome.horizon_color, 0.35)
@@ -848,11 +996,17 @@ func _apply_time_of_day_settings() -> void:
 		_background.color = _active_time.sky_tint
 	if _sun_light:
 		if _active_time:
-			_sun_light.visible = true
-			_sun_light.color = _active_time.light_color
-			_sun_light.energy = maxf(0.0, _active_time.light_energy)
-			var angle := deg_to_rad(_active_time.light_angle_degrees)
-			_sun_light.rotation = angle
+			# Only enable sun light during the day
+			# At night, we don't want additive light since we aren't globally darkening
+			if is_night_time():
+				_sun_light.visible = false
+				_sun_light.energy = 0.0
+			else:
+				_sun_light.visible = true
+				_sun_light.color = _active_time.light_color
+				_sun_light.energy = maxf(0.0, _active_time.light_energy)
+				var angle := deg_to_rad(_active_time.light_angle_degrees)
+				_sun_light.rotation = angle
 		else:
 			_sun_light.color = Color(1.0, 0.96, 0.85, 1.0)
 			_sun_light.energy = 1.0
@@ -887,18 +1041,22 @@ func _update_bloom_for_time_of_day(is_daytime: bool) -> void:
 		env.glow_hdr_threshold = 1.5  # Higher threshold = less glow
 		env.glow_hdr_scale = 1.0
 	else:
-		# Nighttime: more visible bloom for that glowy effect
-		env.glow_intensity = 0.6
-		env.glow_strength = 1.0
-		env.glow_bloom = 0.15
-		env.glow_hdr_threshold = 0.9  # Lower threshold = more glow
-		env.glow_hdr_scale = 2.0
+		# Nighttime: Subtle bloom for glowy effect
+		env.glow_enabled = true
+		env.glow_intensity = 0.15
+		env.glow_strength = 0.5
+		env.glow_bloom = 0.04
+		env.glow_hdr_threshold = 1.3  # High threshold to only glow very bright things
+		env.glow_hdr_scale = 1.2
 
 func _update_projectile_ambient_compensation(modulate_color: Color) -> void:
-	var luminance := modulate_color.r * 0.299 + modulate_color.g * 0.587 + modulate_color.b * 0.114
-	var clamped_luminance := clampf(luminance, 0.2, 1.25)
-	var compensation_strength := clampf(1.0 / clamped_luminance, 1.0, 4.0)
-	BasicProjectileVisual.set_ambient_compensation(compensation_strength)
+	# Calculate brightness of the environment
+	var brightness := (modulate_color.r + modulate_color.g + modulate_color.b) / 3.0
+	# Avoid division by zero
+	brightness = maxf(brightness, 0.1)
+	# Compensation is inverse of brightness (darker night = brighter compensation)
+	var compensation := 1.0 / brightness
+	BasicProjectileVisual.set_ambient_compensation(compensation)
 
 func _spawn_decorations() -> void:
 	for entry in _decoration_entries:
@@ -978,7 +1136,7 @@ func _should_biome_have_grass() -> bool:
 	
 	# Add grass to grassy biomes and sakura biome
 	var biome_id = _get_biome_id()
-	var grass_biomes = ["grassy_field", "field", "meadow", "plains", "grassland", "grasslands", "sakura", "cherry_blossom"]
+	var grass_biomes = ["grassy_field", "field", "meadow", "plains", "grassland", "grasslands", "sakura", "cherry_blossom", "rain_forest"]
 	
 	return biome_id in grass_biomes or _active_biome.display_name.to_lower().contains("grass") or _active_biome.display_name.to_lower().contains("sakura")
 
@@ -1340,8 +1498,11 @@ func _update_overlay_layout() -> void:
 		else:
 			_update_flower_overlay_polygon(_get_camera_global_position())
 	if _vignette_overlay:
-		_vignette_overlay.size = view_size
-		_vignette_overlay.position = -view_size * 0.5
+		# No need to set size/position since it's full rect on CanvasLayer
+		pass
+	if _fog_overlay:
+		_fog_overlay.size = view_size
+		_fog_overlay.position = Vector2(0, 0)  # Top-left for top_level
 
 func _update_overlay_transform() -> void:
 	if _overlay_canvas == null:
@@ -1507,27 +1668,45 @@ func _get_snow_particle_ramp() -> GradientTexture1D:
 	ramp.gradient = gradient
 	return ramp
 
-func _resolve_audio_director() -> AudioDirector:
-	if not get_tree():
-		return null
-	var root := get_tree().root
-	var candidate := root.find_child("AudioDirector", true, false)
-	if candidate and candidate is AudioDirector:
-		return candidate
-	return null
-
-func _get_audio_director() -> AudioDirector:
+func _get_audio_director():
 	if _audio_director == null or not is_instance_valid(_audio_director):
-		_audio_director = _resolve_audio_director()
+		_audio_director = get_node_or_null("/root/AudioDirector")
 	return _audio_director
 
 func _update_ambient_audio() -> void:
-	var director := _get_audio_director()
+	var director: Node = _get_audio_director()
 	if director == null:
 		return
 	var desired_path := ""
 	if _active_biome and _active_biome.ambient_loop_path.strip_edges() != "":
 		desired_path = _active_biome.ambient_loop_path.strip_edges()
+	
+	# Special handling for rain biome - use ambient system with crossfade
+	if _active_biome and _active_biome.biome_id == &"rain_forest":
+		# Prefer the biome's ambient path if available (supports mp3/ogg/wav)
+		if desired_path != "" and ResourceLoader.exists(desired_path):
+			# Use ambient system which now crossfades loop endpoints for smooth looping
+			if desired_path != _current_ambient_path:
+				director.play_ambient_loop(desired_path)
+				_current_ambient_path = desired_path
+			return
+		# Fallback: try common rain filenames
+		var fallback_paths := ["res://assets/sounds/sfx/environment/rain.mp3", "res://assets/sounds/sfx/environment/rain.ogg", "res://assets/sounds/sfx/environment/rain.wav"]
+		for p in fallback_paths:
+			if ResourceLoader.exists(p):
+				# Use ambient crossfader for rain
+				if p != _current_ambient_path:
+					director.play_ambient_loop(p)
+					_current_ambient_path = p
+				break
+		return
+	
+	# Stop rain ambient if not in rain biome
+	if _current_ambient_path != "":
+		director.stop_ambient()
+		_current_ambient_path = ""
+	
+	# For all biomes, use the normal ambient system
 	if desired_path == _current_ambient_path:
 		return
 	if desired_path != "" and ResourceLoader.exists(desired_path):
@@ -1538,6 +1717,50 @@ func _update_ambient_audio() -> void:
 
 func _stop_ambient_audio() -> void:
 	_current_ambient_path = ""
-	var director := _get_audio_director()
+	var director: Node = _get_audio_director()
 	if director:
 		director.stop_ambient()
+
+func _update_lightning(delta: float) -> void:
+	if not _active_biome or _active_biome.lightning_frequency <= 0.0 or not _lightning_overlay:
+		return
+	
+	_lightning_timer -= delta
+	if _lightning_timer <= 0.0:
+		# Increase thunder frequency by 30% and reset timer based on effective frequency
+		var effective_freq: float = _active_biome.lightning_frequency * 1.3
+		var interval: float = 1.0 / effective_freq
+		_lightning_timer = _rng.randf_range(interval * 0.5, interval * 1.5)
+		
+		# Trigger lightning flash
+		_trigger_lightning_flash()
+
+func _trigger_lightning_flash() -> void:
+	if not _lightning_overlay:
+		return
+	
+	# Play thunder sound
+	if _audio_director:
+		# Make thunder louder for storm effect
+		_audio_director.play_sfx_by_path("res://assets/sounds/sfx/environment/thunder.wav", 1.0, 6.0)
+	
+	# Create a tween for the flash
+	var tween := create_tween()
+	tween.set_trans(Tween.TRANS_LINEAR)
+	tween.set_ease(Tween.EASE_IN_OUT)
+	
+	# Flash to white with intensity
+	var flash_color := Color(1.0, 1.0, 1.0, _active_biome.lightning_intensity)
+	_lightning_overlay.color = flash_color
+	
+	# Fade out quickly
+	tween.tween_property(_lightning_overlay, "color:a", 0.0, 0.15)
+	tween.tween_callback(func(): _lightning_overlay.color = Color(1.0, 1.0, 1.0, 0.0))
+
+func _on_modulate_changed(color: Color) -> void:
+	var effects_layer := _ensure_effects_layer()
+	if effects_layer:
+		# Set the EffectsLayer modulate to the inverse of the canvas modulate
+		# This compensates for the darkening, keeping effects bright
+		var inverse_color := Color(1.0 / color.r, 1.0 / color.g, 1.0 / color.b, 1.0)
+		effects_layer.set("modulate", inverse_color)

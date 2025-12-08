@@ -14,8 +14,9 @@ var _biome_id: StringName = &""
 var _is_night := false
 var _camera: Camera2D = null
 var _spawn_timer := 0.0
+var _ambient_compensation: float = 1.0
 
-const MAX_PARTICLES := 60
+const MAX_PARTICLES := 600
 const SPAWN_INTERVAL := 0.08
 
 # Particle type configurations
@@ -26,6 +27,10 @@ func _ready() -> void:
 	z_index = 50  # Above most things, below UI
 	# Don't use top_level - particles should be in world space
 	set_process(true)
+	
+	var environment_controller = get_tree().root.find_child("EnvironmentController", true, false)
+	if environment_controller and environment_controller is EnvironmentController:
+		environment_controller.modulate_changed.connect(_on_modulate_changed)
 	
 	_setup_particle_configs()
 
@@ -123,6 +128,22 @@ func _setup_particle_configs() -> void:
 			}
 		],
 		"density": 1.5
+	}
+	
+	# Rain Forest - rain particles
+	_particle_config[&"rain_forest"] = {
+		"types": [
+			{
+				"color": Color(0.9, 0.95, 1.0, 0.8),
+				"size_range": Vector2(3, 6),  # Larger for visibility
+				"speed_range": Vector2(800, 1200),  # Even faster
+				"drift_range": Vector2(50, 150),  # More sideways drift
+				"lifetime_range": Vector2(1, 2),  # Shorter lifetime
+				"shape": "rain_streak",
+				"glow": false
+			}
+		],
+		"density": 600.0
 	}
 
 func configure(biome_id: StringName, is_night: bool) -> void:
@@ -238,7 +259,7 @@ func _spawn_particle(config: Dictionary) -> void:
 	
 	var particle := {
 		"position": spawn_pos,
-		"velocity": Vector2(_rng.randf_range(-drift_range.x, drift_range.y), _rng.randf_range(speed_range.x, speed_range.y)),
+		"velocity": _get_rain_velocity(speed_range, drift_range),
 		"size": _rng.randf_range(size_range.x, size_range.y),
 		"color": type_config.get("color", Color.WHITE),
 		"shape": type_config.get("shape", "circle"),
@@ -253,6 +274,21 @@ func _spawn_particle(config: Dictionary) -> void:
 		"alpha": 1.0
 	}
 	_particles.append(particle)
+
+func _get_rain_velocity(speed_range: Vector2, drift_range: Vector2) -> Vector2:
+	# For rain, create angled velocity (75 degrees from vertical = 15 degrees from horizontal)
+	var base_angle := deg_to_rad(75.0)  # 75 degrees from positive x-axis (down-right)
+	var angle_variation := deg_to_rad(5.0)  # ±5 degrees variation (less random)
+	var angle := base_angle + _rng.randf_range(-angle_variation, angle_variation)
+	
+	var speed := _rng.randf_range(speed_range.x, speed_range.y)
+	var direction := Vector2(cos(angle), sin(angle))
+	
+	# Minimal sideways drift for consistency
+	var drift := _rng.randf_range(-drift_range.x * 0.3, drift_range.x * 0.3)  # Much less drift
+	direction.x += drift * 0.005  # Very small sideways component
+	
+	return direction * speed
 
 func _update_particles(delta: float) -> void:
 	var view_size := _get_view_size()
@@ -307,6 +343,14 @@ func _get_view_size() -> Vector2:
 func _draw() -> void:
 	for p in _particles:
 		var color: Color = p["color"]
+		color.r *= _ambient_compensation
+		color.g *= _ambient_compensation
+		color.b *= _ambient_compensation
+		var max_c := maxf(color.r, maxf(color.g, color.b))
+		if max_c > 1.0:
+			color.r /= max_c
+			color.g /= max_c
+			color.b /= max_c
 		color.a *= p["alpha"]
 		
 		# Convert world position to local for drawing
@@ -316,10 +360,10 @@ func _draw() -> void:
 		match p["shape"]:
 			"circle":
 				if p["glow"]:
-					# Outer glow
-					var glow_color := Color(color.r, color.g, color.b, color.a * 0.3)
+					# Slightly stronger outer glow for effects
+					var glow_color := Color(color.r, color.g, color.b, color.a * 0.45)
 					draw_circle(pos, size * 3, glow_color)
-					draw_circle(pos, size * 2, Color(color.r, color.g, color.b, color.a * 0.5))
+					draw_circle(pos, size * 2, Color(color.r, color.g, color.b, color.a * 0.65))
 				draw_circle(pos, size, color)
 			
 			"petal":
@@ -337,12 +381,21 @@ func _draw() -> void:
 			"firefly":
 				# Glowing firefly
 				var glow_size := size * (2.0 + sin(p["age"] * p["pulse_speed"]) * 0.5)
-				var glow_color := Color(color.r, color.g, color.b, color.a * 0.2)
+				var glow_color := Color(color.r, color.g, color.b, color.a * 0.28)
 				draw_circle(pos, glow_size * 2, glow_color)
-				draw_circle(pos, glow_size, Color(color.r, color.g, color.b, color.a * 0.4))
+				draw_circle(pos, glow_size, Color(color.r, color.g, color.b, color.a * 0.5))
 				draw_circle(pos, size, color)
 				# Bright core
 				draw_circle(pos, size * 0.5, Color(1.0, 1.0, 0.9, color.a))
+			
+			"rain_streak":
+				# Draw a short line in the direction of movement
+				var velocity: Vector2 = p["velocity"]
+				var length := size * 4.0  # Shorter streaks
+				var direction := velocity.normalized()
+				var start_pos := pos - direction * length * 0.5
+				var end_pos := pos + direction * length * 0.5
+				draw_line(start_pos, end_pos, color, size)
 
 func _draw_petal(pos: Vector2, size: float, petal_rotation: float, color: Color) -> void:
 	# Draw a simple petal shape
@@ -359,3 +412,8 @@ func _draw_petal(pos: Vector2, size: float, petal_rotation: float, color: Color)
 		for i in range(points.size()):
 			colors.append(color)
 		draw_polygon(points, colors)
+
+func _on_modulate_changed(color: Color) -> void:
+	var luminance := color.r * 0.299 + color.g * 0.587 + color.b * 0.114
+	var clamped_luminance := clampf(luminance, 0.2, 1.25)
+	_ambient_compensation = clampf(1.0 / clamped_luminance, 1.0, 4.0)

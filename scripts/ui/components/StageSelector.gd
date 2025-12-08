@@ -14,10 +14,11 @@ var _updating_selection: bool = false  # Prevent recursive toggled signals
 
 # Map definitions - biome/time combinations with display names
 const MAPS := [
-	{"id": "sakura_day", "name": "Ark Outskirts", "subtitle": "Day", "biome": "sakura_grove", "time": "day", "preview": "res://assets/backgrounds/forest.jpg"},
-	{"id": "sakura_night", "name": "Ark Outskirts", "subtitle": "Night", "biome": "sakura_grove", "time": "night", "preview": "res://assets/backgrounds/rapturefield2.jpg"},
-	{"id": "snow_day", "name": "The Frozen North", "subtitle": "Day", "biome": "snowfield", "time": "day", "preview": "res://assets/backgrounds/snow-day.jpg"},
-	{"id": "snow_night", "name": "The Frozen North", "subtitle": "Night", "biome": "snowfield", "time": "night", "preview": "res://assets/backgrounds/snow-night.jpg"},
+{"id": "sakura_day", "name": "Ark Outskirts", "subtitle": "Day", "biome": "sakura_grove", "time": "day", "preview": "res://assets/backgrounds/forest.jpg"},
+{"id": "sakura_night", "name": "Ark Outskirts", "subtitle": "Night", "biome": "sakura_grove", "time": "night", "preview": "res://assets/backgrounds/rapturefield2.jpg"},
+{"id": "snow_day", "name": "The Frozen North", "subtitle": "Day", "biome": "snowfield", "time": "day", "preview": "res://assets/backgrounds/snow-day.jpg"},
+{"id": "snow_night", "name": "The Frozen North", "subtitle": "Night", "biome": "snowfield", "time": "night", "preview": "res://assets/backgrounds/snow-night.jpg"},
+{"id": "storm", "name": "Stormbringer", "subtitle": "", "biome": "rain_forest", "time": "night", "preview": "res://assets/backgrounds/rapturefield1.jpg"},
 ]
 
 var _preview_rect: TextureRect
@@ -891,3 +892,8 @@ func _on_start_pressed() -> void:
 	UISounds.play_confirm()
 	# GameState.selected_biome and selected_time are already set by _update_preview
 	stage_confirmed.emit(_selected_stage_id)
+
+
+
+
+

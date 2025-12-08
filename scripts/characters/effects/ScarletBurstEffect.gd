@@ -77,7 +77,7 @@ func _execute_burst() -> void:
 		is_elite_or_boss = is_elite_or_boss or enemy.is_in_group("elite") or enemy.is_in_group("boss")
 		
 		# Determine damage amount
-		var damage_amount := 99999
+		var damage_amount: int = (owner_node.calc_damage() if owner_node and owner_node.has_method("calc_damage") else 0) * 10
 		var will_execute := false
 		if execute_talent and not is_elite_or_boss:
 			# Execution talent: instant kill for non-elite/boss

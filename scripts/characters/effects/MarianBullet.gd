@@ -63,7 +63,7 @@ func _process(delta: float) -> void:
 		_start_position_set = true
 	
 	# Move bullet
-	position += velocity * delta
+	global_position += velocity * delta
 	
 	# Check max range
 	if MAX_RANGE > 0.0:

@@ -99,14 +99,17 @@ func _fire_shotgun(direction: Vector2, is_special: bool, is_burst_shot: bool = f
 		pellet.is_burst = is_burst_shot  # Burst pellets get persistent lines
 		pellet.burn_level = special_burn_level if is_special else 0
 		pellet.size_level = special_size_level if (is_special or is_burst_shot) else 0
-		
+
 		# Set wave and pellet index for zigzag pattern
 		if is_burst_shot:
 			pellet.wave_index = _burst_wave_count
 			pellet.pellet_index = i
-		
-		player.get_parent().add_child(pellet)
 
+		# Determine target parent: player's parent (world) for physics
+		var target_parent = player.get_parent()
+		
+		# Add to target parent and set position
+		target_parent.add_child(pellet)
 func _on_burst_start() -> void:
 	# Duration: 4s base, 8s with upgrade
 	if burst_duration_unlocked:
@@ -114,12 +117,17 @@ func _on_burst_start() -> void:
 	else:
 		burst_timer = 4.0
 	
-	# Always grant invincibility during burst
-	burst_invincible = true
-	player.invincible = true
+	# Grant invincibility during burst if talent is unlocked
+	if burst_invuln_unlocked:
+		burst_invincible = true
+		player.invincible = true
 	
 	# Apply golden glow effect to player
 	_apply_burst_glow(true)
+	
+	# Refill ammo during burst
+	ammo = max_ammo
+	ammo_changed.emit(ammo, max_ammo)
 	
 	# Refill ammo during burst
 	ammo = max_ammo
@@ -135,9 +143,10 @@ func _on_burst_start() -> void:
 	_play_sound("shotgun")
 
 func _on_burst_end() -> void:
-	# Always remove invincibility when burst ends
-	burst_invincible = false
-	player.invincible = false
+	# Remove invincibility when burst ends if talent was active
+	if burst_invuln_unlocked:
+		burst_invincible = false
+		player.invincible = false
 	
 	# Remove golden glow effect
 	_apply_burst_glow(false)

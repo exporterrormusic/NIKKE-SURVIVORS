@@ -1,5 +1,4 @@
 extends Node
-class_name AudioDirector
 
 ## Centralized audio playback and bus management.
 ## Add to autoloads for global access.
@@ -41,6 +40,16 @@ var _current_music_path: String = ""
 var _ambient_player: AudioStreamPlayer = null
 var _current_ambient_path: String = ""
 var _explosion_player: AudioStreamPlayer = null  # Dedicated explosion player to prevent overlap
+var _ambient_player_a: AudioStreamPlayer = null
+var _ambient_player_b: AudioStreamPlayer = null
+var _ambient_use_b: bool = false
+var _ambient_loop_timer: Timer = null
+const AMBIENT_CROSSFADE := 1.0 # seconds to crossfade between loop endpoints
+var _ambient_stream_length: float = 0.0
+var _ambient_crossfade_step_timer: Timer = null
+var _ambient_crossfade_progress: float = 0.0
+var _ambient_crossfade_step_dt: float = 0.05
+var _ambient_base_db: float = 6.0
 
 func _ready() -> void:
 	initialize()
@@ -217,14 +226,20 @@ func play_weapon_reload_sound(weapon_name: String) -> void:
 	push_warning("AudioDirector: Missing reload sound for weapon %s" % weapon_name)
 
 func play_looping_sfx(path: String, pitch_scale: float = 1.0, volume_db: float = 0.0) -> int:
+	print("AudioDirector: play_looping_sfx requested for: ", path)
 	var stream := _load_stream(path)
 	if stream == null:
 		return -1
+	print("AudioDirector: loaded stream type=", typeof(stream), " class=", stream.get_class())
 	var player := AudioStreamPlayer.new()
 	player.bus = SFX_BUS
 	player.pitch_scale = pitch_scale
 	player.volume_db = volume_db
-	player.stream = _ensure_loop_state(stream, true)
+	var ensured := _ensure_loop_state(stream, true)
+	player.stream = ensured
+	if ensured is AudioStreamWAV:
+		var w:= ensured as AudioStreamWAV
+		print("AudioDirector: WAV stream loop_mode=", w.loop_mode, " loop_begin=", w.loop_begin, " loop_end=", w.loop_end)
 	add_child(player)
 	player.play()
 	player.finished.connect(func(): 
@@ -272,19 +287,75 @@ func is_music_playing() -> bool:
 	return _music_player != null and _music_player.playing
 
 func play_ambient_loop(path: String, fade_time: float = 0.5) -> void:
-	if path == _current_ambient_path and _ambient_player != null and _ambient_player.playing:
-		return
-	var stream := _load_stream(path)
+	# Always restart ambient audio when called
+	print("AudioDirector: play_ambient_loop requested for: ", path)
+	var stream := ResourceLoader.load(path)
+	if stream:
+		print("AudioDirector: play_ambient_loop loaded stream class=", stream.get_class(), " typeof=", typeof(stream))
 	if stream == null:
 		push_warning("AudioDirector: Failed to load ambient stream %s" % path)
 		return
+	# If the stream is WAV, prefer to let the engine handle loop points if present.
+	if stream is AudioStreamWAV:
+		var wav_stream := stream as AudioStreamWAV
+		wav_stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		wav_stream.loop_begin = 0
+		wav_stream.loop_end = -1
+	# Try to obtain stream length to schedule crossfade. If not available, fall back to single-player loop.
+	var length := 0.0
+	if stream.has_method("get_length"):
+		length = float(stream.get_length())
+	# If stream length is reasonable, use two-player crossfade loop to hide endpoints
+	if length > AMBIENT_CROSSFADE + 0.05:
+		# Prepare timer
+		if _ambient_loop_timer == null:
+			_ambient_loop_timer = Timer.new()
+			_ambient_loop_timer.one_shot = false
+			add_child(_ambient_loop_timer)
+			_ambient_loop_timer.timeout.connect(func(): _ambient_crossfade_tick())
+		# Prepare players
+		if _ambient_player_a == null:
+			_ambient_player_a = AudioStreamPlayer.new()
+			_ambient_player_a.name = "AmbientPlayerA"
+			_ambient_player_a.bus = SFX_BUS
+			_ambient_player_a.process_mode = Node.PROCESS_MODE_ALWAYS
+			get_tree().root.add_child(_ambient_player_a)
+		if _ambient_player_b == null:
+			_ambient_player_b = AudioStreamPlayer.new()
+			_ambient_player_b.name = "AmbientPlayerB"
+			_ambient_player_b.bus = SFX_BUS
+			_ambient_player_b.process_mode = Node.PROCESS_MODE_ALWAYS
+			get_tree().root.add_child(_ambient_player_b)
+		# Stop any existing players/timer then configure
+		if _ambient_loop_timer != null and not _ambient_loop_timer.is_stopped():
+			_ambient_loop_timer.stop()
+		if _ambient_player_a.playing:
+			_ambient_player_a.stop()
+		if _ambient_player_b.playing:
+			_ambient_player_b.stop()
+		# Use independent non-looping stream instances for precise control
+		var playback_stream_a := _ensure_loop_state(stream, false)
+		var playback_stream_b := playback_stream_a.duplicate()
+		_ambient_player_a.stream = playback_stream_a
+		_ambient_player_b.stream = playback_stream_b
+		# Start A and schedule crossfade at length - crossfade
+		_ambient_player_a.volume_db = 6.0
+		_ambient_player_a.play()
+		_ambient_use_b = false
+		_ambient_stream_length = length
+		_ambient_loop_timer.wait_time = max(0.05, _ambient_stream_length - AMBIENT_CROSSFADE)
+		_ambient_loop_timer.start()
+		_current_ambient_path = path
+		return
+	# Fallback: single player behavior (previous behavior)
 	if _ambient_player == null:
 		_ambient_player = AudioStreamPlayer.new()
 		_ambient_player.name = "AmbientPlayer"
 		_ambient_player.bus = SFX_BUS
 		_ambient_player.process_mode = Node.PROCESS_MODE_ALWAYS
-		add_child(_ambient_player)
-	var looped_stream := _ensure_loop_state(stream, true)
+		get_tree().root.add_child(_ambient_player)
+	# Always restart
+	_current_ambient_path = path
 	if _ambient_player.playing and fade_time > 0.05:
 		var fade_out := create_tween()
 		var ambient_ref := _ambient_player
@@ -294,26 +365,33 @@ func play_ambient_loop(path: String, fade_time: float = 0.5) -> void:
 				return
 			if is_instance_valid(ambient_ref):
 				ambient_ref.stop()
-				ambient_ref.stream = looped_stream
-				ambient_ref.volume_db = -24.0
+				ambient_ref.stream = stream
+				ambient_ref.volume_db = 6.0
 				ambient_ref.play()
 				var fade_in := create_tween()
-				fade_in.tween_property(ambient_ref, "volume_db", -6.0, fade_time * 0.5)
+				fade_in.tween_property(ambient_ref, "volume_db", 6.0, fade_time * 0.5)
 		)
 	else:
 		_ambient_player.stop()
-		_ambient_player.stream = looped_stream
-		_ambient_player.volume_db = -6.0
+		_ambient_player.stream = stream
+		_ambient_player.volume_db = 6.0
 		_ambient_player.play()
-	_current_ambient_path = path
 
 func stop_ambient(fade_time: float = 0.3) -> void:
+	# Stop any ambient playback (single-player or crossfade players)
+	_current_ambient_path = ""
+	# Stop two-player system
+	if _ambient_loop_timer != null and not _ambient_loop_timer.is_stopped():
+		_ambient_loop_timer.stop()
+	if _ambient_player_a != null and _ambient_player_a.playing:
+		_ambient_player_a.stop()
+	if _ambient_player_b != null and _ambient_player_b.playing:
+		_ambient_player_b.stop()
+	# Stop legacy single player
 	if _ambient_player == null or not _ambient_player.playing:
-		_current_ambient_path = ""
 		return
 	if fade_time <= 0.05:
 		_ambient_player.stop()
-		_current_ambient_path = ""
 		return
 	var tween := create_tween()
 	var ambient_ref := _ambient_player
@@ -324,7 +402,6 @@ func stop_ambient(fade_time: float = 0.3) -> void:
 		if is_instance_valid(ambient_ref):
 			ambient_ref.stop()
 	)
-	_current_ambient_path = ""
 
 func _start_music_with_fade(stream: AudioStream, fade_time: float) -> void:
 	var fade_out := create_tween()
@@ -359,7 +436,9 @@ func _load_stream(path: String) -> AudioStream:
 	if path == "":
 		return null
 	if _stream_cache.has(path):
+		print("AudioDirector: stream cache hit: ", path)
 		return _stream_cache[path]
+	print("AudioDirector: loading stream from path: ", path)
 	var stream: AudioStream = ResourceLoader.load(path)
 	if stream == null:
 		push_warning("AudioDirector: Failed to load stream %s" % path)
@@ -432,3 +511,64 @@ func _list_files_in_directory(path: String) -> Array[String]:
 		entry_name = dir.get_next()
 	dir.list_dir_end()
 	return files
+
+func _db_to_amp(db: float) -> float:
+	return pow(10.0, db / 20.0)
+
+func _amp_to_db(amp: float) -> float:
+	if amp <= 0.000001:
+		return -80.0
+	return 20.0 * (log(amp) / log(10.0))
+
+func _ambient_crossfade_step(current: AudioStreamPlayer, next: AudioStreamPlayer) -> void:
+	# Increment progress and update volumes using linear amplitude mix so combined amplitude is constant
+	_ambient_crossfade_progress += _ambient_crossfade_step_dt
+	var t: float = clamp(_ambient_crossfade_progress / AMBIENT_CROSSFADE, 0.0, 1.0)
+	# Use equal-power curve (cosine / sine) so perceived loudness stays constant
+	var theta: float = t * PI * 0.5
+	var w_cur: float = cos(theta)
+	var w_next: float = sin(theta)
+	var base_amp: float = _db_to_amp(_ambient_base_db)
+	var amp_current: float = base_amp * w_cur
+	var amp_next: float = base_amp * w_next
+	if is_instance_valid(current):
+		current.volume_db = _amp_to_db(amp_current)
+	if is_instance_valid(next):
+		next.volume_db = _amp_to_db(amp_next)
+	# Finish crossfade
+	if t >= 1.0:
+		if _ambient_crossfade_step_timer != null and not _ambient_crossfade_step_timer.is_stopped():
+			_ambient_crossfade_step_timer.stop()
+		if is_instance_valid(current):
+			current.stop()
+		_ambient_use_b = !_ambient_use_b
+
+func _ambient_crossfade_tick() -> void:
+	# Called by the ambient loop timer to crossfade between A and B players.
+	if _ambient_player_a == null or _ambient_player_b == null:
+		return
+	# Determine which player is currently active and which is next
+	var current := _ambient_player_b if _ambient_use_b else _ambient_player_a
+	var next := _ambient_player_a if _ambient_use_b else _ambient_player_b
+	# Prepare next player and start at beginning; use a step timer to update linear amplitude crossfade
+	# Ensure any existing crossfade step timer is stopped
+	if _ambient_crossfade_step_timer != null and not _ambient_crossfade_step_timer.is_stopped():
+		_ambient_crossfade_step_timer.stop()
+	# Reset progress
+	_ambient_crossfade_progress = 0.0
+	# Ensure next starts silent and at the beginning
+	next.volume_db = -80.0
+	if next.playing:
+		next.stop()
+	next.play(0.0)
+	# Prepare step timer
+	if _ambient_crossfade_step_timer == null:
+		_ambient_crossfade_step_timer = Timer.new()
+		_ambient_crossfade_step_timer.one_shot = false
+		_ambient_crossfade_step_timer.wait_time = _ambient_crossfade_step_dt
+		add_child(_ambient_crossfade_step_timer)
+		_ambient_crossfade_step_timer.timeout.connect(func(): _ambient_crossfade_step(current, next))
+	else:
+		_ambient_crossfade_step_timer.wait_time = _ambient_crossfade_step_dt
+	# Start stepping
+	_ambient_crossfade_step_timer.start()

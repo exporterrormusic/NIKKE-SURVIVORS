@@ -2,6 +2,9 @@
 extends Node2D
 class_name BasicProjectileVisual
 
+# Toggle this to true to enable per-projectile compensation debug logging
+static var DEBUG_PROJECTILE_LOG: bool = true
+
 const StandardBulletVisualScene: PackedScene = preload("res://scenes/projectiles/visuals/StandardBulletVisual.tscn")
 const StandardBulletVisualScript: Script = preload("res://src/projectiles/visuals/standard_bullet_visual.gd")
 
@@ -32,10 +35,63 @@ static var _is_day_time: bool = true
 
 var _projectile: Node = null
 static func _assign_canvas_layer(node: CanvasItem, z_offset: int = 0) -> void:
+	# Recursively assign canvas layer and z-index to the node and all
+	# CanvasItem descendants. Some visuals are composed of multiple child
+	# CanvasItems (Sprite2D, Line2D, Polygon2D, GPUParticles2D), and
+	# assigning the layer only on the root doesn't affect them. This
+	# traversal ensures every drawable gets placed on the effects layer
+	# so it can be modulated independently from the main world.
 	if node == null:
 		return
-	node.z_as_relative = false
-	node.z_index = PROJECTILE_BASE_Z_INDEX + z_offset
+	var stack: Array = [node]
+	while stack.size() > 0:
+		var n = stack.pop_back()
+		# Only assign `canvas_layer` on concrete drawable node types. Some
+		# CanvasItem subtypes (like plain Node2D) don't accept this
+		# assignment in all contexts and will raise. Use an explicit allow
+		# list for safe types.
+		var assign_layer: bool = false
+		if n is Sprite2D or n is Line2D or n is Polygon2D or n is GPUParticles2D or n is CPUParticles2D:
+			assign_layer = true
+		elif n is Control:
+			assign_layer = true
+
+		if assign_layer:
+			var ci := n as CanvasItem
+			ci.canvas_layer = 1  # Effects layer
+			ci.z_as_relative = false
+			ci.z_index = PROJECTILE_BASE_Z_INDEX + z_offset
+		# Push children to stack for traversal
+		for child in n.get_children():
+			if child is Node:
+				stack.append(child)
+
+	# Finally, if an EnvironmentController exists, reparent the root node
+	# under its `EffectsLayer` CanvasLayer so the layer's `modulate` is
+	# applied. Preserve global transform so visuals don't jump.
+	if not Engine.is_editor_hint():
+		var tree := Engine.get_main_loop() as SceneTree
+		var env = null
+		if tree:
+			env = tree.get_first_node_in_group("environment_controller")
+		if env:
+			var effects = env.get_node_or_null("EffectsLayer")
+			if effects and effects is CanvasLayer:
+				# Only reparent if needed
+				if node.get_parent() != effects:
+					if node is Node2D:
+						var saved_transform = (node as Node2D).global_transform
+						var old_parent = node.get_parent()
+						if old_parent:
+							old_parent.remove_child(node)
+						effects.add_child(node)
+						(node as Node2D).global_transform = saved_transform
+					else:
+						# Generic reparent for non-Node2D; try to preserve position if possible
+						var old_parent = node.get_parent()
+						if old_parent:
+							old_parent.remove_child(node)
+						effects.add_child(node)
 var _sprite: Sprite2D = null
 var _trail: Line2D = null
 var _tracer_body: Line2D = null
@@ -324,6 +380,12 @@ static func _apply_compensation(color: Color, world_position: Vector2, viewport:
 			compensated.b * normalize,
 			compensated.a
 		)
+	# Optional debug logging to inspect compensation math at runtime
+	if DEBUG_PROJECTILE_LOG:
+		var vp_name := "<no-vp>"
+		if viewport:
+			vp_name = str(viewport)
+		printerr("[PROJ_DEBUG] pos=", world_position, "vp=", vp_name, "ambient=", ambient_multiplier, "vignette=", vignette_multiplier, "total=", total_multiplier, "->", compensated)
 	return compensated
 
 static func _resolve_vignette_multiplier_cap() -> float:
@@ -364,7 +426,8 @@ static func _smoothstep(edge0: float, edge1: float, x: float) -> float:
 func _apply_color(color: Color, offset: Vector2 = Vector2.ZERO) -> Color:
 	var viewport: Viewport = get_viewport()
 	var world_position: Vector2 = global_position + offset
-	return _apply_compensation(color, world_position, viewport)
+	var compensated := _apply_compensation(color, world_position, viewport)
+	return compensated
 
 func _setup_tracer_body(color: Color) -> void:
 	var compensated_color: Color = _apply_color(color)

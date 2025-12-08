@@ -113,6 +113,8 @@ func _ready() -> void:
 	update_sprite()
 	call_deferred("_update_hud")
 	_level_up_sfx = load("res://assets/sounds/sfx/ui/level.wav")
+	# Connect to environment for sprite darkening during night
+	_setup_environment_modulate()
 
 func _apply_shop_upgrades() -> void:
 	"""Apply permanent shop upgrades to player stats."""
@@ -518,8 +520,8 @@ func _create_shadow() -> void:
 func _create_ellipse_texture(width: int, height: int) -> Texture2D:
 	var img := Image.create(width, height, false, Image.FORMAT_RGBA8)
 	var center := Vector2(width / 2.0, height / 2.0)
-	for y in height:
-		for x in width:
+	for y in range(height):
+		for x in range(width):
 			var dx := (x - center.x) / (width / 2.0)
 			var dy := (y - center.y) / (height / 2.0)
 			var dist := dx * dx + dy * dy
@@ -528,7 +530,30 @@ func _create_ellipse_texture(width: int, height: int) -> Texture2D:
 				img.set_pixel(x, y, Color(1, 1, 1, alpha))
 			else:
 				img.set_pixel(x, y, Color(0, 0, 0, 0))
+	# Image API doesn't require explicit lock in this environment
 	return ImageTexture.create_from_image(img)
+
+func _apply_unshaded_shader() -> void:
+	# Apply the same simple unshaded shader used by enemies so the player
+	# doesn't get incorrectly darkened by CanvasModulate during storms.
+	var shader = load("res://resources/shaders/enemy_red_glow.gdshader")
+	if shader and _animator:
+		var mat := ShaderMaterial.new()
+		mat.shader = shader
+		_animator.material = mat
+
+func _setup_environment_modulate() -> void:
+	# Connect to EnvironmentController to darken player sprite during night
+	var env_controller = get_tree().root.find_child("Environment", true, false)
+	if env_controller and env_controller is EnvironmentController:
+		if env_controller.has_signal("modulate_changed"):
+			env_controller.modulate_changed.connect(_on_environment_modulate_changed)
+			# Set initial modulate
+			_on_environment_modulate_changed(env_controller.current_modulate)
+
+func _on_environment_modulate_changed(color: Color) -> void:
+	# Manual darkening removed - handled by vignette overlay now
+	pass
 
 # ============= DAMAGE / HEALING =============
 

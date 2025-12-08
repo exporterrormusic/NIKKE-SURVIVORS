@@ -73,17 +73,24 @@ func _perform_attack(direction: Vector2) -> void:
 	const CrownBulletScript = preload("res://scripts/characters/effects/CrownBullet.gd")
 	
 	# Slight random spread for minigun
-	var spread := randf_range(-3.0, 3.0) * PI / 180.0
+	var spread := 0.0
 	var spread_dir := direction.rotated(spread)
 	
 	var bullet = CrownBulletScript.new()
-	player.get_parent().add_child(bullet)
+	# Initialize bullet properties before parenting so preserved transforms
+	# reflect the intended world position.
 	bullet.global_position = player.global_position + spread_dir * 30
 	bullet.velocity = spread_dir * bullet_speed
 	bullet.rotation = spread_dir.angle()
 	bullet.owner_node = player
 	# Use character's base damage with level scaling
 	bullet.base_damage = player.calc_damage()
+	
+	# Determine target parent: player's parent (world) for physics
+	var target_parent = player.get_parent()
+	
+	# Add to target parent and assign canvas layer
+	target_parent.add_child(bullet)
 	
 	_play_sound("minigun")
 
@@ -308,7 +315,11 @@ func _spawn_charge_visual() -> void:
 	_charge_visual.set_script(_get_charge_visual_script())
 	_charge_visual.set("charge_length", charge_length)
 	_charge_visual.set("charge_width", charge_width)
+	# Add the charge visual to the world and mark its CanvasItems to the
+	# effects layer so it's not darkened by world modulate.
 	player.get_parent().add_child(_charge_visual)
+	if BasicProjectileVisual:
+		BasicProjectileVisual._assign_canvas_layer(_charge_visual, 0)
 	_charge_visual.global_position = player.global_position
 	_charge_visual.rotation = _charge_direction.angle()
 
@@ -351,8 +362,23 @@ func _spawn_burst_nova() -> void:
 	var visual := Node2D.new()
 	visual.set_script(_get_nova_visual_script())
 	visual.set("max_radius", view_rect.size.length() * 0.6)
-	player.get_parent().add_child(visual)
+	# Try to parent under the EnvironmentController's EffectsLayer so its
+	# modulate (inverse) keeps this visual bright. Fall back to the player's
+	# parent if the layer is missing.
+	var env = tree.get_first_node_in_group("environment_controller")
+	var added := false
+	if env:
+		var effects = env.get_node_or_null("EffectsLayer")
+		if effects and effects is CanvasLayer:
+			effects.add_child(visual)
+			added = true
+	if not added:
+		player.get_parent().add_child(visual)
+	# Preserve position in world space
 	visual.global_position = player.global_position
+	# Ensure the nova's CanvasItems are placed on the effects layer safely
+	if BasicProjectileVisual:
+		BasicProjectileVisual._assign_canvas_layer(visual, 0)
 	
 	# Damage all visible enemies
 	var enemies := tree.get_nodes_in_group("enemies")
@@ -390,7 +416,10 @@ func _start_burst_beam() -> void:
 	_beam_visual.set_script(_get_beam_visual_script())
 	_beam_visual.set("beam_width", BEAM_WIDTH)
 	_beam_visual.set("beam_length", 2000.0)  # Long beam
+	# Add beam visual to world and mark its CanvasItems to the effects layer
 	player.get_parent().add_child(_beam_visual)
+	if BasicProjectileVisual:
+		BasicProjectileVisual._assign_canvas_layer(_beam_visual, 0)
 	_beam_visual.global_position = player.global_position
 	_beam_visual.rotation = _beam_direction.angle()
 

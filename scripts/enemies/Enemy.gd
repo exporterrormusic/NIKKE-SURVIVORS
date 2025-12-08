@@ -2,6 +2,7 @@ extends CharacterBody2D
 
 @onready var hp_bar = $ProgressBar
 @onready var _animator = $AnimatedSprite2D
+@onready var _environment_controller = get_tree().root.find_child("Environment", true, false)
 
 var hp = 1
 var max_hp = 1
@@ -68,6 +69,7 @@ const FloatingNumberScript = preload("res://scripts/effects/FloatingDamageNumber
 func _ready():
 	hp_bar.max_value = max_hp
 	hp_bar.value = hp
+	hp_bar.z_index = 100  # Ensure above vignette overlay (z=10)
 	_setup_hp_label()
 	
 	# Create shadow under enemy
@@ -86,8 +88,14 @@ func _ready():
 		_animator.configure(texture, 3, 4, 6.0, 0.15)
 	add_to_group("enemies")
 	
+	if _environment_controller:
+		_environment_controller.modulate_changed.connect(_on_modulate_changed)
+		# Set initial modulate for sprite darkening
+		_on_modulate_changed(_environment_controller.current_modulate)
+	
 	# Apply glow shader so enemy glows through night darkness
-	_apply_glow_shader()
+	# NOTE: disable unshaded glow shader so enemies are affected by global CanvasModulate
+	# _apply_glow_shader()
 	
 	# Randomize initial cooldown so enemies don't all fire at once
 	_laser_cooldown = randf_range(0.0, _get_laser_fire_interval())
@@ -116,21 +124,46 @@ func _apply_glow_shader() -> void:
 		_animator.material = mat
 
 func _setup_hp_label() -> void:
-	# Create a Node2D overlay that draws text on top of the HP bar
+	# Create a CanvasLayer to hold HP bar and label so they ignore CanvasModulate
+	var hp_layer := CanvasLayer.new()
+	hp_layer.layer = 1
+	hp_layer.follow_viewport_enabled = true
+	hp_layer.name = "HPLayer"
+	add_child(hp_layer)
+	
+	# Create a container for positioning
+	var container := Node2D.new()
+	container.name = "HPContainer"
+	hp_layer.add_child(container)
+	
+	# Reparent the HP bar to the container
+	# We need to keep a reference to the original parent for position calculation? 
+	# No, we'll update container position in _process
+	hp_bar.get_parent().remove_child(hp_bar)
+	container.add_child(hp_bar)
+	
+	# Create the label overlay
 	_hp_overlay = Node2D.new()
-	_hp_overlay.z_index = 10
-	# Position at the center of the HP bar (bar is at -47 to -37, so center is -42)
+	_hp_overlay.z_index = 100 # Keep high Z just in case
 	_hp_overlay.position = Vector2(0, -42)
-	# Set script BEFORE adding to tree so _ready() is called properly
 	_hp_overlay.set_script(preload("res://scripts/enemies/EnemyHPLabel.gd"))
-	add_child(_hp_overlay)
+	container.add_child(_hp_overlay)
 	_hp_overlay.setup(self)
+	
+	# Store container for updates
+	set_meta("hp_container", container)
 
 func _update_hp_label() -> void:
 	if _hp_overlay and _hp_overlay.has_method("update_values"):
 		_hp_overlay.update_values(hp, max_hp)
 
 func _process(delta: float) -> void:
+	# Update HP container position to follow enemy
+	if has_meta("hp_container"):
+		var container: Node2D = get_meta("hp_container")
+		if container:
+			container.global_position = global_position
+
 	# Death anticipation MUST run in _process, not _physics_process
 	# because physics process gets disabled when enemies are frozen (Commander's freeze)
 	# but they still need to die when HP reaches 0
@@ -649,3 +682,15 @@ func _find_nearest_enemy() -> Node:
 			nearest = child
 	
 	return nearest
+
+func _on_modulate_changed(_color: Color) -> void:
+	# Manual darkening removed - handled by vignette overlay now
+	pass
+
+func _inverse_color(color: Color) -> Color:
+	return Color(
+		1.0 / max(color.r, 0.001),
+		1.0 / max(color.g, 0.001),
+		1.0 / max(color.b, 0.001),
+		1.0 / max(color.a, 0.001)
+	)

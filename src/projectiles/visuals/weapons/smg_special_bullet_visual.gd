@@ -18,7 +18,6 @@ func _ready() -> void:
 		# Apply enhanced glow shader to the bullet sprite
 		var shader_material := ShaderMaterial.new()
 		shader_material.shader = SMG_GLOW_SHADER
-		shader_material.set_shader_parameter("glow_color", Color(0.2, 0.9, 1.0, 1.0))
 		shader_material.set_shader_parameter("glow_intensity", 1.2)
 		shader_material.set_shader_parameter("glow_size", 0.02)
 		bullet_sprite.material = shader_material
@@ -42,10 +41,15 @@ func update_visual(direction: Vector2, radius: float, color: Color, context: Dic
 		var modulated_color := _apply_color(color)
 		bullet_sprite.modulate = modulated_color
 		
+		# Update glow color with compensation
+		var glow_color = _apply_color(Color(0.2, 0.9, 1.0, 1.0))
+		if bullet_sprite.material and bullet_sprite.material is ShaderMaterial:
+			bullet_sprite.material.set_shader_parameter("glow_color", glow_color)
+		
 		# Adjust glow based on lighting conditions (day vs night)
 		var is_day_scene: bool = BasicProjectileVisual._is_day_time
-		var base_glow_intensity: float = 0.05 if is_day_scene else 1.2
-		var base_glow_size: float = 0.001 if is_day_scene else 0.02
+		var base_glow_intensity: float = 0.05 if is_day_scene else 2.0
+		var base_glow_size: float = 0.001 if is_day_scene else 0.04
 		
 		# Apply pulsing effect for special bullet
 		var time := Time.get_ticks_msec() / 1000.0

@@ -14,4 +14,4 @@ fog_alpha = 0.12
 light_color = Color(0.6, 0.7, 0.95, 1)
 light_energy = 0.6
 light_angle_degrees = -90.0
-vignette_strength = 0.3
+vignette_strength = 0.55

@@ -5,6 +5,9 @@ class_name BaseWeaponBulletVisual
 var apply_color_callback: Callable = Callable()
 var _white_texture: Texture2D = null
 
+# NOTE: Environment compensation removed - global CanvasModulate is now disabled
+# Darkness is applied directly to player/enemy sprites only
+
 func set_apply_color_callback(callback: Callable) -> void:
 	apply_color_callback = callback
 
@@ -26,7 +29,15 @@ func update_visual(_direction: Vector2, _radius: float, _color: Color, _context:
 func _apply_color(color: Color, offset: Vector2 = Vector2.ZERO) -> Color:
 	if apply_color_callback and apply_color_callback.is_valid():
 		return apply_color_callback.call(color, offset)
-	return color
+	
+	# Apply ambient and vignette compensation from BasicProjectileVisual
+	# This ensures weapons are bright at night and when vignetted
+	# We need to pass the viewport for vignette calculation
+	var viewport: Viewport = null
+	if is_inside_tree():
+		viewport = get_viewport()
+		
+	return BasicProjectileVisual._apply_compensation(color, global_position + offset, viewport)
 
 func _ensure_sprites_textured(nodes: Array) -> void:
 	if nodes.is_empty():

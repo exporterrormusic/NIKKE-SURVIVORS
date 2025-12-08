@@ -64,5 +64,15 @@ class_name BiomeDefinition
 @export_range(0.0, 1.0, 0.01) var flower_wind_sway: float = 0.3
 @export_range(0.2, 1.0, 0.01) var flower_cluster_size: float = 0.5
 
+@export_group("Weather Effects")
+@export_range(0.0, 1.0, 0.01) var rain_density: float = 0.0
+@export_range(0.25, 4.0, 0.01) var rain_scale: float = 1.0
+@export_range(0.0, 2.0, 0.01) var rain_speed: float = 1.0
+@export var rain_color: Color = Color(0.9, 0.95, 1.0, 0.8)
+@export_range(0.0, 1.0, 0.01) var fog_density: float = 0.0
+@export var fog_color: Color = Color(0.5, 0.55, 0.7, 1.0)
+@export_range(0.0, 2.0, 0.01) var lightning_frequency: float = 0.0
+@export_range(0.0, 1.0, 0.01) var lightning_intensity: float = 1.0
+
 func has_decorations() -> bool:
 	return decoration_textures.size() > 0 and decoration_count > 0

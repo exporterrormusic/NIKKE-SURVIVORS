@@ -46,6 +46,9 @@ func _async_init() -> void:
 	await get_tree().process_frame
 	load_settings()
 	
+	# Add default key bindings for actions that aren't in project.godot
+	_add_default_key_bindings()
+	
 	await get_tree().process_frame
 	apply_all_settings()
 
@@ -102,6 +105,15 @@ func save_settings() -> void:
 func _save_default_key_bindings() -> void:
 	# Store current InputMap state as defaults
 	_update_key_bindings_from_inputmap()
+
+
+func _add_default_key_bindings() -> void:
+	# Add default key bindings for actions not defined in project.godot
+	if not InputMap.has_action("burst"):
+		InputMap.add_action("burst")
+		var event = InputEventKey.new()
+		event.keycode = KEY_E
+		InputMap.action_add_event("burst", event)
 
 
 func _update_key_bindings_from_inputmap() -> void:
@@ -189,7 +201,6 @@ func apply_key_bindings() -> void:
 func set_music_volume(value: float) -> void:
 	music_volume = clamp(value, 0.0, 1.0)
 	_apply_bus_volume("Music", music_volume)
-	_apply_bus_volume("Master", music_volume)
 	save_settings()
 
 

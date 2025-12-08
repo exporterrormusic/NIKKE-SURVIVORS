@@ -1,0 +1,15 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource path="res://src/world/environment/map_definition.gd" type="Script" id=1]
+
+[resource]
+script = ExtResource(1)
+map_id = &"storm_night"
+display_name = "Stormfront: Rapturefield"
+description = "A dark, torrential storm rips through the valley at night  thick fog and lightning make the battlefield chaotic."
+biome_id = &"rain_forest"
+time_of_day_id = &"night"
+environment_seed = 882456
+available_time_ids = [&"day", &"night"]
+difficulty_label = "Storm Night"
+preview_image = "res://assets/backgrounds/bunker-interior.jpg"

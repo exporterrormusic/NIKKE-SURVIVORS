@@ -30,13 +30,20 @@ const CRIT_MULTIPLIER := 2.0
 var base_damage := 3
 
 var _hit_nodes: Array = []
+var _original_modulate = Color(0.6, 0.9, 1.0, 1.0)
 
 func _ready() -> void:
 	connect("body_entered", _on_body_entered)
 	
 	# Apply icy blue tint to sprite if it exists
 	if sprite:
-		sprite.modulate = Color(0.6, 0.9, 1.0, 1.0)
+		sprite.modulate = _original_modulate
+	
+	# Connect to environment modulate changes to keep sprite bright
+	var env = get_tree().root.find_child("Environment", true, false)
+	if env and env.has_signal("modulate_changed"):
+		env.modulate_changed.connect(_on_modulate_changed)
+		_on_modulate_changed(env.current_modulate if "current_modulate" in env else Color.WHITE)
 	
 	# High z-index for visibility
 	z_index = 60
@@ -131,3 +138,13 @@ func _on_body_entered(body: Node2D) -> void:
 		if pierce_count <= 0:
 			_finalize_trail()
 			queue_free()
+
+func _on_modulate_changed(color: Color) -> void:
+	if sprite:
+		var inverse = Color(
+			1.0 / max(color.r, 0.001),
+			1.0 / max(color.g, 0.001),
+			1.0 / max(color.b, 0.001),
+			1.0 / max(color.a, 0.001)
+		)
+		sprite.modulate = inverse * _original_modulate

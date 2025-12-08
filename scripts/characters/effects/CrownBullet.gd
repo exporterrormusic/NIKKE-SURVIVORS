@@ -32,6 +32,14 @@ func _ready() -> void:
 	
 	z_index = 50
 
+	# Connect to environment modulate changes so we can redraw with compensation
+	if not Engine.is_editor_hint():
+		var tree = get_tree()
+		if tree:
+			var env = tree.get_first_node_in_group("environment_controller")
+			if env and env.has_signal("modulate_changed"):
+				env.modulate_changed.connect(Callable(self, "_on_environment_modulate_changed"))
+
 func _create_visual() -> void:
 	# Create collision shape
 	var collision = CollisionShape2D.new()
@@ -68,16 +76,21 @@ func _draw() -> void:
 	# Draw the golden sphere with layered glow
 	var size := 28.0  # Size to match other bullets
 	draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
-	
-	# Outer glow - bright gold bloom
-	draw_circle(Vector2.ZERO, size * 0.8, Color(1.0, 0.85, 0.3, 0.3))
-	draw_circle(Vector2.ZERO, size * 0.6, Color(1.0, 0.9, 0.5, 0.5))
-	
-	# Core - bright golden
-	draw_circle(Vector2.ZERO, size * 0.4, Color(1.0, 0.95, 0.7, 0.8))
-	draw_circle(Vector2.ZERO, size * 0.25, Color(1.0, 1.0, 0.9, 1.0))
-	
-	# Bright center
+
+	# Apply ambient/vignette compensation so the drawn circles remain bright at night
+	var vp := get_viewport()
+	var base_color := Color(1.0, 0.95, 0.7, 1.0)
+	var comp_color := BasicProjectileVisual._apply_compensation(base_color, global_position, vp) if BasicProjectileVisual else base_color
+
+	# Outer glow - bright gold bloom (compensated)
+	draw_circle(Vector2.ZERO, size * 0.8, Color(comp_color.r, comp_color.g, comp_color.b, 0.3))
+	draw_circle(Vector2.ZERO, size * 0.6, Color(comp_color.r, comp_color.g, comp_color.b, 0.5))
+
+	# Core - bright golden (compensated)
+	draw_circle(Vector2.ZERO, size * 0.4, Color(comp_color.r, comp_color.g, comp_color.b, 0.8))
+	draw_circle(Vector2.ZERO, size * 0.25, Color(comp_color.r, comp_color.g, comp_color.b, 1.0))
+
+	# Bright center (keep white)
 	draw_circle(Vector2.ZERO, size * 0.12, Color(1.0, 1.0, 1.0, 1.0))
 	
 	# Draw swirling golden particles

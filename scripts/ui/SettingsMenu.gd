@@ -36,7 +36,7 @@ const CONTROL_ACTION_DEFINITIONS := [
 	{"action": "move_right", "label": "Move Right", "node": "%MoveRightButton"},
 	{"action": "dash", "label": "Dash", "node": "%DashButton"},
 	{"action": "burst", "label": "Burst", "node": "%BurstButton"},
-	{"action": "special_attack", "label": "Special Attack", "node": "%SpecialAttackButton"},
+	{"action": "thrust", "label": "Special Attack", "node": "%SpecialAttackButton"},
 	{"action": "ui_cancel", "label": "Pause", "node": "%PauseButton"}
 ]
 
@@ -370,11 +370,11 @@ func _apply_key_binding(action: String, event: InputEventKey) -> void:
 	_cancel_key_capture()
 
 
-func _update_button_for_action(action: String, keycode: int) -> void:
+func _update_button_for_action(action: String, keycode: int, button_index: int = 0) -> void:
 	if not _control_buttons.has(action):
 		return
 	var button: Button = _control_buttons[action]
-	var label: String = _keycode_to_string(keycode)
+	var label: String = _keycode_to_string(keycode, button_index)
 	button.text = label
 	button.remove_theme_color_override("font_color")
 	button.remove_theme_color_override("font_color_pressed")
@@ -418,7 +418,21 @@ func _apply_bus_volume(bus_name: String, value: float) -> void:
 	print("[SettingsMenu] Set bus '", bus_name, "' (index ", bus_index, ") to ", linear * 100, "% (", db_value, " dB)")
 
 
-func _keycode_to_string(keycode: int) -> String:
+func _keycode_to_string(keycode: int, button_index: int = 0) -> String:
+	if button_index != 0:
+		match button_index:
+			MOUSE_BUTTON_LEFT:
+				return "Left Click"
+			MOUSE_BUTTON_RIGHT:
+				return "Right Click"
+			MOUSE_BUTTON_MIDDLE:
+				return "Middle Click"
+			MOUSE_BUTTON_WHEEL_UP:
+				return "Wheel Up"
+			MOUSE_BUTTON_WHEEL_DOWN:
+				return "Wheel Down"
+			_:
+				return "Mouse Button %d" % button_index
 	if keycode == 0:
 		return "UNBOUND"
 	return OS.get_keycode_string(keycode)
@@ -496,9 +510,14 @@ func _refresh_key_binding_labels() -> void:
 			continue
 		var events: Array = InputMap.action_get_events(action)
 		var keycode: int = 0
+		var button_index: int = 0
 		for ev in events:
 			if ev is InputEventKey:
 				var key_event: InputEventKey = ev
 				keycode = key_event.physical_keycode if key_event.physical_keycode != 0 else key_event.keycode
 				break
-		_update_button_for_action(action, keycode)
+			elif ev is InputEventMouseButton:
+				var mouse_event: InputEventMouseButton = ev
+				button_index = mouse_event.button_index
+				break
+		_update_button_for_action(action, keycode, button_index)

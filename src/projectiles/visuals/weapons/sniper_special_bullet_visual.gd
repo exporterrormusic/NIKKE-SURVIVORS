@@ -17,3 +17,7 @@ func configure_visual(params: Dictionary) -> void:
 	var color: Color = params.get("color", preview_color)
 	var context: Dictionary = params.get("context", {}) if params.has("context") else {}
 	update_visual(direction, radius, color, context)
+
+func _apply_color(color: Color, _offset: Vector2 = Vector2.ZERO) -> Color:
+	# Return original color without compensation to keep original brightness
+	return color

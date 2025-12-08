@@ -9,7 +9,7 @@ const UISounds := preload("res://scripts/ui/UISoundManager.gd")
 signal play_selected
 signal achievements_selected
 signal settings_selected
-signal quit_selected
+
 signal leaderboards_selected
 signal shop_selected
 

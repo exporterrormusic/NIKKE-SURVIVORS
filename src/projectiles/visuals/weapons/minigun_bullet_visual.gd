@@ -10,6 +10,9 @@ const MINIGUN_GLOW_SHADER := preload("res://src/projectiles/shaders/minigun_norm
 @onready var bullet_sprite: Sprite2D = $BulletSprite
 @onready var base_scale: Vector2 = Vector2.ONE
 
+var _original_color: Color = Color.WHITE
+var _environment_controller: EnvironmentController = null
+
 func _ready() -> void:
 	if bullet_sprite:
 		bullet_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
@@ -23,8 +26,20 @@ func _ready() -> void:
 		shader_material.set_shader_parameter("glow_size", 0.004)
 		bullet_sprite.material = shader_material
 	
+	if not Engine.is_editor_hint():
+		_environment_controller = get_tree().get_first_node_in_group("environment_controller")
+		if _environment_controller:
+			_environment_controller.modulate_changed.connect(_on_modulate_changed)
+	
 	if Engine.is_editor_hint():
 		update_visual(Vector2.RIGHT, preview_radius, preview_color)
+
+func _on_modulate_changed(_new_modulate: Color) -> void:
+	if bullet_sprite:
+		# Recompute modulate using BaseWeaponBulletVisual/_apply_color so vignette
+		# and ambient compensation are applied consistently (like SMG).
+		var modulated_color := _apply_color(_original_color)
+		bullet_sprite.modulate = modulated_color
 
 func update_visual(direction: Vector2, radius: float, color: Color, _context: Dictionary = {}) -> void:
 	var dir := direction
@@ -37,6 +52,8 @@ func update_visual(direction: Vector2, radius: float, color: Color, _context: Di
 	var scale_factor: float = max(radius / 6.0, 0.5)
 	if bullet_sprite:
 		bullet_sprite.scale = base_scale * scale_factor
+	_original_color = color
+	# Use shared compensation helper so visuals match SMG behavior
 	var modulated_color := _apply_color(color)
 	bullet_sprite.modulate = modulated_color
 	

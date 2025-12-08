@@ -25,6 +25,7 @@ func _ready() -> void:
 	if trail_glow_sprite:
 		trail_glow_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 		trail_glow_sprite.z_index = -2
+	
 	if Engine.is_editor_hint():
 		update_visual(Vector2.RIGHT, preview_radius, preview_color)
 
@@ -137,3 +138,7 @@ func _blend_colors(base_color: Color, target: Color, weight: float) -> Color:
 		maxf(base_color.b * inv + target.b * w, 0.0),
 		maxf(base_color.a * inv + target.a * w, 0.0)
 	)
+
+
+
+

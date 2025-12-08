@@ -1,0 +1,15 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource path="res://src/world/environment/map_definition.gd" type="Script" id=1]
+
+[resource]
+script = ExtResource(1)
+map_id = &"storm_day"
+display_name = "Stormfront: Rapturefield"
+description = "A rain-swept valley under a bright but stormy sky. Dynamic weather reduces visibility and alters tactics."
+biome_id = &"rain_forest"
+time_of_day_id = &"day"
+environment_seed = 922345
+available_time_ids = [&"day", &"night"]
+difficulty_label = "Storm Tactics"
+preview_image = "res://assets/backgrounds/rapturefield1.jpg"

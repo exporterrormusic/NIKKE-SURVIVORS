@@ -52,6 +52,9 @@ var _last_position: Vector2 = Vector2.ZERO
 # Cached textures
 var _glow_texture: Texture2D = null
 
+# Environment compensation
+var _environment_controller: Node = null
+
 func _ready() -> void:
 	z_as_relative = false
 	z_index = 900

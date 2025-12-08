@@ -21,8 +21,8 @@ A Vampire Survivors-style roguelite fan game featuring characters from **Goddess
 | Move | WASD / Arrow Keys |
 | Aim | Mouse |
 | Attack | Left Click (hold for auto-fire) |
-| Special Ability | Right Click / E |
-| Burst (Ultimate) | Q (when gauge is full) |
+| Special Attack | Right Click |
+| Burst (Ultimate) | E (when gauge is full) |
 | Dash | Space (costs stamina) |
 | Run | Hold Shift (drains stamina) |
 | Talent Tree | Tab |

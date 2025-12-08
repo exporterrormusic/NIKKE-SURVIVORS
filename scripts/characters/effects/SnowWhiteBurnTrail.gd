@@ -87,6 +87,16 @@ func _draw() -> void:
 	if _points.size() < 2:
 		return
 	
+	# Get environment modulate for compensation
+	var env = get_tree().root.find_child("Environment", true, false)
+	var modulate_color = env.current_modulate if env and "current_modulate" in env else Color.WHITE
+	var inverse = Color(
+		1.0 / max(modulate_color.r, 0.001),
+		1.0 / max(modulate_color.g, 0.001),
+		1.0 / max(modulate_color.b, 0.001),
+		1.0 / max(modulate_color.a, 0.001)
+	)
+	
 	# Calculate lengths for tapering
 	var total_length := 0.0
 	var lengths := PackedFloat32Array()
@@ -105,9 +115,9 @@ func _draw() -> void:
 	# Build the trail polygon manually for the icy fire effect
 	
 	# We'll draw 3 layers: outer glow, mid, and core
-	_draw_trail_layer(lengths, total_length, 1.0, Color(0.2, 0.5, 1.0, 0.4 * flicker))   # Outer blue
-	_draw_trail_layer(lengths, total_length, 0.65, Color(0.4, 0.8, 1.0, 0.7 * flicker))  # Mid cyan  
-	_draw_trail_layer(lengths, total_length, 0.3, Color(0.9, 1.0, 1.0, 0.9))              # Core white
+	_draw_trail_layer(lengths, total_length, 1.0, Color(0.2, 0.5, 1.0, 0.4 * flicker) * inverse)   # Outer blue
+	_draw_trail_layer(lengths, total_length, 0.65, Color(0.4, 0.8, 1.0, 0.7 * flicker) * inverse)  # Mid cyan  
+	_draw_trail_layer(lengths, total_length, 0.3, Color(0.9, 1.0, 1.0, 0.9) * inverse)              # Core white
 
 func _draw_trail_layer(lengths: PackedFloat32Array, total_length: float, width_mult: float, color: Color) -> void:
 	if _points.size() < 2:

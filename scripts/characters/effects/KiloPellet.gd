@@ -64,6 +64,14 @@ func _ready() -> void:
 	z_index = 340  # Match original z_index
 	queue_redraw()
 
+	# Connect to environment modulate change if available so we redraw when lighting changes
+	if not Engine.is_editor_hint():
+		var tree := get_tree()
+		if tree:
+			var env = tree.get_first_node_in_group("environment_controller")
+			if env and env.has_signal("modulate_changed"):
+				env.modulate_changed.connect(Callable(self, "_on_environment_modulate_changed"))
+
 func _exit_tree() -> void:
 	all_special_pellets.erase(self)
 	all_burst_pellets.erase(self)
@@ -106,7 +114,10 @@ func _draw() -> void:
 	
 	# === CORE ===
 	# Main core - bright
-	draw_circle(Vector2.ZERO, radius, Color(color.r, color.g, color.b, 1.0))
+	# Apply ambient/vignette compensation so pellet stays bright at night
+	var vp := get_viewport()
+	var comp_color := BasicProjectileVisual._apply_compensation(color, global_position, vp) if BasicProjectileVisual else color
+	draw_circle(Vector2.ZERO, radius, Color(comp_color.r, comp_color.g, comp_color.b, 1.0))
 	
 	# Hot center - almost white
 	var center_color := Color(1.0, 0.95, 0.8, 1.0)
@@ -219,11 +230,13 @@ func _draw_line_to_pellet(pellet: KiloPellet) -> void:
 	var pulse := 1.0 + sin(_time * 12.0) * 0.3
 	
 	# Outer glow line - thicker and more visible
-	var outer_color := Color(LINE_COLOR.r, LINE_COLOR.g * 0.6, LINE_COLOR.b * 0.4, 0.5 * alpha * pulse)
+	# More aggressive visuals - stronger alpha, faster pulse. Apply compensation.
+	var comp_line := BasicProjectileVisual._apply_compensation(LINE_COLOR, global_position, get_viewport()) if BasicProjectileVisual else LINE_COLOR
+	var outer_color := Color(comp_line.r, comp_line.g * 0.6, comp_line.b * 0.4, 0.5 * alpha * pulse)
 	draw_line(Vector2.ZERO, local_pos, outer_color, 18.0)
 	
 	# Middle fire layer
-	var mid_color := Color(LINE_COLOR.r, LINE_COLOR.g * 0.75, LINE_COLOR.b * 0.4, 0.7 * alpha * pulse)
+	var mid_color := Color(comp_line.r, comp_line.g * 0.75, comp_line.b * 0.4, 0.7 * alpha * pulse)
 	draw_line(Vector2.ZERO, local_pos, mid_color, 12.0)
 	
 	# Inner line - brighter orange
@@ -240,7 +253,7 @@ func _physics_process(delta: float) -> void:
 		start_position = global_position
 		_start_position_set = true
 	
-	global_position += velocity * delta
+	position += velocity * delta
 	
 	lifetime += delta
 	if lifetime > 3.0:  # Shorter lifetime for shotgun pellets

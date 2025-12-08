@@ -318,10 +318,9 @@ func _spawn_charge_visual() -> void:
 	# Add the charge visual to the world and mark its CanvasItems to the
 	# effects layer so it's not darkened by world modulate.
 	player.get_parent().add_child(_charge_visual)
-	if BasicProjectileVisual:
-		BasicProjectileVisual._assign_canvas_layer(_charge_visual, 0)
 	_charge_visual.global_position = player.global_position
 	_charge_visual.rotation = _charge_direction.angle()
+	_charge_visual.z_index = 200
 
 func is_invincible() -> bool:
 	return _is_charging  # Invincible during charge
@@ -362,23 +361,10 @@ func _spawn_burst_nova() -> void:
 	var visual := Node2D.new()
 	visual.set_script(_get_nova_visual_script())
 	visual.set("max_radius", view_rect.size.length() * 0.6)
-	# Try to parent under the EnvironmentController's EffectsLayer so its
-	# modulate (inverse) keeps this visual bright. Fall back to the player's
-	# parent if the layer is missing.
-	var env = tree.get_first_node_in_group("environment_controller")
-	var added := false
-	if env:
-		var effects = env.get_node_or_null("EffectsLayer")
-		if effects and effects is CanvasLayer:
-			effects.add_child(visual)
-			added = true
-	if not added:
-		player.get_parent().add_child(visual)
-	# Preserve position in world space
+	# Parent to the player's parent (world) and place on effects layer
+	player.get_parent().add_child(visual)
 	visual.global_position = player.global_position
-	# Ensure the nova's CanvasItems are placed on the effects layer safely
-	if BasicProjectileVisual:
-		BasicProjectileVisual._assign_canvas_layer(visual, 0)
+	visual.z_index = 200
 	
 	# Damage all visible enemies
 	var enemies := tree.get_nodes_in_group("enemies")
@@ -418,10 +404,9 @@ func _start_burst_beam() -> void:
 	_beam_visual.set("beam_length", 2000.0)  # Long beam
 	# Add beam visual to world and mark its CanvasItems to the effects layer
 	player.get_parent().add_child(_beam_visual)
-	if BasicProjectileVisual:
-		BasicProjectileVisual._assign_canvas_layer(_beam_visual, 0)
 	_beam_visual.global_position = player.global_position
 	_beam_visual.rotation = _beam_direction.angle()
+	_beam_visual.z_index = 200
 
 func _update_burst_beam(delta: float) -> void:
 	_beam_timer -= delta

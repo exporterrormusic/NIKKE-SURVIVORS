@@ -203,6 +203,9 @@ func _init_character_system() -> void:
 	
 	# Apply character-specific shop upgrades for selected squad
 	_apply_character_shop_upgrades(all_ids)
+	
+	# Apply all unlocked talents to controllers
+	_apply_all_talents_to_controllers()
 
 func _apply_character_shop_upgrades(all_ids: Array) -> void:
 	"""Apply character-specific shop upgrades based on selected squad.
@@ -293,16 +296,42 @@ func _apply_upgrade_for_character(char_idx: int) -> void:
 				_has_nayuta_duplicity_upgrade = true
 				print("[PlayerCore] Nayuta 'Duplicity' upgrade now active (unlocked)")
 
+func _apply_all_talents_to_controllers() -> void:
+	"""Apply all unlocked talents to controllers when the game starts."""
+	var tree := _get_talent_tree()
+	if not tree or not tree.has_method("get_unlocked_talents"):
+		return
+	
+	var unlocked_talents: Dictionary = tree.get_unlocked_talents()
+	
+	# Apply talents for each character slot
+	for slot_idx in range(_controllers.size()):
+		if slot_idx >= _selected_char_indices.size():
+			continue
+		
+		var registry_idx: int = _selected_char_indices[slot_idx]
+		var controller = _controllers[slot_idx]
+		
+		if controller and registry_idx in unlocked_talents:
+			var char_talents: Dictionary = unlocked_talents[registry_idx]
+			for talent_id in char_talents:
+				var talent_level: int = char_talents[talent_id]
+				for i in range(talent_level):
+					if controller.has_method("apply_talent"):
+						controller.apply_talent(talent_id)
+						print("[PlayerCore] Applied talent %s (level %d) to controller slot %d (registry %d)" % [talent_id, i + 1, slot_idx, registry_idx])
+
 func on_enemy_killed(_enemy: Node2D, killer_source: String = "player") -> void:
 	"""Called by Level when an enemy dies. Handles kill-based character upgrades.
 	   Only player kills (player, projectile, cecil_drone) grant benefits."""
 	# Check if this is a valid kill source for upgrades
-	# Valid: player, projectile, cecil_drone
-	# Invalid: charmed_enemy, summon
-	var valid_kill: bool = killer_source in ["player", "projectile", "cecil_drone"]
+	# Valid: player, projectile, cecil_drone, summon (for other upgrades like Kilo shield)
+	# Invalid: charmed_enemy
+	var valid_kill: bool = killer_source in ["player", "projectile", "cecil_drone", "summon"]
 	
-	# Rapunzel: "I'm a healer, but..." - Heal 2% HP on each kill (only valid kills)
-	if _has_rapunzel_healer_upgrade and valid_kill:
+	# Rapunzel: "I'm a healer, but..." - Heal 2% HP on each kill (exclude clone kills)
+	var rapunzel_valid_kill: bool = killer_source in ["player", "projectile", "cecil_drone"]
+	if _has_rapunzel_healer_upgrade and rapunzel_valid_kill:
 		var heal_amount: int = int(max_hp * 0.02)
 		if heal_amount < 1:
 			heal_amount = 1
@@ -327,11 +356,22 @@ func _spawn_duplicity_clone() -> void:
 	get_parent().add_child(clone)
 	clone.global_position = global_position + Vector2(randf_range(-30, 30), randf_range(-30, 30))
 	
-	# Clone stats: 25% player HP, 20% damage multiplier, no heal on death
-	var clone_hp: int = maxi(1, max_hp / 4)
+	# Clone stats: 25% player HP with level scaling, 20% damage multiplier, no heal on death
+	# HP scales: base 25% of player HP, +25% per level
+	var hp_level_mult := 1.0 + (level - 1) * 0.25
+	var clone_hp: int = maxi(1, int((max_hp / 4.0) * hp_level_mult))
 	var clone_attack: float = 0.2
-	clone.call("initialize", self, "smg", clone_hp, clone_attack, false, level)
-	print("[PlayerCore] Duplicity clone spawned!")
+	
+	# Determine weapon type - use Nayuta's weapon pool if available
+	var weapon_type: String = "smg"  # Default fallback
+	if _current_controller is NayutaController:
+		var nayuta_ctrl := _current_controller as NayutaController
+		if nayuta_ctrl.has_method("get_weapon_pool"):
+			var weapon_pool: Array = nayuta_ctrl.get_weapon_pool()
+			if weapon_pool.size() > 0:
+				weapon_type = weapon_pool[randi() % weapon_pool.size()]
+	
+	clone.call("initialize", self, weapon_type, clone_hp, clone_attack, false, level)
 
 func _init_ui() -> void:
 	if overhead_hud:
@@ -437,6 +477,12 @@ func _get_talent_tree() -> Control:
 		canvas = get_tree().root
 	return canvas.get_node_or_null("TalentTree")
 
+func _get_shop_menu() -> Control:
+	var canvas := get_parent().get_node_or_null("CanvasLayer")
+	if canvas == null:
+		canvas = get_tree().root
+	return canvas.get_node_or_null("ShopMenu")
+
 func _get_talent_level(char_id: int, talent_id: String) -> int:
 	var tree := _get_talent_tree()
 	if tree and tree.has_method("get_talent_level"):
@@ -445,6 +491,20 @@ func _get_talent_level(char_id: int, talent_id: String) -> int:
 
 func get_talent_level(char_id: int, talent_id: String) -> int:
 	return _get_talent_level(char_id, talent_id)
+
+func get_sin_captivating_level() -> int:
+	"""Get Sin's Captivating talent level directly from the controller (if Sin is in party)."""
+	for controller in _controllers:
+		if controller is SinController:
+			return controller.captivating_level
+	return 0
+
+func get_sin_damage() -> int:
+	"""Get Sin's current damage for explosion calculations (if Sin is in party)."""
+	for controller in _controllers:
+		if controller is SinController:
+			return calc_damage()  # Use player's damage (includes level scaling)
+	return 0
 
 func _create_shadow() -> void:
 	var shadow := Sprite2D.new()
@@ -561,6 +621,9 @@ func heal(amount: int) -> void:
 	hp = min(hp + amount, max_hp)
 	var actual_heal = hp - prev_hp
 	
+	# Always heal Nayuta clones for the full intended amount
+	_heal_nayuta_clones(amount)
+	
 	if actual_heal > 0:
 		var FloatingNumber = preload("res://scripts/effects/FloatingDamageNumber.gd")
 		if get_parent():
@@ -573,6 +636,18 @@ func _update_health_display(change: int = 0, animate: bool = false) -> void:
 		player_hud.update_health(hp, max_hp, change, animate)
 	if overhead_hud:
 		overhead_hud.update_health(hp, max_hp)
+
+func _heal_nayuta_clones(player_heal_amount: int) -> void:
+	"""Heal all active Nayuta clones for the full amount of player healing."""
+	var clone_heal_amount = player_heal_amount
+	if clone_heal_amount <= 0:
+		return
+	
+	# Find all Nayuta clones in the scene
+	var clones = get_tree().get_nodes_in_group("nayuta_clones")
+	for clone in clones:
+		if is_instance_valid(clone) and clone.has_method("heal"):
+			clone.heal(clone_heal_amount)
 
 # ============= BURST SYSTEM =============
 
@@ -784,6 +859,11 @@ func _on_talent_unlocked(char_id: int, talent_id: String) -> void:
 		var controller = _controllers[slot_idx]
 		if controller and controller.has_method("apply_talent"):
 			controller.apply_talent(talent_id)
+	
+	# Save shop data when talents change
+	var shop_menu = _get_shop_menu()
+	if shop_menu and shop_menu.has_method("_save_shop_data"):
+		shop_menu._save_shop_data()
 	
 	# Update burst visibility
 	_update_burst_visibility()

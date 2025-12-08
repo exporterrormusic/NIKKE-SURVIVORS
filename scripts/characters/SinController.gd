@@ -26,15 +26,14 @@ var charm_radius: float = 150.0  # Base AoE radius
 var charm_cooldown: float = 10.0  # Base cooldown
 
 # Burst config
-const SIN_DOT_DAMAGE := 8
-const SIN_DOT_INTERVAL := 0.5
-const SIN_HEAL_INTERVAL := 4.0
-const SIN_HEAL_FRACTION := 0.05  # 5% max HP per heal tick per enemy
-const SIN_BURST_DURATION := 8.0
+const SIN_DOT_INTERVAL := 1.0  # Damage every 1 second
+const SIN_DOT_TICKS := 4  # 4 ticks total (4 seconds)
+const SIN_HEAL_FRACTION := 0.05  # 5% max HP per enemy damaged per tick
 
 # Burst state
-var _burst_targets: Array = []
-var _burst_end_time: float = 0.0
+var _burst_targets: Array = []  # Array of {enemy_ref, effect_ref}
+var _burst_next_tick_time: float = 0.0  # When next DOT tick occurs
+var _burst_ticks_remaining: int = 0  # How many ticks left
 
 # Explosion on death during burst
 var burst_explosion_damage: int = 4
@@ -42,7 +41,7 @@ const BURST_EXPLOSION_RADIUS := 100.0
 
 # Talent states
 var special_size_level: int = 0  # AoE size: 50/100/200%
-var special_cooldown_level: int = 0  # -2s per level, max 3
+var captivating_level: int = 0  # Lv1: heal on charm death, Lv2: explode on charm death, Lv3: charm tanks
 var burst_charge_on_kill: bool = false  # Killing during burst charges burst
 var burst_explode_on_death: bool = false  # Enemies explode on death during burst
 
@@ -71,7 +70,7 @@ func _create_magnetic_aura() -> void:
 	_magnetic_aura = SinMagneticAuraScript.new()
 	_magnetic_aura.name = "SinMagneticAura"
 	parent.add_child(_magnetic_aura)
-	_magnetic_aura.initialize(player)
+	_magnetic_aura.initialize(player, self)  # Pass controller for talent checks
 
 func _create_charm_indicator() -> void:
 	if _charm_indicator and is_instance_valid(_charm_indicator):
@@ -202,14 +201,16 @@ func _perform_special(_direction: Vector2) -> void:
 			# Charm the enemy
 			_charm_enemy(enemy)
 	
-	# Apply cooldown reduction from talents
-	var cooldown_reduction := special_cooldown_level * 2.0
-	special_timer = max(charm_cooldown - cooldown_reduction, 2.0)
+	# Start cooldown
+	special_timer = charm_cooldown
 	data.special_cooldown = special_timer  # Update for UI
 
 func _is_elite_or_boss(enemy: Node) -> bool:
 	if enemy.has_meta("enemy_tier"):
 		var tier = enemy.get_meta("enemy_tier")
+		# Tanks can be charmed with captivating level 3
+		if tier == "tank" and captivating_level >= 3:
+			return false
 		if tier in ["elite", "boss", "tank"]:
 			return true
 	if enemy.is_in_group("elite") or enemy.is_in_group("boss"):
@@ -221,6 +222,11 @@ func _charm_enemy(enemy: Node) -> void:
 	if enemy.has_meta("charmed") and enemy.get_meta("charmed"):
 		return
 	
+	# Check if this is a tank (needs force=true with captivating level 3)
+	var is_tank := false
+	if enemy.has_meta("enemy_tier") and enemy.get_meta("enemy_tier") == "tank":
+		is_tank = true
+	
 	# Mark as charmed
 	enemy.set_meta("charmed", true)
 	enemy.set_meta("charm_owner", player)
@@ -231,7 +237,7 @@ func _charm_enemy(enemy: Node) -> void:
 	
 	# Modify enemy behavior - make it attack other enemies
 	if enemy.has_method("set_charmed"):
-		enemy.set_charmed(player, true)  # (charm_owner, charmed)
+		enemy.set_charmed(player, true, is_tank)  # force=true for tanks
 	else:
 		# Add purple visual effect as fallback
 		var effect = SinCharmEffectScript.new()
@@ -306,7 +312,8 @@ func _on_burst_start() -> void:
 		view_rect = Rect2(Vector2.ZERO, Vector2(1920, 1080))
 	
 	var now := Time.get_ticks_msec() * 0.001
-	_burst_end_time = now + SIN_BURST_DURATION
+	_burst_next_tick_time = now + SIN_DOT_INTERVAL  # First tick after 1 second
+	_burst_ticks_remaining = SIN_DOT_TICKS
 	
 	var enemies := tree.get_nodes_in_group("enemies")
 	for enemy in enemies:
@@ -325,9 +332,7 @@ func _on_burst_start() -> void:
 		
 		var target_data: Dictionary = {
 			"enemy_ref": weakref(enemy_node),
-			"effect_ref": weakref(effect),
-			"next_damage_time": now,
-			"next_heal_time": now + SIN_HEAL_INTERVAL
+			"effect_ref": weakref(effect)
 		}
 		_burst_targets.append(target_data)
 	
@@ -359,22 +364,37 @@ func _clear_burst_targets() -> void:
 			if effect and is_instance_valid(effect):
 				effect.queue_free()
 	_burst_targets.clear()
-	_burst_end_time = 0.0
+	_burst_ticks_remaining = 0
 
 func _update_burst_dot(_delta: float) -> void:
-	if _burst_targets.is_empty():
+	if _burst_ticks_remaining <= 0:
 		return
 	
 	var now := Time.get_ticks_msec() * 0.001
-	if now >= _burst_end_time or not player.get_tree():
+	if not player.get_tree():
 		_clear_burst_targets()
 		burst_active = false
 		burst_ended.emit()
 		return
 	
-	var heal_amount := int(round(float(player.max_hp) * SIN_HEAL_FRACTION))
-	var updated: Array = []
+	# Clean up dead enemies (but don't process them yet)
+	_cleanup_dead_enemies()
 	
+	# Check if it's time for a DOT tick
+	if now < _burst_next_tick_time:
+		return
+	
+	# Process DOT tick
+	_burst_next_tick_time = now + SIN_DOT_INTERVAL
+	_burst_ticks_remaining -= 1
+	
+	# Calculate damage (10x Sin's current ATK)
+	var damage: int = player.calc_damage() * 10
+	var heal_per_enemy := int(round(float(player.max_hp) * SIN_HEAL_FRACTION))
+	var enemies_damaged := 0
+	
+	# Damage all living enemies and count them
+	var updated: Array = []
 	for entry in _burst_targets:
 		if not entry is Dictionary:
 			continue
@@ -383,53 +403,71 @@ func _update_burst_dot(_delta: float) -> void:
 		var enemy: Node = enemy_ref.get_ref() if enemy_ref else null
 		
 		if enemy == null or not is_instance_valid(enemy):
-			# Enemy died - check for explosion talent
+			# Enemy already dead, skip
+			continue
+		
+		# Deal damage
+		if enemy.has_method("take_damage"):
+			enemy.take_damage(damage, false, Vector2.ZERO, not burst_charge_on_kill)
+			enemies_damaged += 1
+			
+			if burst_charge_on_kill and player.has_method("register_burst_hit"):
+				player.register_burst_hit(enemy, false)
+		
+		# Check if enemy died from this damage
+		if not is_instance_valid(enemy) or (enemy.has_method("is_dead") and enemy.is_dead()):
+			# Enemy died from this tick - handle explosion
 			var effect_ref: WeakRef = entry.get("effect_ref")
 			if effect_ref:
 				var effect: Node = effect_ref.get_ref()
 				if effect and is_instance_valid(effect):
-					# Get position before freeing
 					var death_pos: Vector2 = effect.global_position
 					effect.queue_free()
-					
-					# Explosion on death
+					if burst_explode_on_death:
+						_spawn_burst_explosion(death_pos)
+		else:
+			# Enemy still alive, keep tracking
+			updated.append(entry)
+	
+	_burst_targets = updated
+	
+	# Heal based on enemies damaged this tick
+	if enemies_damaged > 0 and heal_per_enemy > 0:
+		var total_heal := heal_per_enemy * enemies_damaged
+		player.hp = min(player.hp + total_heal, player.max_hp)
+		player._update_health_display(total_heal, false)
+	
+	# Check if burst is complete
+	if _burst_ticks_remaining <= 0:
+		_clear_burst_targets()
+		burst_active = false
+		burst_ended.emit()
+
+func _cleanup_dead_enemies() -> void:
+	"""Remove dead enemies from tracking and handle explosions."""
+	var updated: Array = []
+	for entry in _burst_targets:
+		if not entry is Dictionary:
+			continue
+		
+		var enemy_ref: WeakRef = entry.get("enemy_ref")
+		var enemy: Node = enemy_ref.get_ref() if enemy_ref else null
+		
+		if enemy == null or not is_instance_valid(enemy):
+			# Enemy died between ticks - handle explosion
+			var effect_ref: WeakRef = entry.get("effect_ref")
+			if effect_ref:
+				var effect: Node = effect_ref.get_ref()
+				if effect and is_instance_valid(effect):
+					var death_pos: Vector2 = effect.global_position
+					effect.queue_free()
 					if burst_explode_on_death:
 						_spawn_burst_explosion(death_pos)
 			continue
 		
-		# Apply DOT damage
-		var next_damage: float = entry.get("next_damage_time", now)
-		if now >= next_damage:
-			var dealt := 0
-			if enemy.has_method("take_damage"):
-				# Calculate damage with player level scaling (+50% per level)
-				var level_mult: float = 1.0
-				if "level" in player:
-					level_mult = 1.0 + (player.level - 1) * 0.5
-				var damage := int(SIN_DOT_DAMAGE * level_mult)
-				enemy.take_damage(damage, false, Vector2.ZERO, not burst_charge_on_kill)
-				dealt = damage
-			
-			if dealt > 0 and burst_charge_on_kill:
-				# Register burst hit for gauge charging
-				if player.has_method("register_burst_hit"):
-					player.register_burst_hit(enemy, false)  # false = can charge burst
-			
-			entry["next_damage_time"] = now + SIN_DOT_INTERVAL
-		
-		# Heal player
-		var next_heal: float = entry.get("next_heal_time", now + SIN_HEAL_INTERVAL)
-		if now >= next_heal and heal_amount > 0:
-			player.hp = min(player.hp + heal_amount, player.max_hp)
-			player._update_health_display(heal_amount, false)
-			entry["next_heal_time"] = now + SIN_HEAL_INTERVAL
-		
 		updated.append(entry)
 	
 	_burst_targets = updated
-	
-	if _burst_targets.is_empty():
-		_clear_burst_targets()
 
 func _spawn_burst_explosion(position: Vector2) -> void:
 	# Create explosion at death position
@@ -517,7 +555,7 @@ func apply_talent(talent_id: String) -> void:
 			special_size_level = mini(special_size_level + 1, 3)
 			special_timer = 0.0  # Refresh cooldown
 		"special_cooldown":
-			special_cooldown_level = mini(special_cooldown_level + 1, 3)
+			captivating_level = mini(captivating_level + 1, 3)
 			special_timer = 0.0  # Refresh cooldown
 		"burst_charge":
 			burst_charge_on_kill = true

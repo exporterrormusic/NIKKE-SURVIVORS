@@ -540,12 +540,18 @@ func _spawn_pristine_core_orb(cores_value: int) -> void:
 	get_parent().add_child(orb)
 
 # --- Charm system ---
-func set_charmed(charm_owner: Node, charmed: bool = true) -> void:
-	"""Set this enemy as charmed (fighting for player) or uncharm."""
-	# Only normal enemies can be charmed (not elite, boss, tank)
-	if has_meta("enemy_tier"):
+func set_charmed(charm_owner: Node, charmed: bool = true, force: bool = false) -> void:
+	"""Set this enemy as charmed (fighting for player) or uncharm.
+	force: If true, allows charming tanks (for Sin's Captivating Lv3 talent)."""
+	# Only normal enemies can be charmed (not elite, boss, tank) unless forced
+	if has_meta("enemy_tier") and not force:
 		var tier: String = get_meta("enemy_tier")
 		if tier in ["elite", "boss", "tank"]:
+			return
+	# Even with force, can't charm elites/bosses
+	if has_meta("enemy_tier"):
+		var tier: String = get_meta("enemy_tier")
+		if tier in ["elite", "boss"]:
 			return
 	
 	_is_charmed = charmed

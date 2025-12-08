@@ -625,6 +625,22 @@ func take_damage(amount, _is_crit = false, _direction = Vector2.ZERO, _from_burs
 	if current_hp <= 0:
 		_die()
 
+func heal(amount: int) -> void:
+	if _is_dying:
+		return
+	
+	var prev_hp = current_hp
+	current_hp = mini(current_hp + amount, max_hp)
+	var actual_heal = current_hp - prev_hp
+	
+	if actual_heal > 0:
+		_update_health_bar()
+		
+		# Spawn floating heal number
+		var FloatingNumber = preload("res://scripts/effects/FloatingDamageNumber.gd")
+		if get_parent():
+			FloatingNumber.spawn_heal(get_parent(), global_position + Vector2(0, -50), actual_heal)
+
 func _die() -> void:
 	if _is_dying:
 		return

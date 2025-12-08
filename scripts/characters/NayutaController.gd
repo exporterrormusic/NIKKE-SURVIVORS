@@ -131,8 +131,7 @@ func _summon_clone() -> void:
 	
 	_active_clones.append(weakref(clone))
 	
-	# Play summon sound (use Commander's ally spawn effect)
-	_play_sound("smg")
+	# Clone summon is silent - no sound effect
 
 func _on_clone_died(clone: Node2D) -> void:
 	# Handle clone death healing
@@ -395,3 +394,7 @@ func _get_weapon_type_name() -> String:
 func get_clone_count() -> int:
 	_cleanup_clones()
 	return _active_clones.size()
+
+## Get the current weapon pool for clones (used by Duplicity upgrade)
+func get_weapon_pool() -> Array[String]:
+	return _weapon_pool.duplicate()

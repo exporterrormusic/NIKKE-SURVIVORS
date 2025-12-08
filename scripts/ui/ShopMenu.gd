@@ -91,6 +91,13 @@ func _ready() -> void:
 	_select_filter(GENERAL_FILTER)
 
 
+func _get_talent_tree() -> Control:
+	var canvas := get_parent().get_node_or_null("CanvasLayer")
+	if canvas == null:
+		canvas = get_tree().root
+	return canvas.get_node_or_null("TalentTree")
+
+
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel") and not event.is_echo():
 		get_viewport().set_input_as_handled()
@@ -125,6 +132,14 @@ func _load_shop_data() -> void:
 		if config.has_section("cores_spent"):
 			for key in config.get_section_keys("cores_spent"):
 				_cores_spent[key] = config.get_value("cores_spent", key, 0)
+		
+		# Load talent data
+		if config.has_section("talents"):
+			var talent_tree = _get_talent_tree()
+			if talent_tree and talent_tree.has_method("set_unlocked_talents"):
+				var saved_talents = config.get_value("talents", "unlocked", {})
+				talent_tree.set_unlocked_talents(saved_talents)
+				print("[ShopMenu] Loaded talent data for %d characters" % saved_talents.size())
 	
 	print("[ShopMenu] Loaded shop data: %d characters unlocked, %d upgrades" % [_unlocked_characters.size(), _upgrade_levels.size()])
 
@@ -146,6 +161,12 @@ func _save_shop_data() -> void:
 	# Save cores spent
 	for category in _cores_spent:
 		config.set_value("cores_spent", category, _cores_spent[category])
+	
+	# Save talent data
+	var talent_tree = _get_talent_tree()
+	if talent_tree and talent_tree.has_method("get_unlocked_talents"):
+		var talents = talent_tree.get_unlocked_talents()
+		config.set_value("talents", "unlocked", talents)
 	
 	var err := config.save(SaveManagerScript.SHOP_PATH)
 	if err == OK:

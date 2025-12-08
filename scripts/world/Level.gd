@@ -614,9 +614,9 @@ func _on_wave_changed(wave_number: int) -> void:
 			wave_display.text = "WAVE %d" % wave_number
 
 func _on_enemy_died(enemy: Node2D) -> void:
-	# Skip upgrade benefits if the dying enemy was charmed (mind controlled)
-	# Charmed enemies are on our side, so their deaths shouldn't count as "kills"
+	# Handle charmed enemy deaths specially for Sin's Captivating talent
 	if enemy.is_in_group("charmed_allies"):
+		_on_charmed_enemy_died(enemy)
 		return
 	
 	# Get killer source from enemy if available
@@ -627,6 +627,103 @@ func _on_enemy_died(enemy: Node2D) -> void:
 	# Notify player for kill-based upgrades (Rapunzel healing, etc.)
 	if player and player.has_method("on_enemy_killed"):
 		player.on_enemy_killed(enemy, killer_source)
+
+func _on_charmed_enemy_died(enemy: Node2D) -> void:
+	"""Handle death of a charmed (mind-controlled) enemy for Sin's Captivating talent."""
+	if not player:
+		return
+	
+	# Check Sin's Captivating talent level directly from controller
+	var captivating_level: int = 0
+	if player.has_method("get_sin_captivating_level"):
+		captivating_level = player.get_sin_captivating_level()
+	
+	if captivating_level <= 0:
+		return
+	
+	# Level 1+: Explode on death (15x Sin's ATK damage)
+	if captivating_level >= 1:
+		_spawn_charmed_death_explosion(enemy.global_position)
+	
+	# Level 2+: Heal player for 1 HP
+	if captivating_level >= 2:
+		var heal_amount: int = 1
+		player.hp = min(player.hp + heal_amount, player.max_hp)
+		if player.has_method("_update_health_display"):
+			player._update_health_display(heal_amount, false)
+
+func _spawn_charmed_death_explosion(death_pos: Vector2) -> void:
+	"""Spawn a rocket-sized explosion when a charmed enemy dies (Captivating Lv2+)."""
+	const EXPLOSION_RADIUS := 120.0  # Rocket-sized
+	
+	if not player:
+		return
+	
+	# Calculate damage as 15x Sin's ATK (uses player's calc_damage which includes level scaling)
+	var base_damage: int = player.calc_damage() if player.has_method("calc_damage") else 10
+	var damage: int = base_damage * 15
+	
+	# Damage nearby enemies
+	var tree := get_tree()
+	if tree:
+		var enemies := tree.get_nodes_in_group("enemies")
+		for enemy in enemies:
+			if not is_instance_valid(enemy) or not enemy is Node2D:
+				continue
+			# Don't damage other charmed allies
+			if enemy.is_in_group("charmed_allies"):
+				continue
+			
+			var dist: float = enemy.global_position.distance_to(death_pos)
+			if dist > EXPLOSION_RADIUS:
+				continue
+			
+			if enemy.has_method("take_damage"):
+				var hit_dir: Vector2 = (enemy.global_position - death_pos).normalized()
+				enemy.take_damage(damage, false, hit_dir, true)
+	
+	# Visual explosion effect
+	var visual := Node2D.new()
+	visual.set_script(_create_explosion_visual_script())
+	visual.set("radius", EXPLOSION_RADIUS)
+	visual.set("color", Color(1.0, 0.3, 0.6, 0.8))  # Pink/magenta for Sin's charm
+	add_child(visual)
+	visual.global_position = death_pos
+
+func _create_explosion_visual_script() -> GDScript:
+	var script := GDScript.new()
+	script.source_code = """
+extends Node2D
+
+var radius: float = 120.0
+var color: Color = Color(1.0, 0.3, 0.6, 0.8)
+var _time: float = 0.0
+var _duration: float = 0.35
+
+func _ready() -> void:
+	z_index = 200
+
+func _process(delta: float) -> void:
+	_time += delta
+	if _time >= _duration:
+		queue_free()
+		return
+	queue_redraw()
+
+func _draw() -> void:
+	var progress := _time / _duration
+	var current_radius := radius * (0.5 + progress * 0.5)
+	var alpha := (1.0 - progress) * color.a
+	
+	# Explosion ring
+	draw_arc(Vector2.ZERO, current_radius, 0, TAU, 32, Color(color.r, color.g, color.b, alpha), 6.0)
+	
+	# Inner flash
+	var inner_alpha := alpha * 0.5 * (1.0 - progress)
+	draw_circle(Vector2.ZERO, current_radius * 0.7, Color(1.0, 0.8, 1.0, inner_alpha))
+"""
+	script.reload()
+	return script
 
 # Legacy spawn function (kept for compatibility but no longer used by timer)
 func spawn_enemy():

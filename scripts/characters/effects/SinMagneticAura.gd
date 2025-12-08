@@ -10,6 +10,7 @@ const CHARM_INTERVAL := 0.5  # Check for enemies every 0.5s
 const AURA_PULSE_DURATION := 1.5  # Visual pulse timing
 
 var player: Node2D = null
+var controller: RefCounted = null  # Reference to SinController for talent checks
 var _charm_timer: float = 0.0
 var _pulse_time: float = 0.0
 
@@ -26,8 +27,9 @@ func _ready() -> void:
 	mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
 	material = mat
 
-func initialize(player_ref: Node2D) -> void:
+func initialize(player_ref: Node2D, controller_ref: RefCounted = null) -> void:
 	player = player_ref
+	controller = controller_ref
 	print("[SinMagneticAura] Magnetic Personality aura initialized")
 
 func _process(delta: float) -> void:
@@ -71,6 +73,18 @@ func _charm_nearby_enemies() -> void:
 		if enemy.has_meta("is_elite") and enemy.get_meta("is_elite"):
 			continue
 		
+		# Check for tank tier - only charmable with captivating level 3
+		if enemy.has_meta("enemy_tier"):
+			var tier = enemy.get_meta("enemy_tier")
+			if tier == "tank":
+				var can_charm_tanks := false
+				if controller and "captivating_level" in controller:
+					can_charm_tanks = controller.captivating_level >= 3
+				if not can_charm_tanks:
+					continue
+			if tier in ["elite", "boss", "super_boss"]:
+				continue
+		
 		# Check range
 		var dist: float = enemy.global_position.distance_to(global_position)
 		if dist > AURA_RADIUS:
@@ -82,13 +96,19 @@ func _charm_nearby_enemies() -> void:
 func _apply_charm_to_enemy(enemy: Node2D) -> void:
 	# Use the same charm system as Sin's normal ability
 	# This properly sets up the charmed state and behavior
+	
+	# Check if this is a tank (needs force=true)
+	var is_tank := false
+	if enemy.has_meta("enemy_tier") and enemy.get_meta("enemy_tier") == "tank":
+		is_tank = true
+	
 	if enemy.has_method("set_charmed"):
 		# Remove from enemies group and add to charmed group
 		enemy.remove_from_group("enemies")
 		enemy.add_to_group("charmed_allies")
 		
-		# Set proper charmed state with player as owner
-		enemy.set_charmed(player, true)
+		# Set proper charmed state with player as owner (force=true for tanks)
+		enemy.set_charmed(player, true, is_tank)
 	else:
 		# Fallback for enemies without set_charmed method
 		enemy.add_to_group("charmed_allies")

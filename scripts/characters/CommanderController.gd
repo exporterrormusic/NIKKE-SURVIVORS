@@ -347,12 +347,13 @@ func apply_talent(talent_id: String) -> void:
 	match talent_id:
 		"special":
 			special_unlocked = true
-			special_timer = 0.0
+			reset_special_cooldown()
 		"special_duration":
 			freeze_duration += 1.0  # +1 second per upgrade
 		"special_cooldown":
 			freeze_cooldown = maxf(6.0, freeze_cooldown - 2.0)  # -2s per upgrade, min 6s
 			data.special_cooldown = freeze_cooldown
+			reset_special_cooldown()
 		"burst_left":
 			# Summon +1 ally
 			left_upgrade_unlocked = true

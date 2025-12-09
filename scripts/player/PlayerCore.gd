@@ -59,13 +59,32 @@ var _burst_sounds: Array = []
 var _level_up_sfx: AudioStream = null
 
 # Player state
-var hp: int = 10
-var max_hp: int = 10
-var xp: int = 0
-var level: int = 1
-var xp_to_next: int = 100
 var burst_current: float = 0.0
-var invincible: bool = false
+
+# Health properties (delegate to _health module)
+var hp: int = 10:
+	get: return _health.hp if _health else 10
+	set(value): if _health: _health.hp = value
+
+var max_hp: int = 10:
+	get: return _health.max_hp if _health else 10
+	set(value): if _health: _health.max_hp = value
+
+var invincible: bool = false:
+	get: return _health.invincible if _health else false
+	set(value): if _health: _health.invincible = value
+
+# Progression system (delegated)
+var _progression: PlayerProgression = null
+# Legacy accessors (for compatibility)
+var xp: int = 0:get = get_xp, set = set_xp
+var level: int = 1:get = get_level
+var xp_to_next: int = 100:get = get_xp_to_next
+
+# Player subsystems (delegated)
+var _health: PlayerHealth = null
+var _movement: PlayerMovement = null
+var _weapons: PlayerWeapons = null
 
 # Movement state
 var dashing: bool = false
@@ -106,6 +125,34 @@ var _has_nayuta_duplicity_upgrade: bool = false  # "Duplicity" - 10% clone spawn
 func _ready() -> void:
 	add_to_group("player")
 	_create_shadow()
+	
+	# Initialize progression module
+	_progression = PlayerProgression.new()
+	add_child(_progression)
+	_progression.configure(1, 0, 100)  # level, xp, xp_to_next
+	_progression.level_up.connect(_on_progression_level_up)
+	
+	# Initialize health module
+	_health = PlayerHealth.new()
+	add_child(_health)
+	_health.initialize(hp, max_hp)
+	_health.damage_taken.connect(_on_health_damage_taken)
+	_health.death.connect(_on_health_death)
+	
+	# Initialize movement module
+	_movement = PlayerMovement.new()
+	add_child(_movement)
+	_movement.speed = speed
+	_movement.dash_speed = dash_speed
+	_movement.dash_duration = dash_duration
+	_movement.dash_started.connect(_on_dash_started)
+	_movement.dash_ended.connect(_on_dash_ended)
+	
+	# Initialize weapons module
+	_weapons = PlayerWeapons.new()
+	add_child(_weapons)
+	_weapons.attack_cooldown = attack_cooldown
+	
 	_apply_shop_upgrades()
 	_init_audio()
 	_init_character_system()
@@ -509,29 +556,8 @@ func get_sin_damage() -> int:
 	return 0
 
 func _create_shadow() -> void:
-	var shadow := Sprite2D.new()
-	shadow.name = "Shadow"
-	shadow.texture = _create_ellipse_texture(48, 20)
-	shadow.modulate = Color(0.1, 0.1, 0.15, 0.4)
-	shadow.position = Vector2(0, 20)
-	shadow.z_index = -1
-	add_child(shadow)
-
-func _create_ellipse_texture(width: int, height: int) -> Texture2D:
-	var img := Image.create(width, height, false, Image.FORMAT_RGBA8)
-	var center := Vector2(width / 2.0, height / 2.0)
-	for y in range(height):
-		for x in range(width):
-			var dx := (x - center.x) / (width / 2.0)
-			var dy := (y - center.y) / (height / 2.0)
-			var dist := dx * dx + dy * dy
-			if dist <= 1.0:
-				var alpha := 1.0 - sqrt(dist)
-				img.set_pixel(x, y, Color(1, 1, 1, alpha))
-			else:
-				img.set_pixel(x, y, Color(0, 0, 0, 0))
-	# Image API doesn't require explicit lock in this environment
-	return ImageTexture.create_from_image(img)
+	# Uses the centralized ShadowHelper utility
+	ShadowHelper.create_player_shadow(self)
 
 func _apply_unshaded_shader() -> void:
 	# Apply the same simple unshaded shader used by enemies so the player
@@ -544,7 +570,7 @@ func _apply_unshaded_shader() -> void:
 
 func _setup_environment_modulate() -> void:
 	# Connect to EnvironmentController to darken player sprite during night
-	var env_controller = get_tree().root.find_child("Environment", true, false)
+	var env_controller = get_tree().get_first_node_in_group("environment_controller")
 	if env_controller and env_controller is EnvironmentController:
 		if env_controller.has_signal("modulate_changed"):
 			env_controller.modulate_changed.connect(_on_environment_modulate_changed)
@@ -610,6 +636,9 @@ func take_damage(dmg: int) -> void:
 		FloatingNumber.spawn_damage(get_parent(), global_position + Vector2(0, -100), dmg)
 	
 	_update_health_display(hp - prev_hp, true)
+	
+	# Emit global event for decoupled systems
+	EventBus.player_damaged.emit(dmg, null)
 	
 	if hp <= 0:
 		_on_player_death()
@@ -747,7 +776,24 @@ func _play_burst_voice() -> void:
 
 # ============= XP / LEVELING =============
 
+# Legacy property accessors (delegate to _progression)
+func get_xp() -> int:
+	return _progression.xp if _progression else 0
+
+func set_xp(value: int) -> void:
+	if _progression:
+		_progression.xp = value
+
+func get_level() -> int:
+	return _progression.level if _progression else 1
+
+func get_xp_to_next() -> int:
+	return _progression.xp_to_next if _progression else 100
+
 func add_xp(amount: int) -> void:
+	if not _progression:
+		return
+	
 	# Apply shop XP bonus
 	var xp_multiplier: float = 1.0 + _shop_xp_bonus
 	
@@ -755,23 +801,53 @@ func add_xp(amount: int) -> void:
 	if _has_crown_xp_upgrade:
 		xp_multiplier *= 2.0
 	
-	var bonus_amount: int = int(float(amount) * xp_multiplier)
-	xp += bonus_amount
-	var leveled_up := false
-	while xp >= xp_to_next:
-		xp -= xp_to_next
-		level += 1
-		xp_to_next = int(xp_to_next * 1.2)
-		leveled_up = true
-		_add_skill_point()
+	_progression.set_xp_multiplier(xp_multiplier)
+	
+	# Delegate to progression module (it handles EventBus emission)
+	var leveled_up = _progression.add_xp(amount)
+	
+	# Update UI
 	update_xp_bar()
-	if leveled_up:
-		if xp_ui and xp_ui.has_method("flash_level_up"):
-			xp_ui.flash_level_up()
-		# Play level up sound
-		_play_level_up_sound()
-		# Spawn WoW-style golden glow effect around player
-		_spawn_level_up_glow()
+	
+	# Level up effects handled by callback (_on_progression_level_up)
+
+func _on_progression_level_up(new_level: int, skill_points_gained: int) -> void:
+	"""Called when PlayerProgression module triggers a level up"""
+	# Add skill points (could be multiple if leveled up more than once)
+	for i in range(skill_points_gained):
+		_add_skill_point()
+	
+	# UI flash
+	if xp_ui and xp_ui.has_method("flash_level_up"):
+		xp_ui.flash_level_up()
+	
+	# Play level up sound
+	_play_level_up_sound()
+	
+	# Spawn WoW-style golden glow effect around player
+	_spawn_level_up_glow()
+	
+	# Note: EventBus.player_leveled_up already emitted by PlayerProgression
+
+func _on_health_damage_taken(amount: int) -> void:
+	"""Called when PlayerHealth module processes damage"""
+	# Update HUD
+	call_deferred("_update_hud")
+
+func _on_health_death() -> void:
+	"""Called when PlayerHealth module triggers death"""
+	# Handle player death
+	# Note: Death logic already in PlayerCore, will be refactored later
+	pass
+
+func _on_dash_started() -> void:
+	"""Called when PlayerMovement starts a dash"""
+	# Could add dash effects here
+	pass
+
+func _on_dash_ended() -> void:
+	"""Called when PlayerMovement ends a dash"""
+	pass
 
 func _play_level_up_sound() -> void:
 	## Plays the level up sound effect

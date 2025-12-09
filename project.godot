@@ -18,6 +18,9 @@ config/windows_native_icon="res://icon.ico"
 
 [autoload]
 
+DebugSettings="*res://scripts/systems/DebugSettings.gd"
+EventBus="*res://scripts/systems/EventBus.gd"
+UITheme="*res://scripts/ui/UITheme.gd"
 MenuManager="*res://scripts/ui/MenuManager.gd"
 GameState="*res://scripts/systems/GameState.gd"
 StageRegistry="*res://scripts/systems/StageRegistry.gd"

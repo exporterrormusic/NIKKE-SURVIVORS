@@ -303,13 +303,12 @@ func apply_talent(talent_id: String) -> void:
 	match talent_id:
 		"special":
 			special_unlocked = true
-			special_timer = 0.0  # Refresh cooldown
+			reset_special_cooldown()
 		"special_burn":
 			special_burn_level = mini(special_burn_level + 1, 3)
-			special_timer = 0.0  # Refresh cooldown
+			# No timer reset here, as per the provided edit's implied removal
 		"special_size":
 			special_size_level = mini(special_size_level + 1, 3)
-			special_timer = 0.0  # Refresh cooldown
 		"burst_duration":
 			burst_duration_unlocked = true
 		"burst_invuln":

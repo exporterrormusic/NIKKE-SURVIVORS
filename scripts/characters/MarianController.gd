@@ -466,13 +466,14 @@ func apply_talent(talent_id: String) -> void:
 	match talent_id:
 		"special":
 			special_unlocked = true
-			special_timer = 0.0
+			reset_special_cooldown()
 		"special_size":
 			special_size_level = mini(special_size_level + 1, 3)
 		"special_cooldown":
 			special_cooldown_level = mini(special_cooldown_level + 1, 3)
 			var reduction := special_cooldown_level * 2.0
 			data.special_cooldown = max(charm_cooldown - reduction, 2.0)
+			reset_special_cooldown()
 		"burst_left":
 			# Missile upgrade - fire 4 homing missiles every 2.5s
 			burst_missile_upgrade = true

@@ -7,7 +7,9 @@ signal enemy_spawned(enemy: Node2D)
 signal enemy_died(enemy: Node2D)
 
 # Enemy scenes
-const BasicEnemyScene = preload("res://scenes/characters/Enemy.tscn")
+# Enemy scenes
+# const BasicEnemyScene = preload("res://scenes/characters/Enemy.tscn") # REMOVED: Legacy
+const ModularEnemyScene = preload("res://scenes/enemies/ModularRapture.tscn")
 
 # Effect scripts
 const TankEffectsScript = preload("res://scripts/enemies/effects/TankEffects.gd")
@@ -134,7 +136,23 @@ func _on_enemy_tree_exiting(enemy: Node2D) -> void:
 	emit_signal("enemy_died", enemy)
 
 func _create_enemy(enemy_type: String, is_elite: bool = false) -> Node2D:
-	var enemy: Node2D = BasicEnemyScene.instantiate()
+	var enemy: Node2D
+	
+	# REPLACEMENT: All requests use the new Modular System
+	if enemy_type in ["basic", "modular_rapture", "tank", "boss", "super_boss", "elite", "ranged"]:
+		enemy = ModularEnemyScene.instantiate()
+		# Normalize type to 'basic' so downstream configuration (stats/elite modifiers) applies correctly
+		# WAIT: If type is 'tank', we want it to stay 'tank' so _apply_tank_stats runs!
+		# If type is 'boss', stay 'boss'.
+		# Only normalize 'modular_rapture' to 'basic'.
+		if enemy_type == "modular_rapture":
+			enemy_type = "basic"
+	else:
+		# Fallback to modular enemy for unknown types, treating as basic
+		print("[EnemySpawner] Warning: Unknown enemy type '%s', defaulting to Modular Basic" % enemy_type)
+		enemy = ModularEnemyScene.instantiate()
+		enemy_type = "basic"
+
 	if not enemy:
 		return null
 	

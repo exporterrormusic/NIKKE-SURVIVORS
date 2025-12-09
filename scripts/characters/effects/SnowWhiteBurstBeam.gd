@@ -35,7 +35,21 @@ func _ready() -> void:
 	set_process(true)
 	set_notify_transform(true)
 	z_index = 420
+	# Assign to effects layer so beam glows at night
+	call_deferred("_assign_to_effects_layer")
 	queue_redraw()
+
+func _assign_to_effects_layer() -> void:
+	var env = get_tree().get_first_node_in_group("environment_controller")
+	if env:
+		var effects = env.get_node_or_null("EffectsLayer")
+		if effects and get_parent() != effects:
+			var saved_pos = global_position
+			get_parent().remove_child(self)
+			effects.add_child(self)
+			global_position = saved_pos
+			z_as_relative = false
+			z_index = 420
 
 func configure(forward: Vector2, range_distance: float = -1.0, angle_degrees: float = -1.0, colors: Dictionary = {}) -> void:
 	_forward = forward.normalized() if forward.length() > 0.0 else Vector2.RIGHT

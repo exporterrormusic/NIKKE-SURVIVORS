@@ -40,7 +40,7 @@ func _ready() -> void:
 		sprite.modulate = _original_modulate
 	
 	# Connect to environment modulate changes to keep sprite bright
-	var env = get_tree().root.find_child("Environment", true, false)
+	var env = get_tree().get_first_node_in_group("environment_controller")
 	if env and env.has_signal("modulate_changed"):
 		env.modulate_changed.connect(_on_modulate_changed)
 		_on_modulate_changed(env.current_modulate if "current_modulate" in env else Color.WHITE)

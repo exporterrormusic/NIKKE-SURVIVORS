@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ModularEnemyStats" load_steps=2 format=3 uid="uid://b8q4y2p2r2y1"]
+
+[ext_resource type="Script" path="res://scripts/enemies/modular/EnemyStats.gd" id="1_stats"]
+
+[resource]
+script = ExtResource("1_stats")
+max_hp = 1
+speed = 100.0
+base_damage = 10
+xp_value = 1

@@ -366,7 +366,7 @@ func apply_talent(talent_id: String) -> void:
 	match talent_id:
 		"special":
 			special_unlocked = true
-			special_timer = 0.0
+			reset_special_cooldown()
 		"special_speed":
 			# Overclock - drone speed upgrade
 			drone_upgrade_level = mini(drone_upgrade_level + 1, 3)

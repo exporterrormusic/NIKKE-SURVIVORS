@@ -55,6 +55,19 @@ func _ready() -> void:
 	connect("body_entered", Callable(self, "_on_body_entered"))
 	# Don't set start_position here - pellet isn't positioned yet
 	
+	# Apply size scaling to hitbox if upgraded
+	if (is_special or is_burst) and size_level > 0:
+		var size_bonuses: Array[float] = [1.0, 1.5, 2.0, 3.0]
+		var mult: float = size_bonuses[mini(size_level, 3)]
+		
+		# Scale the collision shape
+		var shape = get_node_or_null("CollisionShape2D")
+		if shape:
+			shape.scale = Vector2(mult, mult)
+	
+	# Assign to effects layer to prevent night darkening (deferred so node is in tree)
+	call_deferred("_assign_to_effects_layer")
+	
 	# Register for line drawing
 	if is_special:
 		all_special_pellets.append(self)
@@ -75,6 +88,20 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	all_special_pellets.erase(self)
 	all_burst_pellets.erase(self)
+
+func _assign_to_effects_layer() -> void:
+	"""Deferred call to assign to effects layer after node is in tree"""
+	# CRITICAL: Reparent to EffectsLayer CanvasLayer so drawings aren't affected by world modulate
+	var env = get_tree().get_first_node_in_group("environment_controller")
+	if env:
+		var effects = env.get_node_or_null("EffectsLayer")
+		if effects and get_parent() != effects:
+			var saved_pos = global_position
+			get_parent().remove_child(self)
+			effects.add_child(self)
+			global_position = saved_pos
+			z_as_relative = false
+			z_index = 900
 
 func _draw() -> void:
 	_time = Time.get_ticks_msec() / 1000.0
@@ -437,7 +464,14 @@ func _spawn_v_blast_effect(hit_position: Vector2, forward: Vector2) -> void:
 	
 	var effect := KiloVBlastEffect.new()
 	effect.global_position = hit_position
-	effect.configure(forward, 180.0, 45.0, SPECIAL_COLOR, owner_node, is_burst)
+	
+	# Calculate scale based on size level
+	var blast_scale: float = 1.0
+	if size_level > 0:
+		var size_bonuses: Array[float] = [1.0, 1.5, 2.0, 3.0]
+		blast_scale = size_bonuses[mini(size_level, 3)]
+		
+	effect.configure(forward, 180.0, 45.0, SPECIAL_COLOR, owner_node, is_burst, blast_scale)
 	parent.add_child(effect)
 
 func _apply_burn(enemy: Node2D) -> void:

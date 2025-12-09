@@ -59,9 +59,12 @@ const ENEMY_UNLOCKS := [
 # Wave 10: Horde + Elite
 # Wave 11: 1 Super Boss + 5 Bosses (FINAL)
 const EVENTS := [
-	# Horde waves - trigger at wave start, last full 30 seconds
-	{"time": 0.0, "type": "horde", "enemy": "basic", "count": 8, "duration": 30.0},      # Wave 1
-	{"time": 30.0, "type": "horde", "enemy": "basic", "count": 10, "duration": 30.0},    # Wave 2
+	# 10s: Horde 1
+	# REPLACED: Basic Rapture with Modular Rapture for production test
+	{"time": 10.0, "type": "horde", "enemy": "modular_rapture", "count": 15, "duration": 15.0},
+	
+	# 30s: Tank intro
+    # Wave 2
 	{"time": 60.0, "type": "horde", "enemy": "basic", "count": 12, "duration": 30.0},    # Wave 3
 	{"time": 90.0, "type": "horde", "enemy": "tank", "count": 6, "duration": 30.0},      # Wave 4
 	{"time": 120.0, "type": "horde", "enemy": "basic", "count": 15, "duration": 30.0},   # Wave 5
@@ -239,6 +242,8 @@ func _update_spawn_bracket() -> void:
 	if _current_wave != _last_wave:
 		_last_wave = _current_wave
 		emit_signal("wave_changed", _current_wave)
+		# Emit to global EventBus for decoupled systems
+		EventBus.wave_started.emit(_current_wave)
 
 func get_current_wave() -> int:
 	return _current_wave

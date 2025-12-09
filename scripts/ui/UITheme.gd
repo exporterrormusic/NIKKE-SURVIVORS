@@ -1,6 +1,6 @@
 extends Node
-class_name UITheme
-## Global UI Theme singleton providing consistent styling across all menus.
+## UI theme constants and colors.
+## Now an autoload singleton - access globally as UITheme.ACCENT_PRIMARYoviding consistent styling across all menus.
 ## Combines NIKKE's sleek sci-fi aesthetic with Holocure's chunky, fun feel.
 
 # =============================================================================

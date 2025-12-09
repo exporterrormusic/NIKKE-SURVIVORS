@@ -2,8 +2,7 @@
 extends Node2D
 class_name BasicProjectileVisual
 
-# Toggle this to true to enable per-projectile compensation debug logging
-static var DEBUG_PROJECTILE_LOG: bool = true
+# Debug logging is now controlled by DebugSettings.projectile_debug_log
 
 const StandardBulletVisualScene: PackedScene = preload("res://scenes/projectiles/visuals/StandardBulletVisual.tscn")
 const StandardBulletVisualScript: Script = preload("res://src/projectiles/visuals/standard_bullet_visual.gd")
@@ -371,17 +370,12 @@ static func _apply_compensation(color: Color, world_position: Vector2, viewport:
 		color.b * total_multiplier,
 		color.a
 	)
-	var max_channel: float = maxf(maxf(compensated.r, compensated.g), compensated.b)
-	if max_channel > 1.0:
-		var normalize: float = 1.0 / max_channel
-		compensated = Color(
-			compensated.r * normalize,
-			compensated.g * normalize,
-			compensated.b * normalize,
-			compensated.a
-		)
+	
+	# REMOVED: Normalization clamping. We WANT values > 1.0 to fight darkness or create glow.
+	# With CanvasModulate at night (e.g. 0.2), we need Modulate > 1.0 to appear bright.
+	return compensated
 	# Optional debug logging to inspect compensation math at runtime
-	if DEBUG_PROJECTILE_LOG:
+	if DebugSettings.projectile_debug_log:
 		var vp_name := "<no-vp>"
 		if viewport:
 			vp_name = str(viewport)

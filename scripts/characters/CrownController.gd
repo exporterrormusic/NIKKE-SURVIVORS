@@ -511,13 +511,15 @@ func apply_talent(talent_id: String) -> void:
 	match talent_id:
 		"special":
 			special_unlocked = true
-			special_timer = 0.0  # Refresh cooldown
+			reset_special_cooldown()
 		"special_cooldown":
 			special_cooldown_level = mini(special_cooldown_level + 1, 3)
-			special_timer = 0.0  # Refresh cooldown
+			var reduction := special_cooldown_level * 2.0
+			data.special_cooldown = max(charge_cooldown - reduction, 4.0)
+			reset_special_cooldown()
 		"special_explosion":
 			special_explosion_level = mini(special_explosion_level + 1, 3)
-			special_timer = 0.0  # Refresh cooldown
+			reset_special_cooldown()
 		"burst_charge":
 			burst_charge_unlocked = true
 		"burst_beam":
@@ -538,6 +540,20 @@ var _wisps: Array = []
 
 func _ready() -> void:
 	z_index = 150
+	call_deferred("_assign_to_effects_layer")
+
+func _assign_to_effects_layer() -> void:
+	var env = get_tree().get_first_node_in_group("environment_controller")
+	if env:
+		var effects = env.get_node_or_null("EffectsLayer")
+		if effects and get_parent() != effects:
+			var saved_pos = global_position
+			get_parent().remove_child(self)
+			effects.add_child(self)
+			global_position = saved_pos
+			z_as_relative = false
+			z_index = 150
+
 	# Initialize particle trails
 	for i in range(25):
 		_particles.append({
@@ -700,6 +716,19 @@ const DURATION: float = 1.5
 
 func _ready() -> void:
 	z_index = 10
+	call_deferred("_assign_to_effects_layer")
+
+func _assign_to_effects_layer() -> void:
+	var env = get_tree().get_first_node_in_group("environment_controller")
+	if env:
+		var effects = env.get_node_or_null("EffectsLayer")
+		if effects and get_parent() != effects:
+			var saved_pos = global_position
+			get_parent().remove_child(self)
+			effects.add_child(self)
+			global_position = saved_pos
+			z_as_relative = false
+			z_index = 10
 
 func _process(delta: float) -> void:
 	_time += delta
@@ -826,6 +855,20 @@ const DURATION: float = 1.5
 
 func _ready() -> void:
 	z_index = 200
+	call_deferred("_assign_to_effects_layer")
+
+func _assign_to_effects_layer() -> void:
+	var env = get_tree().get_first_node_in_group("environment_controller")
+	if env:
+		var effects = env.get_node_or_null("EffectsLayer")
+		if effects and get_parent() != effects:
+			var saved_pos = global_position
+			get_parent().remove_child(self)
+			effects.add_child(self)
+			global_position = saved_pos
+			z_as_relative = false
+			z_index = 200
+
 	# Create ethereal angel wing tendrils - Diablo 3 style
 	for i in range(24):
 		var angle: float = (float(i) / 24.0) * TAU
@@ -968,6 +1011,19 @@ var _time: float = 0.0
 
 func _ready() -> void:
 	z_index = 180
+	call_deferred("_assign_to_effects_layer")
+
+func _assign_to_effects_layer() -> void:
+	var env = get_tree().get_first_node_in_group("environment_controller")
+	if env:
+		var effects = env.get_node_or_null("EffectsLayer")
+		if effects and get_parent() != effects:
+			var saved_pos = global_position
+			get_parent().remove_child(self)
+			effects.add_child(self)
+			global_position = saved_pos
+			z_as_relative = false
+			z_index = 180
 
 func _process(delta: float) -> void:
 	_time += delta

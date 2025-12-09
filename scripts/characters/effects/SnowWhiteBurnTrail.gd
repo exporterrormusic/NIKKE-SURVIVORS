@@ -88,7 +88,7 @@ func _draw() -> void:
 		return
 	
 	# Get environment modulate for compensation
-	var env = get_tree().root.find_child("Environment", true, false)
+	var env = get_tree().get_first_node_in_group("environment_controller")
 	var modulate_color = env.current_modulate if env and "current_modulate" in env else Color.WHITE
 	var inverse = Color(
 		1.0 / max(modulate_color.r, 0.001),

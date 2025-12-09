@@ -27,6 +27,9 @@ func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 	area_entered.connect(_on_area_entered)
 	
+	# Assign to effects layer to prevent night darkening (deferred so node is in tree)
+	call_deferred("_assign_to_effects_layer")
+	
 	# Create the visual
 	_create_visual()
 	
@@ -39,6 +42,20 @@ func _ready() -> void:
 			var env = tree.get_first_node_in_group("environment_controller")
 			if env and env.has_signal("modulate_changed"):
 				env.modulate_changed.connect(Callable(self, "_on_environment_modulate_changed"))
+
+func _assign_to_effects_layer() -> void:
+	"""Deferred call to assign to effects layer after node is in tree"""
+	# Reparent to EffectsLayer so _draw() isn't darkened by world modulate
+	var env = get_tree().get_first_node_in_group("environment_controller")
+	if env:
+		var effects = env.get_node_or_null("EffectsLayer")
+		if effects and get_parent() != effects:
+			var saved_pos = global_position
+			get_parent().remove_child(self)
+			effects.add_child(self)
+			global_position = saved_pos
+			z_as_relative = false
+			z_index = 900
 
 func _create_visual() -> void:
 	# Create collision shape

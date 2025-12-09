@@ -23,7 +23,7 @@ A Vampire Survivors-style roguelite fan game featuring characters from **Goddess
 | Attack | Left Click (hold for auto-fire) |
 | Special Attack | Right Click |
 | Burst (Ultimate) | E (when gauge is full) |
-| Dash | Space (costs stamina) |
+| Dash | Shift (costs stamina) |
 | Run | Hold Shift (drains stamina) |
 | Talent Tree | Tab |
 | Pause | Escape |
@@ -95,7 +95,7 @@ Survive 11 waves of Rapture enemies and defeat the final boss to complete a run.
 | **Elite Hunt** | All enemies spawn one tier stronger |
 | **Endless** | No wave limit – survive as long as possible |
 
-**Difficulty**: Adjustable 1-100 slider (higher = more enemies, more rewards)
+**Difficulty**: Adjustable 1-100 slider (higher = tougher enemies, more rewards)
 
 ---
 

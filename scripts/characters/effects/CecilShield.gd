@@ -37,8 +37,25 @@ func initialize(player: Node2D, max_shield_hits: int) -> void:
 
 func _ready() -> void:
 	z_index = 40
+	call_deferred("_assign_to_effects_layer")
+
+func _assign_to_effects_layer() -> void:
+	var env = get_tree().get_first_node_in_group("environment_controller")
+	if env:
+		var effects = env.get_node_or_null("EffectsLayer")
+		if effects and get_parent() != effects:
+			var saved_pos = global_position
+			get_parent().remove_child(self)
+			effects.add_child(self)
+			global_position = saved_pos
+			z_as_relative = false
+			z_index = 40
 
 func _process(delta: float) -> void:
+	# Since we are reparented to EffectsLayer, we must manually follow the owner
+	if owner_player and is_instance_valid(owner_player):
+		global_position = owner_player.global_position
+
 	if _is_breaking:
 		_break_timer += delta
 		if _break_timer >= 0.4:

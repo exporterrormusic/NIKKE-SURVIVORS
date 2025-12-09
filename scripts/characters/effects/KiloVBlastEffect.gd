@@ -28,10 +28,26 @@ func _ready() -> void:
 	queue_redraw()
 	# Deal damage on spawn
 	_deal_blast_damage()
+	
+	# Assign to effects layer to avoid night darkening
+	call_deferred("_assign_to_effects_layer")
 
-func configure(forward: Vector2, range_distance: float, spread_degrees: float, color: Color, p_owner: Node = null, p_is_burst: bool = false) -> void:
+func _assign_to_effects_layer() -> void:
+	var env = get_tree().get_first_node_in_group("environment_controller")
+	if env:
+		var effects = env.get_node_or_null("EffectsLayer")
+		if effects and get_parent() != effects:
+			var saved_pos = global_position
+			get_parent().remove_child(self)
+			effects.add_child(self)
+			global_position = saved_pos
+			z_as_relative = false
+			z_index = 420
+
+func configure(forward: Vector2, range_distance: float, spread_degrees: float, color: Color, p_owner: Node = null, p_is_burst: bool = false, p_scale: float = 1.0) -> void:
 	_forward = forward.normalized() if forward.length() > 0.0 else Vector2.RIGHT
-	blast_range = clampf(range_distance, 60.0, 400.0)
+	# Apply scale to range (and increase clamp max)
+	blast_range = clampf(range_distance * p_scale, 60.0, 800.0) 
 	blast_angle = clampf(spread_degrees, 12.0, 90.0)
 	owner_node = p_owner
 	is_burst = p_is_burst

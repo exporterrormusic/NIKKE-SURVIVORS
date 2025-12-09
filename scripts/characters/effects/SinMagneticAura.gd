@@ -73,16 +73,10 @@ func _charm_nearby_enemies() -> void:
 		if enemy.has_meta("is_elite") and enemy.get_meta("is_elite"):
 			continue
 		
-		# Check for tank tier - only charmable with captivating level 3
+		# Skip bosses, elites, and tanks (passive only affects normal enemies)
 		if enemy.has_meta("enemy_tier"):
 			var tier = enemy.get_meta("enemy_tier")
-			if tier == "tank":
-				var can_charm_tanks := false
-				if controller and "captivating_level" in controller:
-					can_charm_tanks = controller.captivating_level >= 3
-				if not can_charm_tanks:
-					continue
-			if tier in ["elite", "boss", "super_boss"]:
+			if tier in ["elite", "boss", "super_boss", "tank"]:
 				continue
 		
 		# Check range

@@ -50,9 +50,14 @@ var _grass_field: Node2D = null  # PhysicalGrassField instance
 var _player_ref: Node2D = null  # Track player for grass interaction
 
 var current_modulate: Color = Color(1.0, 1.0, 1.0, 1.0)
-var _boulder_container: Node2D = null  # Container for boulders
-var _boulders: Array[Node2D] = []  # Active boulder instances
 var _lightning_timer: float = 0.0
+var _weather_system: WeatherSystem = null  # Delegated weather effects
+var _biome_manager: BiomeManager = null  # Delegated biome management
+var _terrain_features: TerrainFeatures = null  # Delegated terrain (grass, boulders)
+
+# Legacy boulder references (still used by _ensure_boulder_container)
+var _boulder_container: Node2D = null
+var _boulders: Array[Node2D] = []
 
 @onready var _background: Polygon2D = _ensure_background()
 @onready var _ground: Polygon2D = _ensure_ground()
@@ -70,9 +75,26 @@ var _lightning_timer: float = 0.0
 @onready var _sun_light: DirectionalLight2D = _ensure_sun_light()
 @onready var _audio_director = get_node_or_null("/root/AudioDirector")
 @onready var _border_overlay: Node2D = _ensure_border_overlay()
+@onready var _effects_layer: CanvasLayer = _ensure_effects_layer()
+@onready var _ui_layer: CanvasLayer = _ensure_ui_layer()
 
 func _ready() -> void:
 	add_to_group("environment_controller")
+	
+	# Initialize module system
+	# Note: BiomeManager disabled for now - conflicts with existing biome loading
+	# _biome_manager = BiomeManager.new()
+	# add_child(_biome_manager)
+	# _biome_manager.load_biomes()
+	
+	_terrain_features = TerrainFeatures.new()
+	add_child(_terrain_features)
+	
+	_weather_system = WeatherSystem.new()
+	add_child(_weather_system)
+	_weather_system.set_audio_director(_audio_director)
+	
+	# Legacy setup
 	_load_biome_definitions()
 	_load_time_of_day_definitions()
 	_update_ground_geometry()
@@ -101,10 +123,9 @@ func _ready() -> void:
 		remove_child(vignette_layer)
 		vignette_layer.queue_free()
 
-	# Temporary test hook: force night-mode at startup so we can reproduce
-	# and debug projectile compensation. Set to `false` to disable.
-	const TEST_FORCE_NIGHT: bool = true
-	if TEST_FORCE_NIGHT:
+	# Debug hook: force night-mode at startup if enabled in DebugSettings
+	# This exercises the projectile compensation path for testing
+	if DebugSettings.force_night:
 		# Example night tint (dark bluish). This should exercise the
 		# compensation path for projectile visuals.
 		var test_night := Color(0.28, 0.32, 0.4, 1.0)
@@ -223,8 +244,10 @@ func _process(delta: float) -> void:
 	if _grass_field and _player_ref and is_instance_valid(_player_ref):
 		_grass_field.update_player_position(_player_ref.global_position)
 	
-	# Update lightning
-	_update_lightning(delta)
+	# Weather system handles lightning now
+	# (kept for backwards compat if _weather_system not present)
+	if not _weather_system:
+		_update_lightning(delta)
 
 func _exit_tree() -> void:
 	_stop_ambient_audio()
@@ -244,11 +267,26 @@ func initialize_environment(seed_override: int = 0, biome_id: StringName = &"", 
 	_apply_biome_to_ground()
 	_apply_time_of_day_settings()
 	_spawn_decorations()
-	_update_grass_field()  # Create/update grass based on biome
-	# Defer boulder spawning to reduce initial lag spike
-	call_deferred("_spawn_boulders")  # Spawn obstacle boulders
+	
+	# Delegate terrain features to module
+	if _terrain_features and _active_biome:
+		_terrain_features.setup(_rng, _world_bounds, _player_ref)
+		_terrain_features.update_grass_field(_active_biome, self)
+		# Configure grass shader settings after creation
+		call_deferred("_update_grass_field_settings")
+		call_deferred("_delegate_boulder_spawn", _active_biome)
+	
+	# Configure weather system with new biome
+	if _weather_system and _active_biome:
+		_weather_system.configure(_active_biome, _lightning_overlay)
+		_weather_system.start()
+	
 	emit_signal("environment_changed", _get_biome_id(), _get_time_id())
 	_update_ambient_audio()
+
+func _delegate_boulder_spawn(biome: BiomeDefinition) -> void:
+	if _terrain_features:
+		_terrain_features.spawn_boulders(biome, self, 15)  # Reduced from 40
 
 func set_environment(biome_id: StringName, time_id: StringName, seed_override: int = 0) -> void:
 	initialize_environment(seed_override, biome_id, time_id)
@@ -675,11 +713,24 @@ func _ensure_effects_layer() -> CanvasLayer:
 	var effects_layer := CanvasLayer.new()
 	effects_layer.name = "EffectsLayer"
 	effects_layer.layer = 1
+	effects_layer.follow_viewport_enabled = true  # CRITICAL: Must follow camera or projectiles drift!
 	effects_layer.set("modulate", Color(1.0, 1.0, 1.0, 1.0))
 	add_child(effects_layer)
 	if Engine.is_editor_hint():
 		effects_layer.owner = get_tree().edited_scene_root
 	return effects_layer
+
+func _ensure_ui_layer() -> CanvasLayer:
+	var node := get_node_or_null("UILayer")
+	if node and node is CanvasLayer:
+		return node
+	var ui_layer := CanvasLayer.new()
+	ui_layer.name = "UILayer"
+	ui_layer.layer = 2
+	add_child(ui_layer)
+	if Engine.is_editor_hint():
+		ui_layer.owner = get_tree().edited_scene_root
+	return ui_layer
 
 
 
@@ -1115,19 +1166,23 @@ func _update_decoration_animations(delta: float) -> void:
 
 func _update_grass_field() -> void:
 	"""Create or remove grass field based on current biome."""
-	if not enable_physical_grass:
-		_remove_grass_field()
-		return
+	# DISABLED: Grass now managed by TerrainFeatures module
+	# This old code was conflicting with TerrainFeatures
+	return
 	
-	# Check if current biome should have grass
-	var should_have_grass := _should_biome_have_grass()
-	
-	if should_have_grass and _grass_field == null:
-		_create_grass_field()
-	elif not should_have_grass and _grass_field != null:
-		_remove_grass_field()
-	elif should_have_grass and _grass_field != null:
-		_update_grass_field_settings()
+	# if not enable_physical_grass:
+	# 	_remove_grass_field()
+	# 	return
+	# 
+	# # Check if current biome should have grass
+	# var should_have_grass := _should_biome_have_grass()
+	# 
+	# if should_have_grass and _grass_field == null:
+	# 	_create_grass_field()
+	# elif not should_have_grass and _grass_field != null:
+	# 	_remove_grass_field()
+	# elif should_have_grass and _grass_field != null:
+	# 	_update_grass_field_settings()
 
 func _should_biome_have_grass() -> bool:
 	"""Determine if current biome should have physical grass."""
@@ -1199,8 +1254,19 @@ func _remove_grass_field() -> void:
 
 func _update_grass_field_settings() -> void:
 	"""Update grass field settings to match current biome."""
+	# Get grass field from TerrainFeatures if available
+	if not _grass_field and _terrain_features:
+		_grass_field = _terrain_features.get_grass_field()
+		if _grass_field:
+			print("[EnvironmentController] Fetched grass field from TerrainFeatures")
+		else:
+			print("[EnvironmentController] WARNING: TerrainFeatures has no grass field!")
+	
 	if _grass_field == null or _active_biome == null:
+		print("[EnvironmentController] Cannot update grass settings - grass_field: ", _grass_field != null, " biome: ", _active_biome != null)
 		return
+	
+	print("[EnvironmentController] Configuring grass shader for biome: ", _active_biome.biome_id)
 	
 	# Update wind
 	if _grass_field.has_method("set_wind_direction"):

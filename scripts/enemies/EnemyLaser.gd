@@ -90,6 +90,22 @@ func _ready() -> void:
 	
 	# Spawn charging flash effect
 	_spawn_charge_effect()
+	
+	# Assign to effects layer so laser glows at night
+	call_deferred("_assign_to_effects_layer")
+
+func _assign_to_effects_layer() -> void:
+	var env = get_tree().get_first_node_in_group("environment_controller")
+	if env:
+		var effects = env.get_node_or_null("EffectsLayer")
+		if effects and get_parent() != effects:
+			# Save position before reparenting
+			var saved_pos = global_position
+			get_parent().remove_child(self)
+			effects.add_child(self)
+			global_position = saved_pos
+			z_as_relative = false
+			z_index = 900
 
 func set_direction(dir: Vector2) -> void:
 	if dir.length() == 0.0:

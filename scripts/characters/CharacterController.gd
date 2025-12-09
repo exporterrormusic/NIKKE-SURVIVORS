@@ -241,3 +241,9 @@ func get_special_progress() -> float:
 	if special_ready:
 		return 1.0
 	return 1.0 - (special_timer / data.special_cooldown)
+
+## Force reset special cooldown (e.g. from upgrade)
+func reset_special_cooldown() -> void:
+	special_timer = 0.0
+	special_ready = true
+	special_cooldown_changed.emit(1.0)

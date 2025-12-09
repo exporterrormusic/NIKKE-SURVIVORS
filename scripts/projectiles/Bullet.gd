@@ -45,40 +45,9 @@ func _ready():
 	# Use CACHED shader material for performance (no new Shader.new() per bullet!)
 	$Sprite2D.material = ShaderCache.get_bullet_glow_material()
 
-	# Ensure this bullet and its drawable children live on the EffectsLayer so
-	# they're not darkened by the world's CanvasModulate. Prefer reparenting
-	# under the EnvironmentController's `EffectsLayer`, preserving global
-	# transform; also set canvas_layer on descendant CanvasItems as a fallback.
-	if not Engine.is_editor_hint():
-		var tree := get_tree()
-		if tree:
-			var env = tree.get_first_node_in_group("environment_controller")
-			if env:
-				var effects = env.get_node_or_null("EffectsLayer")
-				if effects and effects is CanvasLayer:
-					# Preserve transform for Node2D
-					var saved_xform = null
-					if self is Node2D:
-						saved_xform = (self as Node2D).global_transform
-					var old_parent = get_parent()
-					if old_parent:
-						old_parent.remove_child(self)
-					effects.add_child(self)
-					if saved_xform != null:
-						(self as Node2D).global_transform = saved_xform
-					# Walk descendants and set canvas_layer/z so any leftover CanvasItems
-					# are certainly on the effects layer.
-					var stack = [self]
-					while stack.size() > 0:
-						var n = stack.pop_back()
-						if n is CanvasItem and not (n is Area2D) and not (n is CollisionShape2D) and not (n is CollisionPolygon2D) and not (n is CollisionObject2D):
-							var ci := n as CanvasItem
-							ci.canvas_layer = 1
-							ci.z_as_relative = false
-							ci.z_index = 900
-						for c in n.get_children():
-							if c is Node:
-								stack.append(c)
+	# Reparent to EffectsLayer so bullets aren't darkened by CanvasModulate
+	# Uses centralized VisualLayerHelper utility to avoid code duplication
+	VisualLayerHelper.reparent_to_effects_layer(self)
 	
 	# Dynamic lights are VERY expensive with many bullets - disabled by default
 	if ENABLE_BULLET_LIGHTS:

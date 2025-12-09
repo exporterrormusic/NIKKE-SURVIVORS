@@ -361,12 +361,14 @@ func apply_talent(talent_id: String) -> void:
 	match talent_id:
 		"special":
 			special_unlocked = true
-			special_timer = 0.0
+			reset_special_cooldown()
 		"special_heal":
 			clone_heal_level = mini(clone_heal_level + 1, 3)
+			reset_special_cooldown()
 		"special_weapon":
 			clone_weapon_level = mini(clone_weapon_level + 1, 3)
 			_update_weapon_pool()
+			reset_special_cooldown()
 		"burst_stun":
 			burst_stun_bosses = true
 		"burst_debuff":

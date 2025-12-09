@@ -1,0 +1,535 @@
+extends CharacterBody2D
+class_name ModularEnemy
+
+# Replaces the monolithic logic of legacy enemy scripts
+
+@export var stats: ModularEnemyStats
+
+# Component References
+@onready var health_component: HealthComponent = $HealthComponent
+@onready var movement_component: MovementComponent = $MovementComponent
+@onready var hitbox_component: HitboxComponent = $HitboxComponent
+@onready var visuals: Node2D = $AnimatedSprite2D
+@onready var hp_bar: ProgressBar = $ProgressBar
+@onready var hp_label: Label = $HPLabel
+
+# Compatibility variables (so existing systems can read them)
+var hp: int:
+	get: 
+		var hc = health_component if health_component else $HealthComponent
+		return hc.current_hp
+	set(value): 
+		var hc = health_component if health_component else $HealthComponent
+		hc.current_hp = value
+		if hp_bar: hp_bar.value = value
+		if hp_label: hp_label.text = str(value)
+var max_hp: int:
+	get: 
+		var hc = health_component if health_component else $HealthComponent
+		return hc.max_hp
+	set(value): 
+		var hc = health_component if health_component else $HealthComponent
+		hc.set_max_hp(value)
+		if hp_bar: hp_bar.max_value = value
+		if hp_bar: hp_bar.value = hc.current_hp
+		if hp_label: hp_label.text = str(hc.current_hp)
+
+var speed: float:
+	get: 
+		var mc = movement_component if movement_component else $MovementComponent
+		return mc.max_speed
+	set(value): 
+		var mc = movement_component if movement_component else $MovementComponent
+		mc.max_speed = value
+
+func _ready() -> void:
+	print("ModularEnemy _ready: ", name)
+	add_to_group("enemies")
+	
+	# if stats:
+	# 	_apply_stats()
+	
+	health_component.died.connect(_on_death)
+	health_component.health_changed.connect(_on_health_changed)
+	
+	# Find player to chase
+	var player = get_tree().get_first_node_in_group("player")
+	if player:
+		movement_component.set_target(player)
+		
+	# Force initial label update
+	if hp_label and health_component:
+		hp_label.text = str(health_component.current_hp) + "/" + str(health_component.max_hp)
+	
+	# Force initial bar update (Sync with Spawner configuration)
+	if hp_bar and health_component:
+		hp_bar.max_value = health_component.max_hp
+		hp_bar.value = health_component.current_hp
+
+	# Configure visuals
+
+	if visuals.has_method("configure"):
+		var tex = load("res://assets/enemies/rapture-basic/sprite.png")
+		visuals.configure(tex, 3, 4, 6.0, 0.15)
+	
+	# Create shadow
+	_create_shadow()
+	
+	# Setup HP bar styling (Green)
+	hp_bar.visible = true
+	hp_bar.z_index = 100 # Ensure UI is above everything
+	var style_box = StyleBoxFlat.new()
+	style_box.bg_color = Color(0, 1, 0) # Green
+	hp_bar.add_theme_stylebox_override("fill", style_box)
+	
+	# Background style (Grey)
+	var bg_style = StyleBoxFlat.new()
+	bg_style.bg_color = Color(0.2, 0.2, 0.2)
+	hp_bar.add_theme_stylebox_override("background", bg_style)
+	
+	# Update HP Bar color based on tier
+	if is_in_group("tank"):
+		var style = StyleBoxFlat.new()
+		style.bg_color = Color(0.95, 0.85, 0.2) # Yellow for tanks
+		hp_bar.add_theme_stylebox_override("fill", style)
+	elif is_in_group("boss") or is_in_group("super_boss"):
+		var style = StyleBoxFlat.new()
+		style.bg_color = Color(0.7, 0.2, 0.9) # Purple for bosses
+		hp_bar.add_theme_stylebox_override("fill", style)
+	elif is_in_group("elite"):
+		var style = StyleBoxFlat.new()
+		style.bg_color = Color(0.8, 0.1, 0.1) # Red for elites
+		hp_bar.add_theme_stylebox_override("fill", style)
+	else:
+		# KEEP GREEN (Already set above)
+		pass
+	
+	if hp_label:
+		hp_label.z_index = 101 # Above bar
+		hp_label.text = str(health_component.current_hp) + "/" + str(health_component.max_hp)
+
+
+func _create_shadow() -> void:
+	# Uses the centralized ShadowHelper utility
+	if ClassDB.class_exists("ShadowHelper") or get_tree().root.has_node("ShadowHelper"):
+		var shadow = ShadowHelper.create_enemy_shadow(self)
+		shadow.modulate = Color(0.3, 0.1, 0.1, 0.35)
+		shadow.position = Vector2(0, 18)
+
+func _on_health_changed(current: int, _max: int) -> void:
+	if hp_bar:
+		hp_bar.value = current
+	if hp_label:
+		# Format as "Current/Max"
+		hp_label.text = str(current) + "/" + str(_max)
+
+
+
+
+var base_damage: int = 1
+
+# Methods expected by Spawner
+# Methods expected by Spawner
+func set_can_shoot(val: bool) -> void:
+	_can_shoot = val
+
+func _apply_stats() -> void:
+	health_component.set_max_hp(stats.max_hp)
+	movement_component.max_speed = stats.move_speed
+	# TODO: Set hitbox size from stats?
+
+# Preload death effect script
+const RobotDeathEffectScript = preload("res://scripts/effects/RobotDeathEffect.gd")
+
+# Shooting Logic
+const LASER_RANGE := 500.0
+const LASER_FIRE_INTERVAL := 3.0
+const LASER_SPEED := 500.0
+var _laser_cooldown := 0.0
+const CHARGE_DURATION := 1.0
+var _is_charging := false
+var _charge_timer := 0.0
+var _charge_effect: Node2D = null
+var _glow_texture: Texture2D = null
+# Default to true (Standard enemies shoot), Spawner can disable
+var _can_shoot := true
+const EnemyLaserScene = preload("res://scenes/projectiles/EnemyLaser.tscn")
+
+const DAMAGE_DISTANCE := 50.0
+const DAMAGE_COOLDOWN := 1.0
+var _damage_timer := 0.0
+
+# Charmed State
+var _is_charmed := false
+var _charm_owner: Node = null
+var _current_target: Node2D = null
+
+func set_charmed(charm_owner: Node, charmed: bool = true, force: bool = false) -> void:
+	# Validation: Don't charm Elites/Tanks/Bosses unless forced
+	if not force:
+		if is_in_group("elite") or is_in_group("tank") or is_in_group("boss") or is_in_group("super_boss"):
+			return
+	
+	_is_charmed = charmed
+	_charm_owner = charm_owner
+	
+	if charmed:
+		# Add charm visual effect if missing
+		if not has_node("CharmEffect"):
+			var charm_fx := Node2D.new()
+			charm_fx.name = "CharmEffect"
+			# Use generic path or assume script exists
+			if ResourceLoader.exists("res://scripts/characters/effects/SinCharmEffect.gd"):
+				charm_fx.set_script(load("res://scripts/characters/effects/SinCharmEffect.gd"))
+			charm_fx.z_index = 10
+			add_child(charm_fx)
+		
+		# Apply purple tint
+		if visuals:
+			visuals.modulate = Color(0.8, 0.5, 1.0, 1.0)
+			
+		# Switch to finding enemies
+		_find_new_target()
+	else:
+		# Remove visuals
+		if has_node("CharmEffect"):
+			get_node("CharmEffect").queue_free()
+		# Restore modulation (white)
+		if visuals:
+			visuals.modulate = Color.WHITE
+		
+		# Revert to player target
+		_current_target = get_tree().get_first_node_in_group("player")
+		movement_component.set_target(_current_target)
+
+func _find_new_target() -> void:
+	var nearest: Node2D = null
+	var min_dist := INF
+	
+	# Simple search for nearest enemy in "enemies" group
+	var potential_targets = get_tree().get_nodes_in_group("enemies")
+	for target in potential_targets:
+		if target == self: continue
+		if target.is_in_group("charmed_allies"): continue # Don't attack friends
+		
+		# Validate target
+		if not is_instance_valid(target): continue
+		if target.has_method("is_dead") and target.is_dead(): continue
+		if target.get("hp") != null and target.hp <= 0: continue
+		
+		var dist = global_position.distance_to(target.global_position)
+		if dist < min_dist:
+			min_dist = dist
+			nearest = target
+			
+	_current_target = nearest
+	if nearest:
+		movement_component.set_target(nearest)
+
+func _find_best_target() -> void:
+	# Find the closest valid target (Player, Charmed Ally, or Clone)
+	var nearest: Node2D = null
+	var min_dist := INF
+	
+	# 1. Check Player
+	var player = get_tree().get_first_node_in_group("player")
+	if player and is_instance_valid(player):
+		var dist = global_position.distance_to(player.global_position)
+		if dist < min_dist:
+			min_dist = dist
+			nearest = player
+			
+	# 2. Check Charmed Allies
+	var charmed = get_tree().get_nodes_in_group("charmed_allies")
+	for ally in charmed:
+		if ally == self: continue
+		if not is_instance_valid(ally): continue
+		var dist = global_position.distance_to(ally.global_position)
+		if dist < min_dist:
+			min_dist = dist
+			nearest = ally
+			
+	# 3. Check Clones
+	var clones = get_tree().get_nodes_in_group("nayuta_clones")
+	for clone in clones:
+		if not is_instance_valid(clone): continue
+		if clone.get("current_hp") != null and clone.get("current_hp") <= 0: continue
+		var dist = global_position.distance_to(clone.global_position)
+		if dist < min_dist:
+			min_dist = dist
+			nearest = clone
+			
+	_current_target = nearest
+	movement_component.set_target(nearest if nearest else player)
+
+func _process(delta: float) -> void:
+	if _damage_timer > 0:
+		_damage_timer -= delta
+	if _laser_cooldown > 0:
+		_laser_cooldown -= delta
+	
+	# Update logic for Charmed enemies (find new target if current dies OR becomes friend)
+	if _is_charmed:
+		var need_new_target := false
+		if not is_instance_valid(_current_target):
+			need_new_target = true
+		elif _current_target.has_method("is_dead") and _current_target.is_dead():
+			need_new_target = true
+		elif _current_target.get("hp") != null and _current_target.hp <= 0:
+			need_new_target = true
+		elif _current_target.is_in_group("charmed_allies"):
+			# Target was charmed by someone else (or us), stop attacking friend
+			need_new_target = true
+			
+		if need_new_target:
+			_find_new_target()
+	else:
+		# Normal behavior: Find best target (Player OR Charmed Enemy)
+		_find_best_target()
+
+	if visuals and visuals.has_method("update_state"):
+		visuals.update_state(movement_component.velocity, movement_component.velocity)
+		
+	# Dynamic Text Scaling: Keep text physically large but rendered sharply
+	if hp_label:
+		# Ensure pivot is centered
+		hp_label.pivot_offset = hp_label.size / 2.0
+		
+		var p_scale = global_scale
+		if p_scale.x != 0 and p_scale.y != 0:
+			# 1. Counter-scale the node so it isn't stretched/blurry
+			hp_label.scale = Vector2(1.0 / p_scale.x, 1.0 / p_scale.y)
+			# 2. Increase font size to match the intended visual size
+			# Base font size is 10. ELITE_SCALE is 3.25. So font becomes ~32px.
+			var target_font_size = int(10 * p_scale.x)
+			hp_label.add_theme_font_size_override("font_size", target_font_size)
+			
+			# Scale outline size similarly so it doesn't disappear
+			var target_outline_size = int(4 * p_scale.x)
+			hp_label.add_theme_constant_override("outline_size", target_outline_size)
+			
+			# 3. Force Position Alignment: Lock label center to bar center
+			# This corrects any drift caused by pivot offsets or font rendering
+			if hp_bar:
+				hp_label.position = hp_bar.position + (hp_bar.size - hp_label.size) / 2.0
+		
+	# Damage Logic (Attack Current Target)
+	if is_instance_valid(_current_target):
+		var dist = global_position.distance_to(_current_target.global_position)
+		if dist < DAMAGE_DISTANCE and _damage_timer <= 0:
+			if _current_target.has_method("take_damage"):
+				# If we are charmed, we are "charmed_enemy" source
+				var source = "charmed_enemy" if _is_charmed else "enemy"
+				
+				if _current_target.is_in_group("player"):
+					# PlayerCore only accepts 1 argument
+					_current_target.take_damage(base_damage)
+				else:
+					# Enemies/Others support extended arguments
+					_current_target.take_damage(base_damage, false, Vector2.ZERO, false, source)
+			_damage_timer = DAMAGE_COOLDOWN
+			
+	# Charging State Logic
+	if _is_charging:
+		_charge_timer -= delta
+		
+		# Movement paused handled by set_paused() called in _start_charging()
+		
+		# Update visual effect
+		_update_charge_effect()
+		
+		if _charge_timer <= 0:
+			# Fire!
+			var target_pos = global_position # Default to self if invalid? No.
+			
+			# Re-validate target before firing
+			var has_valid_target = is_instance_valid(_current_target)
+			if has_valid_target and _current_target.has_method("is_dead") and _current_target.is_dead():
+				has_valid_target = false
+				
+			if has_valid_target:
+				_fire_laser(global_position.direction_to(_current_target.global_position))
+			else:
+				# Fire in last known or forward direction
+				_fire_laser(Vector2.RIGHT) # Fallback
+			
+			_end_charging()
+			_laser_cooldown = LASER_FIRE_INTERVAL
+	
+	# Shooting Logic (If enabled and not charging)
+	elif _can_shoot and _laser_cooldown <= 0:
+		if is_instance_valid(_current_target):
+			var dist = global_position.distance_to(_current_target.global_position)
+			if dist < LASER_RANGE:
+				# Start charging instead of firing immediately
+				_start_charging()
+				
+	# Only update movement visuals if not charging (velocity is zeroed above if charging)
+	if visuals and visuals.has_method("update_state") and not _is_charging:
+		visuals.update_state(movement_component.velocity, movement_component.velocity)
+
+
+func _start_charging() -> void:
+	_is_charging = true
+	_charge_timer = CHARGE_DURATION
+	
+	# Pause movement via component
+	if movement_component:
+		movement_component.set_paused(true)
+	
+	# Determine charge direction (towards target)
+	var dir = Vector2.RIGHT
+	if is_instance_valid(_current_target):
+		dir = global_position.direction_to(_current_target.global_position)
+	
+	# Create visual effect (Legacy Style)
+	var ChargeEffectScript = load("res://scripts/enemies/EnemyChargeEffect.gd")
+	if ChargeEffectScript:
+		_charge_effect = Node2D.new() # It's a Node2D with a script, not necessarily a Sprite
+		_charge_effect.set_script(ChargeEffectScript)
+		_charge_effect.z_index = 15
+		add_child(_charge_effect)
+		# Position slightly in front like legacy
+		_charge_effect.position = dir * 25.0
+		
+		# Start effect
+		if _charge_effect.has_method("start_charge"):
+			_charge_effect.start_charge(CHARGE_DURATION)
+
+func _update_charge_effect() -> void:
+	if _charge_effect and is_instance_valid(_charge_effect):
+		# Legacy Enemy.gd used set_progress
+		if _charge_effect.has_method("set_progress"):
+			var progress = 1.0 - (_charge_timer / CHARGE_DURATION)
+			_charge_effect.set_progress(progress)
+			
+		# Keep updating position to face target if we want dynamic tracking?
+		# Legacy didn't update direction once started.
+		
+func _end_charging() -> void:
+	_is_charging = false
+	
+	# Resume movement via component
+	if movement_component:
+		movement_component.set_paused(false)
+		
+	if _charge_effect and is_instance_valid(_charge_effect):
+		_charge_effect.queue_free()
+		_charge_effect = null
+
+func _fire_laser(direction: Vector2) -> void:
+	var laser = EnemyLaserScene.instantiate()
+	if laser == null: return
+	
+	# Configure laser direction
+	if laser.has_method("set_direction"):
+		laser.set_direction(direction)
+	else:
+		laser.rotation = direction.angle()
+		
+	laser.speed = LASER_SPEED
+	laser.max_range = LASER_RANGE * 1.5
+	laser.damage = base_damage
+	
+	# Configure Faction Logic (Friendly Fire)
+	if _is_charmed:
+		# Charmed Laser: Hits Enemies (Layer 2), Ignore Player (Layer 1)
+		laser.collision_mask = 2 # Enemies
+		laser.set_meta("from_charmed", true)
+	else:
+		# Normal Laser: Hits Player (Layer 1) AND Enemies/Charmed (Layer 2)
+		# (Script logic prevents hurting allies, but we need collision)
+		laser.collision_mask = 3 # Player (1) + Enemies (2)
+	
+	laser.global_position = global_position + direction * 20.0
+	get_parent().add_child(laser)
+
+
+func _on_death(overkill: int = 0) -> void:
+	# Defer ENTIRE death sequence to avoid physics locking
+	call_deferred("_finalize_death", overkill)
+
+func _finalize_death(overkill: int) -> void:
+	# Check for overkill logic (2x HP damage = overkill?)
+	# Legacy used: is_overkill = overkill_damage >= (max_hp * 2)
+	# Here 'overkill' is just the excess.
+	# So we need to check if overkill >= max_hp * 2? Or just > 0?
+	# Legacy: _overkill_damage = -hp. is_overkill = _overkill_damage >= (max_hp * 2).
+	# This implies doing 3x HP total damage.
+	
+	var is_overkill = overkill >= (stats.max_hp * 2) if stats else false
+	var overkill_multiplier = 2.0 if is_overkill else 1.0
+	
+	# Add score to GameState
+	var score_value: int = 100
+	if is_in_group("elite"): score_value = 500
+	elif is_in_group("boss"): score_value = 2000
+	elif is_in_group("super_boss"): score_value = 5000
+	elif is_in_group("tank"): score_value = 300
+	
+	if is_overkill:
+		score_value = int(score_value * 1.5)
+		
+	if ClassDB.class_exists("GameState") or get_tree().root.has_node("GameState"):
+		# Assuming GameState singleton exists
+		var gs = get_node("/root/GameState")
+		if gs and gs.has_method("add_score"):
+			gs.add_score(score_value)
+			
+	# Emit Global Event
+	# Need _killer_source tracking? Assuming "unknown" if not tracked in Hitbox->Health signaling
+	# We'd need to modify HealthComponent to pass source to died?
+	# Or just assume "player"? Most things are player.
+	if get_node("/root/EventBus"):
+		get_node("/root/EventBus").enemy_killed.emit(self, "player") # Simplification
+		
+	# Drop Pristine Cores (Bosses)
+	if has_meta("pristine_core_drop"):
+		var killed_by_enrage = false
+		var gs = get_node_or_null("/root/GameState")
+		if gs and gs.has_meta("killed_by_enrage"):
+			killed_by_enrage = gs.get_meta("killed_by_enrage")
+			
+		if not killed_by_enrage:
+			var cores = get_meta("pristine_core_drop")
+			_spawn_pristine_core_orb(cores)
+			
+	# Combat Juice Register
+	if ClassDB.class_exists("CombatJuice") or get_tree().root.has_node("CombatJuice"):
+		var cj = get_node("/root/CombatJuice")
+		if cj: cj.register_kill(overkill_multiplier)
+
+	# Spawn death effect
+	var death_effect := Node2D.new()
+	death_effect.set_script(RobotDeathEffectScript)
+	death_effect.global_position = global_position
+	if death_effect.has_method("set_overkill"):
+		death_effect.set_overkill(is_overkill)
+	get_parent().add_child(death_effect)
+	
+	# Spawn XP orbs (Scaled by Tier)
+	var xp_orb_count := 5
+	if is_in_group("tank"): xp_orb_count = 8
+	elif is_in_group("elite"): xp_orb_count = 15
+	elif is_in_group("boss"): xp_orb_count = 25
+	elif is_in_group("super_boss"): xp_orb_count = 40
+	
+	for i in xp_orb_count:
+		var orb = ProjectileCache.create_xp_orb()
+		get_parent().add_child(orb)
+		orb.global_position = global_position + Vector2(randf_range(-20, 20), randf_range(-20, 20))
+	
+	queue_free()
+
+func _spawn_pristine_core_orb(value: int) -> void:
+	if ResourceLoader.exists("res://scripts/world/PristineCoreOrb.gd"):
+		var orb = Area2D.new()
+		orb.set_script(load("res://scripts/world/PristineCoreOrb.gd"))
+		orb.set("cores_value", value)
+		orb.global_position = global_position
+		get_parent().add_child(orb)
+
+
+# Forwarding 'take_damage' for direct calls that bypass HitboxComponent
+func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector2.ZERO, is_burst: bool = false, source: String = "unknown") -> void:
+	hitbox_component.take_damage(amount, is_crit, direction, is_burst, source)

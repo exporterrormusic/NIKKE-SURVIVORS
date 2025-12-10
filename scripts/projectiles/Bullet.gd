@@ -171,6 +171,9 @@ func _on_body_entered(body):
 
 	# Only apply damage to targets that can take damage
 	if not body.has_method("take_damage"):
+		# If it's a wall (StaticBody2D or TileMap), destroy the bullet
+		if body is TileMap or body is StaticBody2D:
+			queue_free()
 		return
 
 	# Prevent repeated hits on the same target

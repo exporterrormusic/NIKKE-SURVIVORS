@@ -50,6 +50,13 @@ func _create_explosion_visuals() -> void:
 		_cached_flash_texture = _create_flash_texture()
 	flash.texture = _cached_flash_texture
 	flash.scale = Vector2.ONE * (_radius / 32.0) * 0.5
+	
+	# Unshaded material for flash
+	var flash_mat := CanvasItemMaterial.new()
+	flash_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	flash_mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+	flash.material = flash_mat
+	
 	add_child(flash)
 	
 	# Animate flash fade

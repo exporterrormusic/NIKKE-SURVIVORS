@@ -50,6 +50,9 @@ func _on_body_entered(body):
 		return
 	if body in _hit_bodies:
 		return
+	# Don't hit the player (friendly fire)
+	if body.is_in_group("player"):
+		return
 	# Skip charmed enemies (they're friendly now)
 	if body.is_in_group("charmed_allies"):
 		return

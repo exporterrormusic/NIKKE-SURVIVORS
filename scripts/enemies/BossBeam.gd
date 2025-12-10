@@ -6,7 +6,7 @@ class_name BossBeam
 signal beam_finished
 
 # Beam settings
-const BEAM_LENGTH := 2000.0
+const BEAM_LENGTH := 5000.0 # Increased to ensure it hits map borders/rocks
 const BEAM_WIDTH := 80.0
 const PREVIEW_WIDTH := 4.0
 const BASE_DAMAGE_PER_TICK := 1
@@ -36,8 +36,9 @@ var _locked_direction := Vector2.RIGHT
 var _current_width := PREVIEW_WIDTH
 
 # Visual
-var _beam_color := Color(1.0, 0.2, 0.1, 1.0)
-var _preview_color := Color(1.0, 0.3, 0.1, 0.4)
+# Visual
+var _beam_color := Color(1.0, 0.05, 0.05, 1.0) # Deep Red
+var _preview_color := Color(1.0, 0.1, 0.1, 0.4)
 
 func initialize(boss: Node2D, player: Node2D, charge_time: float, fire_time: float, fade_time: float, is_boss: bool = true, scaled_damage: int = BASE_DAMAGE_PER_TICK) -> void:
 	_boss = boss
@@ -70,6 +71,11 @@ func initialize(boss: Node2D, player: Node2D, charge_time: float, fire_time: flo
 
 func _ready() -> void:
 	z_index = 100  # Draw on top
+	# Make beam unshaded (glows in dark)
+	var mat := CanvasItemMaterial.new()
+	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+	material = mat
 
 func _process(delta: float) -> void:
 	if not _boss or not is_instance_valid(_boss):
@@ -309,7 +315,7 @@ func _draw() -> void:
 			# Draw main beam (thick, bright)
 			_draw_beam(start, end_local, _current_width, _beam_color)
 			# Draw beam core (brighter, narrower)
-			var core_color := Color(1.0, 0.8, 0.6, 1.0)
+			var core_color := Color(1.0, 0.6, 0.6, 1.0) # Pale red core (was orange/white)
 			_draw_beam(start, end_local, _current_width * 0.4, core_color)
 		
 		BeamState.FADING:

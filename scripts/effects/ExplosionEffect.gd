@@ -1,15 +1,15 @@
 extends Node2D
 class_name ExplosionEffect
 
-@export var radius: float = 120.0
-@export var base_color: Color = Color(1.0, 0.52, 0.24, 0.9)
+@export var radius: float = 80.0
+@export var base_color: Color = Color(1.0, 0.52, 0.24, 0.7)
 @export var duration: float = 0.55
 @export var ring_thickness: float = 6.0
-@export var glow_color: Color = Color(1.0, 0.6, 0.26, 0.78)
-@export var core_color: Color = Color(1.0, 0.92, 0.74, 0.95)
-@export var shockwave_color: Color = Color(1.0, 0.78, 0.3, 0.88)
+@export var glow_color: Color = Color(1.0, 0.6, 0.26, 0.6)
+@export var core_color: Color = Color(1.0, 0.92, 0.74, 0.8)
+@export var shockwave_color: Color = Color(1.0, 0.78, 0.3, 0.7)
 @export var shockwave_thickness: float = 14.0
-@export var spark_color: Color = Color(1.0, 0.76, 0.42, 0.9)
+@export var spark_color: Color = Color(1.0, 0.76, 0.42, 0.7)
 @export var spark_count: int = 16
 
 const FOREGROUND_Z_INDEX := 915
@@ -36,7 +36,13 @@ func _ready() -> void:
 	set_process(true)
 	queue_redraw()
 	
-	# Assign to effects layer to avoid night darkening
+	# Make explosion glowing/unshaded
+	var mat := CanvasItemMaterial.new()
+	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+	material = mat
+	
+	# Assign to effects layer to avoid night darkening (and for Z sorting)
 	call_deferred("_assign_to_effects_layer")
 
 func _assign_to_effects_layer() -> void:

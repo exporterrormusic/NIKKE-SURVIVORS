@@ -134,9 +134,12 @@ func _ready() -> void:
 	
 	_create_shadow()
 	
-	# Register sprite for night glow effect
-	if _animator:
-		NightGlowManager.register_sprite(_animator)
+	# Register sprite for night glow effect (Managed via universal shader now)
+	# if _animator:
+	#	NightGlowManager.register_sprite(_animator)
+	
+	# Apply universal shader for night glow and effects
+	_apply_universal_shader()
 	
 	# Initialize progression module
 	_progression = PlayerProgression.new()
@@ -571,13 +574,17 @@ func _create_shadow() -> void:
 	# Uses the centralized ShadowHelper utility
 	ShadowHelper.create_player_shadow(self)
 
-func _apply_unshaded_shader() -> void:
-	# Apply the same simple unshaded shader used by enemies so the player
-	# doesn't get incorrectly darkened by CanvasModulate during storms.
-	var shader = load("res://resources/shaders/enemy_red_glow.gdshader")
+func _apply_universal_shader() -> void:
+	# Apply the universal sprite shader for night glow support
+	var shader = load("res://resources/shaders/universal_sprite_shader.gdshader")
 	if shader and _animator:
+		print("[PlayerCore] Applying universal shader to animator. Shader loaded: ", shader != null)
 		var mat := ShaderMaterial.new()
 		mat.shader = shader
+		# Player doesn't need outlines usually, but needs night glow
+		mat.set_shader_parameter("enable_outline", false)
+		mat.set_shader_parameter("night_glow_color", Color(0.6, 0.6, 1.0, 1.0)) # slightly brighter/bluer for player
+		mat.set_shader_parameter("night_glow_intensity", 1.2) # Player should pop more
 		_animator.material = mat
 
 func _setup_environment_modulate() -> void:
@@ -590,8 +597,15 @@ func _setup_environment_modulate() -> void:
 			_on_environment_modulate_changed(env_controller.current_modulate)
 
 func _on_environment_modulate_changed(color: Color) -> void:
-	# Manual darkening removed - handled by vignette overlay now
-	pass
+	# Update the shader's night_boost parameter if available
+	if _animator and _animator.material is ShaderMaterial:
+		var mat = _animator.material
+		# EnvironmentController sends a color, but our shader needs a float 0-1
+		# We can derive an intensity or just subscribe to Level's night boost logic
+		# But wait, Level.gd only iterates over "enemies" group.
+		# Let's fix Level.gd to update players too, OR update here if we have access to night state.
+		# For now, let's allow Level.gd to drive this by adding player to a tracked group or handling it there.
+		pass
 
 # ============= DAMAGE / HEALING =============
 

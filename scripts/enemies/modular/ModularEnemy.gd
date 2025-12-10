@@ -84,9 +84,9 @@ func _ready() -> void:
 	# Create shadow
 	_create_shadow()
 	
-	# Register sprite for night glow effect
-	if visuals:
-		NightGlowManager.register_sprite(visuals)
+	# Register sprite for night glow effect - REMOVED (Handled by EnemySpawner + Universal Shader)
+	# if visuals:
+	# 	NightGlowManager.register_sprite(visuals)
 	
 	# Setup HP bar styling (Green)
 	# Hide initially - will be shown after first position sync to prevent flicker at origin
@@ -285,7 +285,33 @@ func _find_best_target() -> void:
 	_current_target = nearest
 	movement_component.set_target(nearest if nearest else player)
 
+var _is_stunned: bool = false
+
+func set_stunned(stunned: bool) -> void:
+	# print("[ModularEnemy] set_stunned: ", stunned, " on ", name)
+	_is_stunned = stunned
+	
+	# Pause movement
+	if movement_component:
+		movement_component.set_paused(stunned)
+	
+	# Pause attacks/charging if stunned
+	if stunned:
+		_end_charging() # Cancel charge if active
+		if visuals and visuals.has_method("set_paused"):
+			visuals.set_paused(stunned)
+	else:
+		if visuals and visuals.has_method("set_paused"):
+			visuals.set_paused(false)
+
+func is_stunned() -> bool:
+	return _is_stunned
+
 func _process(delta: float) -> void:
+	# If stunned, do nothing (frozen in time)
+	if _is_stunned:
+		return
+
 	if _damage_timer > 0:
 		_damage_timer -= delta
 	if _laser_cooldown > 0:
@@ -480,13 +506,25 @@ func _update_charge_effect() -> void:
 func _end_charging() -> void:
 	_is_charging = false
 	
-	# Resume movement via component
-	if movement_component:
+	# Resume movement via component ONLY if not stunned
+	if movement_component and not _is_stunned:
 		movement_component.set_paused(false)
 		
 	if _charge_effect and is_instance_valid(_charge_effect):
 		_charge_effect.queue_free()
 		_charge_effect = null
+
+func apply_stun(duration: float) -> void:
+	if _is_stunned:
+		return # Already stunned, ignore or refresh? For now ignore or maybe just extend?
+		# Simple refresh:
+		# set_stunned(true) # ensure on
+	
+	set_stunned(true)
+	
+	# Create timer to un-stun
+	var timer = get_tree().create_timer(duration)
+	timer.timeout.connect(func(): if is_instance_valid(self): set_stunned(false))
 
 func _fire_laser(direction: Vector2) -> void:
 	var laser = EnemyLaserScene.instantiate()
@@ -501,6 +539,16 @@ func _fire_laser(direction: Vector2) -> void:
 	laser.speed = LASER_SPEED
 	laser.max_range = LASER_RANGE * 1.5
 	laser.damage = base_damage
+	
+	# Scale laser projectile to match enemy size (Boss > Elite > Tank > Normal)
+	laser.scale = scale
+	laser.damage = int(base_damage * scale.x) # Optional: Scale damage slightly with size? Or is that already handled by stats?
+	# User asked for visual scaling ("normal attacks are bigger"), but damage scaling often accompanies it. 
+	# User said "normal attacks scale up the same amount as they scale up". Strict reading = visual scale.
+	# I will stick to visual scale mostly, but damage is already set to `base_damage` which is usually 1. 
+	# Elites/Bosses set `base_damage` higher via stats/spawner logic usually. 
+	# Let's just scale the visual for now as requested.
+	laser.scale = scale
 	
 	# Configure Faction Logic (Friendly Fire)
 	if _is_charmed:

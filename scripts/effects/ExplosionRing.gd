@@ -20,7 +20,10 @@ func initialize(radius: float, duration: float, delay: float, color: Color) -> v
 	_ring_width = radius * 0.1
 
 func _ready() -> void:
-	pass
+	var mat := CanvasItemMaterial.new()
+	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+	material = mat
 
 func _process(delta: float) -> void:
 	# Handle delay

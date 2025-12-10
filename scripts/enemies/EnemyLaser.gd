@@ -124,6 +124,7 @@ func _create_visuals() -> void:
 	ambient_glow.position = Vector2(BEAM_LENGTH * 0.5, 0)
 	var ambient_mat := CanvasItemMaterial.new()
 	ambient_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	ambient_mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
 	ambient_glow.material = ambient_mat
 	ambient_glow.z_index = 896
 	add_child(ambient_glow)
@@ -137,6 +138,7 @@ func _create_visuals() -> void:
 	ambient_glow2.position = Vector2(BEAM_LENGTH * 0.5, 0)
 	var ambient_mat2 := CanvasItemMaterial.new()
 	ambient_mat2.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	ambient_mat2.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
 	ambient_glow2.material = ambient_mat2
 	ambient_glow2.z_index = 895
 	add_child(ambient_glow2)
@@ -148,6 +150,7 @@ func _create_visuals() -> void:
 	_beam_outer_glow.z_index = 898
 	var outer_mat := CanvasItemMaterial.new()
 	outer_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	outer_mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
 	_beam_outer_glow.material = outer_mat
 	add_child(_beam_outer_glow)
 	_update_outer_glow_polygon()
@@ -161,6 +164,7 @@ func _create_visuals() -> void:
 	_glow_sprite.position = Vector2(BEAM_LENGTH * 0.5, 0)
 	var glow_material := CanvasItemMaterial.new()
 	glow_material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	glow_material.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
 	_glow_sprite.material = glow_material
 	_glow_sprite.z_index = 899
 	add_child(_glow_sprite)
@@ -170,6 +174,10 @@ func _create_visuals() -> void:
 	_beam_polygon.color = LASER_COLOR
 	_beam_polygon.antialiased = true
 	_beam_polygon.z_index = 900
+	var core_mat := CanvasItemMaterial.new()
+	core_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	core_mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+	_beam_polygon.material = core_mat
 	add_child(_beam_polygon)
 	_update_beam_polygon()
 	
@@ -180,6 +188,7 @@ func _create_visuals() -> void:
 	_core_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
 	_core_line.end_cap_mode = Line2D.LINE_CAP_ROUND
 	_core_line.z_index = 901
+	_core_line.material = core_mat # Reuse unshaded material
 	add_child(_core_line)
 	_update_core_line()
 	
@@ -191,6 +200,7 @@ func _create_visuals() -> void:
 	_tip_glow.scale = Vector2(0.6, 0.6)
 	var tip_material := CanvasItemMaterial.new()
 	tip_material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	tip_material.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
 	_tip_glow.material = tip_material
 	_tip_glow.position = Vector2(BEAM_LENGTH, 0)
 	_tip_glow.z_index = 902
@@ -204,6 +214,7 @@ func _create_visuals() -> void:
 	tip_glow2.scale = Vector2(0.9, 0.9)
 	var tip_mat2 := CanvasItemMaterial.new()
 	tip_mat2.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	tip_mat2.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
 	tip_glow2.material = tip_mat2
 	tip_glow2.position = Vector2(BEAM_LENGTH, 0)
 	tip_glow2.z_index = 901
@@ -265,6 +276,7 @@ func _spawn_charge_effect() -> void:
 	_charge_flash.scale = Vector2(0.3, 0.3)
 	var flash_mat := CanvasItemMaterial.new()
 	flash_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	flash_mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
 	_charge_flash.material = flash_mat
 	_charge_flash.z_index = 903
 	add_child(_charge_flash)

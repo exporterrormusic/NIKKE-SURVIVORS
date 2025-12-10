@@ -12,7 +12,12 @@ class_name CommanderStunEffect
 
 var _time: float = 0.0
 
+var _target: Node = null
+
 func _ready() -> void:
+	# Capture target before reparenting
+	_target = get_parent()
+	
 	z_index = 100
 	# Make unshaded so it shows through lighting
 	var mat := CanvasItemMaterial.new()
@@ -44,12 +49,11 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 func _should_remove() -> bool:
-	var parent := get_parent()
-	if parent == null or not is_instance_valid(parent):
+	if _target == null or not is_instance_valid(_target):
 		return true
-	if parent.has_method("is_stunned") and not parent.is_stunned():
+	if _target.has_method("is_stunned") and not _target.is_stunned():
 		return true
-	if parent.has_meta("commander_stunned") and not parent.get_meta("commander_stunned"):
+	if _target.has_meta("commander_stunned") and not _target.get_meta("commander_stunned"):
 		return true
 	return false
 

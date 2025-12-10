@@ -36,198 +36,204 @@ var _light: PointLight2D = null
 const ENABLE_MISSILE_LIGHTS := false
 
 func _ready():
-    add_to_group("projectiles")
-    connect("body_entered", Callable(self, "_on_body_entered"))
-    set_process(true)
-    
-    # Dynamic lights are expensive - disabled by default
-    if ENABLE_MISSILE_LIGHTS:
-        _light = PointLight2D.new()
-        _light.name = "MissileLight"
-        _light.color = Color(1.0, 0.6, 0.2)  # Orange glow
-        _light.energy = 0.7
-        _light.texture = _create_light_texture()
-        _light.texture_scale = 0.25
-        _light.shadow_enabled = false
-        add_child(_light)
+	# Make missile unshaded (glows in dark)
+	var mat := CanvasItemMaterial.new()
+	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+	material = mat
+	
+	add_to_group("projectiles")
+	connect("body_entered", Callable(self, "_on_body_entered"))
+	set_process(true)
+	
+	# Dynamic lights are expensive - disabled by default
+	if ENABLE_MISSILE_LIGHTS:
+		_light = PointLight2D.new()
+		_light.name = "MissileLight"
+		_light.color = Color(1.0, 0.6, 0.2)  # Orange glow
+		_light.energy = 0.7
+		_light.texture = _create_light_texture()
+		_light.texture_scale = 0.25
+		_light.shadow_enabled = false
+		add_child(_light)
 
 func _create_light_texture() -> Texture2D:
-    # Use cached texture for performance
-    return TextureCache.get_light_texture_64()
+	# Use cached texture for performance
+	return TextureCache.get_light_texture_64()
 
 func _process(delta):
-    # Flicker the light (every other frame)
-    if _light and Engine.get_process_frames() % 2 == 0:
-        _light.energy = 0.6 + randf() * 0.3
-    
-    # Update smoke trail
-    _smoke_timer += delta
-    if _smoke_timer >= SMOKE_INTERVAL:
-        _smoke_timer = 0.0
-        _spawn_smoke_particle()
-    
-    # Update existing smoke particles
-    var i := 0
-    while i < _smoke_particles.size():
-        var p: Dictionary = _smoke_particles[i]
-        p["age"] += delta
-        if p["age"] >= SMOKE_LIFETIME:
-            _smoke_particles.remove_at(i)
-            continue
-        # Smoke rises and drifts
-        p["pos"] += Vector2(randf_range(-8, 8), -20) * delta
-        _smoke_particles[i] = p
-        i += 1
-    
-    # Only redraw every other frame for performance
-    if Engine.get_process_frames() % 2 == 0:
-        queue_redraw()
+	# Flicker the light (every other frame)
+	if _light and Engine.get_process_frames() % 2 == 0:
+		_light.energy = 0.6 + randf() * 0.3
+	
+	# Update smoke trail
+	_smoke_timer += delta
+	if _smoke_timer >= SMOKE_INTERVAL:
+		_smoke_timer = 0.0
+		_spawn_smoke_particle()
+	
+	# Update existing smoke particles
+	var i := 0
+	while i < _smoke_particles.size():
+		var p: Dictionary = _smoke_particles[i]
+		p["age"] += delta
+		if p["age"] >= SMOKE_LIFETIME:
+			_smoke_particles.remove_at(i)
+			continue
+		# Smoke rises and drifts
+		p["pos"] += Vector2(randf_range(-8, 8), -20) * delta
+		_smoke_particles[i] = p
+		i += 1
+	
+	# Only redraw every other frame for performance
+	if Engine.get_process_frames() % 2 == 0:
+		queue_redraw()
 
 func _spawn_smoke_particle():
-    _smoke_particles.append({
-        "pos": global_position,
-        "age": 0.0,
-        "size_offset": randf_range(-2, 2)
-    })
+	_smoke_particles.append({
+		"pos": global_position,
+		"age": 0.0,
+		"size_offset": randf_range(-2, 2)
+	})
 
 func _draw():
-    # Draw smoke trail (in local space, so convert positions)
-    for p in _smoke_particles:
-        var life_ratio: float = p["age"] / SMOKE_LIFETIME
-        var alpha := (1.0 - life_ratio) * 0.5
-        var size: float = lerp(SMOKE_START_SIZE, SMOKE_END_SIZE, life_ratio) + p["size_offset"]
-        var local_pos: Vector2 = p["pos"] - global_position
-        
-        # Fire core (fades fast)
-        if life_ratio < 0.3:
-            var fire_alpha := (1.0 - life_ratio / 0.3) * 0.7
-            var fire_col := Color(_fire_color.r * 1.4, _fire_color.g * 1.4, _fire_color.b, fire_alpha)
-            draw_circle(local_pos, size * 0.5, fire_col)
-        
-        # Smoke
-        var smoke_col := Color(_trail_color.r, _trail_color.g, _trail_color.b, alpha)
-        draw_circle(local_pos, size, smoke_col)
+	# Draw smoke trail (in local space, so convert positions)
+	for p in _smoke_particles:
+		var life_ratio: float = p["age"] / SMOKE_LIFETIME
+		var alpha := (1.0 - life_ratio) * 0.5
+		var size: float = lerp(SMOKE_START_SIZE, SMOKE_END_SIZE, life_ratio) + p["size_offset"]
+		var local_pos: Vector2 = p["pos"] - global_position
+		
+		# Fire core (fades fast)
+		if life_ratio < 0.3:
+			var fire_alpha := (1.0 - life_ratio / 0.3) * 0.7
+			var fire_col := Color(_fire_color.r * 1.4, _fire_color.g * 1.4, _fire_color.b, fire_alpha)
+			draw_circle(local_pos, size * 0.5, fire_col)
+		
+		# Smoke
+		var smoke_col := Color(_trail_color.r, _trail_color.g, _trail_color.b, alpha)
+		draw_circle(local_pos, size, smoke_col)
 
 func _physics_process(delta):
-    # Update target_pos if we have a valid target_node (for homing)
-    if target_node and is_instance_valid(target_node) and target_node is Node2D:
-        target_pos = target_node.global_position
-    
-    var dir = (target_pos - global_position).normalized()
-    velocity += dir * acceleration * delta
-    if velocity.length() > max_speed:
-        velocity = velocity.normalized() * max_speed
-    position += velocity * delta
-    rotation = velocity.angle()
-    
-    # Check boulder collision - explode if hitting a boulder
-    if _check_boulder_collision():
-        explode()
-        return
-    
-    # Check if missile reached target - account for enemy scale
-    var hit_distance: float = 10.0
-    if target_node and is_instance_valid(target_node) and target_node is Node2D:
-        var enemy_scale: float = target_node.scale.x if target_node.scale.x > 1.0 else 1.0
-        hit_distance = 10.0 + 30.0 * (enemy_scale - 1.0)  # Scale hitbox for large enemies
-    if global_position.distance_to(target_pos) < hit_distance:
-        explode()
-    if position.x < -100 or position.x > 2000 or position.y < -100 or position.y > 1200:
-        queue_free()
+	# Update target_pos if we have a valid target_node (for homing)
+	if target_node and is_instance_valid(target_node) and target_node is Node2D:
+		target_pos = target_node.global_position
+	
+	var dir = (target_pos - global_position).normalized()
+	velocity += dir * acceleration * delta
+	if velocity.length() > max_speed:
+		velocity = velocity.normalized() * max_speed
+	position += velocity * delta
+	rotation = velocity.angle()
+	
+	# Check boulder collision - explode if hitting a boulder
+	if _check_boulder_collision():
+		explode()
+		return
+	
+	# Check if missile reached target - account for enemy scale
+	var hit_distance: float = 10.0
+	if target_node and is_instance_valid(target_node) and target_node is Node2D:
+		var enemy_scale: float = target_node.scale.x if target_node.scale.x > 1.0 else 1.0
+		hit_distance = 10.0 + 30.0 * (enemy_scale - 1.0)  # Scale hitbox for large enemies
+	if global_position.distance_to(target_pos) < hit_distance:
+		explode()
+	if position.x < -100 or position.x > 2000 or position.y < -100 or position.y > 1200:
+		queue_free()
 
 func _check_boulder_collision() -> bool:
-    """Check if missile hit a boulder."""
-    var boulders := get_tree().get_nodes_in_group("boulders")
-    for boulder in boulders:
-        if not is_instance_valid(boulder):
-            continue
-        var boulder_pos: Vector2 = boulder.global_position
-        var boulder_radius: float = boulder.boulder_size * 0.5 if "boulder_size" in boulder else 150.0
-        if global_position.distance_to(boulder_pos) < boulder_radius:
-            return true
-    return false
+	"""Check if missile hit a boulder."""
+	var boulders := get_tree().get_nodes_in_group("boulders")
+	for boulder in boulders:
+		if not is_instance_valid(boulder):
+			continue
+		var boulder_pos: Vector2 = boulder.global_position
+		var boulder_radius: float = boulder.boulder_size * 0.5 if "boulder_size" in boulder else 150.0
+		if global_position.distance_to(boulder_pos) < boulder_radius:
+			return true
+	return false
 
 func explode():
-    # Play explosion sound
-    _play_explosion_sound()
-    
-    # Damage enemies in area (only enemies, not friendly units like player, allies, or clones)
-    var enemies = get_tree().get_nodes_in_group("enemies")
-    const BASE_EXPLOSION_RADIUS := 100.0
-    for enemy in enemies:
-        if not is_instance_valid(enemy):
-            continue
-        if not (enemy is Node2D):
-            continue
-        # Account for enemy scale - larger enemies (bosses/elites) have bigger hitboxes
-        # Base enemy size ~30 units, scale affects effective hitbox radius
-        var enemy_scale: float = enemy.scale.x if enemy.scale.x > 1.0 else 1.0
-        var enemy_hitbox_bonus: float = 30.0 * (enemy_scale - 1.0)  # Extra radius for scaled enemies
-        var effective_radius: float = BASE_EXPLOSION_RADIUS + enemy_hitbox_bonus
-        if global_position.distance_to(enemy.global_position) < effective_radius:
-            # Pass hit direction (from explosion center to enemy)
-            var hit_direction = (enemy.global_position - global_position).normalized()
-            if enemy.has_method("take_damage"):
-                # Determine killer source based on owner type
-                var killer_source := "player"
-                if is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
-                    killer_source = "summon"
-                enemy.take_damage(base_damage, false, hit_direction, false, killer_source)
-    # create explosion
-    var explosion = ProjectileCache.create_explosion()
-    explosion.owner_node = owner_node  # Pass owner for killer_source tracking
-    get_parent().add_child(explosion)
-    explosion.global_position = global_position
-    
-    # Combat juice camera shake for explosion
-    var combat_juice_script = load("res://scripts/systems/CombatJuice.gd")
-    if combat_juice_script and combat_juice_script.instance:
-        combat_juice_script.camera_shake(5.0)
-    
-    # Create burning ground effect if enabled (Rapunzel's missiles only)
-    if create_burning_ground or ground_fire_enabled:
-        _spawn_burning_ground()
-    
-    call_deferred("queue_free")
+	# Play explosion sound
+	_play_explosion_sound()
+	
+	# Damage enemies in area (only enemies, not friendly units like player, allies, or clones)
+	var enemies = get_tree().get_nodes_in_group("enemies")
+	const BASE_EXPLOSION_RADIUS := 100.0
+	for enemy in enemies:
+		if not is_instance_valid(enemy):
+			continue
+		if not (enemy is Node2D):
+			continue
+		# Account for enemy scale - larger enemies (bosses/elites) have bigger hitboxes
+		# Base enemy size ~30 units, scale affects effective hitbox radius
+		var enemy_scale: float = enemy.scale.x if enemy.scale.x > 1.0 else 1.0
+		var enemy_hitbox_bonus: float = 30.0 * (enemy_scale - 1.0)  # Extra radius for scaled enemies
+		var effective_radius: float = BASE_EXPLOSION_RADIUS + enemy_hitbox_bonus
+		if global_position.distance_to(enemy.global_position) < effective_radius:
+			# Pass hit direction (from explosion center to enemy)
+			var hit_direction = (enemy.global_position - global_position).normalized()
+			if enemy.has_method("take_damage"):
+				# Determine killer source based on owner type
+				var killer_source := "player"
+				if is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
+					killer_source = "summon"
+				enemy.take_damage(base_damage, false, hit_direction, false, killer_source)
+	# create explosion
+	var explosion = ProjectileCache.create_explosion()
+	explosion.owner_node = owner_node  # Pass owner for killer_source tracking
+	get_parent().add_child(explosion)
+	explosion.global_position = global_position
+	
+	# Combat juice camera shake for explosion
+	var combat_juice_script = load("res://scripts/systems/CombatJuice.gd")
+	if combat_juice_script and combat_juice_script.instance:
+		combat_juice_script.camera_shake(5.0)
+	
+	# Create burning ground effect if enabled (Rapunzel's missiles only)
+	if create_burning_ground or ground_fire_enabled:
+		_spawn_burning_ground()
+	
+	call_deferred("queue_free")
 
 func _play_explosion_sound() -> void:
-    # Try to find audio director in scene
-    var player = get_tree().get_first_node_in_group("player")
-    if player == null:
-        player = get_tree().root.find_child("Player", true, false)
-    if player and player.has_node("AudioDirector"):
-        var audio = player.get_node("AudioDirector")
-        if audio and audio.has_method("play_rocket_explosion_sound"):
-            audio.play_rocket_explosion_sound()
+	# Try to find audio director in scene
+	var player = get_tree().get_first_node_in_group("player")
+	if player == null:
+		player = get_tree().root.find_child("Player", true, false)
+	if player and player.has_node("AudioDirector"):
+		var audio = player.get_node("AudioDirector")
+		if audio and audio.has_method("play_rocket_explosion_sound"):
+			audio.play_rocket_explosion_sound()
 
 func _spawn_burning_ground():
-    var fire = ProjectileCache.create_ground_fire()
-    get_parent().add_child(fire)
-    fire.global_position = global_position
-    # Configure burning ground with missile's settings
-    fire.radius = ground_fire_radius
-    fire.duration = ground_fire_duration
-    fire.damage_per_tick = ground_fire_damage
-    fire.tick_interval = 0.5
-    # Golden/orange color to match Rapunzel's theme
-    fire.color = Color(1.0, 0.7, 0.2, 0.5)
-    fire.glow_color = Color(1.0, 0.6, 0.1, 0.4)
-    fire.ember_color = Color(1.0, 0.8, 0.3, 0.8)
+	var fire = ProjectileCache.create_ground_fire()
+	get_parent().add_child(fire)
+	fire.global_position = global_position
+	# Configure burning ground with missile's settings
+	fire.radius = ground_fire_radius
+	fire.duration = ground_fire_duration
+	fire.damage_per_tick = ground_fire_damage
+	fire.tick_interval = 0.5
+	# Golden/orange color to match Rapunzel's theme
+	fire.color = Color(1.0, 0.7, 0.2, 0.5)
+	fire.glow_color = Color(1.0, 0.6, 0.1, 0.4)
+	fire.ember_color = Color(1.0, 0.8, 0.3, 0.8)
 
 func _on_body_entered(body):
-    # Ignore owner and allies
-    if body == owner_node:
-        return
-    if body.is_in_group("summoned_allies"):
-        return
-    if body.is_in_group("player_allies"):
-        return
-    if body == get_parent().get_node_or_null("Player"):
-        return
-    # Skip charmed enemies (they're friendly now)
-    if body.is_in_group("charmed_allies"):
-        return
-    # Ignore other projectiles
-    if body.is_in_group("projectiles"):
-        return
-    call_deferred("explode")
+	# Ignore owner and allies
+	if body == owner_node:
+		return
+	if body.is_in_group("summoned_allies"):
+		return
+	if body.is_in_group("player_allies"):
+		return
+	if body == get_parent().get_node_or_null("Player"):
+		return
+	# Skip charmed enemies (they're friendly now)
+	if body.is_in_group("charmed_allies"):
+		return
+	# Ignore other projectiles
+	if body.is_in_group("projectiles"):
+		return
+	call_deferred("explode")

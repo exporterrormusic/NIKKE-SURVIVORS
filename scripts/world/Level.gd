@@ -259,6 +259,7 @@ func _initialize_random_environment() -> void:
 
 func _update_ambient_systems(biome_id: StringName, time_id: StringName) -> void:
 	var is_night := _is_night_time(time_id)
+	print("[Level] _update_ambient_systems: time_id=", time_id, " is_night=", is_night)
 	
 	# Update ambient particles
 	if _ambient_particles and _ambient_particles.has_method("configure"):
@@ -295,9 +296,16 @@ func _update_enemy_night_glow(is_night: bool, time_id: StringName) -> void:
 	# Store for new enemies
 	_current_night_boost = night_boost
 	
-	# Update all existing enemies
-	for child in get_children():
-		if child.is_in_group("enemies"):
+	# Update EnemySpawner for future spawns
+	if _enemy_spawner and _enemy_spawner.has_method("set_night_boost"):
+		_enemy_spawner.set_night_boost(night_boost)
+	
+	# Update all existing enemies AND players
+	var targets = get_tree().get_nodes_in_group("enemies") + get_tree().get_nodes_in_group("player")
+	for child in targets:
+		if child.has_method("set_night_boost"):
+			child.set_night_boost(night_boost)
+		else:
 			_set_enemy_night_boost(child, night_boost)
 
 func _set_enemy_night_boost(enemy: Node, night_boost: float) -> void:
@@ -317,6 +325,11 @@ func _set_enemy_night_boost(enemy: Node, night_boost: float) -> void:
 		if mat.shader:
 			# Check if shader has night_boost parameter
 			mat.set_shader_parameter("night_boost", night_boost)
+			print("[Level] Set night_boost to ", night_boost, " for ", enemy.name)
+		else:
+			print("[Level] FAIL: ", enemy.name, " material has no shader")
+	else:
+		print("[Level] FAIL: ", enemy.name, " has no ShaderMaterial. Sprite: ", sprite)
 
 var _current_night_boost := 0.0
 

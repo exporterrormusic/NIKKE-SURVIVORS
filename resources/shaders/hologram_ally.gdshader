@@ -1,4 +1,5 @@
 shader_type canvas_item;
+render_mode unshaded;
 
 // Holographic summoned ally shader - sci-fi hexagon pattern with silver/white theme
 
@@ -99,14 +100,14 @@ void fragment() {
         final_color += vec3(0.9, 0.95, 1.0) * shimmer * 0.5;
     }
     
-    // Semi-transparency for hologram look
-    // Base alpha is 0.85 when fully spawned, ramping up during spawn
-    float base_alpha = spawn_progress >= 1.0 ? 0.85 : (0.5 + 0.35 * spawn_progress);
-    float alpha = tex_color.a * final_spawn * base_alpha;
-    alpha *= flicker;
-    
-    // Boost alpha at edges for glow effect
-    alpha = min(1.0, alpha + glow * 0.2);
-    
-    COLOR = vec4(final_color, alpha);
+    	// Semi-transparency for hologram look
+	// Base alpha is 0.85 when fully spawned, ramping up during spawn
+	float base_alpha = spawn_progress >= 1.0 ? 0.85 : (0.5 + 0.35 * spawn_progress);
+	float alpha = tex_color.a * final_spawn * base_alpha;
+	alpha *= flicker;
+	
+	// Boost alpha at edges for glow effect
+	alpha = min(1.0, alpha + glow * 0.2);
+	
+	COLOR = vec4(final_color, alpha);
 }

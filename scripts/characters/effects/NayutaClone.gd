@@ -114,6 +114,9 @@ func _create_animator() -> void:
 	# Load Nayuta sprite
 	_load_sprite()
 
+
+
+
 func _load_sprite() -> void:
 	var sprite_path := "res://assets/characters/nayuta/nayuta-sprite.png"
 	if not ResourceLoader.exists(sprite_path):

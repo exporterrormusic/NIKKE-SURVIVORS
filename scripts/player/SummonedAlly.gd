@@ -131,7 +131,12 @@ func _create_animator() -> void:
 	_shader_material.set_shader_parameter("edge_glow", 1.2)
 	_animator.material = _shader_material
 	
+	_animator.material = _shader_material
+	
 	add_child(_animator)
+
+
+
 
 func _create_collision_shape() -> void:
 	var collision := CollisionShape2D.new()

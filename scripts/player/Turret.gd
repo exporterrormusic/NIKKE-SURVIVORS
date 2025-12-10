@@ -49,6 +49,17 @@ func _ready():
 	timer.connect("timeout", Callable(self, "shoot"))
 	timer.start()
 	
+	# Make turret unshaded (bright) to match other summons
+	var mat := CanvasItemMaterial.new()
+	mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+	material = mat
+	
+	# Apply to UI elements too
+	if ammo_bar:
+		ammo_bar.material = mat
+	if ammo_label:
+		ammo_label.material = mat
+	
 	set_process(true)
 
 func _process(delta: float) -> void:

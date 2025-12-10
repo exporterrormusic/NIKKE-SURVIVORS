@@ -268,6 +268,10 @@ func _apply_damage() -> void:
 	
 	var enemies := tree.get_nodes_in_group("enemies")
 	# DebugLog.log("[MarianBeam] Scanning " + str(enemies.size()) + " enemies")
+	
+	# Collect beam hit candidates
+	var candidates := []
+	
 	for enemy in enemies:
 		if not is_instance_valid(enemy) or not enemy is Node2D:
 			continue
@@ -349,7 +353,7 @@ func _draw() -> void:
 	var current_width: float = BEAM_WIDTH * _windup_progress
 	var current_range: float = BEAM_RANGE * (0.3 + 0.7 * _windup_progress)
 	
-	# Calculate visible range (stop at closest boulder)
+	# Calculate visible range (stop at closest boulder OR closest enemy)
 	var visible_range: float = _get_visible_beam_range(current_range)
 	
 	# Draw charge effect during windup
@@ -357,7 +361,7 @@ func _draw() -> void:
 		_draw_charge_effect()
 		return
 	
-	# Draw full beam with wavy effect (stopped at boulder if any)
+	# Draw full beam with wavy effect (stopped at target)
 	_draw_beam(visible_range, current_width, beam_alpha)
 	
 	# Draw muzzle flash
@@ -373,30 +377,46 @@ func _get_visible_beam_range(max_range: float) -> float:
 	var beam_dir: Vector2 = Vector2.RIGHT.rotated(rotation)
 	var closest_hit: float = max_range
 	
+	# 1. Check Boulders
 	for boulder in boulders:
 		if not is_instance_valid(boulder):
 			continue
 		var boulder_pos: Vector2 = boulder.global_position
-		var boulder_radius: float = 150.0  # Default
+		var boulder_radius: float = 150.0 
 		if boulder.get("boulder_size") != null:
 			boulder_radius = boulder.boulder_size * 0.5
 		
 		# Check if beam intersects this boulder
 		var to_boulder := boulder_pos - beam_origin
 		var along := to_boulder.dot(beam_dir)
-		
-		# Boulder must be in front
-		if along < 0:
-			continue
-		
-		# Check perpendicular distance to beam center line
-		var perp: float = abs(to_boulder.dot(beam_dir.orthogonal()))
-		if perp < boulder_radius + BEAM_WIDTH * 0.5:
-			# Beam hits this boulder - calculate exact hit distance
+		if along < 0: continue
+		var perp_dist: float = abs(to_boulder.dot(beam_dir.orthogonal()))
+		if perp_dist < boulder_radius + BEAM_WIDTH * 0.5:
 			var hit_distance: float = along - boulder_radius
 			if hit_distance > 0 and hit_distance < closest_hit:
 				closest_hit = hit_distance
-	
+
+	# 2. Check Enemies (Stop visual at first hit)
+	var enemies := get_tree().get_nodes_in_group("enemies")
+	for enemy in enemies:
+		if not is_instance_valid(enemy) or not enemy is Node2D:
+			continue
+		# Only block beam if enemy is actually hittable
+		if not enemy.has_method("take_damage") or enemy.is_queued_for_deletion():
+			continue
+		# Don't stop on allies
+		if enemy.is_in_group("charmed_allies"):
+			continue
+			
+		var to_enemy: Vector2 = (enemy as Node2D).global_position - beam_origin
+		var along: float = to_enemy.dot(beam_dir)
+		if along < 0 or along > max_range: continue # Ignore out of range
+		
+		var perp_dist: float = abs(to_enemy.dot(beam_dir.orthogonal()))
+		if perp_dist < BEAM_WIDTH * 0.5 + 20.0: # Add margin for enemy radius
+			if along < closest_hit:
+				closest_hit = along
+
 	return closest_hit
 
 

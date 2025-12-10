@@ -42,18 +42,19 @@ func set_map_bounds(bounds: Rect2) -> void:
 	_map_bounds = bounds
 
 # Elite visual settings - 5x size, gold glow, has boss abilities
+# Elite visual settings - 5x size, gold glow, has boss abilities
 const ELITE_SCALE := 3.25
 const ELITE_HP_MULT := 10.0
 const ELITE_DAMAGE_MULT := 3.0
 const ELITE_SPEED_MULT := 0.8
-const ELITE_GLOW_COLOR := Color(1.0, 0.85, 0.2, 1.0)  # Gold glow
+const ELITE_GLOW_COLOR := Color(0.8, 0.1, 0.1, 1.0)  # Red glow (Swapped from Tank)
 
 # Tank settings - 2x size, red glow
 const TANK_SCALE := 2.0
 const TANK_HP_MULT := 5.0
 const TANK_SPEED_MULT := 1.0
 const TANK_DAMAGE_MULT := 2.0
-const TANK_GLOW_COLOR := Color(1.0, 0.2, 0.1, 1.0)  # Red glow
+const TANK_GLOW_COLOR := Color(1.0, 0.85, 0.2, 1.0)  # Yellow glow (Swapped from Elite)
 
 # Boss settings - 4.5x size, purple glow
 const BOSS_SCALE := 4.5
@@ -224,6 +225,9 @@ func _apply_basic_stats(enemy: Node2D) -> void:
 	# Enable shooting
 	if enemy.has_method("set_can_shoot"):
 		enemy.set_can_shoot(true)
+	
+	# Ensure basic enemies get the universal shader (for night glow support)
+	_apply_outline_glow(enemy, Color.TRANSPARENT, false)
 
 func _apply_tank_stats(enemy: Node2D) -> void:
 	var difficulty_mult: int = GameState.difficulty_multiplier
@@ -262,68 +266,42 @@ func _apply_tank_stats(enemy: Node2D) -> void:
 	enemy.add_child(tank_fx)
 
 func _apply_outline_glow(enemy: Node2D, glow_color: Color, enhance_core: bool = false) -> void:
-	# Apply outline shader to sprite that respects alpha
+	# Apply universal shader to sprite
 	var sprite = enemy.get_node_or_null("AnimatedSprite2D")
 	if not sprite:
 		sprite = enemy.get_node_or_null("Sprite2D")
 	if sprite:
+		# Always creating a new material instance to allow unique parameters per enemy
 		var shader_mat := ShaderMaterial.new()
-		shader_mat.shader = _get_outline_shader()
+		# Load the universal shader resource
+		shader_mat.shader = load("res://resources/shaders/universal_sprite_shader.gdshader")
+		
+		# Set Outline Parameters
+		shader_mat.set_shader_parameter("enable_outline", true)
 		shader_mat.set_shader_parameter("outline_color", glow_color)
 		shader_mat.set_shader_parameter("outline_width", 2.0)
+		
+		# Set Core Enhancement Parameters
 		shader_mat.set_shader_parameter("enhance_red_core", enhance_core)
 		shader_mat.set_shader_parameter("core_glow_color", glow_color)
+		
+
+		# Initialize Night Glow parameters (managed by Level.gd later, but defaults here)
+		shader_mat.set_shader_parameter("night_glow_color", Color(0.5, 0.5, 1.0, 1.0))
+		shader_mat.set_shader_parameter("night_glow_intensity", 0.5)
+		
+		# Scale the glow width with the enemy size so big enemies don't have spindly outlines
+		# Use the max of scale.x and scale.y
+		var scale_factor: float = max(enemy.scale.x, enemy.scale.y)
+		# Clamp to avoid excessive glow on massive things, but ensure it scales
+		shader_mat.set_shader_parameter("glow_scale", clamp(scale_factor, 1.0, 5.0))
+		
 		sprite.material = shader_mat
 
-func _get_outline_shader() -> Shader:
+# Deprecated: _get_outline_shader() replaced by universal resource load
+
 	# Create outline shader that respects sprite alpha and can enhance red core
-	var shader := Shader.new()
-	shader.code = """
-shader_type canvas_item;
 
-uniform vec4 outline_color : source_color = vec4(1.0, 0.0, 0.0, 1.0);
-uniform float outline_width : hint_range(0.0, 10.0) = 2.0;
-uniform bool enhance_red_core = false;
-uniform vec4 core_glow_color : source_color = vec4(1.0, 0.3, 0.1, 1.0);
-
-void fragment() {
-	vec4 col = texture(TEXTURE, UV);
-	
-	if (col.a > 0.1) {
-		// Check if this pixel is part of the red core (high red, low green/blue)
-		if (enhance_red_core && col.r > 0.6 && col.g < 0.4 && col.b < 0.4) {
-			// Enhance the red core with glow color
-			float core_intensity = col.r;
-			vec3 enhanced = mix(col.rgb, core_glow_color.rgb, 0.5);
-			enhanced = enhanced * (1.0 + core_intensity * 0.5);  // Brighten
-			COLOR = vec4(enhanced, col.a);
-		} else {
-			COLOR = col;
-		}
-	} else {
-		// Check neighboring pixels for outline
-		vec2 size = TEXTURE_PIXEL_SIZE * outline_width;
-		float outline = 0.0;
-		
-		// Sample in 8 directions
-		outline += texture(TEXTURE, UV + vec2(-size.x, 0)).a;
-		outline += texture(TEXTURE, UV + vec2(size.x, 0)).a;
-		outline += texture(TEXTURE, UV + vec2(0, -size.y)).a;
-		outline += texture(TEXTURE, UV + vec2(0, size.y)).a;
-		outline += texture(TEXTURE, UV + vec2(-size.x, -size.y)).a;
-		outline += texture(TEXTURE, UV + vec2(size.x, -size.y)).a;
-		outline += texture(TEXTURE, UV + vec2(-size.x, size.y)).a;
-		outline += texture(TEXTURE, UV + vec2(size.x, size.y)).a;
-		
-		if (outline > 0.0) {
-			COLOR = outline_color;
-		} else {
-			COLOR = col;
-		}
-	}
-}
-"""
-	return shader
 
 func _apply_boss_stats(enemy: Node2D) -> void:
 	var difficulty_mult: int = GameState.difficulty_multiplier

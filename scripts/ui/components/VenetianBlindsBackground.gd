@@ -411,33 +411,45 @@ func _get_active_textures() -> Array:
 			# Calculate the effective width needed (blind + angle offset)
 			var effective_width = blind_width + abs(angle_offset_pixels)
 			
-			# Calculate UV width to maintain proper aspect ratio
-			var target_aspect = effective_width / size.y
-			var tex_aspect = tex_size.x / tex_size.y
-			var uv_total_width = target_aspect / tex_aspect if tex_aspect > 0 else 1.0
-			uv_total_width = min(uv_total_width, 1.0)
+			# Calculate UV coordinates using COVER scaling (fill blind without squishing)
+			# This ensures the image fills the full blind height without distortion
+			var blind_aspect = effective_width / size.y  # Aspect of the blind strip
+			var tex_aspect = tex_size.x / tex_size.y     # Aspect of the source texture
+			
+			var uv_width: float
+			var uv_height: float
+			
+			if tex_aspect > blind_aspect:
+				# Texture is wider than blind - crop horizontally, show full height
+				uv_height = 1.0
+				uv_width = blind_aspect / tex_aspect
+			else:
+				# Texture is taller than blind - crop vertically, show full width
+				uv_width = 1.0
+				uv_height = tex_aspect / blind_aspect
 			
 			# Calculate the UV offset for the angle (how much to shift bottom vs top)
-			var uv_angle_offset = (abs(angle_offset_pixels) / effective_width) * uv_total_width
-			var uv_blind_width = (blind_width / effective_width) * uv_total_width
+			var uv_angle_offset = (abs(angle_offset_pixels) / effective_width) * uv_width
+			var uv_blind_width = (blind_width / effective_width) * uv_width
 			
-			# Center the crop horizontally
-			var uv_start = (1.0 - uv_total_width) / 2.0
+			# Center the crop horizontally and vertically
+			var uv_start_x = (1.0 - uv_width) / 2.0
+			var uv_start_y = (1.0 - uv_height) / 2.0
 			
 			# Top edge: starts at uv_start, width = uv_blind_width
-			var top_left_u = uv_start
-			var top_right_u = uv_start + uv_blind_width
+			var top_left_u = uv_start_x
+			var top_right_u = uv_start_x + uv_blind_width
 			
 			# Bottom edge: shifted by uv_angle_offset
-			var bottom_left_u = uv_start + uv_angle_offset
-			var bottom_right_u = uv_start + uv_angle_offset + uv_blind_width
+			var bottom_left_u = uv_start_x + uv_angle_offset
+			var bottom_right_u = uv_start_x + uv_angle_offset + uv_blind_width
 			
 			entries.append({
 				"texture": texture,
-				"uv_top_left": Vector2(top_left_u, 0.0),
-				"uv_top_right": Vector2(top_right_u, 0.0),
-				"uv_bottom_right": Vector2(bottom_right_u, 1.0),
-				"uv_bottom_left": Vector2(bottom_left_u, 1.0)
+				"uv_top_left": Vector2(top_left_u, uv_start_y),
+				"uv_top_right": Vector2(top_right_u, uv_start_y),
+				"uv_bottom_right": Vector2(bottom_right_u, uv_start_y + uv_height),
+				"uv_bottom_left": Vector2(bottom_left_u, uv_start_y + uv_height)
 			})
 	return entries
 

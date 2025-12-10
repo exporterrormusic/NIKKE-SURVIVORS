@@ -1,14 +1,14 @@
 extends CharacterBody2D
-class_name ModularEnemy
+
 
 # Replaces the monolithic logic of legacy enemy scripts
 
-@export var stats: ModularEnemyStats
+@export var stats: Resource
 
 # Component References
-@onready var health_component: HealthComponent = $HealthComponent
-@onready var movement_component: MovementComponent = $MovementComponent
-@onready var hitbox_component: HitboxComponent = $HitboxComponent
+@onready var health_component: Node = $HealthComponent
+@onready var movement_component: Node = $MovementComponent
+@onready var hitbox_component: Node = $HitboxComponent
 @onready var visuals: Node2D = $AnimatedSprite2D
 @onready var hp_bar: ProgressBar = $ProgressBar
 @onready var hp_label: Label = $HPLabel
@@ -43,7 +43,6 @@ var speed: float:
 		mc.max_speed = value
 
 func _ready() -> void:
-	print("ModularEnemy _ready: ", name)
 	add_to_group("enemies")
 	
 	# if stats:
@@ -51,11 +50,21 @@ func _ready() -> void:
 	
 	health_component.died.connect(_on_death)
 	health_component.health_changed.connect(_on_health_changed)
+	# Fix: Connect for burst generation on hit
+	health_component.damaged.connect(_on_damaged)
 	
 	# Find player to chase
 	var player = get_tree().get_first_node_in_group("player")
 	if player:
 		movement_component.set_target(player)
+		
+	# RETROACTIVE DEATH CHECK: If died during spawner init (before ready), signal was missed.
+	# We must manually trigger death sequence.
+	# NOTE: current_hp might be reset to full by Spawner, so we MUST check is_dead() flag!
+	if health_component.has_method("is_dead") and health_component.is_dead():
+		_on_death()
+		return # Stop further setup
+		
 		
 	# Force initial label update
 	if hp_label and health_component:
@@ -75,9 +84,19 @@ func _ready() -> void:
 	# Create shadow
 	_create_shadow()
 	
+	# Register sprite for night glow effect
+	if visuals:
+		NightGlowManager.register_sprite(visuals)
+	
 	# Setup HP bar styling (Green)
-	hp_bar.visible = true
-	hp_bar.z_index = 100 # Ensure UI is above everything
+	# Hide initially - will be shown after first position sync to prevent flicker at origin
+	hp_bar.visible = false
+	hp_label.visible = false
+	hp_bar.z_index = 50  # Below HUD layer (HUD is typically 100+)
+	
+	# Reparent to EffectsLayer (deferred to ensure proper positioning)
+	# Use z_index below HUD to prevent covering player UI
+	call_deferred("_reparent_hp_bars_to_effects_layer")
 	var style_box = StyleBoxFlat.new()
 	style_box.bg_color = Color(0, 1, 0) # Green
 	hp_bar.add_theme_stylebox_override("fill", style_box)
@@ -86,6 +105,10 @@ func _ready() -> void:
 	var bg_style = StyleBoxFlat.new()
 	bg_style.bg_color = Color(0.2, 0.2, 0.2)
 	hp_bar.add_theme_stylebox_override("background", bg_style)
+
+	# DEBUG LABEL REMOVED
+	
+	# Update HP Bar color based on tier
 	
 	# Update HP Bar color based on tier
 	if is_in_group("tank"):
@@ -355,7 +378,7 @@ func _process(delta: float) -> void:
 			
 			_end_charging()
 			_laser_cooldown = LASER_FIRE_INTERVAL
-	
+
 	# Shooting Logic (If enabled and not charging)
 	elif _can_shoot and _laser_cooldown <= 0:
 		if is_instance_valid(_current_target):
@@ -367,6 +390,54 @@ func _process(delta: float) -> void:
 	# Only update movement visuals if not charging (velocity is zeroed above if charging)
 	if visuals and visuals.has_method("update_state") and not _is_charging:
 		visuals.update_state(movement_component.velocity, movement_component.velocity)
+
+	# Sync HP Bar position and scale (since it's now on EffectsLayer and detached)
+	if hp_bar and is_instance_valid(hp_bar):
+		# Sync scale fully for the bar
+		hp_bar.scale = scale
+		# Calculate offset based on scale to keep it above the sprite
+		# Default offset (-25, -47) for unscaled sprite
+		var offset = Vector2(-25, -47) * scale
+		hp_bar.global_position = global_position + offset
+	
+	if hp_label and is_instance_valid(hp_label):
+		# Clamp text scale so it doesn't get huge (reads better)
+		# Bar scales fully (e.g. 2.0), but text only goes to 1.4
+		var label_scale_val = clampf(scale.x, 0.8, 1.4)
+		var label_scale = Vector2(label_scale_val, label_scale_val)
+		hp_label.scale = label_scale
+		
+		# Center the label over the bar
+		# Bar Center Y is roughly -42 relative to pivot (-47 + 5)
+		var bar_center_y_local = -42.0 * scale.y
+		var label_half_size = hp_label.size * label_scale * 0.5
+		
+		# Position = EnemyPos + (0, BarCenterY) - LabelHalfSize
+		hp_label.global_position = global_position + Vector2(0, bar_center_y_local) - label_half_size
+	
+	# Show bars after first position sync (prevents flicker at origin)
+	if hp_bar and not hp_bar.visible:
+		hp_bar.visible = true
+	if hp_label and not hp_label.visible:
+		hp_label.visible = true
+
+func _reparent_hp_bars_to_effects_layer() -> void:
+	"""Reparent HP bars to EffectsLayer after enemy is positioned."""
+	if not is_inside_tree():
+		return
+	
+	# Use a lower z-index so we don't cover the HUD
+	if hp_bar and is_instance_valid(hp_bar):
+		CanvasLayerManager.assign_to_effects(hp_bar, 50)
+	if hp_label and is_instance_valid(hp_label):
+		CanvasLayerManager.assign_to_effects(hp_label, 51)
+
+func _exit_tree() -> void:
+	# Cleanup detached UI elements
+	if hp_bar and is_instance_valid(hp_bar):
+		hp_bar.queue_free()
+	if hp_label and is_instance_valid(hp_label):
+		hp_label.queue_free()
 
 
 func _start_charging() -> void:
@@ -445,6 +516,14 @@ func _fire_laser(direction: Vector2) -> void:
 	get_parent().add_child(laser)
 
 
+func _on_damaged(_amount: int, source: String) -> void:
+	"""Handler for when enemy takes damage. Registers burst hit if from player."""
+	# Only register burst if damaged by player or their projectiles/summons
+	if source in ["player", "projectile", "summon", "cecil_drone"]:
+		var player = get_tree().get_first_node_in_group("player")
+		if player and player.has_method("register_burst_hit"):
+			player.register_burst_hit(self)
+
 func _on_death(overkill: int = 0) -> void:
 	# Defer ENTIRE death sequence to avoid physics locking
 	call_deferred("_finalize_death", overkill)
@@ -477,35 +556,35 @@ func _finalize_death(overkill: int) -> void:
 			gs.add_score(score_value)
 			
 	# Emit Global Event
-	# Need _killer_source tracking? Assuming "unknown" if not tracked in Hitbox->Health signaling
-	# We'd need to modify HealthComponent to pass source to died?
-	# Or just assume "player"? Most things are player.
-	if get_node("/root/EventBus"):
-		get_node("/root/EventBus").enemy_killed.emit(self, "player") # Simplification
+	# Using get_node_or_null to prevent crashes if EventBus autoload is missing/renamed in export
+	var event_bus = get_node_or_null("/root/EventBus")
+	if event_bus:
+		event_bus.enemy_killed.emit(self, "player")
 		
 	# Drop Pristine Cores (Bosses)
 	if has_meta("pristine_core_drop"):
 		var killed_by_enrage = false
-		var gs = get_node_or_null("/root/GameState")
-		if gs and gs.has_meta("killed_by_enrage"):
-			killed_by_enrage = gs.get_meta("killed_by_enrage")
+		var gs_meta = get_node_or_null("/root/GameState")
+		if gs_meta and gs_meta.has_meta("killed_by_enrage"):
+			killed_by_enrage = gs_meta.get_meta("killed_by_enrage")
 			
 		if not killed_by_enrage:
 			var cores = get_meta("pristine_core_drop")
 			_spawn_pristine_core_orb(cores)
 			
 	# Combat Juice Register
-	if ClassDB.class_exists("CombatJuice") or get_tree().root.has_node("CombatJuice"):
-		var cj = get_node("/root/CombatJuice")
-		if cj: cj.register_kill(overkill_multiplier)
+	# Combat Juice Register
+	var cj = get_node_or_null("/root/CombatJuice")
+	if cj: cj.register_kill(overkill_multiplier)
 
 	# Spawn death effect
-	var death_effect := Node2D.new()
-	death_effect.set_script(RobotDeathEffectScript)
-	death_effect.global_position = global_position
-	if death_effect.has_method("set_overkill"):
-		death_effect.set_overkill(is_overkill)
-	get_parent().add_child(death_effect)
+	if RobotDeathEffectScript:
+		var death_effect := Node2D.new()
+		death_effect.set_script(RobotDeathEffectScript)
+		death_effect.global_position = global_position
+		if death_effect.has_method("set_overkill"):
+			death_effect.set_overkill(is_overkill)
+		get_parent().add_child(death_effect)
 	
 	# Spawn XP orbs (Scaled by Tier)
 	var xp_orb_count := 5
@@ -516,8 +595,9 @@ func _finalize_death(overkill: int) -> void:
 	
 	for i in xp_orb_count:
 		var orb = ProjectileCache.create_xp_orb()
-		get_parent().add_child(orb)
-		orb.global_position = global_position + Vector2(randf_range(-20, 20), randf_range(-20, 20))
+		if orb:
+			get_parent().add_child(orb)
+			orb.global_position = global_position + Vector2(randf_range(-20, 20), randf_range(-20, 20))
 	
 	queue_free()
 

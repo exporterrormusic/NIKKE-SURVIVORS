@@ -55,6 +55,11 @@ func _process(delta: float) -> void:
 		queue_free()
 		return
 	
+	# Check boulder collision
+	if _check_boulder_collision():
+		queue_free()
+		return
+	
 	# Fade out near end of life
 	var alpha_mult := 1.0
 	if lifetime > max_lifetime * 0.7:
@@ -63,6 +68,19 @@ func _process(delta: float) -> void:
 	_glow_color.a = 0.6 * alpha_mult
 	
 	queue_redraw()
+
+func _check_boulder_collision() -> bool:
+	"""Manual boulder collision check since petals don't reparent but still need check."""
+	var boulders := get_tree().get_nodes_in_group("boulders")
+	for boulder in boulders:
+		if not is_instance_valid(boulder):
+			continue
+		var boulder_pos: Vector2 = boulder.global_position
+		var boulder_radius: float = boulder.boulder_size * 0.5 if "boulder_size" in boulder else 150.0
+		if global_position.distance_to(boulder_pos) < boulder_radius:
+			return true
+	return false
+
 
 func _on_body_entered(body: Node2D) -> void:
 	if _has_hit:
@@ -90,7 +108,8 @@ func _on_body_entered(body: Node2D) -> void:
 		damage = int(base_damage * 2.0)
 	
 	var hit_direction = velocity.normalized()
-	body.take_damage(damage, is_crit, hit_direction)
+	# Pass source="projectile" so ModularEnemy registers burst hit
+	body.take_damage(damage, is_crit, hit_direction, false, "projectile")
 	
 	queue_free()
 

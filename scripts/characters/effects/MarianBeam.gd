@@ -172,11 +172,46 @@ func _is_point_in_beam(point: Vector2) -> bool:
 	if along_beam < 0 or along_beam > beam_range:
 		return false
 	
+	# Check if a boulder blocks the beam before reaching this point
+	if _is_boulder_blocking(along_beam):
+		return false
+	
 	# Check perpendicular distance
 	var perp: float = abs(to_point.dot(_beam_direction.orthogonal()))
 	var width_at_point := beam_width * 0.5  # Half width
 	
 	return perp <= width_at_point
+
+func _is_boulder_blocking(distance_along_beam: float) -> bool:
+	"""Check if any boulder blocks the beam before the given distance."""
+	var boulders := get_tree().get_nodes_in_group("boulders")
+	
+	# Use player position as beam origin since global_position is offset 80px forward
+	var beam_origin: Vector2 = global_position
+	if player_ref and is_instance_valid(player_ref):
+		beam_origin = player_ref.global_position
+	
+	for boulder in boulders:
+		if not is_instance_valid(boulder):
+			continue
+		var boulder_pos: Vector2 = boulder.global_position
+		var boulder_radius: float = boulder.boulder_size * 0.5 if "boulder_size" in boulder else 150.0
+		
+		# Check if beam intersects this boulder
+		var to_boulder := boulder_pos - beam_origin
+		var along := to_boulder.dot(_beam_direction)
+		
+		# Boulder must be in front and before our target point (accounting for 80px offset)
+		if along < 0 or along > distance_along_beam + 80.0:
+			continue
+		
+		# Check perpendicular distance to beam center line
+		var perp: float = abs(to_boulder.dot(_beam_direction.orthogonal()))
+		if perp < boulder_radius + beam_width * 0.5:
+			return true  # Beam is blocked by this boulder
+	
+	return false
+
 
 func _fire_homing_missiles() -> void:
 	# Find the 4 closest enemy targets

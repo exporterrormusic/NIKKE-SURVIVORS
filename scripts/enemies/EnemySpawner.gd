@@ -111,13 +111,13 @@ func spawn_enemy(enemy_type: String, pattern: String) -> Node2D:
 		print("[EnemySpawner] FAILED: No player or enemy_container!")
 		return null
 	
-	print("[EnemySpawner] spawn_enemy called: type=", enemy_type, " pattern=", pattern)
+	# print("[EnemySpawner] spawn_enemy called: type=", enemy_type, " pattern=", pattern)
 	var enemy := _create_enemy(enemy_type, pattern == "elite")
 	if not enemy:
 		print("[EnemySpawner] FAILED: _create_enemy returned null!")
 		return null
 	
-	print("[EnemySpawner] Enemy created successfully, is_elite=", pattern == "elite")
+	# print("[EnemySpawner] Enemy created successfully, is_elite=", pattern == "elite")
 	
 	# Position based on pattern
 	var spawn_pos := _get_spawn_position(pattern)
@@ -211,7 +211,10 @@ func _create_enemy(enemy_type: String, is_elite: bool = false) -> Node2D:
 func _apply_basic_stats(enemy: Node2D) -> void:
 	# Apply wave health multiplier and difficulty multiplier
 	var difficulty_mult: int = GameState.difficulty_multiplier
-	enemy.max_hp = int(enemy.max_hp * _health_multiplier * difficulty_mult)
+	var new_max = int(enemy.max_hp * _health_multiplier * difficulty_mult)
+	if new_max <= 0:
+		print("[EnemySpawner] CRITICAL: Calc max_hp <= 0! base=", enemy.max_hp, " mult=", _health_multiplier, " diff=", difficulty_mult)
+	enemy.max_hp = new_max
 	enemy.hp = enemy.max_hp
 	# Apply Goddess Fall ATK multiplier
 	enemy.base_damage = int(enemy.base_damage * _get_atk_multiplier())
@@ -325,7 +328,7 @@ void fragment() {
 func _apply_boss_stats(enemy: Node2D) -> void:
 	var difficulty_mult: int = GameState.difficulty_multiplier
 	var atk_mult: float = _get_atk_multiplier()
-	print("[EnemySpawner] Applying BOSS stats: scale=", BOSS_SCALE, " hp_mult=", BOSS_HP_MULT, " health_mult=", _health_multiplier, " difficulty=", difficulty_mult)
+	# print("[EnemySpawner] Applying BOSS stats: scale=", BOSS_SCALE, " hp_mult=", BOSS_HP_MULT, " health_mult=", _health_multiplier, " difficulty=", difficulty_mult)
 	enemy.scale = Vector2.ONE * BOSS_SCALE
 	enemy.max_hp = int(enemy.max_hp * BOSS_HP_MULT * _health_multiplier * difficulty_mult)
 	enemy.hp = enemy.max_hp
@@ -334,7 +337,7 @@ func _apply_boss_stats(enemy: Node2D) -> void:
 	if GameState.goddess_fall_mode:
 		enemy.speed = int(enemy.speed * 1.3)
 	enemy.base_damage = int(BOSS_DAMAGE_MULT * atk_mult)
-	print("[EnemySpawner] Boss HP set to: ", enemy.max_hp, " speed=", enemy.speed, " scale=", enemy.scale)
+	# print("[EnemySpawner] Boss HP set to: ", enemy.max_hp, " speed=", enemy.speed, " scale=", enemy.scale)
 	enemy.add_to_group("boss")
 	enemy.set_meta("enemy_tier", "boss")
 	# Bosses have 1/3 chance of dropping pristine cores, multiplied by difficulty
@@ -368,7 +371,7 @@ func _apply_boss_stats(enemy: Node2D) -> void:
 func _apply_super_boss_stats(enemy: Node2D) -> void:
 	var difficulty_mult: int = GameState.difficulty_multiplier
 	var atk_mult: float = _get_atk_multiplier()
-	print("[EnemySpawner] Applying SUPER BOSS stats: scale=", SUPER_BOSS_SCALE, " hp_mult=", SUPER_BOSS_HP_MULT, " difficulty=", difficulty_mult)
+	# print("[EnemySpawner] Applying SUPER BOSS stats: scale=", SUPER_BOSS_SCALE, " hp_mult=", SUPER_BOSS_HP_MULT, " difficulty=", difficulty_mult)
 	enemy.scale = Vector2.ONE * SUPER_BOSS_SCALE
 	enemy.max_hp = int(enemy.max_hp * SUPER_BOSS_HP_MULT * _health_multiplier * difficulty_mult)
 	enemy.hp = enemy.max_hp
@@ -377,7 +380,7 @@ func _apply_super_boss_stats(enemy: Node2D) -> void:
 	if GameState.goddess_fall_mode:
 		enemy.speed = int(enemy.speed * 1.3)
 	enemy.base_damage = int(SUPER_BOSS_DAMAGE_MULT * atk_mult)
-	print("[EnemySpawner] Super Boss HP set to: ", enemy.max_hp, " speed=", enemy.speed, " scale=", enemy.scale)
+	# print("[EnemySpawner] Super Boss HP set to: ", enemy.max_hp, " speed=", enemy.speed, " scale=", enemy.scale)
 	enemy.add_to_group("boss")
 	enemy.add_to_group("super_boss")
 	enemy.set_meta("enemy_tier", "super_boss")
@@ -411,13 +414,13 @@ func _apply_super_boss_stats(enemy: Node2D) -> void:
 func _apply_elite_modifier(enemy: Node2D) -> void:
 	var difficulty_mult: int = GameState.difficulty_multiplier
 	var atk_mult: float = _get_atk_multiplier()
-	print("[EnemySpawner] Applying ELITE modifier on top of existing HP: ", enemy.max_hp, " difficulty=", difficulty_mult)
+	# print("[EnemySpawner] Applying ELITE modifier on top of existing HP: ", enemy.max_hp, " difficulty=", difficulty_mult)
 	enemy.scale = Vector2.ONE * ELITE_SCALE  # Fixed 5x scale, not multiplicative
 	enemy.max_hp = int(enemy.max_hp * ELITE_HP_MULT * _health_multiplier * difficulty_mult)
 	enemy.hp = enemy.max_hp
 	enemy.speed = int(enemy.speed * ELITE_SPEED_MULT)
 	enemy.base_damage = int(ELITE_DAMAGE_MULT * atk_mult)
-	print("[EnemySpawner] Elite HP now: ", enemy.max_hp)
+	# print("[EnemySpawner] Elite HP now: ", enemy.max_hp)
 	enemy.add_to_group("elite")
 	enemy.set_meta("enemy_tier", "elite")  # Track tier for frostburn reduction
 	# In Goddess Fall mode, elites have 1/5 chance to drop cores
@@ -542,7 +545,40 @@ func _get_spawn_position(pattern: String) -> Vector2:
 				spawn_pos = test_pos
 				break
 	
+	# Check if spawn position overlaps a boulder - retry if so
+	spawn_pos = _avoid_boulder_overlap(spawn_pos, player_pos, actual_radius, padding)
+	
 	return spawn_pos
+
+func _avoid_boulder_overlap(spawn_pos: Vector2, player_pos: Vector2, spawn_radius_val: float, padding: float) -> Vector2:
+	"""Ensure spawn position doesn't overlap any boulder. Retries up to 8 times."""
+	var boulders := get_tree().get_nodes_in_group("boulders")
+	if boulders.is_empty():
+		return spawn_pos
+	
+	for _attempt in range(8):
+		var overlaps_boulder := false
+		for boulder in boulders:
+			if not is_instance_valid(boulder):
+				continue
+			var boulder_pos: Vector2 = boulder.global_position
+			var boulder_radius: float = boulder.boulder_size * 0.5 if "boulder_size" in boulder else 150.0
+			# Add extra margin for enemy size
+			if spawn_pos.distance_to(boulder_pos) < (boulder_radius + 50.0):
+				overlaps_boulder = true
+				break
+		
+		if not overlaps_boulder:
+			return spawn_pos
+		
+		# Try a new random position
+		var test_angle := _rng.randf() * TAU
+		spawn_pos = player_pos + Vector2.from_angle(test_angle) * spawn_radius_val
+		spawn_pos.x = clampf(spawn_pos.x, _map_bounds.position.x + padding, _map_bounds.end.x - padding)
+		spawn_pos.y = clampf(spawn_pos.y, _map_bounds.position.y + padding, _map_bounds.end.y - padding)
+	
+	return spawn_pos
+
 
 func start_horde_from_direction(direction: Vector2) -> void:
 	"""Set the direction for horde spawns."""

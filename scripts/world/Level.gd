@@ -505,7 +505,7 @@ func _process(_delta: float) -> void:
 		_wave_director.set_enemy_count(_enemy_container.get_child_count())
 
 func _on_enemy_spawn_requested(enemy_type: String, count: int, pattern: String) -> void:
-	print("[Level] _on_enemy_spawn_requested: type=", enemy_type, " count=", count, " pattern=", pattern)
+	# print("[Level] _on_enemy_spawn_requested: type=", enemy_type, " count=", count, " pattern=", pattern)
 	if not _enemy_spawner:
 		print("[Level] ERROR: No enemy spawner!")
 		return
@@ -517,7 +517,7 @@ func _on_enemy_spawn_requested(enemy_type: String, count: int, pattern: String) 
 	for i in range(count):
 		var enemy: Node2D = _enemy_spawner.spawn_enemy(enemy_type, pattern)
 		if enemy:
-			print("[Level] Enemy spawned successfully: ", enemy.name, " groups=", enemy.get_groups())
+			# print("[Level] Enemy spawned successfully: ", enemy.name, " groups=", enemy.get_groups())
 			# Apply night boost
 			if _current_night_boost > 0.0:
 				call_deferred("_set_enemy_night_boost", enemy, _current_night_boost)
@@ -595,7 +595,7 @@ func _on_time_updated(elapsed: float, remaining: float) -> void:
 		_wave_ui.update_time(elapsed, remaining)
 
 func _on_wave_changed(wave_number: int) -> void:
-	print("[Level] Wave changed to: ", wave_number)
+	# print("[Level] Wave changed to: ", wave_number)
 	
 	# Update GameState with current wave for leaderboard
 	if GameState:
@@ -604,7 +604,7 @@ func _on_wave_changed(wave_number: int) -> void:
 	# Update spawner with new health multiplier
 	if _enemy_spawner and _wave_director:
 		var health_mult: float = _wave_director.get_health_multiplier()
-		print("[Level] Setting health multiplier to: ", health_mult)
+		# print("[Level] Setting health multiplier to: ", health_mult)
 		_enemy_spawner.set_health_multiplier(health_mult)
 	# Update the WaveDisplay label in the scene
 	var canvas := get_node_or_null("CanvasLayer")

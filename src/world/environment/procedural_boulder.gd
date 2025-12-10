@@ -10,6 +10,7 @@ var _visual: Polygon2D = null
 var _collision_shape: CollisionShape2D = null
 
 func _ready():
+	add_to_group("boulders")
 	_create_boulder()
 
 func _create_boulder():
@@ -125,11 +126,57 @@ void fragment() {
 	_collision_shape.shape = circle
 	add_child(_collision_shape)
 	
+	# Add Area2D for bullet detection (Area2D bullets don't collide with StaticBody2D)
+	var bullet_detector := Area2D.new()
+	bullet_detector.name = "BulletDetector"
+	bullet_detector.collision_layer = 0  # No layer - just for detection
+	bullet_detector.collision_mask = 4   # Projectiles are on layer 3 (bit 2 = value 4)
+	bullet_detector.monitoring = true
+	bullet_detector.monitorable = false
+	
+	var detector_shape := CollisionShape2D.new()
+	var detector_circle := CircleShape2D.new()
+	detector_circle.radius = base_radius * 0.95
+	detector_shape.shape = detector_circle
+	bullet_detector.add_child(detector_shape)
+	add_child(bullet_detector)
+	
+	# Connect to destroy bullets on contact
+	bullet_detector.area_entered.connect(_on_bullet_entered)
+	bullet_detector.body_entered.connect(_on_bullet_body_entered)
+	
 	# Set collision layers - this is critical for proper physics
 	# Layer 3 (bit 2): Environment/obstacles  
 	# Mask: Player (layer 1/bit 0), Enemies (layer 3/bit 2), Projectiles (layer 2/bit 1)
 	collision_layer = 0b0000_0000_0000_0100  # Layer 3 (bit 2 = value 4)
 	collision_mask = 0b0000_0000_0000_0111   # Layers 1, 2, 3 (bits 0,1,2 = value 7)
+
+func _on_bullet_entered(area: Area2D) -> void:
+	"""Destroy bullets that hit this boulder. Sniper bullets pierce through."""
+	# Sniper bullets pierce through boulders
+	if area is SnowWhiteBullet or area.name.contains("Sniper") or area.name.contains("SnowWhite"):
+		return
+	
+	if area.is_in_group("bullets") or area.is_in_group("projectiles"):
+		area.queue_free()
+	elif area.has_method("_retire"):
+		area._retire()
+	elif area.name.contains("Bullet") or area.name.contains("Laser") or area.name.contains("Pellet"):
+		area.queue_free()
+
+func _on_bullet_body_entered(body: Node2D) -> void:
+	"""Destroy bullet bodies that hit this boulder. Sniper bullets pierce through."""
+	# Sniper bullets pierce through boulders
+	if body is SnowWhiteBullet or body.name.contains("Sniper") or body.name.contains("SnowWhite"):
+		return
+	
+	if body.is_in_group("bullets") or body.is_in_group("projectiles"):
+		body.queue_free()
+	elif body.has_method("_retire"):
+		body._retire()
+	elif body.name.contains("Bullet") or body.name.contains("Pellet"):
+		body.queue_free()
+
 
 func set_boulder_seed(new_seed: int):
 	"""Set the variation seed for this boulder."""

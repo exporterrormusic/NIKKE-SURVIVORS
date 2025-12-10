@@ -1,5 +1,5 @@
 extends Node
-class_name HealthComponent
+
 
 signal died(overkill: int)
 signal health_changed(current: int, max: int)
@@ -23,12 +23,17 @@ func _set_current_hp(value: int) -> void:
 	if current_hp == 0 and not _is_dead:
 		die(_pending_overkill)
 		_pending_overkill = 0
+	elif current_hp > 0 and _is_dead:
+		# Auto-revive if health is restored (fixes spawn race conditions)
+		_is_dead = false
+		
 
 func set_max_hp(val: int) -> void:
 	max_hp = val
 	current_hp = min(current_hp, max_hp)
 
 func damage(amount: int, source: String = "unknown") -> void:
+	# DebugLog.log("[Health] damage: " + str(amount) + " hp: " + str(current_hp) + " -> " + str(current_hp - amount))
 	if _is_dead:
 		return
 		
@@ -53,3 +58,7 @@ func die(overkill: int = 0) -> void:
 	_is_dead = true
 	current_hp = 0
 	died.emit(overkill)
+
+func is_dead() -> bool:
+	return _is_dead
+

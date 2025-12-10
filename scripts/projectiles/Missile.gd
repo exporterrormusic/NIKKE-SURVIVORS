@@ -120,6 +120,11 @@ func _physics_process(delta):
     position += velocity * delta
     rotation = velocity.angle()
     
+    # Check boulder collision - explode if hitting a boulder
+    if _check_boulder_collision():
+        explode()
+        return
+    
     # Check if missile reached target - account for enemy scale
     var hit_distance: float = 10.0
     if target_node and is_instance_valid(target_node) and target_node is Node2D:
@@ -129,6 +134,18 @@ func _physics_process(delta):
         explode()
     if position.x < -100 or position.x > 2000 or position.y < -100 or position.y > 1200:
         queue_free()
+
+func _check_boulder_collision() -> bool:
+    """Check if missile hit a boulder."""
+    var boulders := get_tree().get_nodes_in_group("boulders")
+    for boulder in boulders:
+        if not is_instance_valid(boulder):
+            continue
+        var boulder_pos: Vector2 = boulder.global_position
+        var boulder_radius: float = boulder.boulder_size * 0.5 if "boulder_size" in boulder else 150.0
+        if global_position.distance_to(boulder_pos) < boulder_radius:
+            return true
+    return false
 
 func explode():
     # Play explosion sound

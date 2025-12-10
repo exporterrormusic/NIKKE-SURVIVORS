@@ -5,8 +5,9 @@
 [ext_resource type="Script" uid="uid://xs7mcymvsl5g" path="res://scripts/characters/character_sprite_animator.gd" id="5"]
 [ext_resource type="Script" path="res://scripts/world/SmoothCamera.gd" id="6"]
 
-[sub_resource type="CircleShape2D" id="CircleShape2D_abc"]
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_new"]
 radius = 32.0
+height = 130.0
 
 [sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_7n8ao"]
 light_mode = 1
@@ -18,8 +19,7 @@ script = ExtResource("1")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 position = Vector2(0, 1)
-scale = Vector2(1, 2.0400007)
-shape = SubResource("CircleShape2D_abc")
+shape = SubResource("CapsuleShape2D_new")
 
 [node name="Sprite2D" type="AnimatedSprite2D" parent="."]
 z_index = 10

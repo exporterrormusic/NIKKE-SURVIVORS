@@ -31,5 +31,5 @@ rain_speed = 1.1
 rain_color = Color(0.9, 0.95, 1.0, 0.8)
 fog_density = 0.0
 fog_color = Color(0.7, 0.75, 0.8, 1.0)
-lightning_frequency = 0.075
-lightning_intensity = 0.7
+lightning_frequency = 0.35
+lightning_intensity = 1.0

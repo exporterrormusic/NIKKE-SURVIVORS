@@ -74,9 +74,10 @@ func _ready() -> void:
 	add_to_group("player_allies")
 	
 	# Collision setup - use layer 8 (allies) so we don't collide with player
-	# Layer 1 = player, Layer 4 = enemies, Layer 8 = allies
-	collision_layer = 8  # Allies layer - not player, so no physical collision with player
-	collision_mask = 4   # Only collide with enemies
+	# Layer 1 = player/world, Layer 4 = enemies, Layer 8 = allies
+	# Mask: World (1), Enemies (4), Boulders (4)
+	collision_layer = 8  # Allies layer
+	collision_mask = 5   # Collide with World (1) and Enemies/Boulders (4)
 	
 	# Create visual components
 	_create_animator()
@@ -613,7 +614,7 @@ func _draw() -> void:
 		var glow_alpha := 0.1 * pulse
 		draw_circle(Vector2.ZERO, 25.0, Color(1.0, 0.85, 0.4, glow_alpha))
 
-func take_damage(amount, _is_crit = false, _direction = Vector2.ZERO, _from_burst = false) -> void:
+func take_damage(amount, _is_crit = false, _direction = Vector2.ZERO, _from_burst = false, _source = "") -> void:
 	if _is_dying:
 		return
 	

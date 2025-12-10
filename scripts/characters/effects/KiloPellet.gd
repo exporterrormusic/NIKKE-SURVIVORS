@@ -75,6 +75,10 @@ func _ready() -> void:
 		all_burst_pellets.append(self)
 	
 	z_index = 340  # Match original z_index
+	
+	# Force Correct Mask for Hitboxes (Layer 4) AND Enemies (Layer 2)
+	collision_mask = 6 
+	
 	queue_redraw()
 
 	# Connect to environment modulate change if available so we redraw when lighting changes
@@ -91,17 +95,9 @@ func _exit_tree() -> void:
 
 func _assign_to_effects_layer() -> void:
 	"""Deferred call to assign to effects layer after node is in tree"""
-	# CRITICAL: Reparent to EffectsLayer CanvasLayer so drawings aren't affected by world modulate
-	var env = get_tree().get_first_node_in_group("environment_controller")
-	if env:
-		var effects = env.get_node_or_null("EffectsLayer")
-		if effects and get_parent() != effects:
-			var saved_pos = global_position
-			get_parent().remove_child(self)
-			effects.add_child(self)
-			global_position = saved_pos
-			z_as_relative = false
-			z_index = 900
+	# Use helper which ensures correct CanvasLayer settings (follow_viewport)
+	VisualLayerHelper.reparent_to_effects_layer(self, 900)
+
 
 func _draw() -> void:
 	_time = Time.get_ticks_msec() / 1000.0
@@ -292,11 +288,29 @@ func _physics_process(delta: float) -> void:
 		queue_free()
 		return
 	
+	# Check boulder collision (reparenting to EffectsLayer breaks Area2D overlap)
+	if _check_boulder_collision():
+		queue_free()
+		return
+	
 	# Always redraw for pulsing effect and line connections
 	if is_special or is_burst:
 		queue_redraw()
 		# Check for line damage
 		_check_line_damage(delta)
+
+func _check_boulder_collision() -> bool:
+	"""Manual boulder collision check since pellets are in EffectsLayer (different scene tree branch)."""
+	var boulders := get_tree().get_nodes_in_group("boulders")
+	for boulder in boulders:
+		if not is_instance_valid(boulder):
+			continue
+		var boulder_pos: Vector2 = boulder.global_position
+		var boulder_radius: float = boulder.boulder_size * 0.5 if "boulder_size" in boulder else 150.0
+		if global_position.distance_to(boulder_pos) < boulder_radius:
+			return true
+	return false
+
 
 # Track enemies hit by the connecting line to prevent double-damage
 var _line_hit_enemies: Dictionary = {}

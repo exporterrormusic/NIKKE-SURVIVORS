@@ -131,10 +131,33 @@ func _physics_process(delta):
         velocity = velocity.normalized() * max_speed
     position += velocity * delta
     rotation = velocity.angle()  # point towards movement direction
+    
+    # Check boulder collision - explode on impact
+    if _check_boulder_collision():
+        call_deferred("explode")
+        return
+    
     if time > 3.0 or global_position.distance_to(target_pos) < 30:
         call_deferred("explode")
     if position.x < -100 or position.x > 2000 or position.y < -100 or position.y > 1200:
         call_deferred("queue_free")
+
+func _check_boulder_collision() -> bool:
+    """Check if rocket hit a boulder."""
+    var boulders := get_tree().get_nodes_in_group("boulders")
+    for boulder in boulders:
+        if not is_instance_valid(boulder):
+            continue
+        var boulder_pos: Vector2 = boulder.global_position
+        var boulder_radius: float = 150.0  # Default
+        if boulder.get("boulder_size") != null:
+            boulder_radius = boulder.boulder_size * 0.5
+        var dist: float = global_position.distance_to(boulder_pos)
+        if dist < boulder_radius:
+            print("[Rocket] Boulder collision! Dist: ", dist, " Radius: ", boulder_radius)
+            return true
+    return false
+
 
 func _on_body_entered(body):
     if body == player:

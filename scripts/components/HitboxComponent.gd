@@ -1,11 +1,12 @@
 extends Area2D
-class_name HitboxComponent
+
 
 # This component handles receiving hits from projectiles/weapons.
 # It delegates the damage logic to a HealthComponent.
 
-@export var health_component: HealthComponent
+@export var health_component: Node
 @export var team: String = "enemy" # "player" or "enemy"
+
 
 signal hit_received(damage, source_node)
 
@@ -21,6 +22,7 @@ func _ready() -> void:
 
 # The method projectiles call (polymorphic compatibility with existing system)
 func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector2.ZERO, is_burst: bool = false, source: String = "unknown") -> void:
+	# DebugLog.log("[Hitbox] take_damage: " + str(amount) + " from " + source)
 	hit_received.emit(amount, null) # For visuals
 	
 	# Check for parent entity and apply modifiers

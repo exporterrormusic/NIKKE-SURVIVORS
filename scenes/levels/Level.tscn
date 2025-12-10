@@ -37,6 +37,7 @@ unique_name_in_owner = true
 position = Vector2(960, 508)
 
 [node name="CanvasLayer" type="CanvasLayer" parent="."]
+layer = 99
 
 [node name="PlayerHudCluster" parent="CanvasLayer" instance=ExtResource("2")]
 offset_left = 20.0

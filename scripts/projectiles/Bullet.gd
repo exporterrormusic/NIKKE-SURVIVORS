@@ -34,7 +34,12 @@ const RANGE_MINIGUN := 1100.0  # Like assault rifle
 const ENABLE_BULLET_LIGHTS := false
 
 func _ready():
+	# VISUAL DEBUG: Turn BLUE if script loads successfully
+	if $Sprite2D: $Sprite2D.modulate = Color(0, 0, 10, 1)
+	
+	print("[BULLET_DEBUG] Spawned at ", global_position, " Layer: ", collision_layer, " Mask: ", collision_mask)
 	connect("body_entered", Callable(self, "_on_body_entered"))
+	connect("area_entered", Callable(self, "_on_body_entered")) # Handle HitboxComponent (Area2D) hits
 	# Don't set start_position here - bullet isn't positioned yet
 	# It will be set on first physics frame
 	
@@ -47,7 +52,14 @@ func _ready():
 
 	# Reparent to EffectsLayer so bullets aren't darkened by CanvasModulate
 	# Uses centralized VisualLayerHelper utility to avoid code duplication
-	VisualLayerHelper.reparent_to_effects_layer(self)
+	# DEBUG: DISABLED TO RULE OUT CANVAS LAYER PHYSICS ISSUES
+	# VisualLayerHelper.reparent_to_effects_layer(self)
+	
+	# DEBUG: FORCE COLLISION MASK
+	# Layer 1(1) = World, Layer 2(2) = Player/Enemies(Old), Layer 3(4) = Hitbox/Enemies
+	# Set mask to 1 | 2 | 4 = 7
+	collision_mask = 7
+	collision_layer = 0 # Bullets shouldn't be hit by things?
 	
 	# Dynamic lights are VERY expensive with many bullets - disabled by default
 	if ENABLE_BULLET_LIGHTS:
@@ -88,7 +100,26 @@ func _physics_process(delta):
 		start_position = global_position
 		_start_position_set = true
 	
-	global_position += velocity * delta
+	var frame_movement = velocity * delta
+	var current_pos = global_position
+	var next_pos = current_pos + frame_movement
+	
+	# RAYCAST CHECK to prevent tunneling (high speed/low fps misses)
+	var space_state = get_world_2d().direct_space_state
+	# Mask 7 = World(1) + Enemy(2) + Hitbox(4)
+	var query = PhysicsRayQueryParameters2D.create(current_pos, next_pos, 7, [self])
+	query.collide_with_areas = true
+	query.collide_with_bodies = true
+	
+	var result = space_state.intersect_ray(query)
+	if result:
+		# Hit something!
+		global_position = result.position
+		_on_body_entered(result.collider)
+		# _on_body_entered might free us, so return
+		return
+	else:
+		global_position = next_pos
 	
 	lifetime += delta
 	if lifetime > 5.0:
@@ -101,8 +132,33 @@ func _physics_process(delta):
 		if traveled >= max_range:
 			queue_free()
 			return
+	
+	# Check boulder collision (reparenting to EffectsLayer breaks Area2D overlap)
+	if _check_boulder_collision():
+		queue_free()
+		return
+
+func _check_boulder_collision() -> bool:
+	"""Manual boulder collision check since bullets are in EffectsLayer (different scene tree branch)."""
+	var boulders := get_tree().get_nodes_in_group("boulders")
+	for boulder in boulders:
+		if not is_instance_valid(boulder):
+			continue
+		var boulder_pos: Vector2 = boulder.global_position
+		var boulder_radius: float = boulder.boulder_size * 0.5 if "boulder_size" in boulder else 150.0
+		if global_position.distance_to(boulder_pos) < boulder_radius:
+			return true
+	return false
+
+
 
 func _on_body_entered(body):
+	# Handle both Body (CharacterBody2D) and Area (HitboxComponent) collisions
+	var target = body
+	
+	# VISUAL DEBUG: Turn red on detected collision
+	if sprite: sprite.modulate = Color(10, 0, 0, 1)
+	
 	# Don't damage owner or player if owner is player/turret
 	if body == owner_node:
 		return

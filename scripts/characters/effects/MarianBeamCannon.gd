@@ -86,7 +86,7 @@ func initialize(damage: int, owner_ref: Node, player_ref: Node2D, controller_ref
 	owner_node = owner_ref
 	player = player_ref
 	_controller = controller_ref
-	print("[MarianBeamCannon] Beam cannon initialized")
+	# print("[MarianBeamCannon] Beam cannon initialized")
 
 func start_firing() -> void:
 	## Called when mouse button is pressed - starts wind-up
@@ -139,6 +139,8 @@ func _process(delta: float) -> void:
 		if _damage_timer >= DAMAGE_INTERVAL:
 			_damage_timer = 0.0
 			_hit_enemies_this_tick.clear()
+			# Log critical transform data
+			# DebugLog.log("BeamPos: %s Rot: %.1f Mouse: %s" % [global_position, rotation_degrees, get_global_mouse_position()])
 			_apply_damage()
 	
 	# Update beam sound (fade in/out with 0.2s transition)
@@ -265,6 +267,7 @@ func _apply_damage() -> void:
 		return
 	
 	var enemies := tree.get_nodes_in_group("enemies")
+	# DebugLog.log("[MarianBeam] Scanning " + str(enemies.size()) + " enemies")
 	for enemy in enemies:
 		if not is_instance_valid(enemy) or not enemy is Node2D:
 			continue
@@ -284,16 +287,59 @@ func _apply_damage() -> void:
 		
 		# Check if along beam (positive X direction)
 		if to_enemy_local.x < 0 or to_enemy_local.x > BEAM_RANGE:
+			# DebugLog.log("[MarianBeam] FAIL: %s out of range X: %.1f" % [enemy.name, to_enemy_local.x])
 			continue
 		
 		# Check perpendicular distance (Y in local space)
 		var perp_dist: float = abs(to_enemy_local.y)
-		if perp_dist <= BEAM_WIDTH * 0.5:
-			# Hit!
-			enemy.take_damage(_damage, false, Vector2.RIGHT.rotated(rotation))
-			_hit_enemies_this_tick.append(enemy)
-			# Note: Don't call register_burst_hit here - the beam cannon is a normal attack
-			# Burst generation happens on kills via Enemy.take_damage()
+		if perp_dist > BEAM_WIDTH * 0.5:
+			# DebugLog.log("[MarianBeam] FAIL: %s out of width Y: %.1f" % [enemy.name, to_enemy_local.y])
+			continue
+		
+		# Check if a boulder blocks the beam before reaching this enemy
+		if _is_boulder_blocking(to_enemy_local.x):
+			# DebugLog.log("[MarianBeam] FAIL: %s blocked by boulder" % enemy.name)
+			continue
+		
+		# Hit!
+		# DebugLog.log("[MarianBeam] HIT enemy %s at dist %.1f" % [enemy.name, to_enemy_local.x])
+		enemy.take_damage(_damage, false, Vector2.RIGHT.rotated(rotation))
+		_hit_enemies_this_tick.append(enemy)
+		# Note: Don't call register_burst_hit here - the beam cannon is a normal attack
+		# Burst generation happens on kills via Enemy.take_damage()
+
+func _is_boulder_blocking(distance_along_beam: float) -> bool:
+	"""Check if any boulder blocks the beam before the given distance."""
+	var boulders := get_tree().get_nodes_in_group("boulders")
+	var beam_origin: Vector2 = global_position
+	if player and is_instance_valid(player):
+		beam_origin = player.global_position
+	
+	var beam_dir: Vector2 = Vector2.RIGHT.rotated(rotation)
+	
+	for boulder in boulders:
+		if not is_instance_valid(boulder):
+			continue
+		var boulder_pos: Vector2 = boulder.global_position
+		var boulder_radius: float = 150.0  # Default
+		if boulder.get("boulder_size") != null:
+			boulder_radius = boulder.boulder_size * 0.5
+		
+		# Check if beam intersects this boulder
+		var to_boulder := boulder_pos - beam_origin
+		var along := to_boulder.dot(beam_dir)
+		
+		# Boulder must be in front and before our target point
+		if along < 0 or along > distance_along_beam + BEAM_OFFSET:
+			continue
+		
+		# Check perpendicular distance to beam center line
+		var perp: float = abs(to_boulder.dot(beam_dir.orthogonal()))
+		if perp < boulder_radius + BEAM_WIDTH * 0.5:
+			return true  # Beam is blocked by this boulder
+	
+	return false
+
 
 func _draw() -> void:
 	if _windup_progress <= 0.0:
@@ -303,16 +349,56 @@ func _draw() -> void:
 	var current_width: float = BEAM_WIDTH * _windup_progress
 	var current_range: float = BEAM_RANGE * (0.3 + 0.7 * _windup_progress)
 	
+	# Calculate visible range (stop at closest boulder)
+	var visible_range: float = _get_visible_beam_range(current_range)
+	
 	# Draw charge effect during windup
 	if _windup_progress < 1.0:
 		_draw_charge_effect()
 		return
 	
-	# Draw full beam with wavy effect
-	_draw_beam(current_range, current_width, beam_alpha)
+	# Draw full beam with wavy effect (stopped at boulder if any)
+	_draw_beam(visible_range, current_width, beam_alpha)
 	
 	# Draw muzzle flash
 	_draw_muzzle_flash()
+
+func _get_visible_beam_range(max_range: float) -> float:
+	"""Calculate how far the beam can visually extend (stops at closest boulder)."""
+	var boulders := get_tree().get_nodes_in_group("boulders")
+	var beam_origin: Vector2 = global_position
+	if player and is_instance_valid(player):
+		beam_origin = player.global_position
+	
+	var beam_dir: Vector2 = Vector2.RIGHT.rotated(rotation)
+	var closest_hit: float = max_range
+	
+	for boulder in boulders:
+		if not is_instance_valid(boulder):
+			continue
+		var boulder_pos: Vector2 = boulder.global_position
+		var boulder_radius: float = 150.0  # Default
+		if boulder.get("boulder_size") != null:
+			boulder_radius = boulder.boulder_size * 0.5
+		
+		# Check if beam intersects this boulder
+		var to_boulder := boulder_pos - beam_origin
+		var along := to_boulder.dot(beam_dir)
+		
+		# Boulder must be in front
+		if along < 0:
+			continue
+		
+		# Check perpendicular distance to beam center line
+		var perp: float = abs(to_boulder.dot(beam_dir.orthogonal()))
+		if perp < boulder_radius + BEAM_WIDTH * 0.5:
+			# Beam hits this boulder - calculate exact hit distance
+			var hit_distance: float = along - boulder_radius
+			if hit_distance > 0 and hit_distance < closest_hit:
+				closest_hit = hit_distance
+	
+	return closest_hit
+
 
 func _draw_charge_effect() -> void:
 	# Pulsing charge circle at origin

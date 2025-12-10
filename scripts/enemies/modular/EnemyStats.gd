@@ -1,5 +1,5 @@
 extends Resource
-class_name ModularEnemyStats
+
 
 @export var max_hp: int = 10
 @export var move_speed: float = 150.0

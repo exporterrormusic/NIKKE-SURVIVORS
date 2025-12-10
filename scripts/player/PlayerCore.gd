@@ -124,7 +124,19 @@ var _has_nayuta_duplicity_upgrade: bool = false  # "Duplicity" - 10% clone spawn
 
 func _ready() -> void:
 	add_to_group("player")
+	
+	# Set collision layer/mask to prevent squad trapping
+	# Layer 2: Player/Allies
+	# Mask: World (1), Enemies (3/4), Boulders (3/4), Items (5)
+	# Explicitly exclude Layer 2 so squad members don't collide with each other
+	collision_layer = 2
+	set_collision_mask_value(2, false) # Don't collide with other players/allies
+	
 	_create_shadow()
+	
+	# Register sprite for night glow effect
+	if _animator:
+		NightGlowManager.register_sprite(_animator)
 	
 	# Initialize progression module
 	_progression = PlayerProgression.new()

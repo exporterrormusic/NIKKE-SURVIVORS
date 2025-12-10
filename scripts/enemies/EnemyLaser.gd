@@ -287,6 +287,11 @@ func _physics_process(delta: float) -> void:
 	_distance_travelled += displacement.length()
 	_age += delta
 	
+	# Check boulder collision (reparenting to EffectsLayer breaks Area2D overlap)
+	if _check_boulder_collision():
+		_retire()
+		return
+	
 	# Update trail particles
 	_update_trail(delta)
 	
@@ -301,6 +306,19 @@ func _physics_process(delta: float) -> void:
 		_retire()
 	
 	_last_position = global_position
+
+func _check_boulder_collision() -> bool:
+	"""Manual boulder collision check since lasers are in EffectsLayer (different scene tree branch)."""
+	var boulders := get_tree().get_nodes_in_group("boulders")
+	for boulder in boulders:
+		if not is_instance_valid(boulder):
+			continue
+		var boulder_pos: Vector2 = boulder.global_position
+		var boulder_radius: float = boulder.boulder_size * 0.5 if "boulder_size" in boulder else 150.0
+		if global_position.distance_to(boulder_pos) < boulder_radius:
+			return true
+	return false
+
 
 func _update_pulse_effects() -> void:
 	# Multi-frequency pulse for organic flickering

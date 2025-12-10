@@ -99,7 +99,14 @@ func _ready() -> void:
 	add_child(_loading_delay_timer)
 	_loading_delay_timer.start()
 	
-	# Start loading resources in background (but don't check them yet)
+	# Initialize DebugLog if needed (removed for production/cleanup)
+	# var debug_log_script = load("res://scripts/systems/DebugLog.gd")
+	# if debug_log_script:
+	# 	var debug_log_node = debug_log_script.new()
+	# 	debug_log_node.name = "DebugLog"
+	# 	add_child(debug_log_node)
+	
+	# RESTORED: Start loading resources in background
 	call_deferred("_start_background_loading")
 
 

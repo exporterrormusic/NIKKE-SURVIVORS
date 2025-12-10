@@ -155,15 +155,30 @@ func _check_beam_hit() -> void:
 	
 	# Get beam line segment
 	var beam_start := _boss.global_position
+	# Default end point
 	var beam_end := beam_start + _locked_direction * BEAM_LENGTH
+	
+	# Check for boulder blocking
+	var collision_point_info := _get_beam_collision_point(beam_start, _locked_direction, BEAM_LENGTH)
+	if collision_point_info.has("point"):
+		beam_end = collision_point_info.point
 	
 	# Check player
 	if _player and is_instance_valid(_player):
 		var player_pos := _player.global_position
+		# Only check hit if player is essentially "behind" the beam end if it was shortened, 
+		# but point_to_line_distance on a segment handles this if we use the shortened beam_end.
 		var dist := _point_to_line_distance(player_pos, beam_start, beam_end)
 		if dist < BEAM_WIDTH / 2.0:
-			if _player.has_method("take_damage"):
-				_player.take_damage(damage_per_tick)
+			# Verify player is not past the beam end (the segment check might be slightly forgiving or player radius matters)
+			# Projection check to ensure we don't hit beyond the blocker
+			var to_player = player_pos - beam_start
+			var projected_dist = to_player.dot(_locked_direction)
+			var beam_len_sq = beam_start.distance_to(beam_end)
+			
+			if projected_dist >= 0 and projected_dist <= beam_len_sq + 20: # +20 grace
+				if _player.has_method("take_damage"):
+					_player.take_damage(damage_per_tick)
 	
 	# Check charmed allies (they're fighting for the player, so enemies should damage them)
 	var tree := get_tree()
@@ -175,17 +190,71 @@ func _check_beam_hit() -> void:
 			var ally_pos := (ally as Node2D).global_position
 			var dist := _point_to_line_distance(ally_pos, beam_start, beam_end)
 			if dist < BEAM_WIDTH / 2.0:
-				if ally.has_method("take_damage"):
-					ally.take_damage(damage_per_tick)
+				var to_ally = ally_pos - beam_start
+				var projected_dist = to_ally.dot(_locked_direction)
+				var beam_len_sq = beam_start.distance_to(beam_end)
+				
+				if projected_dist >= 0 and projected_dist <= beam_len_sq + 20:
+					if ally.has_method("take_damage"):
+						ally.take_damage(damage_per_tick)
+
+func _get_beam_collision_point(start: Vector2, direction: Vector2, max_length: float) -> Dictionary:
+	"""Check if beam hits a boulder and return the collision point."""
+	var boulders := get_tree().get_nodes_in_group("boulders")
+	var closest_dist := max_length
+	var hit_point = null
+	
+	for boulder in boulders:
+		if not is_instance_valid(boulder):
+			continue
+		
+		# Assuming circular boulders for simple/fast checking
+		var boulder_pos: Vector2 = boulder.global_position
+		var boulder_radius: float = 150.0 # Default
+		if boulder.get("boulder_size") != null:
+			boulder_radius = boulder.boulder_size * 0.5
+			
+		# Vector from beam start to boulder center
+		var to_boulder := boulder_pos - start
+		
+		# Project boulder center onto beam direction
+		var projected_dist := to_boulder.dot(direction)
+		
+		# Boulder is behind the beam start
+		if projected_dist < 0:
+			continue
+			
+		# Boulder is too far
+		if projected_dist > closest_dist + boulder_radius:
+			continue
+			
+		# Perpendicular distance from beam line to boulder center
+		var perp_dist_vec := to_boulder - (direction * projected_dist)
+		var perp_dist := perp_dist_vec.length()
+		
+		# Check overlap (beam width + boulder radius)
+		# Being generous with collision to ensure visually it looks blocked
+		if perp_dist < (boulder_radius + BEAM_WIDTH * 0.4):
+			# Approximate intersection: boulder center projection minus some offset to hit the surface
+			# A true circle-line intersection is better but this is roughly ok
+			var dist_to_surface = projected_dist - sqrt(max(0, boulder_radius * boulder_radius - perp_dist * perp_dist))
+			
+			if dist_to_surface < closest_dist and dist_to_surface > 0:
+				closest_dist = dist_to_surface
+				hit_point = start + direction * closest_dist
+				
+	if hit_point:
+		return {"point": hit_point, "distance": closest_dist}
+	return {}
 
 func _point_to_line_distance(point: Vector2, line_start: Vector2, line_end: Vector2) -> float:
 	var line := line_end - line_start
-	var line_length := line.length()
-	if line_length == 0:
+	var line_length_sq := line.length_squared() # Optimization
+	if line_length_sq == 0:
 		return point.distance_to(line_start)
 	
-	# Project point onto line
-	var t := clampf((point - line_start).dot(line) / (line_length * line_length), 0.0, 1.0)
+	# Project point onto line, clamped to segment
+	var t := clampf((point - line_start).dot(line) / line_length_sq, 0.0, 1.0)
 	var projection := line_start + line * t
 	
 	return point.distance_to(projection)
@@ -200,28 +269,54 @@ func _draw() -> void:
 		return
 	
 	var start := Vector2.ZERO  # Local origin (attached to boss)
-	var end := _locked_direction * BEAM_LENGTH
+	# Determine logical end point
+	var beam_len_local = BEAM_LENGTH
+	
+	# We need to perform the collision check in local space logic or transform result to local
+	# Since _get_beam_collision_point uses global coords, let's use that
+	var start_global = global_position # This is where the beam starts
+	# Note: global_position might change if parent moves, but _draw is called every frame
+	
+	var collision = _get_beam_collision_point(start_global, _locked_direction, BEAM_LENGTH)
+	if collision.has("distance"):
+		beam_len_local = collision.distance
+	
+	# Convert length to a vector in local space? 
+	# Actually, the beam is drawn from (0,0) to some point.
+	# _locked_direction is global direction.
+	# If this node rotates with the boss, drawing along local X might be better, but
+	# the script seems to use _locked_direction for logic. 
+	# Let's see... _locked_direction is updated in process.
+	# If the node's rotation is 0, we must draw using `to_local`.
+	
+	var end_global = start_global + _locked_direction * beam_len_local
+	var end_local = to_local(end_global)
 	
 	match _state:
 		BeamState.CHARGING:
 			# Draw preview line (thin, pulsing, semi-transparent)
-			draw_line(start, end, _preview_color, _current_width, true)
+			draw_line(start, end_local, _preview_color, _current_width, true)
 			# Draw glowing endpoint indicator
-			var indicator_pos := _locked_direction * 100.0
+			# var indicator_pos := _locked_direction * 100.0 # This was hardcoded? keeping behavior or fixing?
+			# Original code was indicator_pos := _locked_direction * 100.0. 
+			# Let's make it appear at the end or fixed distance? 
+			# User code had: var indicator_pos := _locked_direction * 100.0
+			# We'll calculate it properly in local space
+			var indicator_pos = end_local.normalized() * min(100.0, beam_len_local)
 			draw_circle(indicator_pos, 10.0 + sin(_timer * 15.0) * 3.0, _preview_color)
 		
 		BeamState.FIRING:
 			# Draw main beam (thick, bright)
-			_draw_beam(start, end, _current_width, _beam_color)
+			_draw_beam(start, end_local, _current_width, _beam_color)
 			# Draw beam core (brighter, narrower)
 			var core_color := Color(1.0, 0.8, 0.6, 1.0)
-			_draw_beam(start, end, _current_width * 0.4, core_color)
+			_draw_beam(start, end_local, _current_width * 0.4, core_color)
 		
 		BeamState.FADING:
 			# Draw shrinking beam
 			var fade_alpha := 1.0 - (_timer / _fade_time)
 			var fade_color := Color(_beam_color.r, _beam_color.g, _beam_color.b, _beam_color.a * fade_alpha)
-			_draw_beam(start, end, _current_width, fade_color)
+			_draw_beam(start, end_local, _current_width, fade_color)
 
 func _draw_beam(start: Vector2, end: Vector2, width: float, color: Color) -> void:
 	if width <= 0:
@@ -232,7 +327,9 @@ func _draw_beam(start: Vector2, end: Vector2, width: float, color: Color) -> voi
 	
 	# Draw caps at start and end
 	draw_circle(start, width / 2.0, color)
+	draw_circle(end, width / 2.0, color) # Draw cap at end too
 	
 	# Draw edge glow
 	var glow_color := Color(color.r, color.g, color.b, color.a * 0.3)
 	draw_line(start, end, glow_color, width * 1.5, true)
+

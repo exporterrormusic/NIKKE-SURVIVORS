@@ -80,6 +80,12 @@ static func get_effects_layer() -> CanvasLayer:
 		if env:
 			var effects = env.get_node_or_null("EffectsLayer")
 			if effects and effects is CanvasLayer:
+				# CRITICAL FIX: Ensure layer follows viewport so physics/position aligns with world
+				# This is required because we reparent Bullets (Area2D) to this layer.
+				# Without this, the physics space (World) and visual space (Screen) diverge.
+				if not effects.follow_viewport_enabled:
+					effects.follow_viewport_enabled = true
+				
 				_effects_layer = effects
 				return _effects_layer
 	

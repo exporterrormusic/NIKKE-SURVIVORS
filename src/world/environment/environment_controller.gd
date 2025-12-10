@@ -59,6 +59,18 @@ var _terrain_features: TerrainFeatures = null  # Delegated terrain (grass, bould
 var _boulder_container: Node2D = null
 var _boulders: Array[Node2D] = []
 
+# Smart night shader overlay
+const NIGHT_SHADER_PATH := "res://resources/shaders/visual_night_overlay.gdshader"
+var _night_overlay: ColorRect = null
+var _night_shader_material: ShaderMaterial = null
+
+# Screen-space fog overlay (Zelda-style)
+const SCREEN_FOG_SHADER_PATH := "res://resources/shaders/screen_fog.gdshader"
+var _screen_fog_overlay: ColorRect = null
+var _screen_fog_material: ShaderMaterial = null
+var _screen_fog_layer: CanvasLayer = null
+var _fog_time: float = 0.0
+
 @onready var _background: Polygon2D = _ensure_background()
 @onready var _ground: Polygon2D = _ensure_ground()
 @onready var _decor_container: Node2D = _ensure_decor_container()
@@ -248,6 +260,9 @@ func _process(delta: float) -> void:
 	# (kept for backwards compat if _weather_system not present)
 	if not _weather_system:
 		_update_lightning(delta)
+	
+	# Animate screen fog
+	_update_screen_fog(delta)
 
 func _exit_tree() -> void:
 	_stop_ambient_audio()
@@ -441,7 +456,8 @@ func _ensure_fog_overlay() -> ColorRect:
 	var fog_overlay := ColorRect.new()
 	fog_overlay.name = "FogOverlay"
 	fog_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	fog_overlay.color = Color(0.7, 0.75, 0.8, 0.7)  # Gray fog
+	fog_overlay.color = Color(0.0, 0.0, 0.0, 0.0)  # Start transparent
+	fog_overlay.visible = false  # Hidden until explicitly enabled
 	fog_overlay.size = Vector2(1920, 1080)
 	fog_overlay.position = Vector2(0, 0)
 	fog_overlay.z_index = 50
@@ -517,7 +533,7 @@ func _ensure_vignette_overlay() -> ColorRect:
 	if vignette_layer == null:
 		vignette_layer = CanvasLayer.new()
 		vignette_layer.name = "VignetteLayer"
-		vignette_layer.layer = 0  # Below UI layers
+		vignette_layer.layer = 90  # Above game world, below HUD at 99
 		add_child(vignette_layer)
 		if Engine.is_editor_hint():
 			vignette_layer.owner = get_tree().edited_scene_root
@@ -537,7 +553,13 @@ func _ensure_vignette_overlay() -> ColorRect:
 	vignette_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vignette_overlay.color = Color(0.0, 0.0, 0.0, 0.0)
 	vignette_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	vignette_overlay.size = Vector2.ZERO  # Full rect
+	# Explicitly set size to viewport for proper coverage
+	var viewport_size := Vector2(1920, 1080)  # Default fallback
+	if Engine.get_main_loop() and Engine.get_main_loop() is SceneTree:
+		var tree := Engine.get_main_loop() as SceneTree
+		if tree.root:
+			viewport_size = tree.root.get_visible_rect().size
+	vignette_overlay.size = viewport_size
 	if vignette_shader:
 		var shader_material := ShaderMaterial.new()
 		shader_material.shader = vignette_shader
@@ -556,17 +578,22 @@ func _configure_vignette_overlay(strength: float) -> void:
 		return
 	_vignette_overlay.visible = true
 	var view_size := _get_camera_view_size()
-	# No need to set size/position since it's full rect on CanvasLayer
+	# Ensure the overlay is sized correctly
+	_vignette_overlay.size = view_size
 	var shader_material := _vignette_overlay.material as ShaderMaterial
 	var clamped_strength := clampf(strength, 0.0, 1.0)
-	var inner_radius := lerpf(0.38, 0.62, clampf(1.0 - clamped_strength, 0.0, 1.0))
-	var softness := lerpf(0.24, 0.48, 1.0 - clamped_strength)
+	# Smaller inner radius = more aggressive vignette (edges start darkening sooner)
+	var inner_radius := lerpf(0.2, 0.5, clampf(1.0 - clamped_strength, 0.0, 1.0))
+	var softness := lerpf(0.3, 0.6, 1.0 - clamped_strength)
 	if shader_material:
 		shader_material.set_shader_parameter("vignette_strength", clamped_strength)
 		shader_material.set_shader_parameter("inner_radius", inner_radius)
 		shader_material.set_shader_parameter("softness", softness)
 		shader_material.set_shader_parameter("tint", Color(0.0, 0.0, 0.0, 1.0))
 		shader_material.set_shader_parameter("base_alpha", 0.0)
+		print("[EnvironmentController] Vignette configured: strength=", clamped_strength, " inner=", inner_radius, " softness=", softness)
+	else:
+		push_warning("[EnvironmentController] Vignette overlay has no shader material!")
 	# Enable vignette compensation for projectiles
 	BasicProjectileVisual.set_vignette_profile(clamped_strength, inner_radius, softness, view_size)
 
@@ -1001,16 +1028,32 @@ func _apply_time_of_day_settings() -> void:
 		# Adjust bloom for daytime (subtle)
 		_update_bloom_for_time_of_day(true)
 		return
-	# Global CanvasModulate handles the base darkening
-	var modulate_color := Color(1.0, 1.0, 1.0, 1.0)
-	if _active_time:
-		modulate_color = _active_time.get_canvas_modulate()
 	
-	if _canvas_modulate:
-		_canvas_modulate.color = modulate_color
+	# Check for smart night shader first (replaces CanvasModulate approach)
+	if _active_time and _active_time.use_smart_night_shader:
+		_apply_smart_night_shader(_active_time)
+		# Still emit modulate signal for other systems, but use white
+		current_modulate = Color(1.0, 1.0, 1.0, 1.0)
+		modulate_changed.emit(current_modulate)
+	else:
+		# Completely remove smart shader overlay if it exists
+		if _night_overlay and is_instance_valid(_night_overlay):
+			var parent_layer = _night_overlay.get_parent()
+			_night_overlay.queue_free()
+			_night_overlay = null
+			if parent_layer and parent_layer.name == "NightShaderLayer":
+				parent_layer.queue_free()
 		
-	current_modulate = modulate_color
-	modulate_changed.emit(modulate_color)
+		# Legacy: Global CanvasModulate handles the base darkening
+		var modulate_color := Color(1.0, 1.0, 1.0, 1.0)
+		if _active_time:
+			modulate_color = _active_time.get_canvas_modulate()
+		
+		if _canvas_modulate:
+			_canvas_modulate.color = modulate_color
+			
+		current_modulate = modulate_color
+		modulate_changed.emit(modulate_color)
 	
 	# Ground modulate is handled by CanvasModulate now, but we can add extra tint if needed
 	# For now, reset to white so it just takes the global darken
@@ -1065,6 +1108,14 @@ func _apply_time_of_day_settings() -> void:
 	if _active_time:
 		vignette_strength = clampf(_active_time.vignette_strength, 0.0, 1.0)
 	_configure_vignette_overlay(vignette_strength)
+	
+	# Apply screen-space fog (Zelda-style)
+	_apply_screen_fog()
+	
+	# Enable/disable night glow on sprites
+	var is_night := is_night_time()
+	NightGlowManager.set_night_mode(is_night, 0.35 if is_night else 0.0)
+	
 	BasicProjectileVisual.set_time_of_day(is_day_time())
 	# Adjust bloom for nighttime (more visible)
 	_update_bloom_for_time_of_day(is_day_time())
@@ -1099,6 +1150,88 @@ func _update_bloom_for_time_of_day(is_daytime: bool) -> void:
 		env.glow_bloom = 0.04
 		env.glow_hdr_threshold = 1.3  # High threshold to only glow very bright things
 		env.glow_hdr_scale = 1.2
+
+func _setup_smart_night_shader() -> void:
+	"""Create the smart night overlay if it doesn't exist."""
+	if _night_overlay != null:
+		return
+	
+	# Load the shader
+	if not ResourceLoader.exists(NIGHT_SHADER_PATH):
+		push_warning("[EnvironmentController] Smart night shader not found: ", NIGHT_SHADER_PATH)
+		return
+	
+	var shader := load(NIGHT_SHADER_PATH) as Shader
+	if shader == null:
+		push_warning("[EnvironmentController] Failed to load night shader")
+		return
+	
+	# Create material
+	_night_shader_material = ShaderMaterial.new()
+	_night_shader_material.shader = shader
+	
+	# Create a CanvasLayer for the overlay
+	# Layer 8: Above EffectsLayer (5), below HUD (99)
+	var night_layer := CanvasLayer.new()
+	night_layer.name = "NightShaderLayer"
+	night_layer.layer = 8
+	add_child(night_layer)
+	
+	# Create the full-screen ColorRect that reads the screen texture
+	_night_overlay = ColorRect.new()
+	_night_overlay.name = "NightOverlay"
+	_night_overlay.material = _night_shader_material
+	_night_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	
+	# Make it cover the full viewport using anchors
+	_night_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_night_overlay.size = get_viewport().get_visible_rect().size
+	# The ColorRect color doesn't matter - shader reads screen_texture
+	_night_overlay.color = Color(1, 1, 1, 0)  # Transparent base
+	
+	night_layer.add_child(_night_overlay)
+	
+	# Connect to viewport resize to keep overlay sized correctly
+	get_viewport().size_changed.connect(_on_night_overlay_viewport_resize)
+	
+	# Initially hidden
+	_night_overlay.visible = false
+	print("[EnvironmentController] Smart night shader initialized")
+
+func _on_night_overlay_viewport_resize() -> void:
+	if _night_overlay and is_instance_valid(_night_overlay):
+		_night_overlay.size = get_viewport().get_visible_rect().size
+
+func _apply_smart_night_shader(time_def: TimeOfDayDefinition) -> void:
+	"""Apply smart night shader settings from the time definition."""
+	if time_def == null or not time_def.use_smart_night_shader:
+		# Disable shader overlay
+		if _night_overlay:
+			_night_overlay.visible = false
+		return
+	
+	# Ensure overlay exists
+	_setup_smart_night_shader()
+	
+	if _night_overlay == null or _night_shader_material == null:
+		return
+	
+	# Apply shader parameters from definition
+	_night_shader_material.set_shader_parameter("night_intensity", time_def.night_shader_intensity)
+	_night_shader_material.set_shader_parameter("desaturation", time_def.night_desaturation)
+	_night_shader_material.set_shader_parameter("darkness_factor", time_def.night_darkness)
+	
+	# Use vignette from time definition
+	_night_shader_material.set_shader_parameter("vignette_strength", time_def.vignette_strength)
+	
+	# Enable the overlay
+	_night_overlay.visible = true
+	
+	# Disable CanvasModulate when using shader (shader handles everything)
+	if _canvas_modulate:
+		_canvas_modulate.color = Color(1.0, 1.0, 1.0, 1.0)
+	
+	print("[EnvironmentController] Smart night shader applied with intensity: ", time_def.night_shader_intensity)
 
 func _update_projectile_ambient_compensation(modulate_color: Color) -> void:
 	# Calculate brightness of the environment
@@ -1315,7 +1448,7 @@ func _spawn_boulders() -> void:
 	
 	var min_distance_between = 1500.0  # Increased from 800 for more spread
 	var edge_margin = 200.0  # Keep boulders away from edges
-	var min_distance_from_center = 2000.0  # Keep boulders away from EDEN (at 0,0)
+	var min_distance_from_center = 2500.0  # Keep boulders away from player spawn area (EDEN at 0,0)
 	
 	var spawn_area = Rect2(
 		_world_bounds.position + Vector2(edge_margin, edge_margin),
@@ -1830,3 +1963,112 @@ func _on_modulate_changed(color: Color) -> void:
 		# This compensates for the darkening, keeping effects bright
 		var inverse_color := Color(1.0 / color.r, 1.0 / color.g, 1.0 / color.b, 1.0)
 		effects_layer.set("modulate", inverse_color)
+
+# ============ SCREEN-SPACE FOG (ZELDA-STYLE) ============
+
+func _setup_screen_fog() -> void:
+	"""Create the screen-space fog overlay if it doesn't exist."""
+	if _screen_fog_overlay != null:
+		return
+	
+	# Load the fog shader
+	if not ResourceLoader.exists(SCREEN_FOG_SHADER_PATH):
+		push_warning("[EnvironmentController] Screen fog shader not found: ", SCREEN_FOG_SHADER_PATH)
+		return
+	
+	var shader := load(SCREEN_FOG_SHADER_PATH) as Shader
+	if shader == null:
+		push_warning("[EnvironmentController] Failed to load screen fog shader")
+		return
+	
+	# Create material
+	_screen_fog_material = ShaderMaterial.new()
+	_screen_fog_material.shader = shader
+	
+	# Load a noise texture for the fog
+	var noise := FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_PERLIN
+	noise.frequency = 0.01
+	noise.fractal_octaves = 4
+	
+	var noise_tex := NoiseTexture2D.new()
+	noise_tex.width = 256
+	noise_tex.height = 256
+	noise_tex.noise = noise
+	noise_tex.seamless = true
+	
+	_screen_fog_material.set_shader_parameter("noise_texture", noise_tex)
+	
+	# Create a CanvasLayer for the overlay
+	# Layer 80: Above game world (5) and EffectsLayer, but below HUD (99)
+	_screen_fog_layer = CanvasLayer.new()
+	_screen_fog_layer.name = "ScreenFogLayer"
+	_screen_fog_layer.layer = 80
+	add_child(_screen_fog_layer)
+	
+	# Create the full-screen ColorRect
+	_screen_fog_overlay = ColorRect.new()
+	_screen_fog_overlay.name = "ScreenFogOverlay"
+	_screen_fog_overlay.material = _screen_fog_material
+	_screen_fog_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_screen_fog_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_screen_fog_overlay.size = get_viewport().get_visible_rect().size
+	_screen_fog_overlay.color = Color(1, 1, 1, 0)  # Transparent base
+	
+	_screen_fog_layer.add_child(_screen_fog_overlay)
+	
+	# Connect to viewport resize
+	get_viewport().size_changed.connect(_on_screen_fog_viewport_resize)
+	
+	# Initially hidden
+	_screen_fog_overlay.visible = false
+	print("[EnvironmentController] Screen fog overlay initialized")
+
+func _on_screen_fog_viewport_resize() -> void:
+	if _screen_fog_overlay and is_instance_valid(_screen_fog_overlay):
+		_screen_fog_overlay.size = get_viewport().get_visible_rect().size
+
+func _apply_screen_fog() -> void:
+	"""Apply screen fog settings from the time definition."""
+	if _active_time == null or not _active_time.use_screen_fog:
+		# Disable fog overlay
+		if _screen_fog_overlay and is_instance_valid(_screen_fog_overlay):
+			_screen_fog_overlay.visible = false
+		return
+	
+	# Ensure overlay exists
+	_setup_screen_fog()
+	
+	if _screen_fog_overlay == null or _screen_fog_material == null:
+		return
+	
+	# Apply fog parameters from definition
+	_screen_fog_material.set_shader_parameter("fog_density", _active_time.screen_fog_density)
+	_screen_fog_material.set_shader_parameter("fog_color", _active_time.screen_fog_color)
+	
+	# Enable the overlay
+	_screen_fog_overlay.visible = true
+	print("[EnvironmentController] Screen fog applied with density: ", _active_time.screen_fog_density)
+
+func _update_screen_fog(delta: float) -> void:
+	"""Animate the screen fog and update world-space parameters."""
+	if _screen_fog_overlay == null or not _screen_fog_overlay.visible:
+		return
+	
+	if _screen_fog_material == null:
+		return
+	
+	# Update fog animation time
+	_fog_time += delta
+	_screen_fog_material.set_shader_parameter("time", _fog_time)
+	
+	# Update viewport size
+	var viewport := get_viewport()
+	if viewport:
+		var viewport_size := viewport.get_visible_rect().size
+		_screen_fog_material.set_shader_parameter("viewport_size", viewport_size)
+	
+	# Update camera position for world-space fog
+	var camera := get_viewport().get_camera_2d()
+	if camera:
+		_screen_fog_material.set_shader_parameter("camera_position", camera.global_position)

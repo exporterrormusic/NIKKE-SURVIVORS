@@ -156,6 +156,11 @@ func _process(delta: float) -> void:
 			_explode()
 			return
 	
+	# Check boulder collision - explode on impact
+	if _check_boulder_collision():
+		_explode()
+		return
+	
 	global_position = new_position
 	var is_rocket := render_style.to_lower() == "rocket"
 	if trail_enabled:
@@ -313,6 +318,20 @@ func _should_ignore_target(target: Node) -> bool:
 	if target.get_script() and target.get_script().resource_path:
 		var script_path: String = target.get_script().resource_path
 		if script_path.find("Rocket") != -1 or script_path.find("Missile") != -1 or script_path.find("Projectile") != -1:
+			return true
+	return false
+
+func _check_boulder_collision() -> bool:
+	"""Check if projectile hit a boulder."""
+	var boulders := get_tree().get_nodes_in_group("boulders")
+	for boulder in boulders:
+		if not is_instance_valid(boulder):
+			continue
+		var boulder_pos: Vector2 = boulder.global_position
+		var boulder_radius: float = 150.0  # Default
+		if boulder.get("boulder_size") != null:
+			boulder_radius = boulder.boulder_size * 0.5
+		if global_position.distance_to(boulder_pos) < boulder_radius:
 			return true
 	return false
 

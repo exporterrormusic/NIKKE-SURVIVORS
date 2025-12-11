@@ -287,3 +287,7 @@ func hide_all() -> void:
 
 func update_wave(_wave_number: int) -> void:
 	pass  # Wave display is handled by Level.gd via WaveDisplay label in scene
+
+func set_custom_timer_text(text: String) -> void:
+	if _timer_label:
+		_timer_label.text = text

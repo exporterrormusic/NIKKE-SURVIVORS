@@ -5,6 +5,7 @@ class_name EnemySpawner
 
 signal enemy_spawned(enemy: Node2D)
 signal enemy_died(enemy: Node2D)
+signal rapture_queen_spawned()
 
 # Enemy scenes
 # Enemy scenes
@@ -267,35 +268,31 @@ func _apply_tank_stats(enemy: Node2D) -> void:
 
 func _apply_outline_glow(enemy: Node2D, glow_color: Color, enhance_core: bool = false) -> void:
 	# Apply universal shader to sprite
-	var sprite = enemy.get_node_or_null("AnimatedSprite2D")
+	var sprite = null
+	
+	# 1. Try common properties
+	if "visuals" in enemy and enemy.visuals is CanvasItem:
+		sprite = enemy.visuals
+	
+	# 2. Try root nodes
+	if not sprite:
+		sprite = enemy.get_node_or_null("AnimatedSprite2D")
 	if not sprite:
 		sprite = enemy.get_node_or_null("Sprite2D")
+		
+	# 3. Try "Visuals" container (common in bosses)
+	if not sprite:
+		var visual_container = enemy.get_node_or_null("Visuals")
+		if visual_container:
+			# Look for sprite inside
+			sprite = visual_container.get_node_or_null("AnimatedSprite2D")
+			if not sprite:
+				sprite = visual_container.get_node_or_null("Sprite2D")
+				
 	if sprite:
-		# Always creating a new material instance to allow unique parameters per enemy
-		var shader_mat := ShaderMaterial.new()
-		# Load the universal shader resource
-		shader_mat.shader = load("res://resources/shaders/universal_sprite_shader.gdshader")
-		
-		# Set Outline Parameters
-		shader_mat.set_shader_parameter("enable_outline", true)
-		shader_mat.set_shader_parameter("outline_color", glow_color)
-		shader_mat.set_shader_parameter("outline_width", 2.0)
-		
-		# Set Core Enhancement Parameters
-		shader_mat.set_shader_parameter("enhance_red_core", enhance_core)
-		shader_mat.set_shader_parameter("core_glow_color", glow_color)
-		
-
-		# Initialize Night Glow parameters (managed by Level.gd later, but defaults here)
-		shader_mat.set_shader_parameter("night_glow_color", Color(0.5, 0.5, 1.0, 1.0))
-		shader_mat.set_shader_parameter("night_glow_intensity", 0.5)
-		
-		# Scale the glow width with the enemy size so big enemies don't have spindly outlines
-		# Use the max of scale.x and scale.y
+		# Use ShaderCache for optimized material creation (avoids load() per enemy)
 		var scale_factor: float = max(enemy.scale.x, enemy.scale.y)
-		# Clamp to avoid excessive glow on massive things, but ensure it scales
-		shader_mat.set_shader_parameter("glow_scale", clamp(scale_factor, 1.0, 5.0))
-		
+		var shader_mat := ShaderCache.create_enemy_glow_material(glow_color, enhance_core, scale_factor)
 		sprite.material = shader_mat
 
 # Deprecated: _get_outline_shader() replaced by universal resource load
@@ -715,3 +712,47 @@ func _setup_super_boss_aura(boss: Node2D) -> void:
 	aura_node.set_script(load("res://scripts/enemies/effects/SuperBossAura.gd"))
 	boss.add_child(aura_node)
 	print("[EnemySpawner] Super boss empowerment aura active!")
+
+func spawn_rapture_queen() -> Node2D:
+	var scene = load("res://scenes/enemies/bosses/RaptureQueenN01.tscn")
+	if not scene:
+		print("[EnemySpawner] FAILED: Could not load Rapture Queen scene!")
+		return null
+		
+	var queen = scene.instantiate()
+	if not queen: return null
+	
+	var spawn_pos := Vector2.ZERO
+	if _player:
+		# Spawn fixed distance above player (ensure visibility - was -900, now -400 to be on-screen)
+		var offset = Vector2(0, -400)
+		spawn_pos = _player.global_position + offset
+		
+		# Clamp to map bounds if available
+		if _map_bounds != Rect2():
+			spawn_pos.x = clamp(spawn_pos.x, _map_bounds.position.x + 300, _map_bounds.end.x - 300)
+			spawn_pos.y = clamp(spawn_pos.y, _map_bounds.position.y + 300, _map_bounds.end.y - 300)
+	
+	queen.global_position = spawn_pos
+	
+	# Apply Boss Glow (Crucial for visibility in Night mode)
+	# Using Purple/Pink glow for Rapture Queen
+	var queen_glow = Color(1.0, 0.2, 0.6, 1.0)
+	_apply_outline_glow(queen, queen_glow, true) # Enable core enhancement
+	
+	# Register with container
+	# Register with container - safely using call_deferred
+	if _enemy_container:
+		_enemy_container.call_deferred("add_child", queen)
+	else:
+		_player.get_parent().call_deferred("add_child", queen) # Fallback to level
+		
+	# Setup Boss Bar
+	if _boss_health_bar and _boss_health_bar.has_method("show_boss"):
+		_boss_health_bar.show_boss(queen, "RAPTURE QUEEN N01")
+		
+	# Emit signal so Level can trigger weather
+	emit_signal("rapture_queen_spawned")
+	print("[EnemySpawner] Rapture Queen N01 Spawned at: ", queen.global_position)
+	
+	return queen

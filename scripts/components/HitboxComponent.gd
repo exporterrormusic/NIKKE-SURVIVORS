@@ -25,6 +25,14 @@ func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector
 	# DebugLog.log("[Hitbox] take_damage: " + str(amount) + " from " + source)
 	hit_received.emit(amount, null) # For visuals
 	
+	# Spawn Damage Number (Restored)
+	if FloatingDamageNumber:
+		var parent = get_tree().current_scene
+		if is_crit:
+			FloatingDamageNumber.spawn_critical(parent, global_position, amount)
+		else:
+			FloatingDamageNumber.spawn_damage(parent, global_position, amount)
+	
 	# Check for parent entity and apply modifiers
 	var parent = get_parent()
 	var final_damage = amount

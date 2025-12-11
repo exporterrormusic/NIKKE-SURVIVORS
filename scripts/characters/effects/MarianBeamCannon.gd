@@ -307,10 +307,15 @@ func _apply_damage() -> void:
 		
 		# Hit!
 		# DebugLog.log("[MarianBeam] HIT enemy %s at dist %.1f" % [enemy.name, to_enemy_local.x])
-		enemy.take_damage(_damage, false, Vector2.RIGHT.rotated(rotation))
+		enemy.take_damage(_damage, false, Vector2.RIGHT.rotated(rotation), false, "projectile")
 		_hit_enemies_this_tick.append(enemy)
-		# Note: Don't call register_burst_hit here - the beam cannon is a normal attack
-		# Burst generation happens on kills via Enemy.take_damage()
+		
+		# Register burst hit on the player
+		if player and player.has_method("register_burst_hit"):
+			# Pass true for is_burst if this is considered a burst attack? 
+			# No, Beam Cannon is a BASIC attack replacement ("Main Heroine" upgrade).
+			# So it SHOULD generate burst charge.
+			player.register_burst_hit(enemy)
 
 func _is_boulder_blocking(distance_along_beam: float) -> bool:
 	"""Check if any boulder blocks the beam before the given distance."""

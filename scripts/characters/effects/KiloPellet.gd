@@ -68,14 +68,6 @@ func _ready() -> void:
 	# Assign to effects layer to prevent night darkening (deferred so node is in tree)
 	call_deferred("_assign_to_effects_layer")
 	
-	# Register for line drawing
-	if is_special:
-		all_special_pellets.append(self)
-	if is_burst:
-		all_burst_pellets.append(self)
-	
-	z_index = 340  # Match original z_index
-	
 	# Force Correct Mask for Hitboxes (Layer 4) AND Enemies (Layer 2)
 	collision_mask = 6 
 	
@@ -89,9 +81,19 @@ func _ready() -> void:
 			if env and env.has_signal("modulate_changed"):
 				env.modulate_changed.connect(Callable(self, "_on_environment_modulate_changed"))
 
+func _enter_tree() -> void:
+	# Register for line drawing (must be in _enter_tree to survive reparenting)
+	if is_special and not self in all_special_pellets:
+		all_special_pellets.append(self)
+	if is_burst and not self in all_burst_pellets:
+		all_burst_pellets.append(self)
+
 func _exit_tree() -> void:
-	all_special_pellets.erase(self)
-	all_burst_pellets.erase(self)
+	# Use erase safely
+	if self in all_special_pellets:
+		all_special_pellets.erase(self)
+	if self in all_burst_pellets:
+		all_burst_pellets.erase(self)
 
 func _assign_to_effects_layer() -> void:
 	"""Deferred call to assign to effects layer after node is in tree"""
@@ -451,6 +453,11 @@ func _on_body_entered(body: Node2D) -> void:
 	var hit_direction := velocity.normalized()
 	# Pass is_burst as from_burst to prevent burst charge during burst attacks
 	body.take_damage(damage, is_crit, hit_direction, is_burst)
+	
+	# Register burst hit (only if not from burst)
+	if owner_node and owner_node.has_method("register_burst_hit"):
+		owner_node.register_burst_hit(body, is_burst)
+		
 	_hit_nodes.append(body)
 	
 	# Apply burn if special with burn talent
@@ -492,12 +499,13 @@ func _apply_burn(enemy: Node2D) -> void:
 	if not is_instance_valid(enemy) or not "max_hp" in enemy:
 		return
 	
-	# Burn rates: 15/25/35% HP/s for normal, 5/10/15% for elite/boss
+	# Burn rates: 15/25/35% HP/s for normal (and elite/tank), 3% for boss
 	var burn_rates := [0.0, 0.15, 0.25, 0.35]
-	var elite_rates := [0.0, 0.05, 0.10, 0.15]
+	var boss_rates := [0.0, 0.03, 0.03, 0.03] # Flat 3% for bosses
 	
-	var is_elite: bool = enemy.has_meta("enemy_tier") and enemy.get_meta("enemy_tier") in ["elite", "boss", "tank"]
-	var burn_rate: float = elite_rates[burn_level] if is_elite else burn_rates[burn_level]
+	# Logic: "reduced burn effect is only for bosses, not elites and tanks"
+	var is_boss: bool = enemy.has_meta("enemy_tier") and enemy.get_meta("enemy_tier") == "boss"
+	var burn_rate: float = boss_rates[burn_level] if is_boss else burn_rates[burn_level]
 	var burn_duration := 3.0
 	var damage_per_second := int(enemy.max_hp * burn_rate)
 	

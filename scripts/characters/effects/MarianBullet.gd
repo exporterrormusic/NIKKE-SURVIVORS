@@ -160,5 +160,9 @@ func _hit_target(target: Node) -> void:
 	elif "hp" in target:
 		target.hp -= base_damage
 	
+	# Register burst hit (Essential for burst accumulation)
+	if owner_node and owner_node.has_method("register_burst_hit"):
+		owner_node.register_burst_hit(target)
+	
 	# Destroy bullet
 	queue_free()

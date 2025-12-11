@@ -148,40 +148,177 @@ func _apply_vulnerability(enemy: Node2D) -> void:
 	enemy.set_meta("damage_vulnerability", 1.5)  # 50% more damage = 1.5x multiplier
 	
 	# Apply visual shader effect
-	var sprite: Node = null
-	if enemy.has_node("AnimatedSprite2D"):
-		sprite = enemy.get_node("AnimatedSprite2D")
-	elif enemy.has_node("Sprite2D"):
-		sprite = enemy.get_node("Sprite2D")
+	# Robust sprite finding (Handles nested Visuals/Sprite2D structures)
+	# Prioritize "Visuals" node as it likely contains the composed boss sprite
+	var sprite: CanvasItem = null
+	var additional_targets: Array[CanvasItem] = [] # For hair, arms, etc.
 	
+	if enemy.has_node("Visuals"):
+		var visuals = enemy.get_node("Visuals")
+		if visuals.has_node("AnimatedSprite2D"):
+			sprite = visuals.get_node("AnimatedSprite2D")
+		elif visuals.has_node("Sprite2D"):
+			sprite = visuals.get_node("Sprite2D")
+		
+		# Also capture hair and arms for the Rapture Queen
+		for child in visuals.get_children():
+			if child != sprite and child is CanvasItem:
+				additional_targets.append(child)
+	
+	# Fallback to root sprites if nothing found in Visuals (or Visuals doesn't exist)
+	if not sprite:
+		if enemy.has_node("AnimatedSprite2D"):
+			sprite = enemy.get_node("AnimatedSprite2D")
+		elif enemy.has_node("Sprite2D"):
+			sprite = enemy.get_node("Sprite2D")
+	
+	# Handle Timer Refreshing (Stacking = Refresh Duration)
+	var timer_name = "ScarletVulnTimer"
+	var debuff_timer: Timer = enemy.get_node_or_null(timer_name)
+	
+	if debuff_timer:
+		# Timer exists, just refresh it
+		debuff_timer.start(8.0)
+		return # Visuals already applied
+	
+	# New Debuff Application
 	var original_material: Material = null
-	if sprite and sprite is CanvasItem:
+	var original_materials: Dictionary = {} # Store original materials for all targets
+	
+	if sprite:
 		original_material = sprite.material
 		var vuln_shader = load("res://resources/shaders/vulnerability_debuff.gdshader")
 		if vuln_shader:
 			var shader_mat = ShaderMaterial.new()
 			shader_mat.shader = vuln_shader
 			shader_mat.set_shader_parameter("intensity", 1.0)
-			shader_mat.set_shader_parameter("pulse_speed", 1.5)
+			shader_mat.set_shader_parameter("pulse_speed", 3.0) # Faster as requested
 			shader_mat.set_shader_parameter("crack_density", 4.0)
+			shader_mat.set_shader_parameter("tint_factor", 1.0) # Full purple tint for Sprite
+			# Standard Square scale for sprites
+			shader_mat.set_shader_parameter("uv_scale", Vector2(1.0, 1.0))
 			sprite.material = shader_mat
+			
+			# Apply screen-space shader to additional targets (hair, arms)
+			# _draw() nodes don't have proper UV coords, so use screen-space version
+			var screenspace_shader = load("res://resources/shaders/vulnerability_debuff_screenspace.gdshader")
+			if screenspace_shader:
+				for target in additional_targets:
+					original_materials[target.get_instance_id()] = target.material
+					var target_mat = ShaderMaterial.new()
+					target_mat.shader = screenspace_shader
+					target_mat.set_shader_parameter("intensity", 1.0)
+					target_mat.set_shader_parameter("pulse_speed", 3.0)
+					target_mat.set_shader_parameter("crack_density", 1.5) # Lower for bigger cracks
+					target_mat.set_shader_parameter("tint_factor", 1.0)
+					target.material = target_mat
 	
-	# Create a timer to remove the debuff after 8 seconds
-	var debuff_timer := Timer.new()
+	# Create new timer
+	debuff_timer = Timer.new()
+	debuff_timer.name = timer_name
 	debuff_timer.wait_time = 8.0
 	debuff_timer.one_shot = true
 	debuff_timer.autostart = true
+	
 	var enemy_ref := enemy
 	var sprite_ref := sprite
 	var orig_mat_ref := original_material
+	
+	# Also apply to HP bar if found
+	var hp_bar: Control = enemy.get_node_or_null("ProgressBar")
+	# If Reparented by ModularEnemy, we might need a reference or search, 
+	# but ModularEnemy keeps "hp_bar" variable. We can't access script vars easily without casting or dynamic access.
+	# However, ModularEnemy reparents it to EffectsLayer. 
+	# Accessing internal "hp_bar" property is safest if dealing with ModularEnemy type.
+	
+	var hp_elements: Array[CanvasItem] = []
+	if "hp_bar" in enemy and is_instance_valid(enemy.hp_bar):
+		hp_elements.append(enemy.hp_bar)
+	# Do NOT transform the label (text readability issues)
+	# if "hp_label" in enemy and is_instance_valid(enemy.hp_label):
+	# 	hp_elements.append(enemy.hp_label)
+		
+	# Store original materials for HP elements
+	var hp_orig_mats: Dictionary = {} # { object_id: material }
+	# Use overlay-only shader for HP bars (doesn't sample TEXTURE)
+	var overlay_shader_res = load("res://resources/shaders/crack_overlay.gdshader")
+	
+	# For HP bars, we create an OVERLAY instead of replacing the material
+	# because ProgressBar has no TEXTURE - the shader reads empty/white pixels
+	var hp_overlays: Array[Control] = []
+	
+	for el in hp_elements:
+		hp_orig_mats[el.get_instance_id()] = el.material
+		if overlay_shader_res and el is Control:
+			# Create a transparent overlay that sits on top of the HP bar
+			var overlay = ColorRect.new()
+			overlay.name = "VulnOverlay"
+			overlay.color = Color(0, 0, 0, 0) # Invisible base
+			overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			# Use anchors to fill parent exactly, not PRESET which can overflow
+			overlay.anchor_left = 0
+			overlay.anchor_top = 0
+			overlay.anchor_right = 1
+			overlay.anchor_bottom = 1
+			overlay.offset_left = 0
+			overlay.offset_top = 0
+			overlay.offset_right = 0
+			overlay.offset_bottom = 0
+			
+			# Clip to parent bounds
+			overlay.clip_contents = false # ColorRect doesn't clip itself, parent does
+			el.clip_contents = true # Make the ProgressBar clip its children
+			
+			# Create shader material
+			var mat = ShaderMaterial.new()
+			mat.shader = overlay_shader_res
+			mat.set_shader_parameter("intensity", 0.9) 
+			mat.set_shader_parameter("pulse_speed", 2.5)
+			# REDUCED density for bigger, sparser cracks (0.5 = zoomed in)
+			mat.set_shader_parameter("crack_density", 0.5)
+			mat.set_shader_parameter("crack_color", Vector3(1.0, 1.0, 1.0)) # White cracks
+			
+			# Calculate UV Scale based on aspect ratio (Width / Height)
+			var aspect_x = 1.0
+			var size = el.size
+			if size.y > 0:
+				aspect_x = size.x / size.y
+			mat.set_shader_parameter("uv_scale", Vector2(aspect_x, 1.0))
+			
+			overlay.material = mat
+			el.add_child(overlay)
+			hp_overlays.append(overlay)
+
 	debuff_timer.timeout.connect(func():
 		if is_instance_valid(enemy_ref):
 			enemy_ref.remove_meta("damage_vulnerability")
-		if is_instance_valid(sprite_ref) and sprite_ref is CanvasItem:
-			sprite_ref.material = orig_mat_ref
-		debuff_timer.queue_free()
+			
+			# Clean up visuals
+			if is_instance_valid(sprite_ref) and sprite_ref is CanvasItem:
+				# Restore original material
+				sprite_ref.material = orig_mat_ref
+			
+			# Clean up additional targets (hair, arms) - restore material
+			for target_id in original_materials.keys():
+				# Find the target by walking all CanvasItems
+				if enemy_ref.has_node("Visuals"):
+					for child in enemy_ref.get_node("Visuals").get_children():
+						if is_instance_valid(child) and child.get_instance_id() == target_id:
+							child.material = original_materials[target_id]
+				
+			# Clean up HP bar overlays
+			for overlay in hp_overlays:
+				if is_instance_valid(overlay):
+					overlay.queue_free()
+		
+		# Remove timer
+		if is_instance_valid(debuff_timer):
+			debuff_timer.queue_free()
 	)
+	
 	enemy.add_child(debuff_timer)
+	
+
 
 func _get_camera_view_rect() -> Rect2:
 	var viewport := get_viewport()

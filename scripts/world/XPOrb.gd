@@ -22,9 +22,8 @@ var _inner_glow: Sprite2D = null
 var _glow_texture: Texture2D = null
 var _rng := RandomNumberGenerator.new()
 
-# Trail particles
-var _trail_particles: Array = []
-const MAX_TRAIL_PARTICLES := 8
+# Trail particles (REMOVED for performance)
+# const MAX_TRAIL_PARTICLES := 8
 
 # Pulse animation (now 2.25x original speed)
 const PULSE_SPEED := 9.0
@@ -56,10 +55,11 @@ func _ready():
 
 func _exit_tree() -> void:
 	# Clean up any trail particles still in the scene
-	for p in _trail_particles:
-		if is_instance_valid(p.get("node")):
-			p["node"].queue_free()
-	_trail_particles.clear()
+	# for p in _trail_particles:
+	# 	if is_instance_valid(p.get("node")):
+	# 		p["node"].queue_free()
+	# _trail_particles.clear()
+	pass
 
 func _create_glow_layers() -> void:
 	# Get shared additive material (cached, not created per orb)
@@ -97,7 +97,8 @@ func _physics_process(delta):
 	
 	_age += delta
 	_update_visuals(delta)
-	_update_trail(delta)
+	_update_visuals(delta)
+	# _update_trail(delta) # Disabled for performance
 	
 	var progress = float(player.xp) / player.xp_to_next
 	var bar_rect = xp_bar.get_global_rect()
@@ -179,55 +180,12 @@ func _update_visuals(delta: float) -> void:
 		var color_t := sin(_age * 2.25) * 0.5 + 0.5
 		_sprite.modulate = PRIMARY_COLOR.lerp(SECONDARY_COLOR, color_t * 0.3)
 
-func _update_trail(delta: float) -> void:
-	var velocity := global_position - _last_position
-	var speed_factor: float = velocity.length() / (speed * delta) if delta > 0 else 0.0
-	
-	# Only spawn trail when moving fast
-	if speed_factor > 0.3 and _rng.randf() < 0.4:
-		_spawn_trail_particle()
-	
-	# Update existing trail particles
-	var i := 0
-	while i < _trail_particles.size():
-		var p: Dictionary = _trail_particles[i]
-		p["age"] += delta
-		p["alpha"] = maxf(0, 1.0 - p["age"] / p["lifetime"])
-		
-		if p["age"] >= p["lifetime"]:
-			if is_instance_valid(p["node"]):
-				p["node"].queue_free()
-			_trail_particles.remove_at(i)
-		else:
-			if is_instance_valid(p["node"]):
-				p["node"].modulate.a = p["alpha"] * 0.7
-				p["node"].scale = Vector2.ONE * (0.3 + p["alpha"] * 0.3)
-			i += 1
+# Trail Logic Removed for Performance
+func _update_trail(_delta: float) -> void:
+	pass
 
 func _spawn_trail_particle() -> void:
-	if _trail_particles.size() >= MAX_TRAIL_PARTICLES:
-		return
-	
-	var particle := Sprite2D.new()
-	particle.texture = _glow_texture
-	particle.centered = true
-	particle.global_position = global_position + Vector2(_rng.randf_range(-3, 3), _rng.randf_range(-3, 3))
-	particle.scale = Vector2(0.4, 0.4)
-	
-	var spark_color := SPARKLE_COLOR if _rng.randf() > 0.5 else PRIMARY_COLOR
-	particle.modulate = spark_color
-	
-	# Use shared additive material
-	particle.material = ShaderCache.get_additive_material()
-	
-	get_parent().add_child(particle)
-	
-	_trail_particles.append({
-		"node": particle,
-		"age": 0.0,
-		"lifetime": _rng.randf_range(0.2, 0.4),
-		"alpha": 1.0
-	})
+	pass
 
 # Collection burst uses ShaderCache for shared material
 

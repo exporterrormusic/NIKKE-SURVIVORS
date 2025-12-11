@@ -64,7 +64,11 @@ func _process(delta: float) -> void:
 	_elapsed += delta
 	
 	if _elapsed >= FLOAT_DURATION:
-		queue_free()
+		# Return to pool if pooled, otherwise free
+		if EffectPool._instance and self in EffectPool._instance._damage_number_pool:
+			EffectPool._instance.return_damage_number(self)
+		else:
+			queue_free()
 		return
 	
 	var progress := _elapsed / FLOAT_DURATION

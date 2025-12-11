@@ -609,8 +609,8 @@ func _on_environment_modulate_changed(color: Color) -> void:
 
 # ============= DAMAGE / HEALING =============
 
-func take_damage(dmg: int) -> void:
-	if invincible:
+func take_damage(dmg: int, is_crit: bool = false, direction: Vector2 = Vector2.ZERO, is_true_damage: bool = false, source: String = "enemy") -> void:
+	if invincible and not is_true_damage:
 		return
 	# Debug invincibility from debug menu
 	if has_meta("debug_invincible") and get_meta("debug_invincible"):

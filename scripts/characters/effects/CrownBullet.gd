@@ -163,6 +163,10 @@ func _hit_target(target: Node) -> void:
 	if target.has_method("take_damage"):
 		var hit_direction := velocity.normalized()
 		target.take_damage(damage, is_crit, hit_direction)
+		
+		# Register burst hit
+		if owner_node and owner_node.has_method("register_burst_hit"):
+			owner_node.register_burst_hit(target)
 	
 	# Destroy bullet after hitting
 	queue_free()

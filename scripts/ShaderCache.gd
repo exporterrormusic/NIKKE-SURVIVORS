@@ -112,3 +112,42 @@ static func get_unshaded_shader() -> Shader:
 		_unshaded_shader = Shader.new()
 		_unshaded_shader.code = UNSHADED_SHADER_CODE
 	return _unshaded_shader
+
+
+# =============================================================================
+# UNIVERSAL SPRITE SHADER (for enemies)
+# =============================================================================
+static var _universal_shader: Shader = null
+
+
+static func get_universal_shader() -> Shader:
+	## Returns the cached universal sprite shader resource.
+	## Only loads from disk once on first call.
+	if _universal_shader == null:
+		_universal_shader = load("res://resources/shaders/universal_sprite_shader.gdshader")
+	return _universal_shader
+
+
+static func create_enemy_glow_material(glow_color: Color, enhance_core: bool, scale_factor: float) -> ShaderMaterial:
+	## Creates a new material for enemy glow effects using the cached shader.
+	## Use this instead of manually loading the shader in EnemySpawner.
+	var mat := ShaderMaterial.new()
+	mat.shader = get_universal_shader()
+	
+	# Outline parameters
+	mat.set_shader_parameter("enable_outline", true)
+	mat.set_shader_parameter("outline_color", glow_color)
+	mat.set_shader_parameter("outline_width", 2.0)
+	
+	# Core enhancement
+	mat.set_shader_parameter("enhance_red_core", enhance_core)
+	mat.set_shader_parameter("core_glow_color", glow_color)
+	
+	# Night glow defaults
+	mat.set_shader_parameter("night_glow_color", Color(0.5, 0.5, 1.0, 1.0))
+	mat.set_shader_parameter("night_glow_intensity", 0.5)
+	
+	# Scale-based glow width
+	mat.set_shader_parameter("glow_scale", clamp(scale_factor, 1.0, 5.0))
+	
+	return mat

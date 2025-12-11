@@ -33,7 +33,7 @@ func _ready() -> void:
 	_setup_ui()
 
 func _setup_ui() -> void:
-	# Main container - positioned below wave timer with padding
+	# Main container
 	_container = Control.new()
 	_container.name = "BossBarContainer"
 	_container.set_anchors_preset(Control.PRESET_CENTER_TOP)
@@ -41,37 +41,40 @@ func _setup_ui() -> void:
 	_container.size = Vector2(BAR_WIDTH, BAR_HEIGHT + 30)
 	add_child(_container)
 	
-	# Boss name label
-	_name_label = Label.new()
-	_name_label.name = "BossName"
-	_name_label.text = "BOSS"
-	_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_name_label.add_theme_font_size_override("font_size", 18)
-	_name_label.add_theme_color_override("font_color", Color(0.95, 0.9, 1.0))
-	_name_label.add_theme_color_override("font_shadow_color", Color(0.2, 0.1, 0.3, 0.9))
-	_name_label.add_theme_constant_override("shadow_offset_x", 2)
-	_name_label.add_theme_constant_override("shadow_offset_y", 2)
-	_name_label.position = Vector2(0, 0)
-	_name_label.size = Vector2(BAR_WIDTH, 24)
-	_container.add_child(_name_label)
-	
 	# Bar background
 	_bar_background = ColorRect.new()
 	_bar_background.name = "Background"
 	_bar_background.color = BG_COLOR
-	_bar_background.position = Vector2(0, 26)
+	_bar_background.position = Vector2(0, 0)
 	_bar_background.size = Vector2(BAR_WIDTH, BAR_HEIGHT)
 	_container.add_child(_bar_background)
 	
-	# Custom fill control (drawn manually for segments)
+	# Fill
 	_bar_fill = Control.new()
 	_bar_fill.name = "Fill"
-	_bar_fill.position = Vector2(0, 26)
+	_bar_fill.position = Vector2(0, 0)
 	_bar_fill.size = Vector2(BAR_WIDTH, BAR_HEIGHT)
 	_bar_fill.draw.connect(_draw_bar)
 	_container.add_child(_bar_fill)
 	
-	# Enrage timer label (Goddess Fall mode only)
+	# Name Label
+	_name_label = Label.new()
+	_name_label.name = "BossName"
+	_name_label.text = "BOSS"
+	_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# Critical: Center alignment with clean font sizes
+	_name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_name_label.add_theme_font_size_override("font_size", 26) # Default safe size
+	_name_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
+	_name_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.8))
+	_name_label.add_theme_constant_override("shadow_offset_x", 1)
+	_name_label.add_theme_constant_override("shadow_offset_y", 1)
+	_name_label.position = Vector2(0, 0)
+	_name_label.size = Vector2(BAR_WIDTH, BAR_HEIGHT)
+	_name_label.clip_text = true
+	_container.add_child(_name_label)
+	
+	# Enrage timer label
 	_timer_label = Label.new()
 	_timer_label.name = "EnrageTimer"
 	_timer_label.text = ""
@@ -81,12 +84,13 @@ func _setup_ui() -> void:
 	_timer_label.add_theme_color_override("font_shadow_color", Color(0.3, 0.1, 0.0, 0.9))
 	_timer_label.add_theme_constant_override("shadow_offset_x", 2)
 	_timer_label.add_theme_constant_override("shadow_offset_y", 2)
-	_timer_label.position = Vector2(0, 52)
+	_timer_label.position = Vector2(0, BAR_HEIGHT + 4) # Adjust for height
 	_timer_label.size = Vector2(BAR_WIDTH, 28)
 	_timer_label.visible = false
 	_container.add_child(_timer_label)
 
 func _draw_bar() -> void:
+    # ... (Keep existing draw logic, just ensure it uses rect.size.y which is now BAR_HEIGHT)
 	if not _bar_fill:
 		return
 	
@@ -128,9 +132,24 @@ func _draw_bar() -> void:
 func show_boss(boss: Node2D, boss_name: String = "BOSS") -> void:
 	_boss = boss
 	_name_label.text = boss_name
+	
+	# Intelligent Font Scaling for 24px Bar
+	var name_len = boss_name.length()
+	var font_size = 26 # Bigger again (User requested)
+	
+	if name_len > 35:
+		font_size = 16
+	elif name_len > 25:
+		font_size = 18
+	elif name_len > 15:
+		font_size = 22
+	
+	_name_label.add_theme_font_size_override("font_size", font_size)
+	
 	_current_fill = 1.0
 	_target_fill = 1.0
 	visible = true
+
 	
 	# Check if Goddess Fall mode - show enrage timer
 	_is_goddess_fall = GameState and GameState.goddess_fall_mode

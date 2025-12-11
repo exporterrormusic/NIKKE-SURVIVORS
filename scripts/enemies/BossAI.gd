@@ -190,7 +190,13 @@ func _fire_beam() -> void:
 	# Initialize beam with boss reference and timing
 	if _current_beam.has_method("initialize"):
 		var damage: int = _boss.base_damage if "base_damage" in _boss else 1
-		_current_beam.initialize(_boss, _player, charge_time, BEAM_FIRE_TIME, BEAM_FADE_TIME, is_true_boss, damage)
+		
+		# Only N01 / Rapture Queen does oil burn
+		var enable_oil_burn: bool = false
+		if "N01" in _boss.name or "Queen" in _boss.name or "RaptureQueen" in _boss.name or (_boss.scene_file_path and "RaptureQueen" in _boss.scene_file_path):
+			enable_oil_burn = true
+			
+		_current_beam.initialize(_boss, _player, charge_time, BEAM_FIRE_TIME, BEAM_FADE_TIME, is_true_boss, damage, enable_oil_burn)
 	
 	# Connect beam finished signal
 	if _current_beam.has_signal("beam_finished"):

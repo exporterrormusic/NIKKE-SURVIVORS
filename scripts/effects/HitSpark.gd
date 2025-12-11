@@ -44,7 +44,11 @@ func _process(delta: float) -> void:
 	queue_redraw()
 	
 	if _lifetime >= _max_lifetime:
-		queue_free()
+		# Return to pool if pooled, otherwise free
+		if EffectPool._instance and self in EffectPool._instance._hit_spark_pool:
+			EffectPool._instance.return_hit_spark(self)
+		else:
+			queue_free()
 
 func _draw() -> void:
 	var color: Color

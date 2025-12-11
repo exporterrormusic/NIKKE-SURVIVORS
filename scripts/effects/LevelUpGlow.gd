@@ -6,8 +6,8 @@ class_name LevelUpGlow
 
 const EFFECT_DURATION := 2.0
 const RING_EXPAND_DURATION := 0.4
-const PARTICLE_COUNT := 24
-const RING_SEGMENTS := 48
+const PARTICLE_COUNT := 12 # Reduced from 24
+const RING_SEGMENTS := 32 # Reduced from 48
 
 # Golden color palette
 const GOLD_CORE := Color(1.0, 0.9, 0.4, 1.0)
@@ -138,8 +138,7 @@ func _draw_central_glow() -> void:
 	
 	# Multiple overlapping circles for soft glow
 	var glow_alpha := 0.3 * pulse * fade
-	draw_circle(Vector2.ZERO, 80.0, Color(GOLD_GLOW.r, GOLD_GLOW.g, GOLD_GLOW.b, glow_alpha * 0.3))
-	draw_circle(Vector2.ZERO, 50.0, Color(GOLD_GLOW.r, GOLD_GLOW.g, GOLD_GLOW.b, glow_alpha * 0.5))
+	draw_circle(Vector2.ZERO, 60.0, Color(GOLD_GLOW.r, GOLD_GLOW.g, GOLD_GLOW.b, glow_alpha * 0.4))
 	draw_circle(Vector2.ZERO, 30.0, Color(GOLD_OUTER.r, GOLD_OUTER.g, GOLD_OUTER.b, glow_alpha * 0.7))
 
 func _draw_particle(p: Dictionary) -> void:
@@ -151,11 +150,8 @@ func _draw_particle(p: Dictionary) -> void:
 	var glow_size := size * 2.5
 	draw_circle(pos, glow_size, Color(GOLD_GLOW.r, GOLD_GLOW.g, GOLD_GLOW.b, alpha * 0.3))
 	
-	# Core particle
-	draw_circle(pos, size, Color(GOLD_CORE.r, GOLD_CORE.g, GOLD_CORE.b, alpha))
-	
-	# Bright center
-	draw_circle(pos, size * 0.5, Color(GOLD_BRIGHT.r, GOLD_BRIGHT.g, GOLD_BRIGHT.b, alpha))
+	# Combined core and bright center
+	draw_circle(pos, size * 0.8, Color(GOLD_BRIGHT.r, GOLD_BRIGHT.g, GOLD_BRIGHT.b, alpha))
 
 func _draw_light_column() -> void:
 	# Draw vertical column of light (fades quickly)
@@ -168,10 +164,10 @@ func _draw_light_column() -> void:
 	var column_width := 40.0
 	var column_height := 200.0
 	
-	for i in range(20):
-		var y := -column_height * (float(i) / 20.0)
-		var width_factor := 1.0 - (float(i) / 20.0) * 0.7  # Narrower at top
-		var alpha := column_fade * (1.0 - float(i) / 20.0) * 0.4
+	for i in range(10): # Reduced from 20
+		var y := -column_height * (float(i) / 10.0) # Adjusted for loop size
+		var width_factor := 1.0 - (float(i) / 10.0) * 0.7
+		var alpha := column_fade * (1.0 - float(i) / 10.0) * 0.4
 		var half_width := column_width * 0.5 * width_factor
 		
 		draw_line(

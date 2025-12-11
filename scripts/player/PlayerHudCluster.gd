@@ -525,3 +525,4 @@ func _trigger_damage_shake() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_THEME_CHANGED and auto_apply_styles:
 		_apply_styles()
+

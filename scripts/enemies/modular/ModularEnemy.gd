@@ -117,7 +117,7 @@ func _ready() -> void:
 		hp_bar.add_theme_stylebox_override("fill", style)
 	elif is_in_group("boss") or is_in_group("super_boss"):
 		var style = StyleBoxFlat.new()
-		style.bg_color = Color(0.7, 0.2, 0.9) # Purple for bosses
+		style.bg_color = Color(0.9, 0.0, 0.0) # Deep Red for bosses (User Requested)
 		hp_bar.add_theme_stylebox_override("fill", style)
 	elif is_in_group("elite"):
 		var style = StyleBoxFlat.new()
@@ -186,6 +186,9 @@ var _damage_timer := 0.0
 var _is_charmed := false
 var _charm_owner: Node = null
 var _current_target: Node2D = null
+
+# Optimization state
+var _cached_font_size: int = -1
 
 func set_charmed(charm_owner: Node, charmed: bool = true, force: bool = false) -> void:
 	# Validation: Don't charm Elites/Tanks/Bosses unless forced
@@ -340,28 +343,52 @@ func _process(delta: float) -> void:
 		visuals.update_state(movement_component.velocity, movement_component.velocity)
 		
 	# Dynamic Text Scaling: Keep text physically large but rendered sharply
-	if hp_label:
-		# Ensure pivot is centered
-		hp_label.pivot_offset = hp_label.size / 2.0
+	if hp_label and hp_bar:
+		# Reset pivot to default to simplified position math
+		hp_label.pivot_offset = Vector2.ZERO
 		
-		var p_scale = global_scale
-		if p_scale.x != 0 and p_scale.y != 0:
-			# 1. Counter-scale the node so it isn't stretched/blurry
-			hp_label.scale = Vector2(1.0 / p_scale.x, 1.0 / p_scale.y)
-			# 2. Increase font size to match the intended visual size
-			# Base font size is 10. ELITE_SCALE is 3.25. So font becomes ~32px.
-			var target_font_size = int(10 * p_scale.x)
-			hp_label.add_theme_font_size_override("font_size", target_font_size)
-			
-			# Scale outline size similarly so it doesn't disappear
-			var target_outline_size = int(4 * p_scale.x)
-			hp_label.add_theme_constant_override("outline_size", target_outline_size)
-			
-			# 3. Force Position Alignment: Lock label center to bar center
-			# This corrects any drift caused by pivot offsets or font rendering
-			if hp_bar:
-				hp_label.position = hp_bar.position + (hp_bar.size - hp_label.size) / 2.0
+		# Ensure centered text (vertical alignment was missed sometimes)
+		if hp_label.vertical_alignment != VERTICAL_ALIGNMENT_CENTER:
+			hp_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		
+		var p_scale_x = abs(scale.x)
+		if p_scale_x > 0.001:
+			# Fix: Scaling the Node makes text pixelated.
+			# We must scale the FONT SIZE (Resolution) instead.
+			
+			# Math: Previous visual scale was pow(scale, 0.7).
+			# Base Font = 10.
+			# Target Font = 10 * pow(scale, 0.7).
+			
+			var visual_factor = pow(p_scale_x, 0.7)
+			var target_font_size = int(10 * visual_factor)
+			var target_outline = int(4 * visual_factor) # Scale outline so it doesn't look thin
+			
+			# Apply only if changed (Optimized using local cache variable)
+			if _cached_font_size != target_font_size:
+				hp_label.add_theme_font_size_override("font_size", target_font_size)
+				hp_label.add_theme_constant_override("outline_size", target_outline)
+				_cached_font_size = target_font_size
+			
+			# Reset scale to 1.0 for sharp rendering
+			hp_label.scale = Vector2.ONE
+			
+			# Center Alignment relative to the BAR
+			# Bar is detached and scaled by 'scale'.
+			var bar_global_pos = hp_bar.global_position
+			var bar_visual_size = hp_bar.size * hp_bar.scale
+			var bar_center_global = bar_global_pos + bar_visual_size * 0.5
+			
+			# Label size is now "pure" (unscaled) but reflects the larger font
+			var label_size = hp_label.size
+			
+			# Set global position to center
+			# CRITICAL FIX: Round to integer pixel coordinates to prevent jitter/blur
+			# when moving. Sub-pixel text rendering causes artifacts.
+			var exact_pos = bar_center_global - label_size * 0.5
+			hp_label.global_position = exact_pos.round()
+				
 	# Damage Logic (Attack Current Target)
 	if is_instance_valid(_current_target):
 		var dist = global_position.distance_to(_current_target.global_position)
@@ -404,7 +431,7 @@ func _process(delta: float) -> void:
 			
 			_end_charging()
 			_laser_cooldown = LASER_FIRE_INTERVAL
-
+			
 	# Shooting Logic (If enabled and not charging)
 	elif _can_shoot and _laser_cooldown <= 0:
 		if is_instance_valid(_current_target):
@@ -425,21 +452,6 @@ func _process(delta: float) -> void:
 		# Default offset (-25, -47) for unscaled sprite
 		var offset = Vector2(-25, -47) * scale
 		hp_bar.global_position = global_position + offset
-	
-	if hp_label and is_instance_valid(hp_label):
-		# Clamp text scale so it doesn't get huge (reads better)
-		# Bar scales fully (e.g. 2.0), but text only goes to 1.4
-		var label_scale_val = clampf(scale.x, 0.8, 1.4)
-		var label_scale = Vector2(label_scale_val, label_scale_val)
-		hp_label.scale = label_scale
-		
-		# Center the label over the bar
-		# Bar Center Y is roughly -42 relative to pivot (-47 + 5)
-		var bar_center_y_local = -42.0 * scale.y
-		var label_half_size = hp_label.size * label_scale * 0.5
-		
-		# Position = EnemyPos + (0, BarCenterY) - LabelHalfSize
-		hp_label.global_position = global_position + Vector2(0, bar_center_y_local) - label_half_size
 	
 	# Show bars after first position sync (prevents flicker at origin)
 	if hp_bar and not hp_bar.visible:
@@ -549,6 +561,14 @@ func _fire_laser(direction: Vector2) -> void:
 	# Elites/Bosses set `base_damage` higher via stats/spawner logic usually. 
 	# Let's just scale the visual for now as requested.
 	laser.scale = scale
+	
+	# Boss Projectile Size Enforcement
+	# Ensure boss projectiles are physically large (matching 4.5x scale expectation)
+	# even if the boss entity itself is scaled differently (e.g. 2.25x)
+	if is_in_group("boss") or is_in_group("super_boss"):
+		var min_boss_scale = Vector2(4.5, 4.5)
+		if laser.scale.x < min_boss_scale.x:
+			laser.scale = min_boss_scale
 	
 	# Configure Faction Logic (Friendly Fire)
 	if _is_charmed:

@@ -11,6 +11,7 @@ signal boss_incoming(boss_type: String, time_until: float)
 signal run_complete(survived: bool, final_time: float)
 signal time_updated(elapsed: float, remaining: float)
 signal wave_changed(wave_number: int)
+signal rapture_event_started()
 
 # Run settings - 11 waves at 30 seconds each = 5.5 minutes
 const WAVE_DURATION := 30.0
@@ -111,6 +112,7 @@ var _run_won := false
 var _current_wave := 1
 var _last_wave := 0
 var _endless_mode := false
+var _rapture_active := false
 
 var _rng := RandomNumberGenerator.new()
 
@@ -144,6 +146,7 @@ func start() -> void:
 	_bosses_remaining = 0
 	_super_boss_active = false
 	_run_won = false
+	_rapture_active = false
 	_current_wave = 1
 	_last_wave = 0
 	emit_signal("time_updated", 0.0, RUN_DURATION)
@@ -168,16 +171,23 @@ func notify_boss_defeated(is_super_boss: bool = false) -> void:
 		
 		# Game ends when super boss is killed
 		if is_super_boss and _super_boss_active:
-			print("[WaveDirector] SUPER BOSS DEFEATED - RUN COMPLETE!")
+			print("[WaveDirector] SUPER BOSS DEFEATED - INITIATING RAPTURE EVENT!")
 			_boss_active = false
 			_super_boss_active = false
-			_run_won = true
-			emit_signal("run_complete", true, _elapsed_time)
-			_active = false
+			# Do NOT end run yet - Start Rapture Event
+			_start_rapture_event()
 		elif _bosses_remaining <= 0 and not _super_boss_active:
 			# All bosses cleared but super boss hasn't spawned yet - just reset boss state
 			_boss_active = false
 			emit_signal("event_ended", "boss")
+
+func notify_rapture_queen_defeated() -> void:
+	if _rapture_active:
+		print("[WaveDirector] RAPTURE QUEEN DEFEATED - TRUE VICTORY!")
+		_rapture_active = false
+		_run_won = true
+		emit_signal("run_complete", true, _elapsed_time)
+		stop()
 
 func _process(delta: float) -> void:
 	if not _active or _paused:
@@ -192,7 +202,7 @@ func _process(delta: float) -> void:
 		emit_signal("time_updated", _elapsed_time, RUN_DURATION - _elapsed_time)
 	
 	# Check for run timeout (only in non-endless mode)
-	if not _endless_mode and _elapsed_time >= RUN_DURATION and not _boss_active:
+	if not _endless_mode and _elapsed_time >= RUN_DURATION and not _boss_active and not _rapture_active:
 		emit_signal("run_complete", true, _elapsed_time)
 		_active = false
 		return
@@ -213,7 +223,10 @@ func _process(delta: float) -> void:
 	
 	# Normal spawning (reduced during events, stopped during boss)
 	if not _boss_active:
-		_process_normal_spawning(delta)
+		if _rapture_active:
+			_process_rapture_flood(delta)
+		else:
+			_process_normal_spawning(delta)
 
 func _update_spawn_bracket() -> void:
 	# In endless mode, we loop through brackets but keep increasing wave number
@@ -458,3 +471,40 @@ func format_time(seconds: float) -> String:
 	var mins := int(seconds) / 60
 	var secs := int(seconds) % 60
 	return "%d:%02d" % [mins, secs]
+
+func _start_rapture_event() -> void:
+	if _rapture_active: return
+	
+	_rapture_active = true
+	emit_signal("rapture_event_started")
+	print("[WaveDirector] RAPTURE EVENT STARTED - FLOOD MODE ACTIVE")
+	
+	# Stop any other active event
+	_active_event = {}
+	_event_timer = 0.0
+
+func _process_rapture_flood(delta: float) -> void:
+	# Flood mode: Spawn basic enemies very rapidly
+	_spawn_timer += delta
+	var flood_interval := 0.3 # Reduced spawn rate (was 0.15)
+	
+	while _spawn_timer >= flood_interval:
+		_spawn_timer -= flood_interval
+		# Force 'modular_rapture' or 'basic'
+		emit_signal("enemy_spawn_requested", "basic", 1, "horde")
+
+# Dev Tool Helpers
+func debug_jump_to_wave(wave: int) -> void:
+	if not _active: return
+	
+	# Find start time of wave (wave 1 is index 0)
+	var target_index = clamp(wave - 1, 0, SPAWN_BRACKETS.size() - 1)
+	var target_time = SPAWN_BRACKETS[target_index]["time"]
+	
+	_elapsed_time = target_time
+	_update_spawn_bracket()
+	print("[WaveDirector] DEBUG: Jumped to wave ", wave, " (Time: ", target_time, ")")
+
+func debug_start_rapture_event() -> void:
+	if not _active: start()
+	_start_rapture_event()

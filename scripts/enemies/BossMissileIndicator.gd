@@ -11,9 +11,9 @@ const BASE_ALPHA := 0.25
 const PULSE_ALPHA := 0.15
 
 func _ready() -> void:
-	# Make indicator unshaded so it's visible at night
+	# Make indicator unshaded but MIX blend for visibility on day maps
 	var mat := CanvasItemMaterial.new()
-	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_MIX
 	mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
 	material = mat
 
@@ -28,20 +28,19 @@ func _process(delta: float) -> void:
 		queue_redraw()
 
 func _draw() -> void:
-	# Pulsing alpha effect
-	var pulse := sin(_pulse_time * PULSE_SPEED) * 0.5 + 0.5
-	var alpha := BASE_ALPHA + pulse * PULSE_ALPHA
+	# Pulsing alpha effect - DARK RED
+	var pulse := sin(_pulse_time * PULSE_SPEED) * 0.3 + 0.7 # 0.4 to 1.0 range
 	
-	# Main indicator circle only (removed extra rings for performance)
-	var fill_color := Color(1.0, 0.0, 0.0, alpha) # Pure red
+	# Main indicator circle - Semi-transparent dark red
+	var fill_color := Color(0.5, 0.0, 0.0, 0.6) 
 	draw_circle(Vector2.ZERO, _radius, fill_color)
 	
-	# Simple ring outline
-	var ring_color := Color(1.0, 0.1, 0.1, alpha * 1.5) # Bright red
-	draw_arc(Vector2.ZERO, _radius * 0.9, 0, TAU, 16, ring_color, 3.0)
+	# Simple ring outline - Solid dark red
+	var ring_color := Color(0.8, 0.0, 0.0, 0.9) 
+	draw_arc(Vector2.ZERO, _radius * 0.9, 0, TAU, 32, ring_color, 4.0)
 	
-	# Simple crosshair (fewer draw calls)
-	var cross_color := Color(1.0, 0.2, 0.2, alpha * 2.0) # Light red
-	var cross_size := _radius * 0.25
-	draw_line(Vector2(-cross_size, 0), Vector2(cross_size, 0), cross_color, 2.0)
-	draw_line(Vector2(0, -cross_size), Vector2(0, cross_size), cross_color, 2.0)
+	# Crosshair - Dark Red
+	var cross_color := Color(0.6, 0.0, 0.0, 0.8 * pulse) 
+	var cross_size := _radius * 0.4
+	draw_line(Vector2(-cross_size, 0), Vector2(cross_size, 0), cross_color, 4.0)
+	draw_line(Vector2(0, -cross_size), Vector2(0, cross_size), cross_color, 4.0)

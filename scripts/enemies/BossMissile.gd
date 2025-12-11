@@ -154,9 +154,9 @@ func _create_ground_indicator() -> void:
 	call_deferred("_add_indicator_to_scene")
 
 func _ready() -> void:
-	# Make missile unshaded
+	# Make missile unshaded but MIX blend for solid dark look
 	var mat := CanvasItemMaterial.new()
-	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_MIX
 	mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
 	material = mat
 	
@@ -179,11 +179,11 @@ func _ensure_glow_sprite() -> void:
 	_glow_sprite.texture = _cached_glow_texture
 	_glow_sprite.centered = true
 	var glow_material := CanvasItemMaterial.new()
-	glow_material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	glow_material.blend_mode = CanvasItemMaterial.BLEND_MODE_MIX # Darker glow for day visibility
 	glow_material.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
 	_glow_sprite.material = glow_material
 	_glow_sprite.visible = true
-	_glow_sprite.modulate = Color(1.0, 0.1, 0.05, 0.7) # Deep red glow
+	_glow_sprite.modulate = Color(0.5, 0.0, 0.0, 0.6) # Deep dark red glow
 	_glow_sprite.scale = Vector2.ONE * 0.8 * MISSILE_SCALE
 	add_child(_glow_sprite)
 
@@ -425,7 +425,7 @@ func _draw_rocket_exhaust(dir: Vector2, perp: Vector2) -> void:
 	var outer_tip := tail - dir * outer_length
 	var outer_left := tail + perp * outer_width
 	var outer_right := tail - perp * outer_width
-	var outer_color := Color(1.0, 0.1, 0.1, 0.85)  # Deep red for outer glow
+	var outer_color := Color(0.6, 0.0, 0.0, 0.9)  # Deep dark red for outer
 	draw_polygon(
 		PackedVector2Array([outer_tip, outer_right, tail, outer_left]),
 		PackedColorArray([outer_color, outer_color, outer_color, outer_color])
@@ -436,7 +436,7 @@ func _draw_rocket_exhaust(dir: Vector2, perp: Vector2) -> void:
 	var inner_tip := tail - dir * inner_length
 	var inner_left := tail + perp * inner_width
 	var inner_right := tail - perp * inner_width
-	var inner_color := Color(1.0, 0.3, 0.2, 0.92)  # Bright red for inner
+	var inner_color := Color(0.8, 0.1, 0.0, 0.95)  # Dark red for inner
 	draw_polygon(
 		PackedVector2Array([inner_tip, inner_right, tail, inner_left]),
 		PackedColorArray([inner_color, inner_color, inner_color, inner_color])
@@ -447,7 +447,7 @@ func _draw_rocket_exhaust(dir: Vector2, perp: Vector2) -> void:
 	var core_tip := tail - dir * core_length
 	var core_left := tail + perp * core_width
 	var core_right := tail - perp * core_width
-	var core_color := Color(1.0, 0.6, 0.5, 0.95)  # Pale red for core
+	var core_color := Color(0.4, 0.0, 0.0, 1.0)  # Very dark core
 	draw_polygon(
 		PackedVector2Array([core_tip, core_right, tail, core_left]),
 		PackedColorArray([core_color, core_color, core_color, core_color])

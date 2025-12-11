@@ -207,14 +207,19 @@ func _create_spawn_panel() -> void:
 	_add_description(vbox, "Spawn enemies for testing combat.")
 	
 	_add_button(vbox, "Spawn 10 Basic", "Spawn a wave of basic enemies", _on_spawn_basic_wave)
-	_add_button(vbox, "Spawn Elite", "Spawn an elite enemy", _on_spawn_elite)
 	_add_button(vbox, "Spawn Tank", "Spawn a tank enemy", _on_spawn_tank)
+	_add_button(vbox, "Spawn Elite", "Spawn an elite enemy", _on_spawn_elite)
 	_add_button(vbox, "Spawn Boss", "Spawn a boss enemy", _on_spawn_boss)
+	_add_button(vbox, "Spawn Super Boss", "Spawn a super boss enemy", _on_spawn_super_boss)
+	_add_button(vbox, "Spawn N01", "Spawn RAPTURE QUEEN - N01", _on_spawn_n01)
 	
 	_add_separator(vbox)
 	_add_section_label(vbox, "WAVE CONTROL")
 	_add_button(vbox, "Kill All Enemies", "Instantly kill all enemies on screen", _on_kill_all_enemies)
+
 	_add_button(vbox, "Skip to Next Wave", "Advance to the next wave", _on_skip_wave)
+	_add_button(vbox, "Jump to Wave 11", "Instant jump to final wave", _on_jump_wave_11)
+	_add_button(vbox, "Start Rapture Event", "Trigger Queen Event + Flood", _on_start_rapture_event)
 
 func _create_progress_panel() -> void:
 	var scroll := _create_panel_base()
@@ -535,6 +540,30 @@ func _on_spawn_basic_wave() -> void:
 		for i in range(10):
 			_enemy_spawner.spawn_enemy("basic", "ring")
 		print("[DEBUG] Spawned 10 basic enemies")
+
+func _on_spawn_super_boss() -> void:
+	if _enemy_spawner and _enemy_spawner.has_method("spawn_enemy"):
+		_enemy_spawner.spawn_enemy("super_boss", "ring")
+		print("[DEBUG] Spawned Super Boss")
+
+func _on_spawn_n01() -> void:
+	if _enemy_spawner and _enemy_spawner.has_method("spawn_rapture_queen"):
+		_enemy_spawner.spawn_rapture_queen()
+		print("[DEBUG] Spawned N01 via Spawner (Env Triggers Active)")
+	else:
+		print("[DEBUG] Spawner missing spawn_rapture_queen method!")
+
+func _on_jump_wave_11() -> void:
+	if _level and "_wave_director" in _level:
+		var dir = _level._wave_director
+		if dir and dir.has_method("debug_jump_to_wave"):
+			dir.debug_jump_to_wave(11)
+
+func _on_start_rapture_event() -> void:
+	if _level and "_wave_director" in _level:
+		var dir = _level._wave_director
+		if dir and dir.has_method("debug_start_rapture_event"):
+			dir.debug_start_rapture_event()
 
 func _on_kill_all_enemies() -> void:
 	var enemies := get_tree().get_nodes_in_group("enemies")

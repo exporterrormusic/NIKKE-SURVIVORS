@@ -415,7 +415,13 @@ func _setup_wave_system() -> void:
 	_wave_director.time_updated.connect(_on_time_updated)
 	_wave_director.wave_changed.connect(_on_wave_changed)
 	
+
+	if _wave_director.has_signal("rapture_event_started"):
+		_wave_director.rapture_event_started.connect(_on_rapture_event_started)
+	
 	_enemy_spawner.enemy_died.connect(_on_enemy_died)
+	if _enemy_spawner.has_signal("rapture_queen_spawned"):
+		_enemy_spawner.rapture_queen_spawned.connect(_on_rapture_queen_spawned)
 	
 	# Start the wave system
 	_wave_director.start()
@@ -579,7 +585,8 @@ func _spawn_pristine_core_orb_at_boss() -> void:
 	orb.set_script(orb_script)
 	orb.cores_value = 1
 	orb.global_position = spawn_pos
-	_enemy_container.add_child(orb)
+	# Use call_deferred to safely add child during signal callback
+	_enemy_container.call_deferred("add_child", orb)
 	print("[Level] Spawned Pristine Core orb for boss kill")
 
 func _on_run_complete(survived: bool, final_time: float) -> void:
@@ -603,9 +610,144 @@ func _on_run_complete(survived: bool, final_time: float) -> void:
 	else:
 		print("[Level] Run ended at %d:%02d" % [mins, secs])
 
+var _is_rapture_active: bool = false
+
 func _on_time_updated(elapsed: float, remaining: float) -> void:
 	if _wave_ui:
-		_wave_ui.update_time(elapsed, remaining)
+		if _is_rapture_active:
+			_wave_ui.set_custom_timer_text("SURVIVE")
+		else:
+			_wave_ui.update_time(elapsed, remaining)
+
+# --- RAPTURE EVENT LOGIC ---
+
+func _on_rapture_event_started() -> void:
+	_is_rapture_active = true
+	print("[Level] RAPTURE EVENT STARTED! Triggering environment shifts...")
+	
+	# Spawn the Queen and track her death
+	if _enemy_spawner and _enemy_spawner.has_method("spawn_rapture_queen"):
+		var queen = _enemy_spawner.spawn_rapture_queen()
+		if queen:
+			queen.tree_exiting.connect(_on_rapture_queen_defeated)
+	
+	# Weather is handled by _on_rapture_queen_spawned (emitted by spawner), 
+	# but we call it here explicitly just in case spawner fails or we want redundancy.
+	_trigger_rapture_weather()
+	
+	# Update HUD Text
+	var canvas = get_node_or_null("CanvasLayer")
+	if canvas:
+		var wave_display = canvas.get_node_or_null("WaveDisplay")
+		if wave_display:
+			wave_display.text = "ENDGAME"
+
+func _on_rapture_queen_defeated() -> void:
+	# Called when Queen node is freed (tree_exiting)
+	
+	# Reset Camera Zoom via CombatJuice
+	if CombatJuice.instance:
+		var tween = create_tween()
+		tween.tween_property(CombatJuice.instance, "_base_zoom", Vector2.ONE, 2.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	else:
+		var camera = get_viewport().get_camera_2d()
+		if camera:
+			var tween = create_tween()
+			tween.tween_property(camera, "zoom", Vector2.ONE, 2.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	
+	# Check if player is alive (if player dead, run lost already handled)
+	if player and is_instance_valid(player) and player.hp > 0:
+		print("[Level] RAPTURE QUEEN DEFEATED!")
+		if _wave_director and _wave_director.has_method("notify_rapture_queen_defeated"):
+			_wave_director.notify_rapture_queen_defeated()
+
+func _on_rapture_queen_spawned() -> void:
+	print("[Level] Rapture Queen detected! Enforcing weather...")
+	_trigger_rapture_weather()
+	
+	# Cinematic Camera Zoom Out (User Request) - via CombatJuice to prevent snap-back
+	if CombatJuice.instance:
+		var tween = create_tween()
+		tween.tween_property(CombatJuice.instance, "_base_zoom", Vector2(0.7, 0.7), 2.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	else:
+		# Fallback if CombatJuice invalid (unlikely)
+		var camera = get_viewport().get_camera_2d()
+		if camera:
+			var tween = create_tween()
+			tween.tween_property(camera, "zoom", Vector2(0.7, 0.7), 2.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
+func _trigger_rapture_weather() -> void:
+	# 1. Force Night
+	if environment and environment.has_method("set_time_of_day"):
+		environment.set_time_of_day("night")
+		_update_ambient_systems(_get_current_biome(), "night")
+		
+	# 2. Force Rain (unless Snow)
+	var current_biome = _get_current_biome()
+	
+	# If snowfield, keep snow (particles are snow already).
+	# If NOT snowfield, force "rain_forest" particle config to get Rain.
+	if current_biome != "snowfield":
+		if _ambient_particles:
+			# Configure for rain forest (heavy rain) but keep "night" flag
+			_ambient_particles.configure("rain_forest", true)
+			print("[Level] Weather changed to RAIN")
+			
+	# 3. Start Lightning
+	_start_lightning_system()
+
+func _start_lightning_system() -> void:
+	# Check if already running
+	if has_node("LightningTimer"): return
+	
+	var timer = Timer.new()
+	timer.name = "LightningTimer"
+	timer.wait_time = 3.0 # Initial wait
+	timer.one_shot = true
+	timer.timeout.connect(_on_lightning_timer)
+	add_child(timer)
+	timer.start()
+	print("[Level] Lightning system activated")
+
+func _on_lightning_timer() -> void:
+	# Trigger Flash
+	_trigger_lightning_flash()
+	
+	# Schedule next flash (random interval 2-8 seconds)
+	var timer = get_node_or_null("LightningTimer")
+	if timer:
+		timer.wait_time = randf_range(2.0, 8.0)
+		timer.start()
+
+func _trigger_lightning_flash() -> void:
+	# Visual Flash
+	var flash = ColorRect.new()
+	flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	flash.color = Color(0.9, 0.9, 1.0, 0.3) # Bright white-blue
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	
+	# Add to a high-layer canvas
+	var canvas = CanvasLayer.new()
+	canvas.layer = 120 # Top top
+	add_child(canvas)
+	canvas.add_child(flash)
+	
+	# Twin: Flash fast then fade
+	var tween = create_tween()
+	tween.tween_property(flash, "modulate:a", 1.0, 0.05) # Instant max
+	tween.tween_property(flash, "modulate:a", 0.0, 0.4).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+	tween.tween_callback(func(): canvas.queue_free())
+	
+	# Sound (Placeholder or actual if available)
+	# TODO: Play loud thunder sound
+	# AudioSystem.play_sfx("thunder") if exists
+	print("[Level] *THUNDER CRASH*")
+
+func _get_current_biome() -> StringName:
+	if environment and environment.has_method("get_active_biome"):
+		var b = environment.get_active_biome()
+		if b: return b.biome_id
+	return &"grasslands" # Fallback
 
 func _on_wave_changed(wave_number: int) -> void:
 	# print("[Level] Wave changed to: ", wave_number)

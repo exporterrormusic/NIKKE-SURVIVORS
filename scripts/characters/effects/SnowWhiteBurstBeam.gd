@@ -156,13 +156,19 @@ func _apply_frostburn(enemy: Node2D) -> void:
 	if not is_instance_valid(enemy) or not "max_hp" in enemy:
 		return
 	
-	# Burn rates: 34% max HP/s for normal, 12% for bosses (single level talent)
+	# Burn rates: 34% max HP/s for normal, 3% for bosses (User Requested)
 	var burn_rates := [0.0, 0.34]  # Per second - index 0 unused, index 1 is the unlocked value
-	var elite_rates := [0.0, 0.12]  # Reduced for elite/boss
+	var boss_rates := [0.0, 0.03]  # Reduced for boss only
 	
-	var is_elite_or_boss: bool = enemy.has_meta("enemy_tier") and enemy.get_meta("enemy_tier") in ["elite", "boss"]
+	# Logic: Only "boss" gets the deep reduction. Elites take full damage?
+	# User requested "Change Snow White's Frostburn to 3% max HP per second for bosses."
+	# Implies Elites should probably take normal damage? Or stays reduced?
+	# "reduced burn effect is only for bosses" was explicitly said for Kilo.
+	# It's safer to assume Consistency: Bosses = 3%, Everyone else = 34%.
+	
+	var is_boss: bool = enemy.has_meta("enemy_tier") and enemy.get_meta("enemy_tier") == "boss"
 	var level_idx := mini(burn_level, 1)  # Cap at 1 for array access
-	var burn_rate: float = elite_rates[level_idx] if is_elite_or_boss else burn_rates[level_idx]
+	var burn_rate: float = boss_rates[level_idx] if is_boss else burn_rates[level_idx]
 	var burn_duration := 3.0
 	var damage_per_tick := int(enemy.max_hp * burn_rate)  # Per second
 	

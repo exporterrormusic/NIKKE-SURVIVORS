@@ -54,8 +54,8 @@ func initialize(starting_hp: int, starting_max_hp: int) -> void:
 
 
 ## Take damage
-func take_damage(amount: int, source: String = "enemy") -> bool:
-	if invincible:
+func take_damage(amount: int, source: String = "enemy", bypass_invincible: bool = false) -> bool:
+	if invincible and not bypass_invincible:
 		return false
 	
 	var actual_damage = amount
@@ -81,6 +81,12 @@ func take_damage(amount: int, source: String = "enemy") -> bool:
 		return _handle_death()
 	
 	return true
+
+
+## Explicitly expose access to max_hp for external systems (like Rapture Queen)
+# (Though max_hp is already a public var, some systems check has_method("get_max_hp") etc)
+func get_max_hp() -> int:
+	return max_hp
 
 
 ## Heal HP

@@ -26,6 +26,7 @@ StageRegistry="*res://scripts/systems/StageRegistry.gd"
 SettingsManager="*res://scripts/systems/SettingsManager.gd"
 AchievementManager="*res://scripts/systems/AchievementManager.gd"
 AudioDirector="*res://scripts/systems/AudioDirector.gd"
+RunStatsTracker="*res://scripts/systems/RunStatsTracker.gd"
 
 [display]
 

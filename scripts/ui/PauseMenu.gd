@@ -22,6 +22,7 @@ var _panel: Panel = null
 var _button_container: VBoxContainer = null
 var _title_label: Label = null
 var _buttons: Dictionary = {}
+var _stats_panel: Node = null  # StatsPanel instance
 
 func _ready() -> void:
 	layer = 100
@@ -43,16 +44,16 @@ func _build_ui() -> void:
 	overlay.color = Color(0.0, 0.0, 0.0, 0.7)
 	_container.add_child(overlay)
 	
-	# Center panel
+	# Center the main buttons panel on screen
+	var center_wrapper := CenterContainer.new()
+	center_wrapper.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_container.add_child(center_wrapper)
+	
+	# Center panel (buttons) - this is what gets centered
 	_panel = Panel.new()
 	_panel.custom_minimum_size = Vector2(400, 450)
-	_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_panel.offset_left = -200
-	_panel.offset_right = 200
-	_panel.offset_top = -225
-	_panel.offset_bottom = 225
 	_apply_panel_style(_panel)
-	_container.add_child(_panel)
+	center_wrapper.add_child(_panel)
 	
 	# VBox for content
 	var vbox := VBoxContainer.new()
@@ -81,6 +82,20 @@ func _build_ui() -> void:
 	_button_container.add_theme_constant_override("separation", 12)
 	_button_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_child(_button_container)
+	
+	# Stats panel (positioned to the right of center, not centered with it)
+	if ResourceLoader.exists("res://scripts/ui/StatsPanel.gd"):
+		var stats_script = load("res://scripts/ui/StatsPanel.gd")
+		_stats_panel = Panel.new()
+		_stats_panel.set_script(stats_script)
+		_stats_panel.custom_minimum_size = Vector2(400, 520)
+		# Position stats panel to the right of center
+		_stats_panel.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+		_stats_panel.offset_left = -420
+		_stats_panel.offset_right = -20
+		_stats_panel.offset_top = -260
+		_stats_panel.offset_bottom = 260
+		_container.add_child(_stats_panel)
 
 func _apply_panel_style(panel: Panel) -> void:
 	var style := StyleBoxFlat.new()
@@ -227,20 +242,27 @@ func _rebuild_buttons() -> void:
 func show_pause() -> void:
 	_menu_mode = MenuMode.PAUSE
 	_rebuild_buttons()
+	_refresh_stats_panel()
 	visible = true
 	get_tree().paused = true
 
 func show_defeat() -> void:
 	_menu_mode = MenuMode.DEFEAT
 	_rebuild_buttons()
+	_refresh_stats_panel()
 	visible = true
 	get_tree().paused = true
 
 func show_victory() -> void:
 	_menu_mode = MenuMode.VICTORY
 	_rebuild_buttons()
+	_refresh_stats_panel()
 	visible = true
 	get_tree().paused = true
+
+func _refresh_stats_panel() -> void:
+	if _stats_panel and _stats_panel.has_method("set_live_stats"):
+		_stats_panel.set_live_stats()
 
 func hide_menu() -> void:
 	visible = false

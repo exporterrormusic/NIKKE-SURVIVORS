@@ -49,4 +49,10 @@ func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector
 	if health_component:
 		health_component.damage(final_damage, source)
 	
+	# Emit damage_dealt to EventBus for stats tracking
+	if EventBus and team == "enemy":
+		# Create a simple DamageInfo-like dict
+		var damage_info = {"amount": final_damage, "source": source, "is_crit": is_crit}
+		EventBus.damage_dealt.emit(get_parent(), damage_info)
+	
 	# Optional: Knockback logic via MovementComponent could go here or signal up

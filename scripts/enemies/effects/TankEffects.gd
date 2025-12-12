@@ -9,15 +9,16 @@ var _shadow: Node2D = null
 func _ready() -> void:
 	_enemy = get_parent()
 	_setup_shadow()
-	_setup_hp_bar_color()
+	# Delay HP bar color setup to ensure ProgressBar is ready
+	call_deferred("_setup_hp_bar_color")
 	z_index = -1
 
 func _setup_hp_bar_color() -> void:
-	# Make tank HP bar yellow
+	# Make tank HP bar dark reddish-orange
 	if _enemy and _enemy.has_node("ProgressBar"):
 		var hp_bar: ProgressBar = _enemy.get_node("ProgressBar")
 		var fill_style := StyleBoxFlat.new()
-		fill_style.bg_color = Color(0.95, 0.85, 0.2, 1.0)  # Yellow
+		fill_style.bg_color = Color(0.85, 0.35, 0.15, 1.0)  # Dark reddish-orange
 		hp_bar.add_theme_stylebox_override("fill", fill_style)
 
 func _setup_shadow() -> void:

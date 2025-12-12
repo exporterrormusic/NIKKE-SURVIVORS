@@ -55,7 +55,7 @@ const TANK_SCALE := 2.0
 const TANK_HP_MULT := 5.0
 const TANK_SPEED_MULT := 1.0
 const TANK_DAMAGE_MULT := 2.0
-const TANK_GLOW_COLOR := Color(1.0, 0.85, 0.2, 1.0)  # Yellow glow (Swapped from Elite)
+const TANK_GLOW_COLOR := Color(0.85, 0.35, 0.15, 1.0)  # Dark reddish-orange glow
 
 # Boss settings - 4.5x size, purple glow
 const BOSS_SCALE := 4.5
@@ -294,10 +294,6 @@ func _apply_outline_glow(enemy: Node2D, glow_color: Color, enhance_core: bool = 
 		var scale_factor: float = max(enemy.scale.x, enemy.scale.y)
 		var shader_mat := ShaderCache.create_enemy_glow_material(glow_color, enhance_core, scale_factor)
 		sprite.material = shader_mat
-
-# Deprecated: _get_outline_shader() replaced by universal resource load
-
-	# Create outline shader that respects sprite alpha and can enhance red core
 
 
 func _apply_boss_stats(enemy: Node2D) -> void:
@@ -749,7 +745,7 @@ func spawn_rapture_queen() -> Node2D:
 		
 	# Setup Boss Bar
 	if _boss_health_bar and _boss_health_bar.has_method("show_boss"):
-		_boss_health_bar.show_boss(queen, "RAPTURE QUEEN N01")
+		_boss_health_bar.show_boss(queen, "RAPTURE QUEEN N01", true)  # Red bar for super boss
 		
 	# Emit signal so Level can trigger weather
 	emit_signal("rapture_queen_spawned")

@@ -9,7 +9,8 @@ var _shadow: Node2D = null
 func _ready() -> void:
 	_enemy = get_parent()
 	_setup_shadow()
-	_setup_hp_bar_color()
+	# Delay HP bar color setup to ensure ProgressBar is ready
+	call_deferred("_setup_hp_bar_color")
 	_play_growl_sound()
 	z_index = -1
 

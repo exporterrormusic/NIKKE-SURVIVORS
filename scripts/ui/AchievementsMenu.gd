@@ -48,15 +48,8 @@ func _input(event: InputEvent) -> void:
 
 
 func _load_achievements() -> void:
-	# Start with general achievements (these are manually defined placeholders)
-	_achievements = [
-		# General achievements
-		{"id": "first_blood", "title": "First Blood", "desc": "Complete a Stage 1 map", "category": GENERAL_FILTER, "unlocked": false, "progress": 0, "target": 1},
-		{"id": "kill_50000", "title": "Massacre", "desc": "Defeat 50,000 enemies total", "category": GENERAL_FILTER, "unlocked": false, "progress": 0, "target": 50000},
-		{"id": "boss_slayer", "title": "Boss Slayer", "desc": "Defeat a boss enemy", "category": GENERAL_FILTER, "unlocked": false, "progress": 0, "target": 1},
-		{"id": "no_damage", "title": "Untouchable", "desc": "Complete a wave without taking damage", "category": GENERAL_FILTER, "unlocked": false, "progress": 0, "target": 1},
-		{"id": "all_maps", "title": "World Traveler", "desc": "Play on all maps", "category": GENERAL_FILTER, "unlocked": false, "progress": 2, "target": 4},
-	]
+	# Start with empty list (all achievements now loaded from AchievementManager)
+	_achievements = []
 	
 	# Load character-specific achievements from AchievementManager
 	if has_node("/root/AchievementManager"):

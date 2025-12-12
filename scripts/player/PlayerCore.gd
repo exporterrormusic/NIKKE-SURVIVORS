@@ -86,6 +86,12 @@ var _health: PlayerHealth = null
 var _movement: PlayerMovement = null
 var _weapons: PlayerWeapons = null
 
+# New modular components (Phase 2 refactor)
+var _burst_system: BurstSystem = null
+var _char_upgrades: CharacterUpgrades = null
+var _char_switcher: CharacterSwitcher = null
+var _talent_ui: TalentUIManager = null
+
 # Movement state
 var dashing: bool = false
 var dash_direction: Vector2 = Vector2.ZERO
@@ -168,6 +174,9 @@ func _ready() -> void:
 	add_child(_weapons)
 	_weapons.attack_cooldown = attack_cooldown
 	
+	# Initialize new modular components
+	_init_modular_components()
+	
 	_apply_shop_upgrades()
 	_init_audio()
 	_init_character_system()
@@ -177,6 +186,68 @@ func _ready() -> void:
 	_level_up_sfx = load("res://assets/sounds/sfx/ui/level.wav")
 	# Connect to environment for sprite darkening during night
 	_setup_environment_modulate()
+
+func _init_modular_components() -> void:
+	"""Initialize the new modular component system."""
+	# BurstSystem - manages burst gauge
+	_burst_system = BurstSystem.new()
+	_burst_system.name = "BurstSystem"
+	_burst_system.burst_max = burst_max
+	_burst_system.burst_per_hit = burst_per_hit
+	add_child(_burst_system)
+	_burst_system.initialize(self)
+	_burst_system.burst_changed.connect(_on_burst_changed)
+	
+	# CharacterUpgrades - manages character-specific shop upgrades
+	_char_upgrades = CharacterUpgrades.new()
+	_char_upgrades.name = "CharacterUpgrades"
+	add_child(_char_upgrades)
+	_char_upgrades.initialize(self)
+	_char_upgrades.shield_changed.connect(_on_shield_changed)
+	_char_upgrades.revive_triggered.connect(_on_revive_triggered)
+	
+	# TalentUIManager - manages talent tree and skill point notifications
+	_talent_ui = TalentUIManager.new()
+	_talent_ui.name = "TalentUIManager"
+	add_child(_talent_ui)
+	_talent_ui.initialize(self)
+	_talent_ui.talent_unlocked.connect(_on_component_talent_unlocked)
+	_talent_ui.talent_tree_opened.connect(func(): shop_open = true)
+	_talent_ui.talent_tree_closed.connect(func(): shop_open = false)
+	
+	print("[PlayerCore] Modular components initialized")
+
+
+func _on_burst_changed(current: float, maximum: float) -> void:
+	"""Handle burst gauge updates from BurstSystem component."""
+	burst_current = current
+	if player_hud:
+		player_hud.update_burst(current, maximum, true)
+	if overhead_hud:
+		overhead_hud.update_burst(current, maximum)
+
+
+func _on_shield_changed(current: int, maximum: int) -> void:
+	"""Handle shield updates from CharacterUpgrades component."""
+	_kilo_shield_current = current
+	_kilo_shield_max = maximum
+	if overhead_hud:
+		overhead_hud.update_shield(current, maximum)
+
+
+func _on_revive_triggered() -> void:
+	"""Handle revive from CharacterUpgrades component."""
+	hp = max_hp
+	_update_health_display(max_hp, false)
+	_spawn_revive_effect()
+	_cecil_revive_invincible_timer = 5.0
+	invincible = true
+
+
+func _on_component_talent_unlocked(char_id: int, talent_id: String) -> void:
+	"""Handle talent unlock from TalentUIManager component."""
+	# Forward to existing handler
+	_on_talent_unlocked(char_id, talent_id)
 
 func _apply_shop_upgrades() -> void:
 	"""Apply permanent shop upgrades to player stats."""
@@ -1143,9 +1214,12 @@ func switch_character(direction: int) -> void:
 	_update_overhead_ammo()
 	_update_burst_visibility()  # Update burst bar for new character
 	
+	# Update GameState so achievements track the correct character
+	var registry_idx: int = _selected_char_indices[current_character] if current_character < _selected_char_indices.size() else 0
+	GameState.set_player_character(registry_idx)
+	
 	if overhead_hud:
 		# Pass registry index (not slot index) for proper ammo display
-		var registry_idx: int = _selected_char_indices[current_character] if current_character < _selected_char_indices.size() else 0
 		overhead_hud.update_character(registry_idx)
 
 func _trigger_swap_effect() -> void:
@@ -1157,7 +1231,9 @@ func _trigger_swap_effect() -> void:
 		get_parent().add_child(_swap_effect)
 	
 	if _swap_effect.has_method("trigger"):
-		_swap_effect.trigger(current_character, global_position)
+		# Pass registry index (not slot index) for correct character effect
+		var registry_idx: int = _selected_char_indices[current_character] if current_character < _selected_char_indices.size() else 0
+		_swap_effect.trigger(registry_idx, global_position)
 
 # ============= AMMO UI =============
 

@@ -39,7 +39,7 @@ const CHARACTER_UPGRADES := {
 		{"id": "basic_attack", "name": "I'm a healer, but...", "desc": "All squad kills heal player for 2% max HP.", "max_level": 1, "base_cost": 10, "icon": "💖"},
 	],
 	"nayuta": [
-		{"id": "basic_attack", "name": "Duplicity", "desc": "10% chance on kill to spawn a Nayuta clone with current upgrades.", "max_level": 1, "base_cost": 10, "icon": "👥"},
+		{"id": "basic_attack", "name": "Duplicity", "desc": "10% chance to spawn a Nayuta clone when ANY squad member kills an enemy.", "max_level": 1, "base_cost": 10, "icon": "👥"},
 	],
 	"commander": [
 		{"id": "basic_attack", "name": "Obviously Anderson", "desc": "All squad attacks generate Burst gauge at 2x rate.", "max_level": 1, "base_cost": 10, "icon": "⚡"},

@@ -41,17 +41,17 @@ func _ready() -> void:
 	# Initial upward velocity with slight horizontal drift
 	_velocity = Vector2(_rng.randf_range(-20, 20), -FLOAT_SPEED)
 	
-	# Set scale and font size based on type
+	# Set scale and font size based on type - larger for better visibility
 	match _type:
 		NumberType.CRITICAL:
-			_base_scale = 1.6
-			_font_size = 28
+			_base_scale = 1.8
+			_font_size = 34  # Larger for crits
 		NumberType.HEAL:
-			_base_scale = 1.3
-			_font_size = 22
+			_base_scale = 1.4
+			_font_size = 26
 		_:
-			_base_scale = 1.0
-			_font_size = 20
+			_base_scale = 1.2
+			_font_size = 24  # Larger base size
 	
 	# Start with pop scale
 	scale = Vector2.ONE * _base_scale * POP_SCALE

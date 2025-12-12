@@ -254,6 +254,7 @@ func _create_data_panel() -> void:
 	_add_description(vbox, "These actions cannot be undone!")
 	
 	_add_danger_button(vbox, "Reset Shop Data", "Reset purchases and currency", _on_reset_shop)
+	_add_danger_button(vbox, "Reset Leaderboards", "Clear high scores/runs", _on_reset_leaderboards)
 	_add_danger_button(vbox, "Reset Achievements", "Clear all achievement progress", _on_reset_achievements)
 	_add_danger_button(vbox, "RESET ALL DATA", "Delete all save data", _on_reset_all_data)
 
@@ -725,6 +726,11 @@ func _on_reset_shop() -> void:
 	config.save(SaveManagerScript.SHOP_PATH)
 	
 	print("[DEBUG] Shop data reset!")
+
+func _on_reset_leaderboards() -> void:
+	if GameState:
+		GameState.reset_leaderboard()
+		print("[DEBUG] Requested leaderboard reset")
 
 func _on_reset_achievements() -> void:
 	var achievement_manager := get_node_or_null("/root/AchievementManager")

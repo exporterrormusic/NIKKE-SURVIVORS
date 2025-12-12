@@ -69,7 +69,12 @@ func _ready():
 	environment.set_world_bounds(Rect2(-world_size/2, -world_size/2, world_size, world_size))
 	
 	# Initialize environment from stage (or random fallback)
+	# Initialize environment from stage (or random fallback)
 	_initialize_stage_environment()
+	
+	# Notify run started
+	if GameState and EventBus:
+		EventBus.run_started.emit(GameState.current_stage_id)
 
 var _pause_menu: CanvasLayer = null
 
@@ -601,7 +606,12 @@ func _on_run_complete(survived: bool, final_time: float) -> void:
 			# Core is awarded via orb when boss dies, no need to add here
 			
 			# Track win achievement for all characters in squad
+			# Track win achievement for all characters in squad
 			_track_win_achievement()
+			
+			# Notify event bus
+			if EventBus:
+				EventBus.run_completed.emit(true, GameState.current_stage_id, final_time)
 		
 		# Show victory screen
 		var pause_menu = get_node_or_null("PauseMenu")

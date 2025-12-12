@@ -115,8 +115,8 @@ func _process(delta: float) -> void:
 		_fire_missile_barrage()
 		_missile_timer = _missile_cooldown
 	
-	# Fire beam (only bosses fire beams, not tanks)
-	if _beam_timer <= 0 and not _is_tank:
+	# Fire beam (only true bosses fire beams, not tanks or elites)
+	if _beam_timer <= 0 and _is_boss:
 		_fire_beam()
 		_beam_timer = BEAM_COOLDOWN
 

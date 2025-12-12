@@ -60,12 +60,14 @@ const ENEMY_UNLOCKS := [
 # Wave 10: Horde + Elite
 # Wave 11: 1 Super Boss + 5 Bosses (FINAL)
 const EVENTS := [
-	# 10s: Horde 1
-	# REPLACED: Basic Rapture with Modular Rapture for production test
-	{"time": 10.0, "type": "horde", "enemy": "modular_rapture", "count": 15, "duration": 15.0},
+	# Wave 1 (0:00) - No warning needed, game starts at wave 1
+	# First horde spawns shortly after start
+	{"time": 5.0, "type": "horde", "enemy": "modular_rapture", "count": 15, "duration": 20.0},
 	
-	# 30s: Tank intro
-    # Wave 2
+	# Wave 2 (0:30) - Tanks unlock
+	{"time": 30.0, "type": "horde", "enemy": "tank", "count": 4, "duration": 25.0},
+	
+	# Wave 3+
 	{"time": 60.0, "type": "horde", "enemy": "basic", "count": 12, "duration": 30.0},    # Wave 3
 	{"time": 90.0, "type": "horde", "enemy": "tank", "count": 6, "duration": 30.0},      # Wave 4
 	{"time": 120.0, "type": "horde", "enemy": "basic", "count": 15, "duration": 30.0},   # Wave 5
@@ -326,12 +328,12 @@ func _start_event(event: Dictionary) -> void:
 			translated_event["enemy"] = translated_enemy
 			_active_event = translated_event
 			_event_timer = 0.0
-			emit_signal("event_started", "horde", {"enemy": translated_enemy, "count": event["count"]})
+			emit_signal("event_started", "horde", {"enemy": translated_enemy, "count": event["count"], "wave": _current_wave})
 		
 		"elite":
 			print("[WaveDirector] SPAWNING ELITE - enemy_type: ", translated_enemy)
 			emit_signal("enemy_spawn_requested", translated_enemy, 1, "elite")
-			emit_signal("event_started", "elite", {"enemy": translated_enemy})
+			emit_signal("event_started", "elite", {"enemy": translated_enemy, "wave": _current_wave})
 			await get_tree().create_timer(0.1).timeout
 			emit_signal("event_ended", "elite")
 		
@@ -345,7 +347,7 @@ func _start_event(event: Dictionary) -> void:
 			var boss_type := "super_boss" if _stage_mode == 2 else "boss"
 			for i in range(boss_count):
 				emit_signal("enemy_spawn_requested", boss_type, 1, "center")
-			emit_signal("event_started", "boss", {"count": boss_count})
+			emit_signal("event_started", "boss", {"count": boss_count, "name": "RAPTURE TITAN", "wave": _current_wave})
 		
 		"super_boss":
 			_boss_active = true
@@ -355,7 +357,7 @@ func _start_event(event: Dictionary) -> void:
 			
 			# Spawn super boss
 			emit_signal("enemy_spawn_requested", "super_boss", 1, "center")
-			emit_signal("event_started", "super_boss", {"count": 1})
+			emit_signal("event_started", "super_boss", {"count": 1, "name": "RAPTURE QUEEN N01", "wave": _current_wave})
 
 ## Translate enemy types based on stage mode
 ## Stage 1: normal (basic, tank, elite, boss)

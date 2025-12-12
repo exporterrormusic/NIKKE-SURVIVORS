@@ -1,7 +1,8 @@
 extends CanvasLayer
 class_name WaveUI
 
-## Displays combined wave progress bar with timer and event info
+## Displays combined wave progress bar with timer and wave info
+## Syncs with WaveDirector's 30-second wave intervals
 
 # UI elements
 var _progress_container: Control = null
@@ -16,10 +17,12 @@ var _event_fade_timer := 0.0
 var _boss_warning_timer := 0.0
 var _current_progress := 0.0
 var _target_progress := 0.0
-var _next_event_time := 0.0
-var _last_event_time := 0.0
-var _current_event_name := ""
+var _current_wave := 1
 var _bar_flash_timer := 0.0
+
+# Wave timing - matches WaveDirector SPAWN_BRACKETS
+const WAVE_DURATION := 30.0  # Each wave is 30 seconds
+const TOTAL_WAVES := 11
 
 const EVENT_DISPLAY_TIME := 3.0
 const BOSS_WARNING_PULSE_SPEED := 6.0
@@ -33,30 +36,10 @@ const BAR_FILL_COLOR := Color(0.3, 0.7, 1.0, 1.0)
 const BAR_FLASH_COLOR := Color(1.0, 0.9, 0.5, 1.0)
 const BAR_BORDER_COLOR := Color(0.4, 0.45, 0.5, 1.0)
 
-# Event schedule for progress calculation
-const EVENTS := [
-	{"time": 25.0, "name": "HORDE"},
-	{"time": 40.0, "name": "ELITE"},
-	{"time": 55.0, "name": "HORDE"},
-	{"time": 70.0, "name": "ELITE"},
-	{"time": 85.0, "name": "HORDE"},
-	{"time": 100.0, "name": "ELITE"},
-	{"time": 115.0, "name": "HORDE"},
-	{"time": 130.0, "name": "ELITE"},
-	{"time": 145.0, "name": "HORDE"},
-	{"time": 160.0, "name": "ELITE"},
-	{"time": 175.0, "name": "HORDE"},
-	{"time": 190.0, "name": "ELITE"},
-	{"time": 205.0, "name": "HORDE"},
-	{"time": 220.0, "name": "ELITE"},
-	{"time": 235.0, "name": "HORDE"},
-	{"time": 270.0, "name": "BOSS"},
-	{"time": 300.0, "name": "VICTORY"},
-]
 
 func _ready() -> void:
 	_setup_ui()
-	_update_next_event(0.0)
+
 
 func _setup_ui() -> void:
 	# Main container at top center
@@ -92,20 +75,8 @@ func _setup_ui() -> void:
 	_timer_label.size = Vector2(60, BAR_HEIGHT)
 	_progress_container.add_child(_timer_label)
 	
-	# Wave/event label (right side)
-	_wave_label = Label.new()
-	_wave_label.name = "WaveLabel"
-	_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_wave_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_wave_label.add_theme_font_size_override("font_size", 16)
-	_wave_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.6))
-	_wave_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
-	_wave_label.add_theme_constant_override("shadow_offset_x", 1)
-	_wave_label.add_theme_constant_override("shadow_offset_y", 1)
-	_wave_label.text = "NEXT: HORDE"
-	_wave_label.position = Vector2(BAR_WIDTH - 130, 0)
-	_wave_label.size = Vector2(120, BAR_HEIGHT)
-	_progress_container.add_child(_wave_label)
+	# Wave label removed - wave number is shown in warnings instead
+	# The progress bar just shows timer on the left
 	
 	# Event notification (center screen, larger)
 	_event_label = Label.new()
@@ -125,7 +96,6 @@ func _setup_ui() -> void:
 	add_child(_event_label)
 	
 	# Boss warning - thin red bar across middle of screen
-	# Create a full-screen container first
 	var warning_container := Control.new()
 	warning_container.name = "WarningContainer"
 	warning_container.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -137,6 +107,7 @@ func _setup_ui() -> void:
 	_boss_warning.visible = false
 	warning_container.add_child(_boss_warning)
 
+
 func _draw_progress_bar() -> void:
 	var bar := _progress_bar
 	var rect := Rect2(Vector2.ZERO, bar.size)
@@ -144,11 +115,11 @@ func _draw_progress_bar() -> void:
 	# Background
 	bar.draw_rect(rect, BAR_BG_COLOR)
 	
-	# Fill based on progress to next event
+	# Fill based on progress within current wave
 	var fill_width := rect.size.x * _current_progress
 	var fill_rect := Rect2(Vector2.ZERO, Vector2(fill_width, rect.size.y))
 	
-	# Flash when event triggers
+	# Flash when wave changes
 	var fill_color := BAR_FILL_COLOR
 	if _bar_flash_timer > 0:
 		var flash_t := _bar_flash_timer / 0.5
@@ -159,14 +130,15 @@ func _draw_progress_bar() -> void:
 	# Border
 	bar.draw_rect(rect, BAR_BORDER_COLOR, false, 2.0)
 	
-	# Segment markers for visual interest
-	var segment_count := 10
+	# Segment markers for visual interest (11 segments for 11 waves)
+	var segment_count := TOTAL_WAVES
 	for i in range(1, segment_count):
 		var x := rect.size.x * float(i) / float(segment_count)
 		var top := Vector2(x, 0)
 		var bottom := Vector2(x, 4)
 		bar.draw_line(top, bottom, BAR_BORDER_COLOR, 1.0)
 		bar.draw_line(Vector2(x, rect.size.y - 4), Vector2(x, rect.size.y), BAR_BORDER_COLOR, 1.0)
+
 
 func _process(delta: float) -> void:
 	# Smooth progress bar
@@ -189,25 +161,7 @@ func _process(delta: float) -> void:
 	# Pulse boss warning
 	if _boss_warning and _boss_warning.visible:
 		_boss_warning_timer -= delta
-		# Don't force hide - let WarningBar handle its own fade-out animation
-		# The WarningBar will set visible = false when animation completes
 
-func _update_next_event(elapsed: float) -> void:
-	# Find the next upcoming event
-	for i in range(EVENTS.size()):
-		if EVENTS[i]["time"] > elapsed:
-			_next_event_time = EVENTS[i]["time"]
-			_current_event_name = EVENTS[i]["name"]
-			# Find previous event time
-			if i > 0:
-				_last_event_time = EVENTS[i - 1]["time"]
-			else:
-				_last_event_time = 0.0
-			break
-	
-	# Update wave label
-	if _wave_label:
-		_wave_label.text = "NEXT: %s" % _current_event_name
 
 func update_time(elapsed: float, remaining: float) -> void:
 	if _timer_label:
@@ -220,43 +174,62 @@ func update_time(elapsed: float, remaining: float) -> void:
 		else:
 			_timer_label.text = "%d:%02d" % [mins, secs]
 	
-	# Calculate progress to next event
-	if _next_event_time > _last_event_time:
-		var segment_duration := _next_event_time - _last_event_time
-		var segment_progress := elapsed - _last_event_time
-		_target_progress = clampf(segment_progress / segment_duration, 0.0, 1.0)
-	
-	# Check if we crossed into a new segment
-	if elapsed >= _next_event_time:
-		_update_next_event(elapsed)
-		_bar_flash_timer = 0.5  # Flash when event triggers
-		_target_progress = 0.0
+	# Calculate progress within current wave (0.0 to 1.0)
+	# Each wave is WAVE_DURATION seconds
+	var wave_start_time := float(_current_wave - 1) * WAVE_DURATION
+	var time_in_wave := elapsed - wave_start_time
+	_target_progress = clampf(time_in_wave / WAVE_DURATION, 0.0, 1.0)
+
+
+func update_wave(wave_number: int) -> void:
+	# Called when wave changes
+	if wave_number != _current_wave:
+		_bar_flash_timer = 0.5  # Flash when wave changes
 		_current_progress = 0.0
+		_target_progress = 0.0
+	
+	_current_wave = wave_number
+	
+	if _wave_label:
+		_wave_label.text = "WAVE %d" % wave_number
+
 
 func show_event(event_type: String, event_data: Dictionary, elapsed_time: float = 0.0) -> void:
 	if not _event_label:
 		return
 	
-	# Skip warning bar for the very first wave (at time 0)
-	if elapsed_time < 1.0:
-		return
+	# Skip warning bar for wave 1 events (game already starts at wave 1)
+	if elapsed_time < 25.0:
+		# Only show boss warnings during wave 1, skip normal wave warnings
+		if event_type not in ["boss", "super_boss"]:
+			return
 	
 	var text := ""
 	var show_warning_bar := false
 	
 	match event_type:
+		"wave":
+			# Show wave number (only for wave 2+)
+			var wave_num: int = event_data.get("wave", _current_wave)
+			text = "WAVE %d" % wave_num
+			show_warning_bar = true
 		"horde":
-			text = "HORDE WAVE"
+			# Horde is just a wave with more enemies (only for wave 2+)
+			var wave_num: int = event_data.get("wave", _current_wave)
+			text = "WAVE %d" % wave_num
 			show_warning_bar = true
 		"elite":
-			text = "ELITE ENEMY"
+			# Elite spawn - still show wave number (only for wave 2+)
+			var wave_num: int = event_data.get("wave", _current_wave)
+			text = "WAVE %d" % wave_num
 			show_warning_bar = true
 		"boss":
-			var boss_count: int = event_data.get("count", 1)
-			text = "BOSS x%d" % boss_count if boss_count > 1 else "BOSS"
+			var boss_name: String = event_data.get("name", "BOSS")
+			text = "WARNING: %s INCOMING" % boss_name
 			show_warning_bar = true
 		"super_boss":
-			text = "FINAL BOSS"
+			var boss_name: String = event_data.get("name", "FINAL BOSS")
+			text = "WARNING: %s INCOMING" % boss_name
 			show_warning_bar = true
 	
 	# Show the red warning bar for important events
@@ -270,6 +243,7 @@ func show_event(event_type: String, event_data: Dictionary, elapsed_time: float 
 	# Hide the old text label - we're using the warning bar now
 	_event_label.visible = false
 
+
 func show_boss_warning(_time_until: float) -> void:
 	if not _boss_warning:
 		return
@@ -279,14 +253,13 @@ func show_boss_warning(_time_until: float) -> void:
 	if _boss_warning.has_method("start_pulse"):
 		_boss_warning.start_pulse(BOSS_WARNING_DURATION)
 
+
 func hide_all() -> void:
 	if _event_label:
 		_event_label.visible = false
 	if _boss_warning:
 		_boss_warning.visible = false
 
-func update_wave(_wave_number: int) -> void:
-	pass  # Wave display is handled by Level.gd via WaveDisplay label in scene
 
 func set_custom_timer_text(text: String) -> void:
 	if _timer_label:

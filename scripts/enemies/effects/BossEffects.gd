@@ -9,8 +9,10 @@ var _shadow: Node2D = null
 func _ready() -> void:
 	_enemy = get_parent()
 	_setup_shadow()
-	_setup_hp_bar_color()
+	# Delay HP bar color setup to ensure ProgressBar is ready
+	call_deferred("_setup_hp_bar_color")
 	_play_growl_sound()
+	_trigger_boss_shake()
 	z_index = -1
 
 func _setup_hp_bar_color() -> void:
@@ -69,3 +71,11 @@ func _draw() -> void:
 func _process(_delta: float) -> void:
 	if not is_instance_valid(_enemy):
 		queue_free()
+
+
+func _trigger_boss_shake() -> void:
+	# Dramatic camera shake when boss spawns
+	var CombatJuice = load("res://scripts/systems/CombatJuice.gd")
+	if CombatJuice and CombatJuice.instance:
+		CombatJuice.camera_shake(20.0)  # Strong shake for boss entrance
+

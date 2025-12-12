@@ -9,13 +9,13 @@ extends Area2D
 @export var max_range := 600.0
 @export var lifetime := 1.5
 
-# Visual parameters - INTENSE RED GLOW
-const LASER_COLOR := Color(1.0, 0.08, 0.15, 1.0)  # Deep bright red
-const LASER_COLOR_HOT := Color(1.0, 0.2, 0.1, 1.0)  # Intense red for pulse
-const GLOW_COLOR := Color(1.0, 0.15, 0.1, 0.85)   # Strong red glow
-const CORE_COLOR := Color(1.0, 0.6, 0.5, 1.0)     # Hot pinkish-white core
-const CORE_COLOR_PULSE := Color(1.0, 0.4, 0.3, 1.0)  # Pulsing core color
-const TRAIL_COLOR := Color(1.0, 0.1, 0.05, 0.8)   # Deep red trail
+# Visual parameters - DARK RED (compensates for daylight brightness)
+const LASER_COLOR := Color(0.85, 0.0, 0.05, 1.0)  # Dark blood red
+const LASER_COLOR_HOT := Color(0.9, 0.0, 0.0, 1.0)  # Dark crimson
+const GLOW_COLOR := Color(0.8, 0.0, 0.0, 0.85)   # Dark red glow
+const CORE_COLOR := Color(0.9, 0.15, 0.15, 1.0)   # Darker pinkish core
+const CORE_COLOR_PULSE := Color(0.85, 0.1, 0.1, 1.0)  # Dark pulsing core
+const TRAIL_COLOR := Color(0.8, 0.0, 0.0, 0.8)   # Dark red trail
 const BEAM_LENGTH := 50.0
 const BEAM_WIDTH := 8.0
 const GLOW_RADIUS := 32.0
@@ -119,7 +119,7 @@ func _create_visuals() -> void:
 	var ambient_glow := Sprite2D.new()
 	ambient_glow.texture = _glow_texture
 	ambient_glow.centered = true
-	ambient_glow.modulate = Color(1.0, 0.1, 0.05, 0.4)
+	ambient_glow.modulate = Color(0.8, 0.0, 0.0, 0.4)  # Dark red ambient
 	ambient_glow.scale = Vector2(2.0, 1.2)
 	ambient_glow.position = Vector2(BEAM_LENGTH * 0.5, 0)
 	var ambient_mat := CanvasItemMaterial.new()
@@ -133,7 +133,7 @@ func _create_visuals() -> void:
 	var ambient_glow2 := Sprite2D.new()
 	ambient_glow2.texture = _glow_texture
 	ambient_glow2.centered = true
-	ambient_glow2.modulate = Color(1.0, 0.05, 0.0, 0.3)
+	ambient_glow2.modulate = Color(0.75, 0.0, 0.0, 0.3)  # Darker red
 	ambient_glow2.scale = Vector2(2.5, 1.5)
 	ambient_glow2.position = Vector2(BEAM_LENGTH * 0.5, 0)
 	var ambient_mat2 := CanvasItemMaterial.new()
@@ -159,7 +159,7 @@ func _create_visuals() -> void:
 	_glow_sprite = Sprite2D.new()
 	_glow_sprite.texture = _glow_texture
 	_glow_sprite.centered = true
-	_glow_sprite.modulate = Color(1.0, 0.2, 0.1, 0.9)
+	_glow_sprite.modulate = Color(0.85, 0.0, 0.0, 0.9)  # Dark red glow
 	_glow_sprite.scale = Vector2(1.4, 0.8)
 	_glow_sprite.position = Vector2(BEAM_LENGTH * 0.5, 0)
 	var glow_material := CanvasItemMaterial.new()
@@ -196,7 +196,7 @@ func _create_visuals() -> void:
 	_tip_glow = Sprite2D.new()
 	_tip_glow.texture = _glow_texture
 	_tip_glow.centered = true
-	_tip_glow.modulate = Color(1.0, 0.3, 0.2, 1.0)
+	_tip_glow.modulate = Color(0.9, 0.05, 0.05, 1.0)  # Dark red tip
 	_tip_glow.scale = Vector2(0.6, 0.6)
 	var tip_material := CanvasItemMaterial.new()
 	tip_material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
@@ -210,7 +210,7 @@ func _create_visuals() -> void:
 	var tip_glow2 := Sprite2D.new()
 	tip_glow2.texture = _glow_texture
 	tip_glow2.centered = true
-	tip_glow2.modulate = Color(1.0, 0.1, 0.05, 0.7)
+	tip_glow2.modulate = Color(0.8, 0.0, 0.0, 0.7)  # Dark red tip
 	tip_glow2.scale = Vector2(0.9, 0.9)
 	var tip_mat2 := CanvasItemMaterial.new()
 	tip_mat2.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
@@ -272,7 +272,7 @@ func _spawn_charge_effect() -> void:
 	_charge_flash = Sprite2D.new()
 	_charge_flash.texture = _glow_texture
 	_charge_flash.centered = true
-	_charge_flash.modulate = Color(1.0, 0.8, 0.6, 1.0)
+	_charge_flash.modulate = Color(0.9, 0.3, 0.25, 1.0)  # Dark reddish charge
 	_charge_flash.scale = Vector2(0.3, 0.3)
 	var flash_mat := CanvasItemMaterial.new()
 	flash_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
@@ -431,6 +431,7 @@ func _spawn_trail_particle() -> void:
 	
 	var mat := CanvasItemMaterial.new()
 	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
 	particle_sprite.material = mat
 	particle_sprite.z_index = 897
 	
@@ -519,10 +520,11 @@ func _spawn_impact_effect() -> void:
 	# Main impact flash
 	var flash := Sprite2D.new()
 	flash.texture = _glow_texture
-	flash.modulate = Color(1.0, 0.5, 0.3, 1.0)
+	flash.modulate = Color(0.9, 0.15, 0.1, 1.0)  # Dark red impact
 	flash.scale = Vector2(0.4, 0.4)
 	var flash_material := CanvasItemMaterial.new()
 	flash_material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	flash_material.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
 	flash.material = flash_material
 	flash.global_position = global_position
 	flash.z_index = 950
@@ -540,10 +542,11 @@ func _spawn_impact_effect() -> void:
 	for i in range(4):
 		var spark := Sprite2D.new()
 		spark.texture = _glow_texture
-		spark.modulate = Color(1.0, 0.6, 0.3, 0.9)
+		spark.modulate = Color(0.85, 0.2, 0.1, 0.9)  # Dark red sparks
 		spark.scale = Vector2(0.12, 0.12)
 		var spark_mat := CanvasItemMaterial.new()
 		spark_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		spark_mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
 		spark.material = spark_mat
 		spark.global_position = global_position
 		spark.z_index = 949

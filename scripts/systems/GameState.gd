@@ -114,6 +114,18 @@ func reset_run_stats() -> void:
 	current_wave = 0
 	current_kills = 0
 	_run_already_recorded = false
+	# Reset per-character stats tracker
+	var run_stats_tracker = get_node_or_null("/root/RunStatsTracker")
+	if run_stats_tracker:
+		run_stats_tracker.reset()
+
+
+## Get run stats data from RunStatsTracker (for leaderboard entries)
+func _get_run_stats_data() -> Dictionary:
+	var run_stats_tracker = get_node_or_null("/root/RunStatsTracker")
+	if run_stats_tracker:
+		return run_stats_tracker.get_run_stats()
+	return {}
 
 
 ## Record the result of a completed run (call on game over)
@@ -149,7 +161,11 @@ func record_run_result(character_id: String) -> void:
 		"wave": current_wave,
 		"difficulty": difficulty_multiplier,
 		"goddess_fall": goddess_fall_mode,
-		"timestamp": int(Time.get_unix_time_from_system())
+		"timestamp": int(Time.get_unix_time_from_system()),
+		# NEW: Squad composition (3 character indices)
+		"squad_indices": Array(selected_character_indices).duplicate(),
+		# NEW: Per-character stats from RunStatsTracker
+		"run_stats": _get_run_stats_data()
 	}
 	
 	# Add to leaderboard if it qualifies (top 10 by score)
@@ -202,7 +218,9 @@ func get_leaderboard_entries(max_count: int = 10) -> Array:
 			"best_wave": run.get("wave", 0),
 			"best_difficulty": run.get("difficulty", 1),
 			"best_goddess_fall": run.get("goddess_fall", false),
-			"timestamp": run.get("timestamp", 0)
+			"timestamp": run.get("timestamp", 0),
+			"squad_indices": run.get("squad_indices", []),
+			"run_stats": run.get("run_stats", {})
 		})
 	
 	# Already sorted, just limit to max_count
@@ -210,6 +228,15 @@ func get_leaderboard_entries(max_count: int = 10) -> Array:
 		entries = entries.slice(0, max_count)
 	
 	return entries
+
+
+## Reset leaderboard data (but preserve currency)
+func reset_leaderboard() -> void:
+	_leaderboard_entries.clear()
+	_total_score_all_time = 0
+	_total_runs_all_time = 0
+	_save_leaderboard()
+	print("[GameState] Leaderboard reset!")
 
 
 ## Get total score across all runs
@@ -284,6 +311,9 @@ func _save_leaderboard() -> void:
 		config.set_value("leaderboard", prefix + "difficulty", entry.get("difficulty", 1))
 		config.set_value("leaderboard", prefix + "goddess_fall", entry.get("goddess_fall", false))
 		config.set_value("leaderboard", prefix + "timestamp", entry.get("timestamp", 0))
+		# NEW: Save squad and stats
+		config.set_value("leaderboard", prefix + "squad_indices", entry.get("squad_indices", []))
+		config.set_value("leaderboard", prefix + "run_stats", entry.get("run_stats", {}))
 	
 	var err := config.save(SaveManagerScript.LEADERBOARD_PATH)
 	if err == OK:
@@ -316,7 +346,10 @@ func _load_leaderboard() -> void:
 			"wave": config.get_value("leaderboard", prefix + "wave", 0),
 			"difficulty": config.get_value("leaderboard", prefix + "difficulty", 1),
 			"goddess_fall": config.get_value("leaderboard", prefix + "goddess_fall", false),
-			"timestamp": config.get_value("leaderboard", prefix + "timestamp", 0)
+			"timestamp": config.get_value("leaderboard", prefix + "timestamp", 0),
+			# NEW: Load squad and stats
+			"squad_indices": config.get_value("leaderboard", prefix + "squad_indices", []),
+			"run_stats": config.get_value("leaderboard", prefix + "run_stats", {})
 		}
 		if entry["character_id"] != "":
 			_leaderboard_entries.append(entry)
@@ -354,7 +387,12 @@ func get_main_character() -> int:
 ## @param index: Character registry index
 func set_player_character(index: int) -> void:
 	print("[GameState] set_player_character called with index: %d (was %d)" % [index, player_character_index])
+	var old_index := player_character_index
 	player_character_index = index
+	# Emit to EventBus for stats tracking
+	if EventBus and old_index != index:
+		# slot_index is unknown here, but the character_id (registry index) is what matters
+		EventBus.character_switched.emit(-1, index)
 
 ## Get the player's controlled character index
 func get_player_character() -> int:

@@ -17,6 +17,11 @@ const ENTRIES_PER_COLUMN := 5
 @onready var _empty_state_label: Label = %EmptyStateLabel
 @onready var _total_score_label: Label = %TotalScoreLabel
 
+# Detail popup for showing run stats
+var _detail_popup: Control = null
+var _detail_stats_panel: Node = null
+var _entries_cache: Array = []  # Cache for entry data
+
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	set_process_input(true)
@@ -24,6 +29,7 @@ func _ready() -> void:
 	
 	_update_static_labels()
 	_refresh_entries()
+	_build_detail_popup()
 
 
 func _input(event: InputEvent) -> void:
@@ -38,6 +44,13 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _handle_escape() -> void:
+	if _detail_popup and _detail_popup.visible:
+		_hide_detail_popup()
+		UISounds.play_back()
+		var viewport := get_viewport()
+		if viewport:
+			viewport.set_input_as_handled()
+		return
 	UISounds.play_back()
 	var viewport := get_viewport()
 	if viewport:
@@ -55,6 +68,7 @@ func _refresh_entries() -> void:
 	
 	# Get leaderboard data from GameState
 	var entries: Array = _get_leaderboard_entries()
+	_entries_cache = entries.duplicate()  # Cache for click handling
 	
 	_update_total_score_label()
 	
@@ -72,15 +86,18 @@ func _refresh_entries() -> void:
 		right_entries = entries.slice(ENTRIES_PER_COLUMN, entries.size())
 	
 	var rank := 1
+	var entry_index := 0
 	for entry in left_entries:
-		var control := _create_entry_control(entry, rank, true)
+		var control := _create_entry_control(entry, rank, true, entry_index)
 		_left_column.add_child(control)
 		rank += 1
+		entry_index += 1
 	
 	for entry in right_entries:
-		var control := _create_entry_control(entry, rank, false)
+		var control := _create_entry_control(entry, rank, false, entry_index)
 		_right_column.add_child(control)
 		rank += 1
+		entry_index += 1
 	
 	if _columns_scroll:
 		_columns_scroll.set_v_scroll(0)
@@ -159,7 +176,7 @@ func _clear_columns() -> void:
 			child.queue_free()
 
 
-func _create_entry_control(entry: Dictionary, rank: int, is_left_column: bool = true) -> Control:
+func _create_entry_control(entry: Dictionary, rank: int, is_left_column: bool = true, entry_index: int = -1) -> Control:
 	var wrapper := MarginContainer.new()
 	wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	# Add outer padding - left margin for left column, right margin for right column
@@ -171,9 +188,16 @@ func _create_entry_control(entry: Dictionary, rank: int, is_left_column: bool = 
 	var panel := Panel.new()
 	panel.custom_minimum_size = Vector2(0, 120)
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP  # Make clickable
 	panel.add_theme_stylebox_override("panel", _make_entry_stylebox(rank == 1))
 	wrapper.add_child(panel)
+	
+	# Make entry clickable
+	if entry_index >= 0:
+		panel.gui_input.connect(func(event: InputEvent):
+			if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+				_on_entry_clicked(entry_index)
+		)
 	
 	var layout := HBoxContainer.new()
 	layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -491,3 +515,63 @@ func _resolve_entry_portrait(entry: Dictionary) -> Texture2D:
 				return tex
 	
 	return null
+
+
+func _build_detail_popup() -> void:
+	"""Create the popup overlay for showing run details."""
+	_detail_popup = Control.new()
+	_detail_popup.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_detail_popup.visible = false
+	_detail_popup.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_detail_popup)
+	
+	# Dark overlay background
+	var overlay := ColorRect.new()
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.color = Color(0.0, 0.0, 0.0, 0.7)
+	overlay.gui_input.connect(_on_popup_overlay_click)
+	_detail_popup.add_child(overlay)
+	
+	# Center the stats panel
+	var center_container := CenterContainer.new()
+	center_container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_detail_popup.add_child(center_container)
+	
+	# Create stats panel
+	if ResourceLoader.exists("res://scripts/ui/StatsPanel.gd"):
+		var stats_script = load("res://scripts/ui/StatsPanel.gd")
+		_detail_stats_panel = Panel.new()
+		_detail_stats_panel.set_script(stats_script)
+		_detail_stats_panel.custom_minimum_size = Vector2(400, 500)
+		center_container.add_child(_detail_stats_panel)
+
+
+func _on_popup_overlay_click(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		_hide_detail_popup()
+
+
+func _show_entry_details(entry_index: int) -> void:
+	"""Show the detail popup for a specific leaderboard entry."""
+	if entry_index < 0 or entry_index >= _entries_cache.size():
+		return
+	
+	var entry: Dictionary = _entries_cache[entry_index]
+	
+	if _detail_stats_panel and _detail_stats_panel.has_method("set_entry_stats"):
+		_detail_stats_panel.set_entry_stats(entry)
+	
+	if _detail_popup:
+		_detail_popup.visible = true
+
+
+func _hide_detail_popup() -> void:
+	"""Hide the detail popup."""
+	if _detail_popup:
+		_detail_popup.visible = false
+
+
+func _on_entry_clicked(entry_index: int) -> void:
+	"""Handle click on a leaderboard entry."""
+	UISounds.play_confirm()
+	_show_entry_details(entry_index)

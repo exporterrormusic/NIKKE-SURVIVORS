@@ -24,8 +24,18 @@ enum AchievementType {
 	SHOP_UNLOCK,      # Unlock character in shop
 	KILL_COUNT,       # Kill 10,000 Raptures as character
 	ALL_SKILLS,       # Purchase all skills in a single match
-	WIN_GAME          # Win a game with character in squad
+	WIN_GAME,         # Win a game with character in squad
+	# General Achievements
+	MASSACRE,         # Kill 50,000 Raptures total
+	BOSS_SLAYER,      # Defeat a boss enemy
+	FIRST_BLOOD,      # Complete a Stage 1 map
+	NO_DAMAGE,        # Complete a wave without taking damage
+	ALL_MAPS          # Play on all maps
 }
+
+const GENERAL_ID := "general"
+const MASSACRE_GOAL := 50000
+const MAP_TARGET_COUNT := 4
 
 # --- Persistent Data ---
 # Dictionary: achievement_id -> { "unlocked": bool, "progress": int, "unlocked_at": int (timestamp) }
@@ -37,8 +47,30 @@ var _session_kills: Dictionary = {}  # char_id -> kills this run
 # Runtime skill tracking (per character, resets on game end)
 var _session_skills: Dictionary = {}  # char_index -> total skill purchases this run (int)
 
+# Track current active character
+var _current_character_id: String = ""
+var _current_map_id: String = ""
+var _wave_damaged: bool = false
+
 
 func _ready() -> void:
+	# Connect to EventBus signals for tracking
+	if EventBus:
+		EventBus.enemy_killed.connect(_on_enemy_killed_event)
+		EventBus.character_switched.connect(_on_character_switched)
+		
+		# New Signals for General Achievements
+		if EventBus.has_signal("run_started"):
+			EventBus.run_started.connect(_on_run_started)
+		if EventBus.has_signal("run_completed"):
+			EventBus.run_completed.connect(_on_run_completed)
+		if EventBus.has_signal("wave_started"):
+			EventBus.wave_started.connect(_on_wave_started)
+		if EventBus.has_signal("wave_completed"):
+			EventBus.wave_completed.connect(_on_wave_completed)
+		if EventBus.has_signal("player_damaged"):
+			EventBus.player_damaged.connect(_on_player_damaged)
+	
 	# Wait for MenuManager's intro screen to render before doing heavy initialization
 	# CharacterRegistry has many preloads that cascade to other scripts
 	if MenuManager.intro_rendered:
@@ -85,12 +117,92 @@ func get_achievement_id(type: AchievementType, char_id: String) -> String:
 			return "all_skills_%s" % char_id
 		AchievementType.WIN_GAME:
 			return "win_%s" % char_id
+		AchievementType.MASSACRE:
+			return "kill_50000"
+		AchievementType.BOSS_SLAYER:
+			return "boss_slayer"
+		AchievementType.FIRST_BLOOD:
+			return "first_blood"
+		AchievementType.NO_DAMAGE:
+			return "no_damage"
+		AchievementType.ALL_MAPS:
+			return "all_maps"
 	return ""
 
 
 ## Get all achievements for a character
 func get_character_achievements(char_id: String) -> Array[Dictionary]:
 	var achievements: Array[Dictionary] = []
+	
+	# General Achievements
+	if char_id == GENERAL_ID:
+		# Massacre
+		var massacre_id := get_achievement_id(AchievementType.MASSACRE, "")
+		var massacre_data: Dictionary = _achievements.get(massacre_id, {"unlocked": false, "progress": 0})
+		achievements.append({
+			"id": massacre_id,
+			"title": "Massacre",
+			"desc": "Defeat %s enemies total" % _format_number(MASSACRE_GOAL),
+			"category": "GENERAL",
+			"unlocked": massacre_data.get("unlocked", false),
+			"progress": massacre_data.get("progress", 0),
+			"target": MASSACRE_GOAL
+		})
+		
+		# Boss Slayer
+		var boss_id := get_achievement_id(AchievementType.BOSS_SLAYER, "")
+		var boss_data: Dictionary = _achievements.get(boss_id, {"unlocked": false, "progress": 0})
+		achievements.append({
+			"id": boss_id,
+			"title": "Boss Slayer",
+			"desc": "Defeat a boss enemy",
+			"category": "GENERAL",
+			"unlocked": boss_data.get("unlocked", false),
+			"progress": boss_data.get("progress", 0),
+			"target": 1
+		})
+		
+		# First Blood
+		var fb_id := get_achievement_id(AchievementType.FIRST_BLOOD, "")
+		var fb_data: Dictionary = _achievements.get(fb_id, {"unlocked": false, "progress": 0})
+		achievements.append({
+			"id": fb_id,
+			"title": "First Blood",
+			"desc": "Complete a Stage 1 map",
+			"category": "GENERAL",
+			"unlocked": fb_data.get("unlocked", false),
+			"progress": fb_data.get("progress", 0),
+			"target": 1
+		})
+		
+		# No Damage
+		var nd_id := get_achievement_id(AchievementType.NO_DAMAGE, "")
+		var nd_data: Dictionary = _achievements.get(nd_id, {"unlocked": false, "progress": 0})
+		achievements.append({
+			"id": nd_id,
+			"title": "Untouchable",
+			"desc": "Complete a wave without taking damage",
+			"category": "GENERAL",
+			"unlocked": nd_data.get("unlocked", false),
+			"progress": nd_data.get("progress", 0),
+			"target": 1
+		})
+		
+		# All Maps
+		var am_id := get_achievement_id(AchievementType.ALL_MAPS, "")
+		var am_data: Dictionary = _achievements.get(am_id, {"unlocked": false, "progress": 0})
+		achievements.append({
+			"id": am_id,
+			"title": "World Traveler",
+			"desc": "Play on all maps",
+			"category": "GENERAL",
+			"unlocked": am_data.get("unlocked", false),
+			"progress": am_data.get("progress", 0),
+			"target": MAP_TARGET_COUNT
+		})
+		
+		return achievements
+
 	var display_name := get_character_display_name(char_id)
 	
 	# Unlock achievement (only for non-default characters)
@@ -153,6 +265,10 @@ func get_character_achievements(char_id: String) -> Array[Dictionary]:
 func get_all_achievements() -> Array[Dictionary]:
 	_ensure_registry()
 	var all: Array[Dictionary] = []
+	
+	# Add General Achievements first
+	all.append_array(get_character_achievements(GENERAL_ID))
+	
 	var char_ids := _registry.get_all_character_ids()
 	for char_id in char_ids:
 		all.append_array(get_character_achievements(char_id))
@@ -288,6 +404,16 @@ func _get_target_for_type(type: AchievementType) -> int:
 			return 1
 		AchievementType.WIN_GAME:
 			return 1
+		AchievementType.MASSACRE:
+			return MASSACRE_GOAL
+		AchievementType.BOSS_SLAYER:
+			return 1
+		AchievementType.FIRST_BLOOD:
+			return 1
+		AchievementType.NO_DAMAGE:
+			return 1
+		AchievementType.ALL_MAPS:
+			return MAP_TARGET_COUNT
 	return 1
 
 
@@ -301,7 +427,114 @@ func _get_achievement_title(type: AchievementType, display_name: String) -> Stri
 			return "Purchase all skills for %s" % display_name
 		AchievementType.WIN_GAME:
 			return "Win a game with %s" % display_name
+		AchievementType.MASSACRE:
+			return "Massacre"
+		AchievementType.BOSS_SLAYER:
+			return "Boss Slayer"
+		AchievementType.FIRST_BLOOD:
+			return "First Blood"
+		AchievementType.NO_DAMAGE:
+			return "Untouchable"
+		AchievementType.ALL_MAPS:
+			return "World Traveler"
 	return "Unknown Achievement"
+
+
+# --- Event Handlers ---
+
+func _on_character_switched(slot_idx: int, char_index: int) -> void:
+	# Update current character ID for tracking
+	_ensure_registry()
+	if _registry:
+		_current_character_id = _registry.get_character_id(char_index)
+
+
+func _on_enemy_killed_event(enemy: Node, killer_source: String) -> void:
+	# Ignore if not killed by player
+	if killer_source not in ["player", "projectile", "summon", "cecil_drone"]:
+		return
+	
+	# Track general kills (Massacre)
+	_track_massacre_progress()
+	
+	# Track boss kill (Boss Slayer)
+	if enemy.is_in_group("boss") or enemy.is_in_group("super_boss"):
+		_unlock_achievement(get_achievement_id(AchievementType.BOSS_SLAYER, ""), "", AchievementType.BOSS_SLAYER)
+	
+	# Track per-character kills
+	on_enemy_killed(_current_character_id)
+
+
+func _on_run_started(map_id: String) -> void:
+	_current_map_id = map_id
+	_wave_damaged = false
+	
+	# Track map for World Traveler
+	_track_map_progress(map_id)
+
+
+func _on_run_completed(is_win: bool, map_id: String, _duration: float) -> void:
+	if is_win:
+		# Check First Blood (Stage 1)
+		if map_id == "stage_1":
+			_unlock_achievement(get_achievement_id(AchievementType.FIRST_BLOOD, ""), "", AchievementType.FIRST_BLOOD)
+
+
+func _on_wave_started(_wave_number: int) -> void:
+	_wave_damaged = false
+
+
+func _on_wave_completed(_wave_number: int) -> void:
+	if not _wave_damaged:
+		_unlock_achievement(get_achievement_id(AchievementType.NO_DAMAGE, ""), "", AchievementType.NO_DAMAGE)
+
+
+func _on_player_damaged(_amount: int, _source: Node) -> void:
+	_wave_damaged = true
+
+
+func _track_massacre_progress() -> void:
+	var achievement_id := get_achievement_id(AchievementType.MASSACRE, "")
+	if not _achievements.has(achievement_id):
+		_achievements[achievement_id] = {"unlocked": false, "progress": 0}
+	
+	_achievements[achievement_id]["progress"] += 1
+	var progress: int = _achievements[achievement_id]["progress"]
+	
+	if progress >= MASSACRE_GOAL and not _achievements[achievement_id].get("unlocked", false):
+		_unlock_achievement(achievement_id, "", AchievementType.MASSACRE)
+	
+	if progress % 100 == 0:
+		_save_achievements()
+
+
+func _track_map_progress(map_id: String) -> void:
+	var achievement_id := get_achievement_id(AchievementType.ALL_MAPS, "")
+	if not _achievements.has(achievement_id):
+		_achievements[achievement_id] = {"unlocked": false, "progress": 0, "maps_played": []}
+	
+	var played_maps: Array = _achievements[achievement_id].get("maps_played", [])
+	if map_id not in played_maps:
+		played_maps.append(map_id)
+		_achievements[achievement_id]["maps_played"] = played_maps
+		_achievements[achievement_id]["progress"] = played_maps.size()
+		
+		if played_maps.size() >= MAP_TARGET_COUNT:
+			_unlock_achievement(achievement_id, "", AchievementType.ALL_MAPS)
+		
+		_save_achievements()
+
+
+func _format_number(value: int) -> String:
+	var str_val := str(value)
+	var result := ""
+	var count := 0
+	for i in range(str_val.length() - 1, -1, -1):
+		if count > 0 and count % 3 == 0:
+			result = "," + result
+		result = str_val[i] + result
+		count += 1
+	return result
 
 
 # --- Persistence ---

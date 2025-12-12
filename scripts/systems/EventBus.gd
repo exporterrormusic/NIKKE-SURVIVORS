@@ -72,6 +72,16 @@ signal burst_ready
 # WAVE/GAME FLOW EVENTS
 # =============================================================================
 
+## Emitted when a run starts on a specific map
+## @param map_id: The ID of the map being played
+signal run_started(map_id: String)
+
+## Emitted when a run ends (win or lose)
+## @param is_win: True if the run was won
+## @param map_id: The ID of the map played
+## @param duration: Run duration in seconds
+signal run_completed(is_win: bool, map_id: String, duration: float)
+
 ## Emitted when a new wave starts
 ## @param wave_number: The wave number starting
 signal wave_started(wave_number: int)

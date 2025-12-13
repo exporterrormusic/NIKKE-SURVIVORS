@@ -14,10 +14,11 @@ uniform vec4 core_glow_color : source_color = vec4(1.0, 0.3, 0.1, 1.0);
 
 uniform float glow_scale : hint_range(0.1, 10.0) = 1.0;
 uniform float hit_flash : hint_range(0.0, 1.0) = 0.0;
+uniform vec4 sprite_tint : source_color = vec4(1.0, 1.0, 1.0, 1.0); // Explicit tint control
 
 void fragment() {
 	vec4 tex = texture(TEXTURE, UV);
-	vec3 body_rgb = tex.rgb;
+	vec3 body_rgb = tex.rgb * sprite_tint.rgb; // Apply explicit tint
 	
 	// 1. Red Core (unchanged)
 	if (tex.a > 0.1 && enhance_red_core && tex.r > 0.6 && tex.g < 0.4 && tex.b < 0.4) {
@@ -64,40 +65,37 @@ void fragment() {
 			// Wide Gaussian-ish sampling (12 samples)
 			// Angle pairs + Distance layers for smoothness
 			
-			// Layer 1: Close
-			for(float i=0.0; i<6.28; i+=1.05) { 
-				vec2 offset = vec2(sin(i), cos(i)) * size * (width * 0.2); // Tighter inner
-				float a = texture(TEXTURE, UV + offset).a;
-				total_alpha += a * 2.0; 
-				total_weight += 2.0;
-			}
+			// IMPROVED GLOW: 16 samples for smoother quality (High Quality mode)
 			
-			// Layer 2: Mid
-			for(float i=0.5; i<6.78; i+=1.05) { 
-				vec2 offset = vec2(sin(i), cos(i)) * size * (width * 0.5);
-				float a = texture(TEXTURE, UV + offset).a;
-				total_alpha += a * 1.5;
-				total_weight += 1.5;
-			}
+			// Layer 1: Close (8 samples ring)
+            // Cardinal
+			total_alpha += texture(TEXTURE, UV + vec2(size.x * width * 0.35, 0.0)).a;
+			total_alpha += texture(TEXTURE, UV - vec2(size.x * width * 0.35, 0.0)).a;
+			total_alpha += texture(TEXTURE, UV + vec2(0.0, size.y * width * 0.35)).a;
+			total_alpha += texture(TEXTURE, UV - vec2(0.0, size.y * width * 0.35)).a;
+            // Diagonal
+            vec2 diag = size * width * 0.25;
+            total_alpha += texture(TEXTURE, UV + diag).a;
+            total_alpha += texture(TEXTURE, UV - diag).a;
+            total_alpha += texture(TEXTURE, UV + vec2(diag.x, -diag.y)).a;
+            total_alpha += texture(TEXTURE, UV + vec2(-diag.x, diag.y)).a;
+			total_weight += 8.0;
 			
-			// Layer 3: Far
+			// Layer 2: Far (8 samples ring)
 			if (night_boost > 0.0 || enable_outline) {
-				for(float i=0.0; i<6.28; i+=0.785) { 
-					vec2 offset = vec2(sin(i), cos(i)) * size * width;
-					float a = texture(TEXTURE, UV + offset).a;
-					total_alpha += a * 0.8; 
-					total_weight += 0.8;
-				}
-			}
-			
-			// Layer 4: Very Far (for extreme softness)
-			if (enable_outline) {
-				for(float i=0.0; i<6.28; i+=1.05) { 
-					vec2 offset = vec2(sin(i), cos(i)) * size * (width * 1.5);
-					float a = texture(TEXTURE, UV + offset).a;
-					total_alpha += a * 0.4; 
-					total_weight += 0.4;
-				}
+                // Outer ring
+                vec2 far = size * width * 0.85;
+				total_alpha += texture(TEXTURE, UV + vec2(far.x, 0.0)).a * 0.6;
+				total_alpha += texture(TEXTURE, UV - vec2(far.x, 0.0)).a * 0.6;
+				total_alpha += texture(TEXTURE, UV + vec2(0.0, far.y)).a * 0.6;
+				total_alpha += texture(TEXTURE, UV - vec2(0.0, far.y)).a * 0.6;
+                // Outer Diagonal
+                vec2 far_diag = size * width * 0.6;
+                total_alpha += texture(TEXTURE, UV + far_diag).a * 0.6;
+                total_alpha += texture(TEXTURE, UV - far_diag).a * 0.6;
+                total_alpha += texture(TEXTURE, UV + vec2(far_diag.x, -far_diag.y)).a * 0.6;
+                total_alpha += texture(TEXTURE, UV + vec2(-far_diag.x, far_diag.y)).a * 0.6;
+				total_weight += 4.8;
 			}
 			
 			if (total_alpha > 0.0) {

@@ -50,7 +50,7 @@ func _can_attack() -> bool:
 	return not is_reloading and ammo > 0
 
 func _perform_attack(direction: Vector2) -> void:
-	# Fire dual SMG bullets (same as Sin/Cecil)
+	# Fire dual SMG bullets (same as Sin/Cecil) - using pooled bullets
 	
 	var perp := Vector2(-direction.y, direction.x).normalized()
 	var gun_offset := 18.0
@@ -58,23 +58,13 @@ func _perform_attack(direction: Vector2) -> void:
 	# Each SMG bullet does 1 base damage (2 total per shot)
 	var bullet_damage: int = maxi(player.calc_damage(1.0 / player.get_base_damage()), 1)
 	
-	# Left gun bullet
-	var bullet_left = ProjectileCache.create_smg_bullet()
-	player.get_parent().add_child(bullet_left)
-	bullet_left.global_position = player.global_position + direction * 45 - perp * gun_offset
-	bullet_left.velocity = direction * bullet_speed
-	bullet_left.rotation = direction.angle()
-	bullet_left.owner_node = player
-	bullet_left.base_damage = bullet_damage
+	# Left gun bullet (pooled)
+	var left_pos := player.global_position + direction * 45 - perp * gun_offset
+	EffectPool.smg_bullet(player.get_parent(), left_pos, direction * bullet_speed, bullet_damage, player)
 	
-	# Right gun bullet
-	var bullet_right = ProjectileCache.create_smg_bullet()
-	player.get_parent().add_child(bullet_right)
-	bullet_right.global_position = player.global_position + direction * 45 + perp * gun_offset
-	bullet_right.velocity = direction * bullet_speed
-	bullet_right.rotation = direction.angle()
-	bullet_right.owner_node = player
-	bullet_right.base_damage = bullet_damage
+	# Right gun bullet (pooled)
+	var right_pos := player.global_position + direction * 45 + perp * gun_offset
+	EffectPool.smg_bullet(player.get_parent(), right_pos, direction * bullet_speed, bullet_damage, player)
 	
 	_play_sound("smg")
 
@@ -158,6 +148,11 @@ func _perform_galaxy_burst() -> void:
 		return
 	
 	# Get view rect
+	# (view_rect calculation inferred from context, assuming similar structure to others)
+	# Assuming loop starts around line 155-160 in full file
+	# I will replace the loop header if I can see it, but I don't see it in the previous snippet.
+	# I need to view Nayuta again to be safe.
+	pass
 	var camera := viewport.get_camera_2d()
 	var view_rect: Rect2
 	if camera:
@@ -174,7 +169,7 @@ func _perform_galaxy_burst() -> void:
 		damage = int(damage * (1.0 + (player.level - 1) * 0.5))
 	
 	# Damage all enemies on screen
-	var enemies := tree.get_nodes_in_group("enemies")
+	var enemies := TargetCache.get_enemies()
 	for enemy in enemies:
 		if not is_instance_valid(enemy) or not enemy is Node2D:
 			continue

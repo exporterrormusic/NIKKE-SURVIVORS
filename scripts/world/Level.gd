@@ -61,6 +61,9 @@ func _ready():
 	# Initialize ambient particle system
 	_setup_ambient_particles()
 	
+	# Warm up projectile cache (prevents shader stutter)
+	ProjectileCache.warm_up_cache(self)
+	
 	# Initialize night glow system
 	_setup_night_glow()
 	
@@ -75,6 +78,61 @@ func _ready():
 	# Notify run started
 	if GameState and EventBus:
 		EventBus.run_started.emit(GameState.current_stage_id)
+		
+	# Start background music based on character
+	# Start background music based on initial character
+	_play_character_bgm()
+
+# Removed _on_character_switched to prevent music changing during gameplay
+
+func _play_character_bgm(forced_index: int = -1) -> void:
+	if not GameState or not AudioDirector:
+		return
+		
+	# Determine which character to play music for
+	var main_char_idx = 0
+	if forced_index != -1:
+		main_char_idx = forced_index
+	else:
+		# Default to main selected character
+		var char_indices = GameState.selected_character_indices
+		if not char_indices.is_empty():
+			main_char_idx = char_indices[0]
+	
+	var registry = CharacterRegistry.get_instance()
+	if not registry:
+		AudioDirector.play_random_battle_track()
+		return
+		
+	var all_ids = registry.get_all_character_ids()
+	
+	# Validate index
+	if main_char_idx < 0 or main_char_idx >= all_ids.size():
+		print("[Level] Invalid character index: ", main_char_idx, ". Playing random track.")
+		AudioDirector.play_random_battle_track()
+		return
+		
+	var char_id = all_ids[main_char_idx]
+	print("[Level] Resolving BGM for character ID: ", char_id, " (index: ", main_char_idx, ")")
+	
+	var music_path = ""
+	match char_id:
+		"snow_white":
+			music_path = "res://assets/sounds/music/bgm/snow.wav"
+		"rapunzel":
+			music_path = "res://assets/sounds/music/bgm/rapunzel.wav"
+		"sin":
+			music_path = "res://assets/sounds/music/bgm/sin.wav"
+		"nayuta":
+			music_path = "res://assets/sounds/music/bgm/nayuta.wav"
+	
+	# 75% chance to play specific theme if it exists
+	if music_path != "" and randf() < 0.75:
+		print("[Level] Playing character BGM (75% roll hit): ", music_path)
+		AudioDirector.play_music_by_path(music_path)
+	else:
+		print("[Level] Playing random BGM (25% roll or no specific theme)")
+		AudioDirector.play_random_battle_track()
 
 var _pause_menu: CanvasLayer = null
 
@@ -149,6 +207,12 @@ func _on_character_select_requested() -> void:
 	# Record the run result before leaving (save score even if player didn't die)
 	if GameState:
 		GameState.record_run_result("")
+	
+	# Stop battle music and ambient sounds
+	if AudioDirector:
+		AudioDirector.stop_music(0.5)
+		AudioDirector.stop_ambient(0.5)
+		
 	get_tree().change_scene_to_file("res://scenes/ui/CharacterSelectMenu.tscn")
 
 func _on_quit_requested() -> void:
@@ -156,6 +220,12 @@ func _on_quit_requested() -> void:
 	# Record the run result before quitting (save score even if player didn't die)
 	if GameState:
 		GameState.record_run_result("")
+	
+	# Stop battle music and ambient sounds
+	if AudioDirector:
+		AudioDirector.stop_music(0.5)
+		AudioDirector.stop_ambient(0.5)
+	
 	# Use MenuManager to return to main menu so signals get connected properly
 	if MenuManager:
 		MenuManager.return_to_main_menu()

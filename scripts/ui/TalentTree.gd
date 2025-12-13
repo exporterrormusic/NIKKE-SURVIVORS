@@ -278,7 +278,7 @@ func _load_character_data() -> void:
 				BURST_PORTRAIT_PATHS.append(burst_path)
 	else:
 		# Fallback if registry not available
-		CHARACTER_NAMES = ["Scarlet", "Legendary Commander", "Rapunzel", "Kilo", "Marian", "Crown", "Snow White", "Sin", "Cecil", "Nayuta"]
+		CHARACTER_NAMES = ["Scarlet", "Commander", "Rapunzel", "Kilo", "Marian", "Crown", "Snow White", "Sin", "Cecil", "Nayuta"]
 		PORTRAIT_PATHS = [
 			"res://assets/characters/scarlet/portrait-sq.png",
 			"res://assets/characters/commander/portrait-sq.png",

@@ -27,21 +27,13 @@ func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 	area_entered.connect(_on_area_entered)
 	
-	# Assign to effects layer to prevent night darkening (deferred so node is in tree)
+	# Assign to effects layer to prevent night darkening
 	call_deferred("_assign_to_effects_layer")
 	
 	# Create the visual
 	_create_visual()
 	
 	z_index = 50
-
-	# Connect to environment modulate changes so we can redraw with compensation
-	if not Engine.is_editor_hint():
-		var tree = get_tree()
-		if tree:
-			var env = tree.get_first_node_in_group("environment_controller")
-			if env and env.has_signal("modulate_changed"):
-				env.modulate_changed.connect(Callable(self, "_on_environment_modulate_changed"))
 
 func _assign_to_effects_layer() -> void:
 	"""Deferred call to assign to effects layer after node is in tree"""
@@ -88,7 +80,7 @@ func _process(delta: float) -> void:
 
 func _check_boulder_collision() -> bool:
 	"""Manual boulder collision check since bullets are in EffectsLayer (different scene tree branch)."""
-	var boulders := get_tree().get_nodes_in_group("boulders")
+	var boulders := TargetCache.get_boulders()
 	for boulder in boulders:
 		if not is_instance_valid(boulder):
 			continue
@@ -136,6 +128,10 @@ func _on_area_entered(area: Area2D) -> void:
 	_hit_target(area)
 
 func _hit_target(target: Node) -> void:
+	# Skip if target is invalid (freed during collision)
+	if not is_instance_valid(target):
+		return
+	
 	# Skip if target is the owner
 	if target == owner_node:
 		return

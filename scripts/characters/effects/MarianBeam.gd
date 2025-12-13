@@ -144,7 +144,7 @@ func _deal_beam_damage() -> void:
 	if not tree:
 		return
 	
-	var enemies := tree.get_nodes_in_group("enemies")
+	var enemies := TargetCache.get_enemies()
 	
 	# Calculate level-scaled damage (+50% per level)
 	var level_mult := 1.0 + (player_level - 1) * 0.5
@@ -184,7 +184,7 @@ func _is_point_in_beam(point: Vector2) -> bool:
 
 func _is_boulder_blocking(distance_along_beam: float) -> bool:
 	"""Check if any boulder blocks the beam before the given distance."""
-	var boulders := get_tree().get_nodes_in_group("boulders")
+	var boulders := TargetCache.get_boulders()
 	
 	# Use player position as beam origin since global_position is offset 80px forward
 	var beam_origin: Vector2 = global_position
@@ -219,7 +219,7 @@ func _fire_homing_missiles() -> void:
 	if not tree:
 		return
 	
-	var enemies := tree.get_nodes_in_group("enemies")
+	var enemies := TargetCache.get_enemies()
 	if enemies.is_empty():
 		return
 	
@@ -386,7 +386,7 @@ func _process(delta: float) -> void:
 		queue_redraw()
 
 func _deal_damage() -> void:
-	for enemy in get_tree().get_nodes_in_group("enemies"):
+	for enemy in TargetCache.get_enemies():
 		if not is_instance_valid(enemy) or not enemy is Node2D:
 			continue
 		var epos: Vector2 = enemy.global_position

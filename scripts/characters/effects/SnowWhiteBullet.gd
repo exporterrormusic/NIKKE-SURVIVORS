@@ -34,6 +34,11 @@ var _original_modulate = Color(0.6, 0.9, 1.0, 1.0)
 
 func _ready() -> void:
 	connect("body_entered", _on_body_entered)
+	connect("area_entered", _on_area_entered)
+	
+	# Ensure detection of Shields (Layer 1 = World, Layer 16 = Shields)
+	# Original mask was 2 (Enemies), so we must add 1 if we want to hit walls/shields on Layer 1
+	collision_mask |= 1 | 16
 	
 	# Apply icy blue tint to sprite if it exists
 	if sprite:
@@ -96,15 +101,30 @@ func _finalize_trail() -> void:
 		_trail_node.finalize()
 
 func _on_body_entered(body: Node2D) -> void:
-	if body == owner_node:
+	_handle_hit(body)
+
+func _on_area_entered(area: Area2D) -> void:
+	# Check for Shield (Layer 16)
+	# ShielderShield Area is child of the ShielderShield Node
+	var shield_root = area.get_parent()
+	if shield_root and shield_root.has_method("take_shield_damage"):
+		_handle_hit(shield_root, true)
+
+func _handle_hit(target: Node, is_shield: bool = false) -> void:
+	if target == owner_node:
 		return
-	if owner_node and body.name == "Player":
+	if owner_node and target.name == "Player":
 		return
-	if body.is_in_group("charmed_allies"):
+	if target.is_in_group("charmed_allies"):
 		return
-	if not body.has_method("take_damage"):
-		return
-	if _hit_nodes.has(body):
+	
+	# Validate target methods
+	if is_shield:
+		if not target.has_method("take_shield_damage"): return
+	else:
+		if not target.has_method("take_damage"): return
+	
+	if _hit_nodes.has(target):
 		return
 	
 	# Roll for critical hit
@@ -120,14 +140,32 @@ func _on_body_entered(body: Node2D) -> void:
 	
 	var hit_direction = velocity.normalized()
 	
-	# Determine killer source for burst tracking
-	var killer_source := "player"
-	if is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
-		killer_source = "summon"
+	if is_shield:
+		target.take_shield_damage(damage)
+		# Force stop on shield hit (Shields block piercing shots)
+		_finalize_trail()
+		queue_free()
+		return
+	else:
+		# Check if target is protected by a shield (Snow White bullets shouldn't pierce shields via body hits)
+		var protected = false
+		if target.has_method("is_protected_by_shield") and target.is_protected_by_shield():
+			protected = true
+			
+		# Determine killer source for burst tracking
+		var killer_source := "player"
+		if is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
+			killer_source = "summon"
+			
+		target.take_damage(damage, is_crit, hit_direction, false, killer_source)
+		
+		# If protected, the damage was redirected to the shield, but we MUST stop the bullet from piercing
+		if protected:
+			_finalize_trail()
+			queue_free()
+			return
 	
-	# Pass killer_source directly to take_damage
-	body.take_damage(damage, is_crit, hit_direction, false, killer_source)
-	_hit_nodes.append(body)
+	_hit_nodes.append(target)
 	
 	if not pierce_all:
 		_finalize_trail()

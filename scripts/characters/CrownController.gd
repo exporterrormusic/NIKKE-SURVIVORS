@@ -77,8 +77,7 @@ func _perform_attack(direction: Vector2) -> void:
 	var spread_dir := direction.rotated(spread)
 	
 	var bullet = CrownBulletScript.new()
-	# Initialize bullet properties before parenting so preserved transforms
-	# reflect the intended world position.
+	# Initialize bullet properties before parenting
 	bullet.global_position = player.global_position + spread_dir * 30
 	bullet.velocity = spread_dir * bullet_speed
 	bullet.rotation = spread_dir.angle()
@@ -86,11 +85,8 @@ func _perform_attack(direction: Vector2) -> void:
 	# Use character's base damage with level scaling
 	bullet.base_damage = player.calc_damage()
 	
-	# Determine target parent: player's parent (world) for physics
-	var target_parent = player.get_parent()
-	
-	# Add to target parent and assign canvas layer
-	target_parent.add_child(bullet)
+	# Add to world
+	player.get_parent().add_child(bullet)
 	
 	_play_sound("minigun")
 
@@ -145,7 +141,7 @@ func _damage_enemies_in_charge_zone() -> void:
 	if not tree:
 		return
 	
-	var enemies := tree.get_nodes_in_group("enemies")
+	var enemies := TargetCache.get_enemies()
 	for enemy in enemies:
 		if not is_instance_valid(enemy) or not enemy is Node2D:
 			continue
@@ -278,7 +274,7 @@ func _trigger_mark_explosion(position: Vector2, _source_enemy: Node) -> void:
 	_spawn_explosion_visual(position, explosion_radius)
 	
 	# Damage enemies
-	var enemies := tree.get_nodes_in_group("enemies")
+	var enemies := TargetCache.get_enemies()
 	for enemy in enemies:
 		if not is_instance_valid(enemy) or not enemy is Node2D:
 			continue
@@ -367,7 +363,7 @@ func _spawn_burst_nova() -> void:
 	visual.z_index = 200
 	
 	# Damage all visible enemies
-	var enemies := tree.get_nodes_in_group("enemies")
+	var enemies := TargetCache.get_enemies()
 	for enemy in enemies:
 		if not is_instance_valid(enemy) or not enemy is Node2D:
 			continue
@@ -439,7 +435,7 @@ func _damage_enemies_in_beam() -> void:
 	if not tree:
 		return
 	
-	var enemies := tree.get_nodes_in_group("enemies")
+	var enemies := TargetCache.get_enemies()
 	for enemy in enemies:
 		if not is_instance_valid(enemy) or not enemy is Node2D:
 			continue

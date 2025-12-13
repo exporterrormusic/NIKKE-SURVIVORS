@@ -52,7 +52,7 @@ var _debug_menu: CanvasLayer = null
 
 # Music player
 var _music_player: AudioStreamPlayer = null
-const MENU_MUSIC_PATH := "res://assets/sounds/music/main-menu.mp3"
+const MENU_MUSIC_PATH := "res://assets/sounds/music/menu/main-menu.mp3"
 
 # Intro screen
 var _intro_screen: Control = null

@@ -424,11 +424,7 @@ func _get_optimal_range() -> float:
 	return 200.0
 
 func _find_best_target() -> Node2D:
-	var tree := get_tree()
-	if not tree:
-		return null
-	
-	var enemies := tree.get_nodes_in_group("enemies")
+	var enemies := TargetCache.get_enemies()
 	var best_target: Node2D = null
 	var best_dist: float = 999999.0
 	
@@ -558,11 +554,7 @@ func _should_use_special() -> bool:
 	# 2. Target is tough (elite/boss)
 	# 3. Haven't used it in a while
 	
-	var tree := get_tree()
-	if not tree:
-		return false
-	
-	var enemies := tree.get_nodes_in_group("enemies")
+	var enemies := TargetCache.get_enemies()
 	var nearby_count := 0
 	
 	for enemy in enemies:
@@ -699,15 +691,11 @@ func _check_burst_usage() -> void:
 	if _time_alive < 2.0:
 		return
 	
-	var tree := get_tree()
-	if not tree:
-		return
-	
 	var should_burst := false
 	var time_remaining := lifetime - _time_alive
 	
 	# Check for boss nearby - always burst if boss in range
-	var enemies := tree.get_nodes_in_group("enemies")
+	var enemies := TargetCache.get_enemies()
 	for enemy in enemies:
 		if not is_instance_valid(enemy) or not enemy is Node2D:
 			continue
@@ -808,12 +796,9 @@ func _spawn_burst_nova(_color: Color, _radius: float) -> void:
 
 func _apply_separation() -> void:
 	# Avoid overlapping with other allies
-	var tree := get_tree()
-	if not tree:
-		return
-	
+	# Avoid overlapping with other allies
 	var separation := Vector2.ZERO
-	var allies := tree.get_nodes_in_group("summoned_allies")
+	var allies := TargetCache.get_summoned_allies()
 	
 	for ally in allies:
 		if ally == self or not is_instance_valid(ally) or not ally is Node2D:

@@ -179,6 +179,7 @@ func _create_toggles_panel() -> void:
 	_toggle_buttons["infinite_burst"] = _add_toggle_button(vbox, "Infinite Burst", "Burst gauge never depletes", _on_toggle_infinite_burst)
 	_toggle_buttons["one_hit_kill"] = _add_toggle_button(vbox, "One-Hit Kill", "Enemies die in one hit", _on_toggle_one_hit_kill)
 	_toggle_buttons["infinite_stamina"] = _add_toggle_button(vbox, "Infinite Stamina", "Dash and run without limit", _on_toggle_infinite_stamina)
+	_toggle_buttons["show_fps"] = _add_toggle_button(vbox, "Show FPS", "Show FPS counter in HUD", _on_toggle_show_fps)
 
 func _create_player_panel() -> void:
 	var scroll := _create_panel_base()
@@ -208,6 +209,8 @@ func _create_spawn_panel() -> void:
 	
 	_add_button(vbox, "Spawn 10 Basic", "Spawn a wave of basic enemies", _on_spawn_basic_wave)
 	_add_button(vbox, "Spawn Tank", "Spawn a tank enemy", _on_spawn_tank)
+	_add_button(vbox, "Spawn Shielder", "Spawn a shielder (blue shield)", _on_spawn_shielder)
+	_add_button(vbox, "Spawn Exploder", "Spawn an exploder (red strobe)", _on_spawn_exploder)
 	_add_button(vbox, "Spawn Elite", "Spawn an elite enemy", _on_spawn_elite)
 	_add_button(vbox, "Spawn Boss", "Spawn a boss enemy", _on_spawn_boss)
 	_add_button(vbox, "Spawn Super Boss", "Spawn a super boss enemy", _on_spawn_super_boss)
@@ -478,6 +481,11 @@ func _on_toggle_infinite_stamina(btn: Button) -> void:
 	
 	print("[DEBUG] Infinite Stamina: ", _infinite_stamina_enabled)
 
+func _on_toggle_show_fps(btn: Button) -> void:
+	DebugSettings.show_fps = not DebugSettings.show_fps
+	_update_toggle_button(btn, DebugSettings.show_fps)
+	print("[DEBUG] Show FPS: ", DebugSettings.show_fps)
+
 # === PLAYER CALLBACKS ===
 
 func _on_fill_burst() -> void:
@@ -525,6 +533,16 @@ func _on_spawn_tank() -> void:
 	if _enemy_spawner and _enemy_spawner.has_method("spawn_enemy"):
 		_enemy_spawner.spawn_enemy("tank", "ring")
 		print("[DEBUG] Spawned Tank")
+
+func _on_spawn_shielder() -> void:
+	if _enemy_spawner and _enemy_spawner.has_method("spawn_enemy"):
+		_enemy_spawner.spawn_enemy("shielder", "ring")
+		print("[DEBUG] Spawned Shielder")
+
+func _on_spawn_exploder() -> void:
+	if _enemy_spawner and _enemy_spawner.has_method("spawn_enemy"):
+		_enemy_spawner.spawn_enemy("exploder", "ring")
+		print("[DEBUG] Spawned Exploder")
 
 func _on_spawn_elite() -> void:
 	if _enemy_spawner and _enemy_spawner.has_method("spawn_enemy"):

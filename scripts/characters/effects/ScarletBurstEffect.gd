@@ -73,7 +73,7 @@ func _execute_burst() -> void:
 	var execution_kill_count: int = 0  # Track kills for healing
 	
 	# Kill all enemies on screen
-	for node in get_tree().get_nodes_in_group("enemies"):
+	for node in TargetCache.get_enemies():
 		if not is_instance_valid(node):
 			continue
 		if not node is Node2D:

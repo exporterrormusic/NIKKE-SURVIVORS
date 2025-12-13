@@ -156,7 +156,7 @@ func _load_all_characters() -> void:
 	})
 	
 	_register_character("commander", {
-		"display_name": "Legendary Commander",
+		"display_name": "Commander",
 		"description": "Leader with ally summoning",
 		"sprite_path": "commander-sprite.png",
 		"portrait_path": "portrait-sq.png",

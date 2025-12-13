@@ -120,6 +120,15 @@ static func _reparent_to_layer(node: CanvasItem, layer: CanvasLayer, z_index: in
 	if Engine.is_editor_hint():
 		return
 	
+	# Guard: Already parented to this layer
+	if node.get_parent() == layer:
+		node.z_index = z_index
+		return
+	
+	# Guard: Node not in tree (can't reparent)
+	if not node.is_inside_tree():
+		return
+	
 	# Save global transform for Node2D types
 	var saved_transform: Transform2D
 	var is_node2d := node is Node2D

@@ -15,6 +15,9 @@ static var enemy_ai_debug: bool = false
 ## Enable visual debug overlays (collision shapes, etc.)
 static var show_debug_overlays: bool = false
 
+## Show FPS counter in HUD
+static var show_fps: bool = false
+
 
 ## Called when loaded as autoload - only enable defaults in debug builds
 func _ready() -> void:

@@ -16,6 +16,7 @@ class_name EffectPool
 # Pool sizes (pre-warmed at startup)
 const DAMAGE_NUMBER_POOL_SIZE := 50
 const HIT_SPARK_POOL_SIZE := 30
+const SMG_BULLET_POOL_SIZE := 100  # SMG bullets are high frequency
 
 # Singleton instance
 static var _instance: EffectPool = null
@@ -23,9 +24,19 @@ static var _instance: EffectPool = null
 # Pools
 var _damage_number_pool: Array[FloatingDamageNumber] = []
 var _hit_spark_pool: Array[HitSpark] = []
+var _smg_bullet_pool: Array = []  # Can't type hint scene-based bullets
+
+# Lazy-loaded scenes for bullet pooling (avoids circular dependency with Bullet.gd)
+var _smg_bullet_scene: PackedScene = null
 
 # Container for inactive pooled objects
 var _pool_container: Node = null
+
+
+func _get_smg_bullet_scene() -> PackedScene:
+	if _smg_bullet_scene == null:
+		_smg_bullet_scene = load("res://scenes/effects/SMGBullet.tscn")
+	return _smg_bullet_scene
 
 
 static func get_instance() -> EffectPool:
@@ -49,8 +60,9 @@ func _ready() -> void:
 	# Pre-warm pools
 	_prewarm_damage_numbers()
 	_prewarm_hit_sparks()
-	print("[EffectPool] Initialized with %d damage numbers, %d hit sparks" % [
-		DAMAGE_NUMBER_POOL_SIZE, HIT_SPARK_POOL_SIZE
+	_prewarm_smg_bullets()
+	print("[EffectPool] Initialized: %d damage#, %d sparks, %d SMG bullets" % [
+		DAMAGE_NUMBER_POOL_SIZE, HIT_SPARK_POOL_SIZE, SMG_BULLET_POOL_SIZE
 	])
 
 
@@ -70,6 +82,18 @@ func _prewarm_hit_sparks() -> void:
 		spark.set_process(false)
 		_pool_container.add_child(spark)
 		_hit_spark_pool.append(spark)
+
+
+func _prewarm_smg_bullets() -> void:
+	var scene := _get_smg_bullet_scene()
+	for i in range(SMG_BULLET_POOL_SIZE):
+		var bullet = scene.instantiate()
+		bullet.visible = false
+		bullet.set_process(false)
+		bullet.set_physics_process(false)
+		bullet.pool_id = "smg"
+		_pool_container.add_child(bullet)
+		_smg_bullet_pool.append(bullet)
 
 
 # =============================================================================
@@ -188,6 +212,81 @@ func return_hit_spark(spark: HitSpark) -> void:
 
 
 # =============================================================================
+# SMG BULLETS
+# =============================================================================
+
+func spawn_smg_bullet(parent: Node, pos: Vector2, velocity: Vector2, damage: int, owner: Node) -> Node:
+	# Use high-performance BulletServer if available
+	var server = BulletServer.get_instance()
+	if is_instance_valid(server):
+		server.spawn_smg_bullet(pos, velocity, damage, owner)
+		return null
+
+	var bullet = _get_pooled_smg_bullet()
+	
+	if bullet == null:
+		# Pool exhausted, create new (will be freed normally)
+		bullet = _get_smg_bullet_scene().instantiate()
+		bullet.global_position = pos
+		bullet.velocity = velocity
+		bullet.rotation = velocity.angle()
+		bullet.owner_node = owner
+		bullet.base_damage = damage
+		parent.add_child(bullet)
+		return bullet
+	
+	# Reset and configure pooled bullet
+	_reset_smg_bullet(bullet, pos, velocity, damage, owner)
+	
+	# Reparent to target parent
+	if bullet.get_parent() != parent:
+		bullet.get_parent().remove_child(bullet)
+		parent.add_child(bullet)
+	
+	return bullet
+
+
+func _get_pooled_smg_bullet() -> Node:
+	for bullet in _smg_bullet_pool:
+		if not bullet.visible:
+			return bullet
+	return null
+
+
+func _reset_smg_bullet(bullet: Node, pos: Vector2, velocity: Vector2, damage: int, owner: Node) -> void:
+	if bullet.has_method("reset"):
+		bullet.reset()
+	# Re-enable processing (was disabled when returned to pool)
+	bullet.process_mode = Node.PROCESS_MODE_INHERIT
+	bullet.global_position = pos
+	bullet.velocity = velocity
+	bullet.rotation = velocity.angle()
+	bullet.owner_node = owner
+	bullet.base_damage = damage
+	bullet.pool_id = "smg"
+	bullet.visible = true
+
+
+func return_bullet(bullet: Node) -> void:
+	## Called when a bullet despawns - returns to appropriate pool
+	## Uses call_deferred to avoid physics callback issues
+	if bullet in _smg_bullet_pool:
+		bullet.visible = false
+		bullet.set_deferred("process_mode", Node.PROCESS_MODE_DISABLED)
+		call_deferred("_deferred_reparent_to_pool", bullet)
+
+
+func _deferred_reparent_to_pool(bullet: Node) -> void:
+	if not is_instance_valid(bullet):
+		return
+	if bullet.get_parent() != _pool_container:
+		var old_parent = bullet.get_parent()
+		if old_parent:
+			old_parent.remove_child(bullet)
+		_pool_container.add_child(bullet)
+
+
+# =============================================================================
 # CONVENIENCE STATIC METHODS
 # =============================================================================
 
@@ -213,3 +312,7 @@ static func spark_critical(parent: Node, pos: Vector2, direction: Vector2 = Vect
 
 static func spark_player_hit(parent: Node, pos: Vector2, direction: Vector2 = Vector2.RIGHT) -> HitSpark:
 	return get_instance().spawn_hit_spark(parent, pos, HitSpark.SparkType.PLAYER_HIT, direction)
+
+
+static func smg_bullet(parent: Node, pos: Vector2, velocity: Vector2, damage: int, owner: Node) -> Node:
+	return get_instance().spawn_smg_bullet(parent, pos, velocity, damage, owner)

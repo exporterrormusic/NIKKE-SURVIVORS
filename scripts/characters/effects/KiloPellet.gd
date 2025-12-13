@@ -303,7 +303,7 @@ func _physics_process(delta: float) -> void:
 
 func _check_boulder_collision() -> bool:
 	"""Manual boulder collision check since pellets are in EffectsLayer (different scene tree branch)."""
-	var boulders := get_tree().get_nodes_in_group("boulders")
+	var boulders := TargetCache.get_boulders()
 	for boulder in boulders:
 		if not is_instance_valid(boulder):
 			continue
@@ -326,7 +326,7 @@ func _check_line_damage(_delta: float) -> void:
 	if tree == null:
 		return
 	
-	var enemies := tree.get_nodes_in_group("enemies")
+	var enemies := TargetCache.get_enemies()
 	var pellet_array: Array[KiloPellet] = all_burst_pellets if is_burst else all_special_pellets
 	var now := Time.get_ticks_msec() / 1000.0
 	
@@ -407,13 +407,13 @@ func _check_line_damage(_delta: float) -> void:
 				continue
 			
 			# Check cooldown for this enemy
-			var enemy_id := enemy.get_instance_id()
+			var enemy_id: int = enemy.get_instance_id()
 			var last_hit: float = _line_hit_enemies.get(enemy_id, 0.0)
 			if now - last_hit < LINE_DAMAGE_INTERVAL:
 				continue
 			
-			# Deal line damage (fixed at 2 for special attack lines)
-			var line_damage: int = 2
+			# Deal line damage (Scale with pellet damage)
+			var line_damage: int = maxi(1, int(base_damage * 0.5))
 			var hit_dir: Vector2 = (enemy_pos - point_on_line).normalized()
 			# Pass is_burst as from_burst to prevent burst charge during burst attacks
 			enemy.take_damage(line_damage, false, hit_dir, is_burst)

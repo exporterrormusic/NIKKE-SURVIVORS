@@ -62,3 +62,8 @@ func die(overkill: int = 0) -> void:
 func is_dead() -> bool:
 	return _is_dead
 
+func reset() -> void:
+	_is_dead = false
+	current_hp = max_hp
+	_pending_overkill = 0
+

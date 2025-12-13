@@ -63,7 +63,7 @@ func _fire_shotgun(direction: Vector2, is_special: bool, is_burst_shot: bool = f
 	# Calculate damage multiplier
 	var damage_mult: float = 1.0
 	if burst_active:
-		damage_mult = 2.2  # Burst damage bonus
+		damage_mult = 2.0  # Explicit "Attack x 2" multiplier
 	
 	# Special attack bonuses (size_level affects damage in pellet)
 	if is_special and special_size_level > 0:

@@ -47,7 +47,7 @@ Survive 11 waves of Rapture enemies and defeat the final boss to complete a run.
 - **Waves 1-2**: Basic enemies
 - **Waves 3+**: Elite enemies begin spawning
 - **Waves 5, 7, 9**: Boss encounters
-- **Wave 11**: Final Boss + multiple bosses
+- **Wave 11**: Final Boss: **Rapture Queen N01** + multiple elites
 
 ---
 
@@ -96,6 +96,30 @@ Survive 11 waves of Rapture enemies and defeat the final boss to complete a run.
 | **Endless** | No wave limit – survive as long as possible |
 
 **Difficulty**: Adjustable 1-100 slider (higher = tougher enemies, more rewards)
+
+---
+
+## 👾 Enemies
+
+| Type | Description |
+|------|-------------|
+| **Basic** | Standard melee units, spawn in large groups |
+| **Tank** | High HP, glowing orange, resistant to knockback |
+| **Shielder** | Blue glow, generates a protective shield for nearby allies |
+| **Exploder** | Fast suicide bombers, red glow, explode on contact |
+| **Elite** | Mini-bosses with red aura, high stats, drop chests |
+| **Boss** | Large unique enemies with special attacks (lasers, missiles) |
+| **Super Boss** | Extremely powerful versions with purple shields and regeneration |
+
+---
+
+## 🛠️ Debug Features
+
+Access the debug menu by pressing **F1** or **`** (tilde) during gameplay:
+- **Spawn Controls**: Spawn specific enemies (Elite, Boss, Super Boss, Tank, Shielder, Exploder)
+- **Time Controls**: Speed up game (5x, 10x) or freeze time
+- **Visual Options**: Toggle damage numbers, hit flash, or performance stats
+- **Invincibility**: Toggle God Mode for testing
 
 ---
 

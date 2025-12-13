@@ -144,23 +144,15 @@ func _perform_attack(direction: Vector2) -> void:
 	# Each SMG bullet does 1 base damage (2 total per shot)
 	var bullet_damage: int = maxi(player.calc_damage(1.0 / player.get_base_damage()), 1)
 	
-	# Left gun bullet
-	var bullet_left = ProjectileCache.create_smg_bullet()
-	player.get_parent().add_child(bullet_left)
-	bullet_left.global_position = player.global_position + direction * 30 - perp * gun_offset
-	bullet_left.velocity = direction * bullet_speed
-	bullet_left.rotation = direction.angle()
-	bullet_left.owner_node = player
-	bullet_left.base_damage = bullet_damage
+	# Left gun bullet (using pooled bullets for performance)
+	var left_pos := player.global_position + direction * 30 - perp * gun_offset
+	var left_vel := direction * bullet_speed
+	EffectPool.smg_bullet(player.get_parent(), left_pos, left_vel, bullet_damage, player)
 	
 	# Right gun bullet
-	var bullet_right = ProjectileCache.create_smg_bullet()
-	player.get_parent().add_child(bullet_right)
-	bullet_right.global_position = player.global_position + direction * 30 + perp * gun_offset
-	bullet_right.velocity = direction * bullet_speed
-	bullet_right.rotation = direction.angle()
-	bullet_right.owner_node = player
-	bullet_right.base_damage = bullet_damage
+	var right_pos := player.global_position + direction * 30 + perp * gun_offset
+	var right_vel := direction * bullet_speed
+	EffectPool.smg_bullet(player.get_parent(), right_pos, right_vel, bullet_damage, player)
 	
 	_play_sound("smg")
 
@@ -315,7 +307,7 @@ func _on_burst_start() -> void:
 	_burst_next_tick_time = now + SIN_DOT_INTERVAL  # First tick after 1 second
 	_burst_ticks_remaining = SIN_DOT_TICKS
 	
-	var enemies := tree.get_nodes_in_group("enemies")
+	var enemies := TargetCache.get_enemies()
 	for enemy in enemies:
 		if not is_instance_valid(enemy) or not enemy is Node2D:
 			continue

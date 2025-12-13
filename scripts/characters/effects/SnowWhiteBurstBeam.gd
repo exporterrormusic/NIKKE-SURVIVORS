@@ -32,7 +32,8 @@ var gauge_on_kill: bool = false  # Soul Harvest talent
 var _enemies_killed: int = 0  # Track kills for gauge generation
 
 func _ready() -> void:
-	set_process(true)
+	set_physics_process(true)
+	set_process(false)
 	set_notify_transform(true)
 	z_index = 420
 	# Assign to effects layer so beam glows at night
@@ -65,7 +66,7 @@ func configure(forward: Vector2, range_distance: float = -1.0, angle_degrees: fl
 		flash_color = colors.get("flash", flash_color)
 	queue_redraw()
 
-func _process(delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	_age += delta
 	
 	# Deal damage once at the start
@@ -93,9 +94,13 @@ func _apply_cone_damage() -> void:
 	
 	# Track enemies for burn and kill counting
 	var hit_enemies: Array[Node2D] = []
+	var hit_shields: Dictionary = {} # Track unique shields hit to prevent multi-damage
 	
 	# Find all enemies in scene
-	for node in get_tree().get_nodes_in_group("enemies"):
+	var enemies = TargetCache.get_enemies()
+	var space_state = get_world_2d().direct_space_state
+	
+	for node in enemies:
 		if not is_instance_valid(node):
 			continue
 		if not node is Node2D:
@@ -113,6 +118,31 @@ func _apply_cone_damage() -> void:
 		var angle_to_enemy := to_enemy.angle()
 		var angle_diff: float = abs(wrapf(angle_to_enemy - base_angle, -PI, PI))
 		if angle_diff > half_angle:
+			continue
+			
+		# Check line of sight (Blockable by Shields on Layer 16 + World Layer 1)
+		var query = PhysicsRayQueryParameters2D.create(global_position, enemy.global_position)
+		query.collision_mask = 1 | 16 # World + Shields
+		query.collide_with_areas = true
+		query.collide_with_bodies = false
+		
+		var result = space_state.intersect_ray(query)
+		if result:
+			var collider = result.collider
+			print("[SnowWhiteBeam] Ray hit: ", collider.name, " parent: ", collider.get_parent().name)
+			
+			# Identify shield root
+			var shield_root = collider.get_parent() 
+			
+			# Deal damage to shield (ONE TIME per burst)
+			if shield_root.has_method("take_shield_damage"):
+				var shield_id = shield_root.get_instance_id()
+				if not hit_shields.has(shield_id):
+					print("[SnowWhiteBeam] Damaging Shield: ", shield_root.name)
+					shield_root.take_shield_damage(scaled_damage)
+					hit_shields[shield_id] = true
+			
+			# BLOCK the hit on the enemy (Snow White's beam does not pierce shields)
 			continue
 		
 		hit_enemies.append(enemy)

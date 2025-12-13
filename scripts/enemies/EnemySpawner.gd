@@ -12,6 +12,36 @@ signal rapture_queen_spawned()
 # const BasicEnemyScene = preload("res://scenes/characters/Enemy.tscn") # REMOVED: Legacy
 const ModularEnemyScene = preload("res://scenes/enemies/ModularRapture.tscn")
 
+# Enemy Pooling
+var _enemy_pool: Dictionary = {}
+
+func return_enemy(enemy: Node2D) -> void:
+	if not is_instance_valid(enemy): return
+	
+	enemy.visible = false
+	enemy.set_process(false)
+	enemy.set_physics_process(false)
+	
+	# Defer removal to avoid physics locks if called during physics frame
+	var do_return = func():
+		if is_instance_valid(enemy):
+			if enemy.get_parent():
+				enemy.get_parent().remove_child(enemy)
+			
+			if not _enemy_pool.has("modular"):
+				_enemy_pool["modular"] = []
+			_enemy_pool["modular"].append(enemy)
+
+	do_return.call_deferred()
+
+func _get_from_pool() -> Node2D:
+	if _enemy_pool.has("modular") and not _enemy_pool["modular"].is_empty():
+		var enemy = _enemy_pool["modular"].pop_back()
+		if is_instance_valid(enemy):
+			enemy.reset() # Important! reset state
+			return enemy
+	return null
+
 # Effect scripts
 const TankEffectsScript = preload("res://scripts/enemies/effects/TankEffects.gd")
 const EliteEffectsScript = preload("res://scripts/enemies/effects/EliteEffects.gd")
@@ -42,39 +72,14 @@ func set_elite_only_mode(enabled: bool) -> void:
 func set_map_bounds(bounds: Rect2) -> void:
 	_map_bounds = bounds
 
-# Elite visual settings - 5x size, gold glow, has boss abilities
-# Elite visual settings - 5x size, gold glow, has boss abilities
-const ELITE_SCALE := 3.25
-const ELITE_HP_MULT := 10.0
-const ELITE_DAMAGE_MULT := 3.0
-const ELITE_SPEED_MULT := 0.8
-const ELITE_GLOW_COLOR := Color(0.8, 0.1, 0.1, 1.0)  # Red glow (Swapped from Tank)
-
-# Tank settings - 2x size, red glow
-const TANK_SCALE := 2.0
-const TANK_HP_MULT := 5.0
-const TANK_SPEED_MULT := 1.0
-const TANK_DAMAGE_MULT := 2.0
-const TANK_GLOW_COLOR := Color(0.85, 0.35, 0.15, 1.0)  # Dark reddish-orange glow
-
-# Boss settings - 4.5x size, purple glow
-const BOSS_SCALE := 4.5
-const BOSS_HP_MULT := 50.0
-const BOSS_SPEED_MULT := 0.5  # 0.5x normal speed
-const BOSS_DAMAGE_MULT := 5.0
-const BOSS_GLOW_COLOR := Color(0.7, 0.2, 1.0, 1.0)  # Purple glow
-
-# Super Boss settings (Stage 2) - 5.5x size, red-purple glow
-const SUPER_BOSS_SCALE := 5.5
-const SUPER_BOSS_HP_MULT := 100.0
-const SUPER_BOSS_SPEED_MULT := 0.4
-const SUPER_BOSS_DAMAGE_MULT := 8.0
-const SUPER_BOSS_GLOW_COLOR := Color(1.0, 0.2, 0.5, 1.0)  # Red-purple glow
+# Tier configuration (now centralized in EnemyTierConfig.gd)
+const EnemyTierConfigClass = preload("res://scripts/enemies/EnemyTierConfig.gd")
 
 # Health multiplier from wave system (doubles each wave)
 var _health_multiplier: float = 1.0
 
 func _ready() -> void:
+	add_to_group("enemy_spawners")
 	_rng.randomize()
 	_setup_screen_effects()
 
@@ -125,10 +130,19 @@ func spawn_enemy(enemy_type: String, pattern: String) -> Node2D:
 	var spawn_pos := _get_spawn_position(pattern)
 	enemy.global_position = spawn_pos
 	
-	_enemy_container.add_child(enemy)
+	# Parenting Check (Pooling Safety)
+	if enemy.get_parent() == _enemy_container:
+		# Already in container, just ensure it's not queued for deletion?
+		pass 
+	else:
+		if enemy.get_parent():
+			enemy.reparent(_enemy_container)
+		else:
+			_enemy_container.add_child(enemy)
 	
-	# Connect to enemy's tree_exiting to emit enemy_died signal
-	enemy.tree_exiting.connect(_on_enemy_tree_exiting.bind(enemy))
+	# Signal Check (Pooling Safety)
+	if not enemy.tree_exiting.is_connected(_on_enemy_tree_exiting):
+		enemy.tree_exiting.connect(_on_enemy_tree_exiting.bind(enemy))
 	
 	emit_signal("enemy_spawned", enemy)
 	
@@ -141,8 +155,12 @@ func _create_enemy(enemy_type: String, is_elite: bool = false) -> Node2D:
 	var enemy: Node2D
 	
 	# REPLACEMENT: All requests use the new Modular System
-	if enemy_type in ["basic", "modular_rapture", "tank", "boss", "super_boss", "elite", "ranged"]:
-		enemy = ModularEnemyScene.instantiate()
+	if enemy_type in ["basic", "modular_rapture", "tank", "shielder", "exploder", "boss", "super_boss", "elite", "ranged"]:
+		# Check pool first
+		enemy = _get_from_pool()
+		if not enemy:
+			enemy = ModularEnemyScene.instantiate()
+			
 		# Normalize type to 'basic' so downstream configuration (stats/elite modifiers) applies correctly
 		# WAIT: If type is 'tank', we want it to stay 'tank' so _apply_tank_stats runs!
 		# If type is 'boss', stay 'boss'.
@@ -152,7 +170,9 @@ func _create_enemy(enemy_type: String, is_elite: bool = false) -> Node2D:
 	else:
 		# Fallback to modular enemy for unknown types, treating as basic
 		print("[EnemySpawner] Warning: Unknown enemy type '%s', defaulting to Modular Basic" % enemy_type)
-		enemy = ModularEnemyScene.instantiate()
+		enemy = _get_from_pool()
+		if not enemy:
+			enemy = ModularEnemyScene.instantiate()
 		enemy_type = "basic"
 
 	if not enemy:
@@ -163,13 +183,23 @@ func _create_enemy(enemy_type: String, is_elite: bool = false) -> Node2D:
 	var actual_type := enemy_type
 	var force_elite := is_elite
 	
+	# Random tank variant selection (shielder or exploder instead of tank)
+	# 60% tank, 20% shielder, 20% exploder
+	if actual_type == "tank":
+		var roll := randf()
+		if roll < 0.2:
+			actual_type = "shielder"
+		elif roll < 0.4:
+			actual_type = "exploder"
+		# else stays as "tank"
+	
 	if _elite_only_mode:
 		match enemy_type:
 			"basic", "ranged":
 				# Basic becomes tank in Stage 2
 				actual_type = "tank"
-			"tank":
-				# Tank becomes elite in Stage 2
+			"tank", "shielder", "exploder":
+				# Tank variants become elite in Stage 2
 				force_elite = true
 			"elite":
 				# Elite becomes boss in Stage 2
@@ -192,6 +222,12 @@ func _create_enemy(enemy_type: String, is_elite: bool = false) -> Node2D:
 		"tank":
 			_apply_tank_stats(enemy)
 		
+		"shielder":
+			_apply_shielder_stats(enemy)
+		
+		"exploder":
+			_apply_exploder_stats(enemy)
+		
 		"boss":
 			_apply_boss_stats(enemy)
 			force_elite = false  # Don't double-apply elite
@@ -211,62 +247,46 @@ func _create_enemy(enemy_type: String, is_elite: bool = false) -> Node2D:
 	return enemy
 
 func _apply_basic_stats(enemy: Node2D) -> void:
-	# Apply wave health multiplier and difficulty multiplier
-	var difficulty_mult: int = GameState.difficulty_multiplier
-	var new_max = int(enemy.max_hp * _health_multiplier * difficulty_mult)
-	if new_max <= 0:
-		print("[EnemySpawner] CRITICAL: Calc max_hp <= 0! base=", enemy.max_hp, " mult=", _health_multiplier, " diff=", difficulty_mult)
-	enemy.max_hp = new_max
-	enemy.hp = enemy.max_hp
-	# Apply Goddess Fall ATK multiplier
-	enemy.base_damage = int(enemy.base_damage * _get_atk_multiplier())
-	# Goddess Fall: 30% speed boost
-	if GameState.goddess_fall_mode:
-		enemy.speed = int(enemy.speed * 1.3)
-	# Enable shooting
-	if enemy.has_method("set_can_shoot"):
-		enemy.set_can_shoot(true)
-	
-	# Ensure basic enemies get the universal shader (for night glow support)
-	_apply_outline_glow(enemy, Color.TRANSPARENT, false)
+	_apply_tier_stats(enemy, "basic")
 
 func _apply_tank_stats(enemy: Node2D) -> void:
-	var difficulty_mult: int = GameState.difficulty_multiplier
-	var atk_mult: float = _get_atk_multiplier()
-	enemy.scale = Vector2.ONE * TANK_SCALE
-	enemy.max_hp = int(enemy.max_hp * TANK_HP_MULT * _health_multiplier * difficulty_mult)
-	enemy.hp = enemy.max_hp
-	# Goddess Fall: 30% speed boost on top of tank speed
-	var speed_mult := TANK_SPEED_MULT
-	if GameState.goddess_fall_mode:
-		speed_mult *= 1.3
-	enemy.speed = int(enemy.speed * speed_mult)
-	enemy.base_damage = int(TANK_DAMAGE_MULT * atk_mult)
-	# Tanks can shoot missiles AND melee
-	if enemy.has_method("set_can_shoot"):
-		enemy.set_can_shoot(true)
-	enemy.add_to_group("tank")
-	enemy.set_meta("enemy_tier", "tank")  # Track tier for frostburn reduction
-	# Red outline glow (respects sprite alpha) with enhanced core
-	_apply_outline_glow(enemy, TANK_GLOW_COLOR, true)
-	
-	# Goddess Fall mode: Tanks get missile ability like elites/bosses
-	if GameState.goddess_fall_mode:
-		var boss_ai = load("res://scripts/enemies/BossAI.gd")
-		if boss_ai:
-			var ai_node := Node.new()
-			ai_node.set_script(boss_ai)
-			ai_node.name = "BossAI"
-			ai_node.set_meta("tank_mode", true)  # Limited abilities for tanks
-			enemy.add_child(ai_node)
-	
-	# Add tank visual effects (ground cracks, stomp particles, proximity vignette)
-	var tank_fx := Node2D.new()
-	tank_fx.set_script(TankEffectsScript)
-	tank_fx.name = "TankEffects"
-	enemy.add_child(tank_fx)
+	_apply_tier_stats(enemy, "tank")
 
-func _apply_outline_glow(enemy: Node2D, glow_color: Color, enhance_core: bool = false) -> void:
+func _apply_shielder_stats(enemy: Node2D) -> void:
+	_apply_tier_stats(enemy, "shielder")
+	
+	# Create and attach shield effect
+	var shield = ShielderShield.new()
+	shield.name = "ShielderShield"
+	enemy.add_child(shield)
+	shield.initialize(enemy, enemy.max_hp)
+	shield.draw_hp_bar = false # Use unified ModularEnemy UI
+
+	
+	# Apply blue HP bar color
+	if enemy.has_node("ProgressBar"):
+		var hp_bar = enemy.get_node("ProgressBar")
+		var style = StyleBoxFlat.new()
+		style.bg_color = Color(0.3, 0.6, 1.0)  # Blue
+		hp_bar.add_theme_stylebox_override("fill", style)
+
+func _apply_exploder_stats(enemy: Node2D) -> void:
+	_apply_tier_stats(enemy, "exploder")
+	
+	# Create and attach exploder behavior
+	var behavior = ExploderBehavior.new()
+	behavior.name = "ExploderBehavior"
+	enemy.add_child(behavior)
+	behavior.initialize(enemy, int(enemy.max_hp * 2.0))  # Damage = 2x Max HP
+	
+	# Apply red HP bar color
+	if enemy.has_node("ProgressBar"):
+		var hp_bar = enemy.get_node("ProgressBar")
+		var style = StyleBoxFlat.new()
+		style.bg_color = Color(1.0, 0.2, 0.2)  # Red
+		hp_bar.add_theme_stylebox_override("fill", style)
+
+func _apply_outline_glow(enemy: Node2D, glow_color: Color, enhance_core: bool = false, enable_outline: bool = true) -> void:
 	# Apply universal shader to sprite
 	var sprite = null
 	
@@ -292,133 +312,120 @@ func _apply_outline_glow(enemy: Node2D, glow_color: Color, enhance_core: bool = 
 	if sprite:
 		# Use ShaderCache for optimized material creation (avoids load() per enemy)
 		var scale_factor: float = max(enemy.scale.x, enemy.scale.y)
-		var shader_mat := ShaderCache.create_enemy_glow_material(glow_color, enhance_core, scale_factor)
+		var shader_mat := ShaderCache.create_enemy_glow_material(glow_color, enhance_core, scale_factor, enable_outline)
 		sprite.material = shader_mat
 
 
-func _apply_boss_stats(enemy: Node2D) -> void:
+## Unified tier stats application using EnemyTierConfig data
+## Replaces duplicate code in _apply_basic_stats, _apply_tank_stats, etc.
+func _apply_tier_stats(enemy: Node2D, tier_name: String) -> void:
+	var tier: Dictionary = EnemyTierConfigClass.get_tier(tier_name)
 	var difficulty_mult: int = GameState.difficulty_multiplier
 	var atk_mult: float = _get_atk_multiplier()
-	# print("[EnemySpawner] Applying BOSS stats: scale=", BOSS_SCALE, " hp_mult=", BOSS_HP_MULT, " health_mult=", _health_multiplier, " difficulty=", difficulty_mult)
-	enemy.scale = Vector2.ONE * BOSS_SCALE
-	enemy.max_hp = int(enemy.max_hp * BOSS_HP_MULT * _health_multiplier * difficulty_mult)
+	
+	# Apply scale
+	if tier.scale > 1.0:
+		enemy.scale = Vector2.ONE * tier.scale
+	
+	# Apply HP (base * tier_mult * wave_mult * difficulty_mult)
+	var new_max = int(enemy.max_hp * tier.hp_mult * _health_multiplier * difficulty_mult)
+	if new_max <= 0:
+		push_warning("[EnemySpawner] Calc max_hp <= 0 for tier %s" % tier_name)
+		new_max = 1
+	enemy.max_hp = new_max
 	enemy.hp = enemy.max_hp
-	enemy.speed = int(enemy.speed * BOSS_SPEED_MULT)
-	# Goddess Fall: 30% speed boost on top of boss speed
+	
+	# Apply speed
+	var speed_mult: float = tier.speed_mult
 	if GameState.goddess_fall_mode:
-		enemy.speed = int(enemy.speed * 1.3)
-	enemy.base_damage = int(BOSS_DAMAGE_MULT * atk_mult)
-	# print("[EnemySpawner] Boss HP set to: ", enemy.max_hp, " speed=", enemy.speed, " scale=", enemy.scale)
-	enemy.add_to_group("boss")
-	enemy.set_meta("enemy_tier", "boss")
-	# Bosses have 1/3 chance of dropping pristine cores, multiplied by difficulty
-	if randf() < 0.333:
+		speed_mult *= EnemyTierConfigClass.GODDESS_FALL_SPEED_MULT
+	enemy.speed = int(enemy.speed * speed_mult)
+	
+	# Apply damage
+	if tier.damage_mult > 1.0:
+		enemy.base_damage = int(tier.damage_mult * atk_mult)
+	else:
+		enemy.base_damage = int(enemy.base_damage * atk_mult)
+	
+	# Enable shooting if specified
+	if tier.get("can_shoot", false) and enemy.has_method("set_can_shoot"):
+		enemy.set_can_shoot(true)
+	
+	# Add to groups
+	for group_name in tier.get("groups", []):
+		enemy.add_to_group(group_name)
+	
+	# Set tier metadata
+	enemy.set_meta("enemy_tier", tier_name)
+	
+	# Apply glow
+	var enable_outline: bool = tier.get("enable_outline", true) # Default to true
+	# Force disable outline for exploders (override)
+	if tier_name == "exploder":
+		enable_outline = false
+		
+	_apply_outline_glow(enemy, tier.glow_color, tier.glow_enhanced, enable_outline)
+	
+	# Handle core drops
+	var core_chance: float = tier.get("core_drop_chance", 0.0)
+	if GameState.goddess_fall_mode and tier_name == "elite":
+		core_chance = EnemyTierConfigClass.GODDESS_FALL_ELITE_CORE_CHANCE
+	if core_chance > 0.0 and randf() < core_chance:
 		enemy.set_meta("pristine_core_drop", difficulty_mult)
-	# Purple outline glow (respects sprite alpha) with enhanced core
-	_apply_outline_glow(enemy, BOSS_GLOW_COLOR, true)
 	
-	# Add boss attack controller
-	var boss_ai = load("res://scripts/enemies/BossAI.gd")
-	if boss_ai:
-		var ai_node := Node.new()
-		ai_node.set_script(boss_ai)
-		ai_node.name = "BossAI"
-		enemy.add_child(ai_node)
+	# Add boss AI if needed
+	var needs_boss_ai: bool = tier.get("has_boss_ai", false)
+	if tier_name == "tank" and GameState.goddess_fall_mode:
+		needs_boss_ai = EnemyTierConfigClass.GODDESS_FALL_TANK_BOSS_AI
 	
-	# Add boss visual effects (dark aura, particle vortex, glowing core, screen darken)
-	var boss_fx := Node2D.new()
-	boss_fx.set_script(BossEffectsScript)
-	boss_fx.name = "BossEffects"
-	enemy.add_child(boss_fx)
+	if needs_boss_ai:
+		var boss_ai = load("res://scripts/enemies/BossAI.gd")
+		if boss_ai:
+			var ai_node := Node.new()
+			ai_node.set_script(boss_ai)
+			ai_node.name = "BossAI"
+			# Set metadata based on tier
+			if tier_name == "tank":
+				ai_node.set_meta("tank_mode", true)
+			elif tier_name == "elite" and GameState.goddess_fall_mode:
+				ai_node.set_meta("elite_enhanced", true)
+			enemy.add_child(ai_node)
 	
-	# Goddess Fall mode: Boss enrage timer (60 seconds to kill or player dies)
+	# Add visual effects based on tier
+	var effects_script_path: String = tier.get("effects_script", "")
+	if effects_script_path != "":
+		var effects_script = load(effects_script_path)
+		if effects_script:
+			var fx := Node2D.new()
+			fx.set_script(effects_script)
+			fx.name = "%sEffects" % tier_name.capitalize().replace("_", "")
+			enemy.add_child(fx)
+	
+	# Goddess Fall special features
 	if GameState.goddess_fall_mode:
-		_setup_boss_enrage_timer(enemy)
+		if tier.get("has_aura", false):
+			_setup_super_boss_aura(enemy)
+		if tier_name in ["boss", "super_boss"]:
+			_setup_boss_enrage_timer(enemy)
 	
-	# Show boss health bar
-	if _boss_health_bar and _boss_health_bar.has_method("show_boss"):
-		_boss_health_bar.show_boss(enemy, "RAPTURE TITAN")
+	# Show boss health bar if applicable
+	var health_bar_name: String = tier.get("health_bar_name", "")
+	if health_bar_name != "" and _boss_health_bar and _boss_health_bar.has_method("show_boss"):
+		var is_super: bool = tier_name == "super_boss"
+		_boss_health_bar.show_boss(enemy, health_bar_name, is_super)
+
+
+func _apply_boss_stats(enemy: Node2D) -> void:
+	_apply_tier_stats(enemy, "boss")
 
 func _apply_super_boss_stats(enemy: Node2D) -> void:
-	var difficulty_mult: int = GameState.difficulty_multiplier
-	var atk_mult: float = _get_atk_multiplier()
-	# print("[EnemySpawner] Applying SUPER BOSS stats: scale=", SUPER_BOSS_SCALE, " hp_mult=", SUPER_BOSS_HP_MULT, " difficulty=", difficulty_mult)
-	enemy.scale = Vector2.ONE * SUPER_BOSS_SCALE
-	enemy.max_hp = int(enemy.max_hp * SUPER_BOSS_HP_MULT * _health_multiplier * difficulty_mult)
-	enemy.hp = enemy.max_hp
-	enemy.speed = int(enemy.speed * SUPER_BOSS_SPEED_MULT)
-	# Goddess Fall: 30% speed boost on top of super boss speed
-	if GameState.goddess_fall_mode:
-		enemy.speed = int(enemy.speed * 1.3)
-	enemy.base_damage = int(SUPER_BOSS_DAMAGE_MULT * atk_mult)
-	# print("[EnemySpawner] Super Boss HP set to: ", enemy.max_hp, " speed=", enemy.speed, " scale=", enemy.scale)
-	enemy.add_to_group("boss")
-	enemy.add_to_group("super_boss")
-	enemy.set_meta("enemy_tier", "super_boss")
-	enemy.set_meta("pristine_core_drop", difficulty_mult)  # Super bosses guaranteed cores * difficulty
-	# Red-purple outline glow
-	_apply_outline_glow(enemy, SUPER_BOSS_GLOW_COLOR, true)
-	
-	# Add boss attack controller
-	var boss_ai = load("res://scripts/enemies/BossAI.gd")
-	if boss_ai:
-		var ai_node := Node.new()
-		ai_node.set_script(boss_ai)
-		ai_node.name = "BossAI"
-		enemy.add_child(ai_node)
-	
-	# Add boss visual effects
-	var boss_fx := Node2D.new()
-	boss_fx.set_script(BossEffectsScript)
-	boss_fx.name = "BossEffects"
-	enemy.add_child(boss_fx)
-	
-	# Goddess Fall mode: Super boss gets empowerment aura
-	if GameState.goddess_fall_mode:
-		_setup_super_boss_aura(enemy)
-		_setup_boss_enrage_timer(enemy)
-	
-	# Show boss health bar
-	if _boss_health_bar and _boss_health_bar.has_method("show_boss"):
-		_boss_health_bar.show_boss(enemy, "RAPTURE OVERLORD")
+	_apply_tier_stats(enemy, "super_boss")
+	# Setup shield AFTER groups are assigned (can't do this in _ready as groups aren't set yet)
+	if enemy.has_method("setup_super_boss_shield"):
+		enemy.setup_super_boss_shield()
 
 func _apply_elite_modifier(enemy: Node2D) -> void:
-	var difficulty_mult: int = GameState.difficulty_multiplier
-	var atk_mult: float = _get_atk_multiplier()
-	# print("[EnemySpawner] Applying ELITE modifier on top of existing HP: ", enemy.max_hp, " difficulty=", difficulty_mult)
-	enemy.scale = Vector2.ONE * ELITE_SCALE  # Fixed 5x scale, not multiplicative
-	enemy.max_hp = int(enemy.max_hp * ELITE_HP_MULT * _health_multiplier * difficulty_mult)
-	enemy.hp = enemy.max_hp
-	enemy.speed = int(enemy.speed * ELITE_SPEED_MULT)
-	enemy.base_damage = int(ELITE_DAMAGE_MULT * atk_mult)
-	# print("[EnemySpawner] Elite HP now: ", enemy.max_hp)
-	enemy.add_to_group("elite")
-	enemy.set_meta("enemy_tier", "elite")  # Track tier for frostburn reduction
-	# In Goddess Fall mode, elites have 1/5 chance to drop cores
-	if GameState.goddess_fall_mode and randf() < 0.2:
-		enemy.set_meta("pristine_core_drop", difficulty_mult)
-	# Goddess Fall: 30% speed boost on top of elite speed
-	if GameState.goddess_fall_mode:
-		enemy.speed = int(enemy.speed * 1.3)
-	# Gold outline glow (respects sprite alpha) with enhanced core
-	_apply_outline_glow(enemy, ELITE_GLOW_COLOR, true)
-	
-	# Add boss attack controller (missiles + beam) to elites
-	# In Goddess Fall mode, elites also get laser and rocket abilities
-	var boss_ai = load("res://scripts/enemies/BossAI.gd")
-	if boss_ai:
-		var ai_node := Node.new()
-		ai_node.set_script(boss_ai)
-		ai_node.name = "BossAI"
-		if GameState.goddess_fall_mode:
-			ai_node.set_meta("elite_enhanced", true)  # Full abilities in Goddess Fall
-		enemy.add_child(ai_node)
-	
-	# Add elite visual effects (golden aura, spark trail, glowing core)
-	var elite_fx := Node2D.new()
-	elite_fx.set_script(EliteEffectsScript)
-	elite_fx.name = "EliteEffects"
-	enemy.add_child(elite_fx)
+	_apply_tier_stats(enemy, "elite")
 
 func _apply_tint(enemy: Node2D, tint: Color) -> void:
 	var sprite = enemy.get_node_or_null("AnimatedSprite2D")

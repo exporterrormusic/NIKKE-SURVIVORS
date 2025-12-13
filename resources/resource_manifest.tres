@@ -1,7 +1,7 @@
 [gd_resource type="Resource" format=3]
 
 [resource]
-metadata/battle_music = Array[String](["res://assets/sounds/music/battle.mp3", "res://assets/sounds/music/MARIAN TIME TRAVEL (Remix) (2).mp3", "res://assets/sounds/music/MARIAN TIME TRAVEL (Remix) - stereo racer.mp3", "res://assets/sounds/music/MARIAN TIME TRAVEL (Remix) - western.mp3"])
+metadata/battle_music = Array[String](["res://assets/sounds/music/bgm/battle.mp3", "res://assets/sounds/music/bgm/dark.mp3", "res://assets/sounds/music/bgm/nayuta.mp3", "res://assets/sounds/music/bgm/racer.mp3", "res://assets/sounds/music/bgm/rapunzel.mp3", "res://assets/sounds/music/bgm/sin.mp3", "res://assets/sounds/music/bgm/snow.mp3", "res://assets/sounds/music/bgm/western.mp3"])
 metadata/biome_files = Array[String](["res://resources/biomes/dunes.tres", "res://resources/biomes/grasslands.tres", "res://resources/biomes/rain_forest.tres", "res://resources/biomes/sakura_grove.tres", "res://resources/biomes/snowfield.tres"])
 metadata/time_of_day_files = Array[String](["res://resources/time_of_day/day.tres", "res://resources/time_of_day/dusk.tres", "res://resources/time_of_day/morning.tres", "res://resources/time_of_day/night.tres", "res://resources/time_of_day/sunrise.tres", "res://resources/time_of_day/twilight.tres", "res://resources/time_of_day/whiteout.tres"])
 metadata/map_files = Array[String](["res://resources/maps/ashen_sands.tres", "res://resources/maps/emerald_fields.tres", "res://resources/maps/polar_front.tres", "res://resources/maps/sakura_grove.tres", "res://resources/maps/storm_day.tres", "res://resources/maps/storm_night.tres"])

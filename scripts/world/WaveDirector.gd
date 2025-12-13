@@ -259,6 +259,12 @@ func _update_spawn_bracket() -> void:
 		emit_signal("wave_changed", _current_wave)
 		# Emit to global EventBus for decoupled systems
 		EventBus.wave_started.emit(_current_wave)
+		
+		# Wave 10 music change
+		if _current_wave == 10:
+			print("[WaveDirector] Wave 10 detected! Requesting music change to wishes.wav")
+			AudioDirector.play_music_by_path("res://assets/sounds/music/bgm/wishes.wav", true, 2.0)
+			print("[WaveDirector] Wave 10 started: Playing wishes.wav")
 
 func get_current_wave() -> int:
 	return _current_wave
@@ -480,6 +486,9 @@ func _start_rapture_event() -> void:
 	_rapture_active = true
 	emit_signal("rapture_event_started")
 	print("[WaveDirector] RAPTURE EVENT STARTED - FLOOD MODE ACTIVE")
+	
+	# Play Timer Music
+	AudioDirector.play_queen_timer_music()
 	
 	# Stop any other active event
 	_active_event = {}

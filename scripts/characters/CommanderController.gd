@@ -104,7 +104,7 @@ func _start_freeze() -> void:
 	else:
 		view_rect = Rect2(player.global_position - Vector2(1000, 600), Vector2(2000, 1200))
 	
-	var enemies := tree.get_nodes_in_group("enemies")
+	var enemies := TargetCache.get_enemies()
 	for enemy in enemies:
 		if not is_instance_valid(enemy) or not enemy is Node2D:
 			continue

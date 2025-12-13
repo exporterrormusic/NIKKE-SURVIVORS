@@ -8,6 +8,9 @@ var owner_node: Node = null
 var start_position: Vector2 = Vector2.ZERO
 var _start_position_set: bool = false  # Track if start position has been captured
 
+# Object pooling support
+var pool_id: String = ""  # Empty = not pooled, otherwise identifies the pool
+
 # If true, bullet will pierce every damageable target it hits (doesn't queue_free on hit)
 @export var pierce_all: bool = false
 # Optional limited pierce count; 0 = unlimited when pierce_all is true
@@ -32,6 +35,32 @@ const RANGE_MINIGUN := 1100.0  # Like assault rifle
 
 # Performance: disable dynamic lights on bullets (they're expensive!)
 const ENABLE_BULLET_LIGHTS := false
+
+## Reset bullet for object pooling
+func reset() -> void:
+	velocity = Vector2.ZERO
+	lifetime = 0.0
+	owner_node = null
+	start_position = Vector2.ZERO
+	_start_position_set = false
+	pierce_all = false
+	pierce_count = 0
+	max_range = 0.0
+	base_damage = 3
+	_hit_nodes.clear()
+	visible = true
+	modulate.a = 1.0
+	monitoring = true
+	monitorable = true
+	set_process(true)
+	set_physics_process(true)
+
+## Despawn bullet - returns to pool if pooled, otherwise queue_free
+func _despawn() -> void:
+	if has_meta("pool_type"):
+		ProjectileCache.return_to_pool(self)
+		return
+	queue_free()
 
 func _ready():
 	# VISUAL DEBUG: Turn BLUE if script loads successfully
@@ -123,19 +152,19 @@ func _physics_process(delta):
 	
 	lifetime += delta
 	if lifetime > 5.0:
-		queue_free()
+		_despawn()
 		return
 	
 	# Check max range
 	if max_range > 0.0:
 		var traveled := global_position.distance_to(start_position)
 		if traveled >= max_range:
-			queue_free()
+			_despawn()
 			return
 	
 	# Check boulder collision (reparenting to EffectsLayer breaks Area2D overlap)
 	if _check_boulder_collision():
-		queue_free()
+		_despawn()
 		return
 
 func _check_boulder_collision() -> bool:
@@ -169,16 +198,34 @@ func _on_body_entered(body):
 	if body.is_in_group("charmed_allies"):
 		return
 
+	# Check for Shield Hit (Area2D child of ShielderShield)
+	var shield_root = null
+	if body is Area2D:
+		shield_root = body.get_parent()
+	elif body.has_method("take_shield_damage"):
+		shield_root = body
+		
+	if shield_root and shield_root.has_method("take_shield_damage"):
+		# Shield hit! Destroy bullet.
+		shield_root.take_shield_damage(base_damage) 
+		_despawn()
+		return
+
 	# Only apply damage to targets that can take damage
 	if not body.has_method("take_damage"):
 		# If it's a wall (StaticBody2D or TileMap), destroy the bullet
 		if body is TileMap or body is StaticBody2D:
-			queue_free()
+			_despawn()
 		return
 
 	# Prevent repeated hits on the same target
 	if _hit_nodes.has(body):
 		return
+		
+	# Check if target is protected by a shield (stop piercing if so)
+	var protected = false
+	if body.has_method("is_protected_by_shield") and body.is_protected_by_shield():
+		protected = true
 
 	# Roll for critical hit - base chance + shop bonus (capped at 100%)
 	var crit_chance := BASE_CRIT_CHANCE
@@ -201,12 +248,17 @@ func _on_body_entered(body):
 	
 	body.take_damage(damage, is_crit, hit_direction, false, killer_source)
 	_hit_nodes.append(body)
+	
+	# If protected, the damage was redirected to the shield, but we MUST stop the bullet from piercing
+	if protected:
+		_despawn()
+		return
 
 	# If we are not piercing, or we have a limited pierce_count that reached 0, destroy
 	if not pierce_all:
-		queue_free()
+		_despawn()
 		return
 	if pierce_count > 0:
 		pierce_count -= 1
 		if pierce_count <= 0:
-			queue_free()
+			_despawn()

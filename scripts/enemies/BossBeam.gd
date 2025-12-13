@@ -80,7 +80,7 @@ func _ready() -> void:
 	mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED # Still ignores lighting
 	material = mat
 
-func _process(delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	if not _boss or not is_instance_valid(_boss):
 		_finish()
 		return

@@ -247,9 +247,8 @@ func _play_swap_sound() -> void:
 	audio.name = "SwapSFX"
 	audio.volume_db = -5.0
 	audio.bus = "SFX"
-	var sound = load("res://assets/sounds/sfx/ui/swap.wav")
-	if not sound:
-		sound = load("res://assets/sounds/sfx/ui/select.wav")
+	# Use existing select sound as swap sound
+	var sound = load("res://assets/sounds/sfx/ui/select.wav")
 	if sound:
 		audio.stream = sound
 		add_child(audio)

@@ -158,7 +158,7 @@ func explode():
 	_play_explosion_sound()
 	
 	# Damage enemies in area (only enemies, not friendly units like player, allies, or clones)
-	var enemies = get_tree().get_nodes_in_group("enemies")
+	var enemies = TargetCache.get_enemies()
 	const BASE_EXPLOSION_RADIUS := 100.0
 	for enemy in enemies:
 		if not is_instance_valid(enemy):

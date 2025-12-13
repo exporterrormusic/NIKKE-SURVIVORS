@@ -81,20 +81,32 @@ func play_random_battle_track(fade_time: float = 0.5) -> void:
 	play_music_by_path(choice, true, fade_time)
 
 func play_music_by_path(path: String, loop: bool = true, fade_time: float = 0.5) -> void:
+	print("[AudioDirector] play_music_by_path called: ", path)
+	if _current_music_path == path and _music_player.playing:
+		print("[AudioDirector] Music already playing: ", path)
+		return
+		
 	var stream := _load_stream(path)
 	if stream == null:
+		push_error("[AudioDirector] FAILED to load music stream: " + path)
 		return
-	initialize()
+	print("[AudioDirector] Stream loaded successfully. Preparing to play.")
+	print("[AudioDirector] Preparing to play. _music_player.playing: ", _music_player.playing, " fade_time: ", fade_time)
+	
 	var prepared := _ensure_loop_state(stream, loop)
+	
 	if fade_time > 0.05 and _music_player.playing:
+		print("[AudioDirector] Branch: CROSSFADE")
 		_start_music_with_fade(prepared, fade_time)
 	else:
+		print("[AudioDirector] Branch: STANDARD START")
 		_music_player.stop()
 		_music_player.stream = prepared
 		_music_player.volume_db = -12.0 if fade_time > 0.05 else 0.0
 		_music_player.play()
 		if fade_time > 0.05:
 			var tween := create_tween()
+			tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS) # Run even if paused
 			tween.tween_property(_music_player, "volume_db", 0.0, fade_time)
 	_current_music_path = path
 
@@ -116,6 +128,13 @@ func stop_music(fade_time: float = 0.3) -> void:
 			player_ref.volume_db = 0.0
 	)
 	_current_music_path = ""
+
+func play_ui_music() -> void:
+	play_music_by_path("res://assets/sounds/music/menu/main-menu.mp3", true, 0.5)
+
+func play_queen_timer_music() -> void:
+	play_music_by_path("res://assets/sounds/music/bgm/timer.wav", true, 2.0)
+	print("[AudioDirector] Playing Queen Timer Music (Crossfade 2.0s)")
 
 func play_sfx_by_path(path: String, pitch_scale: float = 1.0, volume_db: float = 0.0) -> void:
 	var stream := _load_stream(path)
@@ -404,7 +423,9 @@ func stop_ambient(fade_time: float = 0.3) -> void:
 	)
 
 func _start_music_with_fade(stream: AudioStream, fade_time: float) -> void:
+	print("[AudioDirector] Starting music crossfade. Time: ", fade_time)
 	var fade_out := create_tween()
+	fade_out.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS) # Run even if game is paused
 	var player_ref := _music_player
 	fade_out.tween_property(player_ref, "volume_db", -48.0, fade_time * 0.5)
 	fade_out.finished.connect(func():
@@ -417,6 +438,7 @@ func _start_music_with_fade(stream: AudioStream, fade_time: float) -> void:
 		player_ref.volume_db = -30.0
 		player_ref.play()
 		var fade_in := create_tween()
+		fade_in.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS) # Run even if game is paused
 		fade_in.tween_property(player_ref, "volume_db", 0.0, max(0.01, fade_time * 0.5))
 	)
 
@@ -435,15 +457,28 @@ func _request_sfx_player() -> AudioStreamPlayer:
 func _load_stream(path: String) -> AudioStream:
 	if path == "":
 		return null
-	if _stream_cache.has(path):
-		print("AudioDirector: stream cache hit: ", path)
-		return _stream_cache[path]
-	print("AudioDirector: loading stream from path: ", path)
-	var stream: AudioStream = ResourceLoader.load(path)
+		
+	# Smart Loading: If asking for .wav, check if .mp3 exists and prefer it
+	# This handles the issue where large WAVs fail to stream in Godot
+	var final_path = path
+	if path.ends_with(".wav"):
+		var mp3_path = path.replace(".wav", ".mp3")
+		if ResourceLoader.exists(mp3_path):
+			print("[AudioDirector] Smart Load: Found .mp3 variant, using it instead of .wav: ", mp3_path)
+			final_path = mp3_path
+			
+	if _stream_cache.has(final_path):
+		# print("AudioDirector: stream cache hit: ", final_path) # Commented out spam
+		return _stream_cache[final_path]
+		
+	print("AudioDirector: loading stream from path: ", final_path)
+	var stream: AudioStream = ResourceLoader.load(final_path)
 	if stream == null:
-		push_warning("AudioDirector: Failed to load stream %s" % path)
+		push_warning("AudioDirector: Failed to load stream %s" % final_path)
 		return null
-	_stream_cache[path] = stream
+		
+	_stream_cache[final_path] = stream
+	_stream_cache[path] = stream # Cache under original path too to save lookups
 	return stream
 
 func _stream_exists(path: String) -> bool:
@@ -452,28 +487,27 @@ func _stream_exists(path: String) -> bool:
 func _ensure_loop_state(stream: AudioStream, should_loop: bool) -> AudioStream:
 	if stream == null:
 		return null
+	
+	# Modify directly to avoid duplication issues
 	if stream is AudioStreamWAV:
 		var wav := stream as AudioStreamWAV
 		var desired := AudioStreamWAV.LOOP_FORWARD if should_loop else AudioStreamWAV.LOOP_DISABLED
-		if wav.loop_mode == desired:
-			return wav
-		var wav_clone := wav.duplicate() as AudioStreamWAV
-		wav_clone.loop_mode = desired
-		return wav_clone
+		if wav.loop_mode != desired:
+			wav.loop_mode = desired
+		return wav
+		
 	if stream is AudioStreamMP3:
 		var mp3 := stream as AudioStreamMP3
-		if mp3.loop == should_loop:
-			return mp3
-		var mp3_clone := mp3.duplicate() as AudioStreamMP3
-		mp3_clone.loop = should_loop
-		return mp3_clone
+		if mp3.loop != should_loop:
+			mp3.loop = should_loop
+		return mp3
+		
 	if stream is AudioStreamOggVorbis:
 		var ogg := stream as AudioStreamOggVorbis
-		if ogg.loop == should_loop:
-			return ogg
-		var ogg_clone := ogg.duplicate() as AudioStreamOggVorbis
-		ogg_clone.loop = should_loop
-		return ogg_clone
+		if ogg.loop != should_loop:
+			ogg.loop = should_loop
+		return ogg
+		
 	return stream
 
 func _collect_indexed_variants(directory: String, prefix: String, key: String) -> Array[String]:

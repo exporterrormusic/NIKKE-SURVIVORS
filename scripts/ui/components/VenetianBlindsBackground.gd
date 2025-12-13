@@ -652,6 +652,9 @@ static func _blit_image_with_clipping(dest: Image, src: Image, dest_pos: Vector2
 
 ## Apply monochrome effect to image - converts to grayscale and applies blue tint
 static func _apply_monochrome_effect(image: Image) -> void:
+	# PERFORMANCE FIX: CPU pixel processing is too slow for large backgrounds.
+	# We rely on the shader/draw-time modulation for tinting instead.
+	return
 	if image == null or image.is_empty():
 		return
 	

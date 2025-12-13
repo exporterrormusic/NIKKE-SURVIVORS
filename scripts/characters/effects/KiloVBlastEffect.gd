@@ -62,7 +62,7 @@ func _deal_blast_damage() -> void:
 	# Find all enemies within the V-shaped blast area
 	var half_angle := deg_to_rad(blast_angle * 0.5)
 	
-	for node in get_tree().get_nodes_in_group("enemies"):
+	for node in TargetCache.get_enemies():
 		if not is_instance_valid(node):
 			continue
 		if not node.has_method("take_damage"):

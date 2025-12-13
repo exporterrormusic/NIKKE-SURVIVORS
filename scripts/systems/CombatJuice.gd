@@ -255,10 +255,12 @@ static func burst_effect() -> void:
 		instance._do_burst_effect()
 
 func _do_burst_effect() -> void:
-	_do_hitstop(0.15)  # 150ms freeze (MORE NOTICEABLE)
+	# User requested removal of hitstop/pause during bursts
+	# _do_hitstop(0.15)
 	_chromatic_target = 0.04
 	_chromatic_strength = 0.04
-	# Time dilation kicks in after hitstop ends
+	# Time dilation still okay? User said "pause", dilation is slow-mo.
+	# Let's keep dilation but remove the hard freeze.
 	_time_scale_target = 0.4
 	camera_shake(15.0)  # Stronger shake
 

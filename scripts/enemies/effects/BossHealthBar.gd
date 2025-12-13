@@ -28,7 +28,13 @@ const FILL_LOW_COLOR := Color(0.9, 0.2, 0.3, 1.0)
 const BORDER_COLOR := Color(0.9, 0.85, 1.0, 0.9)
 const SEGMENT_LINE_COLOR := Color(0.2, 0.1, 0.25, 0.8)
 
+const SHIELD_HEIGHT := 16.0
+const SHIELD_GAP := 4.0
+
 var _is_super_boss := false  # Track if current boss is super boss (red bar)
+var _shield_bar: Control = null
+var _shield_fill: float = 0.0
+
 
 func _ready() -> void:
 	layer = 50  # Above game elements
@@ -71,11 +77,22 @@ func _setup_ui() -> void:
 	_name_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.9))
 	_name_label.add_theme_constant_override("shadow_offset_x", 1)
 	_name_label.add_theme_constant_override("shadow_offset_y", 1)
-	_name_label.position = Vector2(0, -7)  # Nudge up 7px for visual centering
+	_name_label.position = Vector2(0, -5)  # Centered in bar
 	_name_label.size = Vector2(BAR_WIDTH, BAR_HEIGHT)
 	_name_label.clip_text = true
 	_name_label.z_index = 1  # Above the bar fill
 	_container.add_child(_name_label)
+	
+	# Shield Bar (Stacked ABOVE main bar)
+	# Positioned at negative Y to sit on top with a gap
+	_shield_bar = Control.new()
+	_shield_bar.name = "ShieldBar"
+	_shield_bar.position = Vector2(0, -(SHIELD_HEIGHT + SHIELD_GAP))
+	_shield_bar.size = Vector2(BAR_WIDTH, SHIELD_HEIGHT)
+	_shield_bar.draw.connect(_draw_shield_bar)
+	_shield_bar.visible = false
+	_container.add_child(_shield_bar)
+
 	
 	# Enrage timer label
 	_timer_label = Label.new()
@@ -229,6 +246,57 @@ func _process(delta: float) -> void:
 	
 	if _bar_fill:
 		_bar_fill.queue_redraw()
+
+	# Update Shield Logic
+	if _boss and _shield_bar:
+		var s_data = Vector2.ZERO
+		if _boss.has_method("get_active_shield_stats"):
+			s_data = _boss.get_active_shield_stats()
+		
+		# If protected, show bar
+		if s_data.y > 0 and s_data.x > 0:
+			_shield_fill = clampf(s_data.x / s_data.y, 0.0, 1.0)
+			_shield_bar.visible = true
+			_shield_bar.queue_redraw()
+		else:
+			_shield_bar.visible = false
+
+func _draw_shield_bar() -> void:
+	if not _shield_bar: return
+	
+	var rect := Rect2(Vector2.ZERO, _shield_bar.size)
+	
+	# Background (Darker)
+	_shield_bar.draw_rect(rect, Color(0.1, 0.05, 0.2, 0.9))
+	
+	# Fill (Purple/Cyan based on theme? Using Purple for Bosses)
+	var fill_w = rect.size.x * _shield_fill
+	if fill_w > 0:
+		_shield_bar.draw_rect(Rect2(0, 0, fill_w, rect.size.y), Color(0.6, 0.3, 1.0, 1.0))
+		
+	# Border
+	_shield_bar.draw_rect(rect, BORDER_COLOR, false, 2.0)
+	
+	# Gloss
+	if _shield_fill > 0:
+		_shield_bar.draw_rect(Rect2(0, 0, fill_w, 4), Color(1, 1, 1, 0.2))
+	
+	# Shield HP Text (centered)
+	if _boss and _shield_fill > 0:
+		var s_data = Vector2.ZERO
+		if _boss.has_method("get_active_shield_stats"):
+			s_data = _boss.get_active_shield_stats()
+		if s_data.y > 0:
+			var shield_text := "%d / %d" % [int(s_data.x), int(s_data.y)]
+			var font = ThemeDB.fallback_font
+			var font_size := 12
+			var text_size = font.get_string_size(shield_text, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size)
+			var text_pos := Vector2((rect.size.x - text_size.x) / 2, rect.size.y / 2 + text_size.y / 4)
+			# Shadow
+			_shield_bar.draw_string(font, text_pos + Vector2(1, 1), shield_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(0, 0, 0, 0.8))
+			# Text
+			_shield_bar.draw_string(font, text_pos, shield_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(1.0, 1.0, 1.0, 1.0))
+
 
 func _update_enrage_timer_display() -> void:
 	if not _boss or not is_instance_valid(_boss):

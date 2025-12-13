@@ -38,7 +38,7 @@ func _ready():
 	# Select initial target - only target enemies, not friendly units
 	var closest_enemy = null
 	var min_dist = INF
-	var enemies = get_tree().get_nodes_in_group("enemies")
+	var enemies = TargetCache.get_enemies()
 	for enemy in enemies:
 		if not is_instance_valid(enemy):
 			continue

@@ -40,7 +40,7 @@ static func ensure_initialized() -> void:
 		_load_manifest()
 
 static func _scan_all_resources() -> void:
-	battle_music = _scan_directory("res://assets/sounds/music", [".mp3", ".ogg", ".wav"], ["main-menu"])
+	battle_music = _scan_directory("res://assets/sounds/music/bgm", [".mp3", ".ogg", ".wav"], ["timer", "wishes"])
 	biome_files = _scan_directory("res://resources/biomes", [".tres"])
 	time_of_day_files = _scan_directory("res://resources/time_of_day", [".tres"])
 	map_files = _scan_directory("res://resources/maps", [".tres"])

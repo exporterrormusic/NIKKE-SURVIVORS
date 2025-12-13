@@ -7,29 +7,28 @@ uniform float glow_size : hint_range(0.0, 0.1) = 0.02;
 void fragment() {
 	vec4 tex_color = texture(TEXTURE, UV);
 	
-	// Sample neighboring pixels for glow effect
-	vec4 glow_sample = vec4(0.0);
-	float samples = 0.0;
+	// OPTIMIZATION: 8-Tap Sample (Quality + Speed)
+	float alpha_sum = 0.0;
+	vec2 size = vec2(glow_size);
+    // Cardinals
+	alpha_sum += texture(TEXTURE, UV + vec2(size.x, 0.0)).a;
+	alpha_sum += texture(TEXTURE, UV - vec2(size.x, 0.0)).a;
+	alpha_sum += texture(TEXTURE, UV + vec2(0.0, size.y)).a;
+	alpha_sum += texture(TEXTURE, UV - vec2(0.0, size.y)).a;
+    // Diagonals (0.707 distance)
+    vec2 diag = size * 0.707;
+    alpha_sum += texture(TEXTURE, UV + diag).a;
+    alpha_sum += texture(TEXTURE, UV - diag).a;
+    alpha_sum += texture(TEXTURE, UV + vec2(diag.x, -diag.y)).a;
+    alpha_sum += texture(TEXTURE, UV + vec2(-diag.x, diag.y)).a;
 	
-	// Sample in a small radius around the current pixel
-	for(float x = -glow_size; x <= glow_size; x += glow_size * 0.5) {
-		for(float y = -glow_size; y <= glow_size; y += glow_size * 0.5) {
-			vec2 offset = vec2(x, y);
-			vec4 sample_color = texture(TEXTURE, UV + offset);
-			glow_sample += sample_color;
-			samples += 1.0;
-		}
-	}
+	float avg_alpha = alpha_sum * 0.125;
 	
-	glow_sample /= samples;
+	// Glow is stronger where there is nearby alpha but low current alpha
+	float glow_mask = max(0.0, avg_alpha - tex_color.a);
 	
-	// Create glow based on texture alpha
-	float glow_alpha = glow_sample.a * glow_intensity;
-	vec3 glow_rgb = glow_color.rgb * glow_alpha;
+	vec3 glow_rgb = glow_color.rgb * glow_mask * glow_intensity * 2.0;
 	
-	// Combine original texture with glow
-	vec3 final_rgb = tex_color.rgb + glow_rgb;
-	float final_alpha = max(tex_color.a, glow_alpha * 0.3);
-	
-	COLOR = vec4(final_rgb, final_alpha);
+	// Add glow to original
+	COLOR = vec4(tex_color.rgb + glow_rgb, max(tex_color.a, glow_mask * glow_intensity));
 }

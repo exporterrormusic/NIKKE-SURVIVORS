@@ -12,6 +12,9 @@ const CACHE_INTERVAL := 0.1  # 100ms = 10 updates per second
 static var _enemies: Array = []
 static var _charmed_allies: Array = []
 static var _nayuta_clones: Array = []
+static var _shielder_shields: Array = []
+static var _summoned_allies: Array = []
+static var _boulders: Array = []
 static var _player: Node2D = null
 
 # Cache timing
@@ -52,6 +55,9 @@ static func _refresh_cache() -> void:
 	_enemies = _tree.get_nodes_in_group("enemies")
 	_charmed_allies = _tree.get_nodes_in_group("charmed_allies")
 	_nayuta_clones = _tree.get_nodes_in_group("nayuta_clones")
+	_shielder_shields = _tree.get_nodes_in_group("shielder_shields")
+	_summoned_allies = _tree.get_nodes_in_group("summoned_allies")
+	_boulders = _tree.get_nodes_in_group("boulders")
 	
 	# Cache player reference
 	var players := _tree.get_nodes_in_group("player")
@@ -85,6 +91,28 @@ static func get_nayuta_clones() -> Array:
 	return _nayuta_clones
 
 
+static func get_shielder_shields() -> Array:
+	var current_frame := Engine.get_process_frames()
+	if current_frame != _last_cache_frame:
+		_refresh_cache()
+		_last_cache_frame = current_frame
+	return _shielder_shields
+
+static func get_summoned_allies() -> Array:
+	var current_frame := Engine.get_process_frames()
+	if current_frame != _last_cache_frame:
+		_refresh_cache()
+		_last_cache_frame = current_frame
+	return _summoned_allies
+
+static func get_boulders() -> Array:
+	var current_frame := Engine.get_process_frames()
+	if current_frame != _last_cache_frame:
+		_refresh_cache()
+		_last_cache_frame = current_frame
+	return _boulders
+
+
 static func get_player() -> Node2D:
 	"""Returns cached player reference."""
 	var current_frame := Engine.get_process_frames()
@@ -98,47 +126,19 @@ static func get_nearest_enemy(from_position: Vector2, max_range: float = INF) ->
 	"""Find the nearest valid enemy to a position."""
 	var enemies := get_enemies()
 	var nearest: Node2D = null
-	var nearest_dist := max_range
+	var min_dist_sq := max_range * max_range
 	
 	for enemy in enemies:
-		if not is_instance_valid(enemy) or not enemy is Node2D:
-			continue
-		if enemy.get("hp") != null and enemy.get("hp") <= 0:
+		if not is_instance_valid(enemy):
 			continue
 		
-		var dist := from_position.distance_to((enemy as Node2D).global_position)
-		if dist < nearest_dist:
-			nearest_dist = dist
-			nearest = enemy as Node2D
-	
+		# Skip dying enemies? (Optional)
+		if enemy.has_method("is_dead") and enemy.is_dead():
+			continue
+			
+		var dist_sq = from_position.distance_squared_to(enemy.global_position)
+		if dist_sq < min_dist_sq:
+			min_dist_sq = dist_sq
+			nearest = enemy
+			
 	return nearest
-
-
-static func get_enemies_in_range(from_position: Vector2, range_radius: float) -> Array:
-	"""Get all enemies within a radius. Returns array of Node2D."""
-	var enemies := get_enemies()
-	var result: Array = []
-	var range_sq := range_radius * range_radius
-	
-	for enemy in enemies:
-		if not is_instance_valid(enemy) or not enemy is Node2D:
-			continue
-		if enemy.get("hp") != null and enemy.get("hp") <= 0:
-			continue
-		
-		var dist_sq := from_position.distance_squared_to((enemy as Node2D).global_position)
-		if dist_sq <= range_sq:
-			result.append(enemy)
-	
-	return result
-
-
-static func clear_cache() -> void:
-	"""Clear all caches. Call when changing scenes."""
-	_enemies.clear()
-	_charmed_allies.clear()
-	_nayuta_clones.clear()
-	_player = null
-	_last_cache_frame = -1
-	_cache_timer = 0.0
-	_tree = null

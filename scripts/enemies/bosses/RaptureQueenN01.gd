@@ -24,6 +24,11 @@ var _regen_accumulator: float = 0.0
 var _is_self_destructing := false
 var _self_destruct_timer: float = 0.0
 var _is_teleporting := false
+var _event_timer: float = 0.0
+var _warning_triggered: bool = false
+var _explosion_triggered: bool = false
+const EVENT_WARNING_TIME := 168.0 # 2:48
+const EVENT_EXPLOSION_TIME := 174.0 # 2:54
 
 func _ready() -> void:
 	# Mark as boss BEFORE super._ready() so ModularEnemy can see the group
@@ -37,6 +42,10 @@ func _ready() -> void:
 	# Notify HUD
 	if EventBus:
 		EventBus.boss_spawned.emit(self)
+		
+	# Play Timer Music (Correct place for all spawn methods)
+	if AudioDirector:
+		AudioDirector.play_queen_timer_music()
 	
 	# 1.5 is already big, but boss requested 4.5x equivalent?
 	# 4.5x is for Sprite2D scaling.
@@ -77,6 +86,9 @@ func _ready() -> void:
 			get_parent().add_child(slime_trail)
 			slime_trail.setup(self)  # Pass boss reference
 
+	# Setup Boss Shield (Purple, 10% HP, 30s CD)
+	_setup_boss_shield()
+
 # Removed _setup_visual_overlays as logic is now in Visuals node
 
 func _process(delta: float) -> void:
@@ -112,6 +124,9 @@ func _process(delta: float) -> void:
 	
 	# Process regeneration (Passive)
 	_process_passive_regeneration(delta)
+	
+	# Process Event Timer (Song synchronization)
+	_process_event_timer(delta)
 
 	# Process Self Destruct
 	if _is_self_destructing:
@@ -120,6 +135,121 @@ func _process(delta: float) -> void:
 	elif health_component.current_hp <= health_component.max_hp * 0.10: # 10% Threshold
 		_trigger_self_destruct()
 		
+	# Boss Shield Logic
+	if _shield_ready_to_deploy and not _is_teleporting and not _is_self_destructing:
+		# ~0.5% chance per frame to deploy shield if ready
+		if randf() < 0.005:
+			_deploy_shield()
+
+var _boss_shield: Node2D = null
+var _shield_ready_to_deploy: bool = false
+
+func _setup_boss_shield() -> void:
+	var shield_script = load("res://scripts/enemies/effects/ShielderShield.gd")
+	if not shield_script: return
+	
+	_boss_shield = shield_script.new()
+	# Add as child so it inherits scale (2.25x)
+	add_child(_boss_shield)
+	
+	# Configure: Purple, 10% Max HP, Manual Regen, 30s Cooldown
+	# Base radius reduced because 2.25x scale makes it huge
+	_boss_shield.initialize(self, health_component.max_hp, 0.1, 120.0)
+	_boss_shield.color_theme = Color(0.7, 0.3, 1.0) # Purple
+	_boss_shield.auto_regen = false
+	_boss_shield.recharge_duration = 30.0
+	_boss_shield.bar_offset_y = -120.0 # High above HP bar
+	# Note: draw_hp_bar is now enabled so boss has both HUD and world-space bars
+	
+	_boss_shield.recharge_complete.connect(func(): 
+		_shield_ready_to_deploy = true
+		print("[RaptureQueen] Shield recharged and ready to deploy.")
+	)
+	
+	# Start inactive but ready
+	_boss_shield.deactivate_initially()
+	_shield_ready_to_deploy = true
+
+func _deploy_shield() -> void:
+	if _boss_shield and _boss_shield.has_method("activate"):
+		print("[RaptureQueen] Deploying Boss Shield!")
+		_boss_shield.activate()
+		_shield_ready_to_deploy = false
+
+func get_active_shield_stats() -> Vector2:
+	# Override: Return our boss shield stats for BossHealthBar
+	if _boss_shield and _boss_shield.is_active():
+		return Vector2(_boss_shield.shield_hp, _boss_shield.max_shield_hp)
+	return Vector2.ZERO
+
+func _process_event_timer(delta: float) -> void:
+	_event_timer += delta
+	
+	# 2:48 - Warning Phase (Red Tint + Charging)
+	if _event_timer >= EVENT_WARNING_TIME and not _warning_triggered:
+		_trigger_event_warning()
+	
+	# 2:54 - Explosion Phase (Game Over)
+	if _event_timer >= EVENT_EXPLOSION_TIME and not _explosion_triggered:
+		_trigger_event_explosion()
+
+func _trigger_event_warning() -> void:
+	_warning_triggered = true
+	print("[RaptureQueen] EVENT WARNING - 2:48 REACHED")
+	
+	# Create Red Overlay
+	var canvas = CanvasLayer.new()
+	canvas.layer = 110 # High layer
+	canvas.name = "QueenEventOverlay"
+	get_tree().root.add_child(canvas)
+	
+	var color_rect = ColorRect.new()
+	color_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	color_rect.color = Color(1.0, 0.0, 0.0, 0.0)
+	color_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	canvas.add_child(color_rect)
+	
+	# Animate Red Tint (Fade in over 6 seconds)
+	var tween = create_tween()
+	tween.tween_property(color_rect, "color:a", 0.4, 6.0).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_CUBIC)
+	
+	# Visual Charging Effect on Boss
+	if _visuals:
+		var charge_tween = create_tween()
+		charge_tween.tween_property(_visuals, "modulate", Color(10.0, 0.5, 0.5, 1.0), 6.0) # Glow intense red
+
+func _trigger_event_explosion() -> void:
+	_explosion_triggered = true
+	print("[RaptureQueen] EVENT EXPLOSION - 2:54 REACHED - GAME OVER")
+	
+	# Clean up overlay
+	var overlay = get_tree().root.get_node_or_null("QueenEventOverlay")
+	if overlay:
+		overlay.queue_free()
+	
+	# Massive Explosion Effect (White Flash)
+	var canvas = CanvasLayer.new()
+	canvas.layer = 120
+	get_tree().root.add_child(canvas)
+	
+	var flash = ColorRect.new()
+	flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	flash.color = Color.WHITE
+	canvas.add_child(flash)
+	
+	# Kill all players instantly
+	var players = get_tree().get_nodes_in_group("player")
+	for p in players:
+		if p.has_method("die"):
+			p.die()
+		elif p.has_method("take_damage"):
+			# True damage, ensure kill
+			p.take_damage(999999, false, Vector2.ZERO, true)
+	
+	# Also kill boss to end run logically (if needed) or just let WaveDirector handle 'run lost' via player death
+	# But prompt says "all players will die. This ends the match."
+	# Player death usually triggers run end.
+
 func _process_passive_regeneration(delta: float) -> void:
 	# Don't regen if dead
 	if health_component.is_dead():

@@ -290,7 +290,7 @@ func _init_audio() -> void:
 	movement_effects.name = "MovementEffects"
 	add_child(movement_effects)
 	
-	audio_director.play_random_battle_track()
+	# audio_director.play_random_battle_track() # Disabling to prevent conflict with Level BGM
 
 func _init_character_system() -> void:
 	_registry = CharacterRegistryScript.get_instance()

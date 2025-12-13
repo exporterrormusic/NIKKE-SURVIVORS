@@ -23,6 +23,7 @@ var _current_score: int = 0
 var _display_score: int = 0
 var _score_tween: Tween = null
 var _pulse_tween: Tween = null
+var _fps_label: Label = null
 
 func _ready() -> void:
 	_build_ui()
@@ -36,6 +37,10 @@ func _process(_delta: float) -> void:
 		var new_score: int = GameState.current_score
 		if new_score != _current_score:
 			_set_score(new_score)
+	
+	# Always update display for FPS counter
+	if DebugSettings.show_fps:
+		_update_display()
 
 func _build_ui() -> void:
 	# Main container - anchor to top right, below XP bar
@@ -82,6 +87,19 @@ func _build_ui() -> void:
 	_score_label.add_theme_color_override("font_color", SCORE_COLOR)
 	_score_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(_score_label)
+	
+	# FPS Label (outside the main panel, just below it)
+	_fps_label = Label.new()
+	_fps_label.text = "FPS: 60"
+	_fps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_fps_label.add_theme_font_size_override("font_size", 10)
+	_fps_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
+	_fps_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	# Position relative to top right of screen, below score box
+	# Score box bottom is approx 120 (50 top + 70 height).
+	_fps_label.position = Vector2(-70, 75) 
+	add_child(_fps_label)
+	_fps_label.visible = false
 
 func _create_panel_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
@@ -115,6 +133,23 @@ func _update_display_score(value: int) -> void:
 func _update_display() -> void:
 	if _score_label:
 		_score_label.text = _format_number(_display_score)
+	
+	# Update FPS label visibility and text
+	if _fps_label:
+		if DebugSettings.show_fps:
+			_fps_label.visible = true
+			_fps_label.text = "FPS: %d" % Engine.get_frames_per_second()
+			
+			# Color code FPS
+			var fps = Engine.get_frames_per_second()
+			if fps >= 55:
+				_fps_label.modulate = Color(0.5, 1.0, 0.5, 0.7) # Green
+			elif fps >= 30:
+				_fps_label.modulate = Color(1.0, 1.0, 0.5, 0.7) # Yellow
+			else:
+				_fps_label.modulate = Color(1.0, 0.4, 0.4, 0.7) # Red
+		else:
+			_fps_label.visible = false
 
 func _format_number(value: int) -> String:
 	var str_value := str(value)

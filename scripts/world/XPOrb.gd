@@ -35,11 +35,7 @@ func _ready():
 	_rng.randomize()
 	_bob_offset = _rng.randf() * TAU  # Random phase so orbs don't sync
 	# Find player in the scene tree
-	player = get_tree().get_first_node_in_group("player")
-	if not player:
-		var level = get_tree().current_scene
-		if level and level.has_node("Player"):
-			player = level.get_node("Player")
+	player = TargetCache.get_player()
 	# Get xp_bar from the XPUI node
 	if player and "xp_ui" in player:
 		var xp_ui = player.xp_ui
@@ -92,11 +88,10 @@ func _create_glow_layers() -> void:
 
 func _physics_process(delta):
 	if not xp_bar:
-		queue_free()
+		ProjectileCache.return_to_pool(self)
 		return
 	
 	_age += delta
-	_update_visuals(delta)
 	_update_visuals(delta)
 	# _update_trail(delta) # Disabled for performance
 	
@@ -109,7 +104,7 @@ func _physics_process(delta):
 	var camera = get_viewport().get_camera_2d()
 	var viewport_size = get_viewport_rect().size
 	var screen_center = viewport_size / 2
-	var offset = (target_pos_screen - screen_center) * camera.zoom
+	var offset = (target_pos_screen - screen_center) / camera.zoom
 	var target_pos_world = camera.global_position + offset
 	
 	_last_position = global_position
@@ -143,7 +138,7 @@ func _physics_process(delta):
 		_spawn_collection_burst()
 		if player:
 			player.add_xp(1)
-		queue_free()
+		ProjectileCache.return_to_pool(self)
 
 func _update_visuals(delta: float) -> void:
 	var pulse := sin(_age * PULSE_SPEED) * 0.5 + 0.5
@@ -223,6 +218,34 @@ func _spawn_collection_burst() -> void:
 				spark.queue_free()
 		)
 
-func _create_radial_glow_texture(_size: int) -> Texture2D:
 	# Fallback - should use TextureCache instead
 	return TextureCache.get_glow_texture_32()
+
+func reset() -> void:
+	_age = 0.0
+	_rng.randomize()
+	_bob_offset = _rng.randf() * TAU
+	_base_position = position
+	_last_position = global_position
+	
+	# Ensure player reference is valid
+	if not player or not is_instance_valid(player):
+		player = TargetCache.get_player()
+		
+	# Ensure xp_bar reference is valid
+	if not xp_bar or not is_instance_valid(xp_bar):
+		if player and "xp_ui" in player:
+			var xp_ui = player.xp_ui
+			if xp_ui:
+				xp_bar = xp_ui.get_node_or_null("ProgressBar")
+	
+	# Reset visuals
+	modulate = Color.WHITE
+	scale = Vector2.ONE
+	rotation = 0.0
+	if _glow_sprite:
+		_glow_sprite.scale = Vector2(1.5, 1.5)
+		_glow_sprite.rotation = 0.0
+	if _inner_glow:
+		_inner_glow.scale = Vector2(0.6, 0.6)
+		_inner_glow.rotation = 0.0

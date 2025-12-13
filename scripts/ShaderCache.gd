@@ -128,14 +128,14 @@ static func get_universal_shader() -> Shader:
 	return _universal_shader
 
 
-static func create_enemy_glow_material(glow_color: Color, enhance_core: bool, scale_factor: float) -> ShaderMaterial:
+static func create_enemy_glow_material(glow_color: Color, enhance_core: bool, scale_factor: float, enable_outline: bool = true) -> ShaderMaterial:
 	## Creates a new material for enemy glow effects using the cached shader.
 	## Use this instead of manually loading the shader in EnemySpawner.
 	var mat := ShaderMaterial.new()
 	mat.shader = get_universal_shader()
 	
 	# Outline parameters
-	mat.set_shader_parameter("enable_outline", true)
+	mat.set_shader_parameter("enable_outline", enable_outline)
 	mat.set_shader_parameter("outline_color", glow_color)
 	mat.set_shader_parameter("outline_width", 2.0)
 	

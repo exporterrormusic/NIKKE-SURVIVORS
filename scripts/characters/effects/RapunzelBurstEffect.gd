@@ -95,7 +95,7 @@ func _execute_burst() -> void:
 	if not get_tree():
 		return
 	
-	for node in get_tree().get_nodes_in_group("enemies"):
+	for node in TargetCache.get_enemies():
 		if not is_instance_valid(node):
 			continue
 		if not node is Node2D:

@@ -92,7 +92,7 @@ func _can_attack() -> bool:
 	return not is_reloading and ammo > 0
 
 func _perform_attack(direction: Vector2) -> void:
-	# Fire dual SMG bullets (same as Sin)
+	# Fire dual SMG bullets (same as Sin) - using pooled bullets
 	
 	var perp := Vector2(-direction.y, direction.x).normalized()
 	var gun_offset := 18.0
@@ -100,23 +100,13 @@ func _perform_attack(direction: Vector2) -> void:
 	# Each SMG bullet does 1 base damage (2 total per shot)
 	var bullet_damage: int = maxi(player.calc_damage(1.0 / player.get_base_damage()), 1)
 	
-	# Left gun bullet
-	var bullet_left = ProjectileCache.create_smg_bullet()
-	player.get_parent().add_child(bullet_left)
-	bullet_left.global_position = player.global_position + direction * 45 - perp * gun_offset
-	bullet_left.velocity = direction * bullet_speed
-	bullet_left.rotation = direction.angle()
-	bullet_left.owner_node = player
-	bullet_left.base_damage = bullet_damage
+	# Left gun bullet (pooled)
+	var left_pos := player.global_position + direction * 45 - perp * gun_offset
+	EffectPool.smg_bullet(player.get_parent(), left_pos, direction * bullet_speed, bullet_damage, player)
 	
-	# Right gun bullet
-	var bullet_right = ProjectileCache.create_smg_bullet()
-	player.get_parent().add_child(bullet_right)
-	bullet_right.global_position = player.global_position + direction * 45 + perp * gun_offset
-	bullet_right.velocity = direction * bullet_speed
-	bullet_right.rotation = direction.angle()
-	bullet_right.owner_node = player
-	bullet_right.base_damage = bullet_damage
+	# Right gun bullet (pooled)
+	var right_pos := player.global_position + direction * 45 + perp * gun_offset
+	EffectPool.smg_bullet(player.get_parent(), right_pos, direction * bullet_speed, bullet_damage, player)
 	
 	_play_sound("smg")
 

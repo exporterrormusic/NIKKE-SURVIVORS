@@ -61,10 +61,11 @@ func _ready() -> void:
 	_rng.randomize()
 	
 	# Setup collision
-	collision_layer = 8   # Enemy projectile layer
+	collision_layer = 4   # Enemy projectile layer (Was 8, standardizing to 4 for Scarlet Slash detection)
 	collision_mask = 1 | 2 | 8   # Hit player (1), enemies for charmed (2), ally layer (8)
 	monitoring = true
-	monitorable = false
+	monitorable = true # Must be monitorable for Scarlet's Slash Area to detect it!
+	add_to_group("enemy_projectiles")
 	
 	# Create collision shape
 	var collision_shape := CollisionShape2D.new()

@@ -103,12 +103,22 @@ func spawn_smg_bullet(pos: Vector2, vel: Vector2, damage: int, owner_node: Node)
 	
 	_bullets.append(bullet)
 
+# Reusable query object to avoid per-bullet allocation
+var _query: PhysicsRayQueryParameters2D = null
+
 func _physics_process(delta: float) -> void:
 	if _bullets.is_empty():
 		return
 		
 	var space_state = get_world_2d().direct_space_state
 	var i = _bullets.size() - 1
+	
+	# Create reusable query once
+	if _query == null:
+		_query = PhysicsRayQueryParameters2D.new()
+		_query.collision_mask = MASK_COLLISION
+		_query.collide_with_areas = true
+		_query.collide_with_bodies = true
 	
 	while i >= 0:
 		var b = _bullets[i]
@@ -117,17 +127,14 @@ func _physics_process(delta: float) -> void:
 		var move_vec = b.velocity * delta
 		var next_pos = b.position + move_vec
 		
-		# Raycast for collision
-		# Exclude owner from raycast
-		var exclude = []
+		# Raycast for collision - reuse query object
+		_query.from = b.position
+		_query.to = next_pos
+		_query.exclude.clear()
 		if is_instance_valid(b.owner):
-			exclude.append(b.owner.get_rid())
-			
-		var query = PhysicsRayQueryParameters2D.create(b.position, next_pos, MASK_COLLISION, exclude)
-		query.collide_with_areas = true
-		query.collide_with_bodies = true
+			_query.exclude.append(b.owner.get_rid())
 		
-		var result = space_state.intersect_ray(query)
+		var result = space_state.intersect_ray(_query)
 		var destroyed = false
 		
 		if result:
@@ -139,15 +146,14 @@ func _physics_process(delta: float) -> void:
 			b.position = next_pos
 			
 		if not destroyed:
-			# Lifecycle checks
+			# Lifecycle checks - use distance_squared for performance
 			b.lifetime += delta
-			if b.lifetime > 5.0 or (b.max_range > 0 and b.position.distance_to(b.start_position) > b.max_range):
+			if b.lifetime > 5.0:
 				destroyed = true
-			
-			# Check boulder collision manual check (if strictly needed, but let's assume world mask handles it if boulders have bodies)
-			# Bullet.gd did a manual check because it was in EffectsLayer. We are in World (hopefully). 
-			# BulletServer should be added to World scene mostly.
-			# But if Boulders are Area2D, raycast handles them if mask is correct.
+			elif b.max_range > 0:
+				var max_range_sq: float = b.max_range * b.max_range
+				if b.position.distance_squared_to(b.start_position) > max_range_sq:
+					destroyed = true
 		
 		if destroyed:
 			_despawn_bullet(b)

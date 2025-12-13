@@ -1,4 +1,4 @@
-extends Node2D
+extends Area2D
 class_name BossMissile
 
 ## Red missile fired by boss - targets a fixed location near player
@@ -159,6 +159,18 @@ func _ready() -> void:
 	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_MIX
 	mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
 	material = mat
+	
+	# PHYSICS SETUP for Scarlet Slash detection
+	collision_layer = 4 # Layer 3 (Enemy Projectiles)
+	collision_mask = 0  # We handle player calc manually
+	add_to_group("enemy_projectiles")
+	
+	# Add collision shape
+	var shape = CollisionShape2D.new()
+	var circle = CircleShape2D.new()
+	circle.radius = 20.0
+	shape.shape = circle
+	add_child(shape)
 	
 	_flicker_seed = randf_range(0.0, TAU)
 	_velocity = _direction * _current_speed

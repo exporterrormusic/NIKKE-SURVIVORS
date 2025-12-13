@@ -87,8 +87,6 @@ func _ready() -> void:
 	
 	# Find player
 	_player = get_tree().get_first_node_in_group("player")
-	
-	print("[BossAI] Initialized - tank=%s, elite=%s, boss=%s, missiles=%d, cooldown=%.1fs" % [_is_tank, _is_elite, _is_boss, _missiles_per_barrage, _missile_cooldown])
 
 func _process(delta: float) -> void:
 	if not _boss or not is_instance_valid(_boss):
@@ -155,7 +153,7 @@ var _total_missiles_in_volley := 0
 
 func _spawn_missile(spawn_pos: Vector2, delay: float) -> void:
 	# Create missile node
-	var missile := Node2D.new()
+	var missile := Area2D.new()
 	missile.set_script(BossMissileScene)
 	missile.name = "BossMissile"
 	missile.global_position = spawn_pos

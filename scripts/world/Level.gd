@@ -57,12 +57,36 @@ func _ready():
 		if environment.has_method("register_player"):
 			environment.register_player(player)
 			print("[Level] Player registered with environment for grass interaction")
+			
+	# Initialize Grass Mask Manager
+	if not has_node("GrassMaskManager"):
+		var mask_mgr = load("res://scripts/systems/GrassMaskManager.gd").new()
+		mask_mgr.name = "GrassMaskManager"
+		add_child(mask_mgr)
 	
 	# Initialize ambient particle system
 	_setup_ambient_particles()
 	
+	# Setup main HUD (Health, etc) and Music Player
+	_setup_hud()
+	
 	# Warm up projectile cache (prevents shader stutter)
 	ProjectileCache.warm_up_cache(self)
+
+func _setup_hud() -> void:
+	if not player:
+		return
+		
+	# Instantiate Music Player (Bottom Left)
+	var music_player_scene = load("res://scenes/ui/MusicPlayerUI.tscn")
+	if music_player_scene:
+		var mp_layer = CanvasLayer.new()
+		mp_layer.layer = 15 # Layer 15 (above HUD 10, below Pause 100)
+		mp_layer.name = "MusicPlayerLayer"
+		add_child(mp_layer)
+		
+		var mp = music_player_scene.instantiate()
+		mp_layer.add_child(mp)
 	
 	# Initialize night glow system
 	_setup_night_glow()
@@ -142,7 +166,6 @@ func _input(event: InputEvent) -> void:
 		return
 	
 	if event.is_action_pressed("ui_cancel"):  # ESC key
-		print("[Level] ESC pressed - toggling pause menu")
 		_toggle_pause_menu()
 		get_viewport().set_input_as_handled()
 
@@ -334,7 +357,11 @@ func _initialize_random_environment() -> void:
 
 func _update_ambient_systems(biome_id: StringName, time_id: StringName) -> void:
 	var is_night := _is_night_time(time_id)
-	print("[Level] _update_ambient_systems: time_id=", time_id, " is_night=", is_night)
+	
+	# Emit biome change for achievements/systems
+	if EventBus:
+		EventBus.biome_changed.emit(biome_id)
+		EventBus.time_of_day_changed.emit(is_night)
 	
 	# Update ambient particles
 	if _ambient_particles and _ambient_particles.has_method("configure"):
@@ -400,11 +427,7 @@ func _set_enemy_night_boost(enemy: Node, night_boost: float) -> void:
 		if mat.shader:
 			# Check if shader has night_boost parameter
 			mat.set_shader_parameter("night_boost", night_boost)
-			print("[Level] Set night_boost to ", night_boost, " for ", enemy.name)
-		else:
-			print("[Level] FAIL: ", enemy.name, " material has no shader")
-	else:
-		print("[Level] FAIL: ", enemy.name, " has no ShaderMaterial. Sprite: ", sprite)
+		# Debug prints removed for performance
 
 var _current_night_boost := 0.0
 
@@ -594,8 +617,8 @@ class _PristineCoreIcon extends Control:
 		draw_circle(center + highlight_offset, highlight_radius, Color(1.0, 1.0, 1.0, 0.6))
 
 func _process(_delta: float) -> void:
-	# Update wave director with current enemy count
-	if _wave_director and _enemy_container:
+	# Update wave director with current enemy count (throttled for performance)
+	if _wave_director and _enemy_container and Engine.get_process_frames() % 10 == 0:
 		_wave_director.set_enemy_count(_enemy_container.get_child_count())
 
 func _on_enemy_spawn_requested(enemy_type: String, count: int, pattern: String) -> void:
@@ -821,7 +844,6 @@ func _trigger_lightning_flash() -> void:
 	# Sound (Placeholder or actual if available)
 	# TODO: Play loud thunder sound
 	# AudioSystem.play_sfx("thunder") if exists
-	print("[Level] *THUNDER CRASH*")
 
 func _get_current_biome() -> StringName:
 	if environment and environment.has_method("get_active_biome"):
@@ -835,6 +857,18 @@ func _on_wave_changed(wave_number: int) -> void:
 	# Update GameState with current wave for leaderboard
 	if GameState:
 		GameState.set_current_wave(wave_number)
+		
+	# Unlock "ABANDONED WISHES" Achievement at Wave 10
+	if wave_number == 10:
+		if AchievementManager:
+			AchievementManager._unlock_achievement(
+				AchievementManager.get_achievement_id(AchievementManager.AchievementType.ABANDONED_WISHES, ""), 
+				"", 
+				AchievementManager.AchievementType.ABANDONED_WISHES
+			)
+			# Refresh playlist to include new track immediately
+			if AudioDirector:
+				AudioDirector._update_playlist()
 	
 	# Update spawner with new health multiplier
 	if _enemy_spawner and _wave_director:

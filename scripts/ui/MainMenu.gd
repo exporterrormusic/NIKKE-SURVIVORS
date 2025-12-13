@@ -25,7 +25,7 @@ const MENU_OPTIONS: Array[Dictionary] = [
 
 const TITLE_TEXT := "KINGDOM CLEANUP"
 const SUBTITLE_TEXT := "A NIKKE FAN GAME"
-const VERSION_TEXT := "v0.1"
+const VERSION_TEXT := "v0.1A"
 
 @onready var _button_row: HBoxContainer = get_node_or_null("%ButtonRow")
 @onready var _title_label: Label = get_node_or_null("%TitleLabel")

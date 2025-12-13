@@ -59,8 +59,8 @@ func _ready() -> void:
 	
 	# Setup health and movement override
 	if health_component:
-		health_component.max_hp = 5000
-		health_component.current_hp = 5000
+		health_component.max_hp = 9999
+		health_component.current_hp = 9999
 	
 	if movement_component:
 		movement_component.max_speed = 120.0 # Increased from 40.0
@@ -76,15 +76,15 @@ func _ready() -> void:
 		boss_ai.set_script(load("res://scripts/enemies/BossAI.gd"))
 		add_child(boss_ai)
 	
-	# Add Slime Trail Manager to world (parent) not to boss
-	if get_parent():
-		var existing_trail = get_parent().get_node_or_null("RaptureQueenSlimeTrail")
-		if not existing_trail:
-			var slime_trail = Node2D.new()
-			slime_trail.name = "RaptureQueenSlimeTrail"
-			slime_trail.set_script(load("res://scripts/enemies/bosses/effects/RaptureQueenSlimeTrail.gd"))
-			get_parent().add_child(slime_trail)
-			slime_trail.setup(self)  # Pass boss reference
+	# Add Slime Trail Manager - DISABLED per user request
+	# if get_parent():
+	# 	var existing_trail = get_parent().get_node_or_null("RaptureQueenSlimeTrail")
+	# 	if not existing_trail:
+	# 		var slime_trail = Node2D.new()
+	# 		slime_trail.name = "RaptureQueenSlimeTrail"
+	# 		slime_trail.set_script(load("res://scripts/enemies/bosses/effects/RaptureQueenSlimeTrail.gd"))
+	# 		get_parent().add_child(slime_trail)
+	# 		slime_trail.setup(self)  # Pass boss reference
 
 	# Setup Boss Shield (Purple, 10% HP, 30s CD)
 	_setup_boss_shield()
@@ -163,7 +163,6 @@ func _setup_boss_shield() -> void:
 	
 	_boss_shield.recharge_complete.connect(func(): 
 		_shield_ready_to_deploy = true
-		print("[RaptureQueen] Shield recharged and ready to deploy.")
 	)
 	
 	# Start inactive but ready
@@ -172,7 +171,6 @@ func _setup_boss_shield() -> void:
 
 func _deploy_shield() -> void:
 	if _boss_shield and _boss_shield.has_method("activate"):
-		print("[RaptureQueen] Deploying Boss Shield!")
 		_boss_shield.activate()
 		_shield_ready_to_deploy = false
 
@@ -195,7 +193,6 @@ func _process_event_timer(delta: float) -> void:
 
 func _trigger_event_warning() -> void:
 	_warning_triggered = true
-	print("[RaptureQueen] EVENT WARNING - 2:48 REACHED")
 	
 	# Create Red Overlay
 	var canvas = CanvasLayer.new()
@@ -220,7 +217,6 @@ func _trigger_event_warning() -> void:
 
 func _trigger_event_explosion() -> void:
 	_explosion_triggered = true
-	print("[RaptureQueen] EVENT EXPLOSION - 2:54 REACHED - GAME OVER")
 	
 	# Clean up overlay
 	var overlay = get_tree().root.get_node_or_null("QueenEventOverlay")
@@ -292,7 +288,6 @@ func _trigger_self_destruct() -> void:
 		hp_label.modulate = Color(1, 0, 0) # Red Text
 		
 	# Could play alarm sound or flash effect here
-	print("WARNING: RAPTURE QUEEN SELF DESTRUCT SEQUENCE INITIATED")
 
 func _process_self_destruct(delta: float) -> void:
 	_self_destruct_timer -= delta
@@ -309,7 +304,6 @@ func _process_self_destruct(delta: float) -> void:
 		_execute_instant_kill()
 
 func _execute_instant_kill() -> void:
-	print("RAPTURE QUEEN EXPLOSION!")
 	var player = get_tree().get_first_node_in_group("player")
 	if player and is_instance_valid(player) and player.has_method("take_damage"):
 		# Deal 100% Max HP

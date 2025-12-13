@@ -67,7 +67,6 @@ var _boss_health_bar: CanvasLayer = null
 
 func set_elite_only_mode(enabled: bool) -> void:
 	_elite_only_mode = enabled
-	print("[EnemySpawner] Elite-only mode: ", enabled)
 
 func set_map_bounds(bounds: Rect2) -> void:
 	_map_bounds = bounds
@@ -115,13 +114,11 @@ func set_night_boost(boost: float) -> void:
 
 func spawn_enemy(enemy_type: String, pattern: String) -> Node2D:
 	if not _player or not _enemy_container:
-		print("[EnemySpawner] FAILED: No player or enemy_container!")
 		return null
 	
 	# print("[EnemySpawner] spawn_enemy called: type=", enemy_type, " pattern=", pattern)
 	var enemy := _create_enemy(enemy_type, pattern == "elite")
 	if not enemy:
-		print("[EnemySpawner] FAILED: _create_enemy returned null!")
 		return null
 	
 	# print("[EnemySpawner] Enemy created successfully, is_elite=", pattern == "elite")
@@ -169,7 +166,6 @@ func _create_enemy(enemy_type: String, is_elite: bool = false) -> Node2D:
 			enemy_type = "basic"
 	else:
 		# Fallback to modular enemy for unknown types, treating as basic
-		print("[EnemySpawner] Warning: Unknown enemy type '%s', defaulting to Modular Basic" % enemy_type)
 		enemy = _get_from_pool()
 		if not enemy:
 			enemy = ModularEnemyScene.instantiate()
@@ -184,13 +180,14 @@ func _create_enemy(enemy_type: String, is_elite: bool = false) -> Node2D:
 	var force_elite := is_elite
 	
 	# Random tank variant selection (shielder or exploder instead of tank)
-	# 60% tank, 20% shielder, 20% exploder
+	# 70% tank, 15% shielder, 15% exploder
 	if actual_type == "tank":
 		var roll := randf()
-		if roll < 0.2:
+		if roll < 0.15:
 			actual_type = "shielder"
-		elif roll < 0.4:
+		elif roll < 0.30:
 			actual_type = "exploder"
+		# else stays as "tank"
 		# else stays as "tank"
 	
 	if _elite_only_mode:
@@ -259,7 +256,7 @@ func _apply_shielder_stats(enemy: Node2D) -> void:
 	var shield = ShielderShield.new()
 	shield.name = "ShielderShield"
 	enemy.add_child(shield)
-	shield.initialize(enemy, enemy.max_hp)
+	shield.initialize(enemy, enemy.max_hp, 1.0)
 	shield.draw_hp_bar = false # Use unified ModularEnemy UI
 
 	
@@ -328,7 +325,14 @@ func _apply_tier_stats(enemy: Node2D, tier_name: String) -> void:
 		enemy.scale = Vector2.ONE * tier.scale
 	
 	# Apply HP (base * tier_mult * wave_mult * difficulty_mult)
-	var new_max = int(enemy.max_hp * tier.hp_mult * _health_multiplier * difficulty_mult)
+	# FIX: Always start from clean base (stats) to prevent compounding multipliers in pool
+	var base_hp = 1
+	if "stats" in enemy and enemy.stats and "max_hp" in enemy.stats:
+		base_hp = enemy.stats.max_hp
+	elif tier.get("base_hp", 0) > 0:
+		base_hp = tier.base_hp
+		
+	var new_max = int(base_hp * tier.hp_mult * _health_multiplier * difficulty_mult)
 	if new_max <= 0:
 		push_warning("[EnemySpawner] Calc max_hp <= 0 for tier %s" % tier_name)
 		new_max = 1
@@ -588,14 +592,12 @@ func _setup_boss_enrage_timer(boss: Node2D) -> void:
 	# Add visual warning timer display
 	boss.set_meta("enrage_timer", timer)
 	boss.set_meta("enrage_start_time", Time.get_ticks_msec())
-	print("[EnemySpawner] Boss enrage timer started - 60 seconds to kill!")
 
 func _on_boss_enrage_timeout(boss: Node2D) -> void:
 	if not is_instance_valid(boss):
 		return
 	
 	var is_super_boss := boss.is_in_group("super_boss")
-	print("[EnemySpawner] BOSS ENRAGED! Creating massive explosion!")
 	
 	# Mark that player is being killed by enrage (no core drop)
 	if GameState:
@@ -608,7 +610,6 @@ func _on_boss_enrage_timeout(boss: Node2D) -> void:
 	if _player:
 		if is_super_boss:
 			# Super boss: 100% max HP, ignores everything - guaranteed kill
-			print("[EnemySpawner] Super boss enrage - guaranteed kill!")
 			if _player.has_method("die"):
 				_player.die()
 			elif _player.has_method("take_damage"):
@@ -619,7 +620,6 @@ func _on_boss_enrage_timeout(boss: Node2D) -> void:
 		else:
 			# Regular boss: 90% of max HP
 			var damage: int = int(_player.max_hp * 0.9)
-			print("[EnemySpawner] Boss enrage - dealing %d damage (90%% of %d max HP)" % [damage, _player.max_hp])
 			if _player.has_method("take_damage"):
 				_player.take_damage(damage)
 	
@@ -714,12 +714,10 @@ func _setup_super_boss_aura(boss: Node2D) -> void:
 	aura_node.name = "EmpowermentAura"
 	aura_node.set_script(load("res://scripts/enemies/effects/SuperBossAura.gd"))
 	boss.add_child(aura_node)
-	print("[EnemySpawner] Super boss empowerment aura active!")
 
 func spawn_rapture_queen() -> Node2D:
 	var scene = load("res://scenes/enemies/bosses/RaptureQueenN01.tscn")
 	if not scene:
-		print("[EnemySpawner] FAILED: Could not load Rapture Queen scene!")
 		return null
 		
 	var queen = scene.instantiate()
@@ -756,6 +754,5 @@ func spawn_rapture_queen() -> Node2D:
 		
 	# Emit signal so Level can trigger weather
 	emit_signal("rapture_queen_spawned")
-	print("[EnemySpawner] Rapture Queen N01 Spawned at: ", queen.global_position)
 	
 	return queen

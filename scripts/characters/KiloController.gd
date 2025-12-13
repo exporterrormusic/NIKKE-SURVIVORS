@@ -199,8 +199,30 @@ class Sparkle:
 
 func _ready() -> void:
 	z_index = 50  # Above player sprite for sparkles
+	# Store reference to player before potential reparenting
+	set_meta("owner_player", get_parent())
+	# Assign to effects layer to avoid night darkening
+	call_deferred("_assign_to_effects_layer")
+
+func _assign_to_effects_layer() -> void:
+	var env = get_tree().get_first_node_in_group("environment_controller")
+	if env:
+		var effects = env.get_node_or_null("EffectsLayer")
+		if effects and get_parent() != effects:
+			var saved_parent = get_parent()
+			if saved_parent:
+				saved_parent.remove_child(self)
+			effects.add_child(self)
+			z_as_relative = false
+			z_index = 500  # Very high to stay above everything
 
 func _process(delta: float) -> void:
+	# Track player position if reparented to effects layer
+	if has_meta("owner_player"):
+		var player = get_meta("owner_player")
+		if is_instance_valid(player):
+			global_position = player.global_position
+	
 	_time += delta
 	_sparkle_timer += delta
 	

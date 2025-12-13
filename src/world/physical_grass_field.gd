@@ -34,6 +34,10 @@ func _process(delta: float):
 			mat.set_shader_parameter("player_pos", _player_position)
 			# Use global position of the grass quad for world coordinates
 			mat.set_shader_parameter("quad_position", _grass_quad.global_position)
+			
+			# Update mask texture if manager exists
+			if GrassMaskManager.instance:
+				mat.set_shader_parameter("mask_texture", GrassMaskManager.instance.get_mask_texture())
 
 func _create_grass_quad():
 	"""Create a single quad that covers the field and renders grass procedurally."""
@@ -72,6 +76,7 @@ uniform vec4 grass_color_base : source_color = vec4(0.3, 0.6, 0.2, 1.0);
 uniform vec4 grass_color_tip : source_color = vec4(0.5, 0.8, 0.4, 1.0);
 uniform vec2 field_size = vec2(4096.0, 4096.0);
 uniform vec2 quad_position = vec2(0.0, 0.0);
+uniform sampler2D mask_texture : hint_default_black;
 
 // Hash function for pseudo-random values
 float hash21(vec2 p) {
@@ -82,6 +87,15 @@ float hash21(vec2 p) {
 
 // Check if we're in a "cut grass" region
 float get_grass_height_multiplier(vec2 world_pos) {
+	// Sample burn mask (Screen Space)
+	// Since mask camera matches main camera, SCREEN_UV aligns perfect
+	// We need to access SCREEN_UV but this is a fragment shader helper. 
+	// We'll pass mask value into this function or sample global texture if possible?
+	// In Godot CanvasItem shader, we can access texture(mask_texture, SCREEN_UV) anywhere in fragment()
+	
+	// BUT this function is called from fragment(). We'll just return height multiplier here based on NOISE.
+	// Mask check happens in fragment() main loop.
+	
 	// Use multiple layers of noise at different scales for organic shapes
 	// Layer 1: Large organic shapes (900px regions)
 	vec2 large_pos = world_pos / 900.0;
@@ -161,10 +175,10 @@ float draw_grass_clump(vec2 local_pos, vec2 clump_pos, float clump_seed, vec2 to
 	float total_coverage = 0.0;
 	
 	// Fewer blades in cut regions for sparse look
-	int max_blades = height_multiplier < 0.4 ? 2 : int(2.0 + clump_seed * 3.0);
+	int max_blades = height_multiplier < 0.4 ? 2 : int(2.0 + clump_seed * 1.0);  // Reduced from 3.0 for perf
 	int num_blades = max_blades;
 	
-	for (int i = 0; i < 5; i++) { // Max loop iterations
+	for (int i = 0; i < 3; i++) { // Reduced from 5 for performance
 		if (i >= num_blades) break;
 		
 		// More random positioning
@@ -220,6 +234,12 @@ float draw_grass_clump(vec2 local_pos, vec2 clump_pos, float clump_seed, vec2 to
 }
 
 void fragment() {
+	// Sample Mask first!
+	vec4 mask = texture(mask_texture, SCREEN_UV);
+	if (mask.r > 0.5) {
+		discard; // Burned area - no grass
+	}
+
 	// Convert UV to world coordinates
 	vec2 world_pos = UV * field_size + quad_position;
 	
@@ -233,10 +253,10 @@ void fragment() {
 	
 	vec4 final_color = vec4(0.0);
 	
-	// Check this cell and neighboring cells for grass clumps
-	for (int dx = -1; dx <= 1; dx++) {
-		for (int dy = -1; dy <= 1; dy++) {
-			vec2 neighbor_cell = cell + vec2(float(dx), float(dy));
+	// Check only 2x2 neighbor cells for performance (reduced from 3x3)
+	for (int dx = 0; dx <= 1; dx++) {
+		for (int dy = 0; dy <= 1; dy++) {
+			vec2 neighbor_cell = cell + vec2(float(dx) - 0.5, float(dy) - 0.5);
 			float clump_seed = hash21(neighbor_cell);
 			
 			// More random position within cell - not centered

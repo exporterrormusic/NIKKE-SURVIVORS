@@ -163,6 +163,10 @@ const BTN_PRESSED_BORDER := Color(0.4, 0.45, 0.55, 0.9)
 const BTN_DISABLED_BG := Color(0.04, 0.04, 0.06, 0.9)
 const BTN_DISABLED_BORDER := Color(0.2, 0.2, 0.25, 0.6)
 
+# Compatibility aliases
+const BUTTON_NORMAL := BTN_NORMAL_BG
+const BUTTON_BORDER := BTN_NORMAL_BORDER
+
 # Danger/red button (for Goddess Fall, cancel, etc.)
 const BTN_DANGER_BG := Color(0.15, 0.04, 0.04, 0.98)
 const BTN_DANGER_BORDER := Color(1.0, 0.2, 0.2, 0.7)

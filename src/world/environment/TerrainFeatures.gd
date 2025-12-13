@@ -72,11 +72,30 @@ func spawn_boulders(_biome: BiomeDefinition, parent: Node2D, count: int = 40) ->
 		var boulder = ProceduralBoulderScript.new()
 		_boulder_container.add_child(boulder)
 		
-		# Random position within bounds
-		var pos := Vector2(
-			_rng.randf_range(_world_bounds.position.x, _world_bounds.end.x),
-			_rng.randf_range(_world_bounds.position.y, _world_bounds.end.y)
-		)
+		# Try to find valid position
+		var valid_pos := false
+		var pos := Vector2.ZERO
+		var attempts := 0
+		
+		while not valid_pos and attempts < 20:
+			attempts += 1
+			# Margin from edges (400px)
+			var margin = 400.0
+			var safe_rect = _world_bounds.grow(-margin)
+			
+			pos = Vector2(
+				_rng.randf_range(safe_rect.position.x, safe_rect.end.x),
+				_rng.randf_range(safe_rect.position.y, safe_rect.end.y)
+			)
+			
+			# Check distance from center (Player Spawn: 800px radius safe zone)
+			if pos.length() > 800.0:
+				valid_pos = true
+		
+		# If we failed to find a spot after 20 tries, skip this boulder
+		if not valid_pos:
+			continue
+			
 		boulder.global_position = pos
 		
 		# Random size

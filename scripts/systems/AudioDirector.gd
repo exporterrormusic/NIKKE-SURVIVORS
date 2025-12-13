@@ -5,7 +5,7 @@ extends Node
 
 const MUSIC_BUS := "Music"  # Music bus for background music only
 const SFX_BUS := "SFX"      # SFX bus for all sound effects (weapons, UI, etc.)
-const BATTLE_MUSIC_DIR := "res://assets/sounds/music"
+const BATTLE_MUSIC_DIR := "res://assets/sounds/music/bgm"
 
 const WEAPON_FILE_MAP := {
 	"Assault Rifle": "AR",
@@ -51,8 +51,34 @@ var _ambient_crossfade_progress: float = 0.0
 var _ambient_crossfade_step_dt: float = 0.05
 var _ambient_base_db: float = 6.0
 
+# --- MUSIC PLAYER ADDITIONS ---
+# Name: [Display Name, Unlock Condition (Achievement ID or empty if unlocked)]
+const MUSIC_METADATA := {
+	"battle.mp3": { "name": "BATTLE", "unlock_id": "" },
+	"dark.mp3": { "name": "DARK", "unlock_id": "" },
+	"nayuta.mp3": { "name": "SEEN IT ALL (Nayuta's Theme)", "unlock_id": "" },
+	"racer.mp3": { "name": "FAST", "unlock_id": "" },
+	"rapunzel.mp3": { "name": "YET STILL I BELIEVE (Rapunzel's Theme)", "unlock_id": "" },
+	"sin.mp3": { "name": "TASTE MY SILVER TONGUE (Sin's Theme)", "unlock_id": "" },
+	"snow.mp3": { "name": "UNYIELDING (Snow White's Theme)", "unlock_id": "" },
+	"western.mp3": { "name": "WESTERN", "unlock_id": "" },
+	"wishes.mp3": { "name": "ABANDON YOUR WISHES (Scheherezade's Theme)", "unlock_id": "abandoned_wishes" },
+	"main-menu.mp3": { "name": "MAIN MENU", "unlock_id": "" },
+	"timer.mp3": { "name": "TIMER", "unlock_id": "she_descends" },
+}
+
+signal music_track_changed(track_name: String)
+signal music_playback_state_changed(is_playing: bool)
+
+var _playlist: Array[String] = []  # List of confirmed unlocked file paths
+var _shuffled_queue: Array[String] = []  # Shuffled queue - depletes then reshuffles
+var _history: Array[String] = []   # Paths of previously played songs
+var _current_track_path: String = ""
+var _is_paused_by_user: bool = false
+
 func _ready() -> void:
 	initialize()
+	_update_playlist()
 
 func _exit_tree() -> void:
 	# Clean up all looping players to prevent lambda capture errors
@@ -109,6 +135,7 @@ func play_music_by_path(path: String, loop: bool = true, fade_time: float = 0.5)
 			tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS) # Run even if paused
 			tween.tween_property(_music_player, "volume_db", 0.0, fade_time)
 	_current_music_path = path
+	_current_track_path = path  # Sync for Music Player UI
 
 func stop_music(fade_time: float = 0.3) -> void:
 	if _music_player == null or not _music_player.playing:
@@ -130,6 +157,7 @@ func stop_music(fade_time: float = 0.3) -> void:
 	_current_music_path = ""
 
 func play_ui_music() -> void:
+	# _load_stream will automatically find .ogg if .mp3 is missing or overridden
 	play_music_by_path("res://assets/sounds/music/menu/main-menu.mp3", true, 0.5)
 
 func play_queen_timer_music() -> void:
@@ -458,17 +486,30 @@ func _load_stream(path: String) -> AudioStream:
 	if path == "":
 		return null
 		
-	# Smart Loading: If asking for .wav, check if .mp3 exists and prefer it
-	# This handles the issue where large WAVs fail to stream in Godot
+	# Smart Loading: Check for optimized formats (.ogg, .mp3) if original path missing or to override
 	var final_path = path
-	if path.ends_with(".wav"):
-		var mp3_path = path.replace(".wav", ".mp3")
-		if ResourceLoader.exists(mp3_path):
-			print("[AudioDirector] Smart Load: Found .mp3 variant, using it instead of .wav: ", mp3_path)
-			final_path = mp3_path
+	var base_path = path.get_base_dir() + "/" + path.get_file().get_basename()
+	
+	# Priority: Configured Path > WAV > OGG > MP3
+	# But if input is .wav, we might want to swap TO compressed for music, or keep WAV for SFX.
+	# The previous logic replaced wav with mp3. Let's make it smarter:
+	
+	# If specific file exists, keep it (unless we want to force override, but let's trust the call first)
+	if not ResourceLoader.exists(path):
+		# Try to find an alternative with standard extensions
+		for ext in [".wav", ".ogg", ".mp3"]: # Wav first (quality), then Ogg, then MP3
+			var try_path = base_path + ext
+			if ResourceLoader.exists(try_path):
+				final_path = try_path
+				break
+	
+	# Special case: If path requests .mp3 but .ogg exists, prefer .ogg (better looping/latency)
+	if final_path.ends_with(".mp3"):
+		var ogg_path = final_path.replace(".mp3", ".ogg")
+		if ResourceLoader.exists(ogg_path):
+			final_path = ogg_path
 			
 	if _stream_cache.has(final_path):
-		# print("AudioDirector: stream cache hit: ", final_path) # Commented out spam
 		return _stream_cache[final_path]
 		
 	print("AudioDirector: loading stream from path: ", final_path)
@@ -606,3 +647,121 @@ func _ambient_crossfade_tick() -> void:
 		_ambient_crossfade_step_timer.wait_time = _ambient_crossfade_step_dt
 	# Start stepping
 	_ambient_crossfade_step_timer.start()
+
+# --- MUSIC PLAYER API ---
+
+func _update_playlist() -> void:
+	# Use ResourceManifest for export compatibility
+	ResourceManifest.ensure_initialized()
+	_playlist.clear()
+	
+	# Get battle music from manifest (works in both editor and exports)
+	var all_files: Array[String] = ResourceManifest.battle_music.duplicate()
+	
+	# Also add main menu if not already included
+	var menu_path = "res://assets/sounds/music/menu/main-menu.mp3"
+	if ResourceLoader.exists(menu_path) and menu_path not in all_files:
+		all_files.append(menu_path)
+		
+	for file_path in all_files:
+		var file_name = file_path.get_file()
+		if MUSIC_METADATA.has(file_name):
+			var data = MUSIC_METADATA[file_name]
+			var unlock_id = data.get("unlock_id", "")
+			
+			if unlock_id == "" or (AchievementManager and AchievementManager.is_achievement_unlocked(unlock_id)):
+				_playlist.append(file_path)
+		else:
+			# Include unlisted tracks too (they'll show capitalized filename)
+			_playlist.append(file_path)
+
+func play_next_random_song(force_start: bool = false) -> void:
+	if _playlist.is_empty():
+		_update_playlist()
+		if _playlist.is_empty(): return
+	
+	# Shuffle queue system: play all songs once before reshuffling
+	if _shuffled_queue.is_empty():
+		_shuffled_queue = _playlist.duplicate()
+		_shuffled_queue.shuffle()
+		# If current song is first in new shuffle, move it to end to avoid immediate repeat
+		if _shuffled_queue.size() > 1 and _shuffled_queue[0] == _current_track_path:
+			var first = _shuffled_queue.pop_front()
+			_shuffled_queue.append(first)
+	
+	# Pop next song from shuffled queue
+	var next_path = _shuffled_queue.pop_front()
+	play_music_file(next_path)
+
+func play_prev_song() -> void:
+	if _history.size() <= 1:
+		# Current + 0 Previous implies we just started or history empty
+		# Start over current or pick random? 
+		# "Hitting back goes back to the previous songs, not a random one."
+		# If no previous, maybe just restart current?
+		if _music_player and _music_player.playing:
+			_music_player.seek(0.0)
+		return
+		
+	# Pop current
+	_history.pop_back()
+	# Peek previous
+	var prev_path = _history[_history.size() - 1]
+	# Pop previous so play_music_file re-adds it correctly (or just handle history manually?)
+	# Let's handle manually:
+	_play_track_internal(prev_path, false) # Don't add to history again
+
+func play_music_file(path: String) -> void:
+	_play_track_internal(path, true)
+
+func _play_track_internal(path: String, add_to_history: bool) -> void:
+	if add_to_history:
+		_history.append(path)
+		if _history.size() > 20: # Cap available history
+			_history.pop_front()
+	
+	_current_track_path = path
+	play_music_by_path(path, true, 0.5)
+	
+	var file_name = path.get_file()
+	var display_name = file_name
+	if MUSIC_METADATA.has(file_name):
+		display_name = MUSIC_METADATA[file_name]["name"]
+	
+	emit_signal("music_track_changed", display_name)
+	emit_signal("music_playback_state_changed", true)
+	_is_paused_by_user = false
+
+func toggle_pause_music() -> void:
+	if _music_player == null: return
+	
+	if _music_player.stream_paused:
+		_music_player.stream_paused = false
+		_is_paused_by_user = false
+		emit_signal("music_playback_state_changed", true)
+	else:
+		_music_player.stream_paused = true
+		_is_paused_by_user = true
+		emit_signal("music_playback_state_changed", false)
+
+func get_playback_progress() -> float:
+	if _music_player and _music_player.playing and not _music_player.stream_paused:
+		var len = _music_player.stream.get_length() if _music_player.stream else 1.0
+		if len <= 0: len = 1.0
+		return _music_player.get_playback_position() / len
+	return 0.0
+
+func get_current_song_name() -> String:
+	if _current_track_path == "": 
+		# Also check _current_music_path as fallback
+		if _current_music_path != "":
+			var file_name = _current_music_path.get_file()
+			if MUSIC_METADATA.has(file_name):
+				return MUSIC_METADATA[file_name]["name"]
+			return file_name.get_basename().capitalize()
+		return "No Music"
+	var file_name = _current_track_path.get_file()
+	if MUSIC_METADATA.has(file_name):
+		return MUSIC_METADATA[file_name]["name"]
+	# Fallback: try to make the filename readable
+	return file_name.get_basename().capitalize()

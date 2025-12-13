@@ -20,7 +20,7 @@ const CHARACTER_UNLOCK_COST := 3  # Pristine Rapture Cores to unlock a character
 
 # General upgrades (apply to all characters)
 const GENERAL_UPGRADES := [
-	{"id": "atk", "name": "ATK", "desc": "+5% Attack Damage", "max_level": 99, "base_cost": 1, "icon": "⚔️"},
+	{"id": "atk", "name": "ATK", "desc": "+25% Attack Damage", "max_level": 99, "base_cost": 1, "icon": "⚔️"},
 	{"id": "hp", "name": "HP", "desc": "+1 Max HP", "max_level": 99, "base_cost": 1, "icon": "❤️"},
 	{"id": "speed", "name": "SPD", "desc": "+5% Movement Speed", "max_level": 99, "base_cost": 1, "icon": "👟"},
 	{"id": "crit", "name": "CRIT", "desc": "+2% Critical Chance", "max_level": 99, "base_cost": 1, "icon": "💥"},
@@ -203,7 +203,7 @@ func _build_ui() -> void:
 	top_bar.add_theme_stylebox_override("panel", _make_letterbox_style())
 	add_child(top_bar)
 	
-	# Title label - absolutely centered in the header, ignoring other elements
+	# Title label - absolutely centered in the header
 	var title_label := Label.new()
 	title_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	title_label.text = "SHOP"
@@ -216,15 +216,56 @@ func _build_ui() -> void:
 	title_label.add_theme_color_override("font_outline_color", UI.SHOP_TITLE_OUTLINE)
 	title_label.add_theme_constant_override("outline_size", 3)
 	title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	top_bar.add_child(title_label)
+	top_bar.add_child(title_label) # Restored
 	
-	# Currency container - positioned at right side
+	# BACK Button - Sci-fi container style
+	var back_btn := _BackButtonContainer.new()
+	back_btn.position = Vector2(48, 30) # Absolute center for 136px header
+	back_btn.custom_minimum_size = Vector2(200, 75)
+	
+	back_btn.pressed.connect(func(): 
+		UISounds.play_back()
+		back_requested.emit()
+	)
+	top_bar.add_child(back_btn)
+	
+	# Currency container - positions elements to the right via spacer
 	var currency_row := HBoxContainer.new()
 	currency_row.set_anchors_preset(Control.PRESET_FULL_RECT)
 	currency_row.offset_left = 48
 	currency_row.offset_right = -48
 	currency_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	top_bar.add_child(currency_row)
+	top_bar.add_child(currency_row) # Restored
+    # The one at 232 was my new insertion?
+    # Step 1046: I inserted `var currency_row := HBoxContainer.new()` at line 232 (in my replacement text).
+    # But I also *kept* `var currency_row := HBoxContainer.new()` at line 249 (in the "original" part that followed?).
+    # Wait, the tool output showed:
+    # +	var currency_row := HBoxContainer.new()
+    # ...
+    # +	# Currency container - positioned at right side
+    # +	var currency_row := HBoxContainer.new()
+    # It duplicated it in the *replacement content*. 
+    # Logic: I will delete the SECOND declaration.
+    
+    # Actually, looking at the file view:
+    # Line 232: var currency_row := HBoxContainer.new()
+    # Line 249: var currency_row := HBoxContainer.new()
+    # I should check which one is configured correctly.
+    # 232 is `PRESET_CENTER_RIGHT` (my new code).
+    # 249 is `PRESET_FULL_RECT` (original code).
+    # I wanted the RIGHT positioning.
+    # But `PRESET_FULL_RECT` with offset might be how it was working.
+    # User said "PRISTINE RAPTURE CORE counter is on the right side".
+    # Original code used `PRESET_FULL_RECT` with margins.
+    # My new code `PRESET_CENTER_RIGHT` might be safer.
+    # I will keep the *first* one (232) and remove the second (249).
+    # Also remove lines 234-245 (commented out junk).
+	
+	# Actually, simply removing 249-254 is safest.
+	# But wait, lines 256+ use `currency_row`.
+	# If I keep 232, `currency_row` exists.
+	# So I remove lines 248-254.
+
 	
 	# Spacer to push currency to right
 	var currency_spacer := Control.new()
@@ -1257,7 +1298,7 @@ static func get_upgrade_bonus(upgrade_type: String) -> float:
 	
 	match upgrade_type:
 		"atk":
-			return level * 0.05  # +5% per level
+			return level * 0.25  # +25% per level
 		"hp":
 			return float(level)  # +1 HP per level
 		"speed":
@@ -1688,3 +1729,99 @@ class _PristineCoreContainer extends Control:
 		for y_line in range(0, int(h), 4):
 			draw_line(Vector2(CORNER_CUT, y_line), Vector2(w - CORNER_CUT, y_line), 
 					 Color(UI.RESET_SCAN_LINE.r, UI.RESET_SCAN_LINE.g, UI.RESET_SCAN_LINE.b, scan_alpha), 1.0)
+
+
+# Sci-fi styled Back Button
+class _BackButtonContainer extends Button:
+	const UI := preload("res://scripts/ui/UITheme.gd")
+	const CONTAINER_WIDTH := 200.0  # Match PristineCoreContainer
+	const CONTAINER_HEIGHT := 75.0
+	const BORDER_THICKNESS := 3.0
+	const CORNER_CUT := 10.0
+	
+	var _glow_time: float = 0.0
+	var _is_hovered: bool = false
+	
+	func _init() -> void:
+		custom_minimum_size = Vector2(CONTAINER_WIDTH, CONTAINER_HEIGHT)
+		focus_mode = Control.FOCUS_NONE
+		mouse_entered.connect(func(): _is_hovered = true)
+		mouse_exited.connect(func(): _is_hovered = false)
+	
+	func _ready() -> void:
+		_build_content()
+	
+	func _process(delta: float) -> void:
+		_glow_time += delta
+		if _is_hovered:
+			queue_redraw()
+	
+	func _build_content() -> void:
+		var center := CenterContainer.new()
+		center.set_anchors_preset(Control.PRESET_FULL_RECT)
+		center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(center)
+		
+		var hbox := HBoxContainer.new()
+		hbox.add_theme_constant_override("separation", 12)
+		center.add_child(hbox)
+		
+		var arrow := Label.new()
+		arrow.text = "<<"
+		arrow.add_theme_font_size_override("font_size", 32)
+		arrow.add_theme_color_override("font_color", UI.BTN_BACK_BORDER)
+		hbox.add_child(arrow)
+		
+		var label := Label.new()
+		label.text = "BACK"
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		if UI.FONT_TITLE:
+			label.add_theme_font_override("font", UI.FONT_TITLE)
+		label.add_theme_font_size_override("font_size", 36)
+		label.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
+		hbox.add_child(label)
+	
+	func _draw() -> void:
+		var w := size.x
+		var h := size.y
+		
+		# Define colors based on state
+		var bg_color := UI.BTN_BACK_BG
+		var border_color := UI.BTN_BACK_BORDER
+		
+		if _is_hovered:
+			bg_color = UI.BTN_BACK_HOVER_BG
+			border_color = UI.BTN_BACK_HOVER_BORDER
+		
+		if button_pressed:
+			bg_color = bg_color.darkened(0.2)
+		
+		# Draw background with cut corners
+		var bg_points := PackedVector2Array([
+			Vector2(CORNER_CUT, 0),
+			Vector2(w - CORNER_CUT, 0),
+			Vector2(w, CORNER_CUT),
+			Vector2(w, h - CORNER_CUT),
+			Vector2(w - CORNER_CUT, h),
+			Vector2(CORNER_CUT, h),
+			Vector2(0, h - CORNER_CUT),
+			Vector2(0, CORNER_CUT)
+		])
+		draw_colored_polygon(bg_points, bg_color)
+		
+		# Draw border
+		for i in range(bg_points.size()):
+			var p1: Vector2 = bg_points[i]
+			var p2: Vector2 = bg_points[(i + 1) % bg_points.size()]
+			draw_line(p1, p2, border_color, BORDER_THICKNESS, true)
+		
+		# Tech decoration lines
+		var line_alpha: float = 0.3
+		if _is_hovered:
+			line_alpha = 0.6 + 0.2 * sin(_glow_time * 8.0)
+		
+		var deco_color := border_color
+		deco_color.a = line_alpha
+		
+		draw_line(Vector2(CORNER_CUT + 5, 5), Vector2(CORNER_CUT + 30, 5), deco_color, 2.0)
+		draw_line(Vector2(w - CORNER_CUT - 30, h - 5), Vector2(w - CORNER_CUT - 5, h - 5), deco_color, 2.0)

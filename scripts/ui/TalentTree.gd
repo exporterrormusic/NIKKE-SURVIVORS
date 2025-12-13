@@ -210,7 +210,7 @@ var _last_hovered_character: int = -1  # Last character that was hovered (for st
 
 # Player's unlocked talents
 var _unlocked_talents: Dictionary = {0: {}, 1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}}
-var _skill_points: int = 0
+var _skill_points: int = 0: set = set_skill_points
 var _talent_buttons: Array = []
 var _lines_control: Control = null
 
@@ -1489,3 +1489,14 @@ func _apply_default_talents() -> void:
 		if not _unlocked_talents[main_char_idx].has("unlock"):
 			_unlocked_talents[main_char_idx]["unlock"] = 1
 			print("[TalentTree] Auto-unlocked main character %d" % main_char_idx)
+
+func set_skill_points(amount: int) -> void:
+	_skill_points = amount
+	
+	# Update UI if valid
+	if _character_panel:
+		var points_container = _character_panel.get_node_or_null("PointsContainer")
+		if points_container:
+			var points_label = points_container.get_node_or_null("SkillPoints")
+			if points_label:
+				points_label.text = "   AVAILABLE SKILL POINTS: %d   " % _skill_points

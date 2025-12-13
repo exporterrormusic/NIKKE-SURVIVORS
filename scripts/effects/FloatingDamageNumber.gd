@@ -109,11 +109,14 @@ func _draw() -> void:
 	# HoloCure-style thick black outline for readability
 	var shadow_color := Color(0, 0, 0, color.a * 0.95)
 	
-	# Draw outline at fewer angles for better performance (8 instead of 16)
-	var outline_angles := 8
-	for i in range(outline_angles):
-		var angle := (float(i) / outline_angles) * TAU
-		var offset := Vector2(cos(angle), sin(angle)) * OUTLINE_WIDTH
+	# Draw outline at 4 cardinal angles for performance (down from 8)
+	var outline_offsets := [
+		Vector2(OUTLINE_WIDTH, 0),
+		Vector2(-OUTLINE_WIDTH, 0),
+		Vector2(0, OUTLINE_WIDTH),
+		Vector2(0, -OUTLINE_WIDTH)
+	]
+	for offset in outline_offsets:
 		draw_string(
 			ThemeDB.fallback_font,
 			offset,
@@ -145,7 +148,7 @@ static func spawn(parent: Node, pos: Vector2, value: int, type: NumberType = Num
 	var number := FloatingDamageNumber.new()
 	number.setup(value, type)
 	number.global_position = pos
-	parent.add_child(number)
+	parent.add_child.call_deferred(number)
 	return number
 
 static func spawn_damage(parent: Node, pos: Vector2, value: int) -> FloatingDamageNumber:

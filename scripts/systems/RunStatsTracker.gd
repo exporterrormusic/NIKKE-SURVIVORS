@@ -45,12 +45,10 @@ func reset() -> void:
 			_normal_kills_by_character[char_idx] = 0
 			_boss_kills_by_character[char_idx] = 0
 		_current_character_id = GameState.player_character_index
-		print("[RunStatsTracker] Reset stats for squad: %s, current char: %d" % [str(GameState.selected_character_indices), _current_character_id])
 
 func get_run_stats() -> Dictionary:
 	# Safety check: if stats are empty (e.g. forgot to reset), try to init from current GameState
 	if _damage_by_character.is_empty() and GameState:
-		print("[RunStatsTracker] get_run_stats called but stats empty - forcing init")
 		for char_idx in GameState.selected_character_indices:
 			if not _damage_by_character.has(char_idx):
 				_damage_by_character[char_idx] = 0
@@ -124,7 +122,6 @@ func _on_damage_dealt(target: Node, info: Variant) -> void:
 		damage_amount = 1  # Fallback
 	
 	_damage_by_character[char_id] += damage_amount
-	print("[RunStatsTracker] Damage: %d to char %d (total: %d)" % [damage_amount, char_id, _damage_by_character[char_id]])
 
 func _on_enemy_killed(enemy: Node, killer_source: String) -> void:
 	# Only track player kills
@@ -144,12 +141,10 @@ func _on_enemy_killed(enemy: Node, killer_source: String) -> void:
 	# Determine if enemy is a boss or normal
 	if enemy and (enemy.is_in_group("boss") or enemy.is_in_group("super_boss")):
 		_boss_kills_by_character[char_id] += 1
-		print("[RunStatsTracker] Boss kill by char %d (total: %d)" % [char_id, _boss_kills_by_character[char_id]])
 	else:
 		# Normal, tank, elite all count as "normal" kills
 		_normal_kills_by_character[char_id] += 1
-		print("[RunStatsTracker] Kill by char %d (total: %d)" % [char_id, _normal_kills_by_character[char_id]])
 
 func _on_character_switched(slot_index: int, character_id: int) -> void:
 	_current_character_id = character_id
-	print("[RunStatsTracker] Character switched to slot %d, char_id %d" % [slot_index, character_id])
+

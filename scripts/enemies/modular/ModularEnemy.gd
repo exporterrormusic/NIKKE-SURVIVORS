@@ -354,10 +354,37 @@ func set_stunned(stunned: bool) -> void:
 func is_stunned() -> bool:
 	return _is_stunned
 
+# Screen bounds cache for off-screen culling
+var _screen_bounds: Rect2 = Rect2()
+var _last_bounds_frame: int = -1
+const BOUNDS_UPDATE_INTERVAL := 30  # Update bounds every 30 frames
+
+func _is_on_screen() -> bool:
+	# Update cached screen bounds periodically
+	var frame := Engine.get_process_frames()
+	if frame - _last_bounds_frame > BOUNDS_UPDATE_INTERVAL:
+		_last_bounds_frame = frame
+		var viewport := get_viewport()
+		if viewport:
+			var camera := viewport.get_camera_2d()
+			if camera:
+				var vp_size := viewport.get_visible_rect().size
+				var half_size := vp_size / (2.0 * camera.zoom)
+				# Add 200px margin so enemies just off-screen still process
+				_screen_bounds = Rect2(camera.global_position - half_size - Vector2(200, 200), half_size * 2 + Vector2(400, 400))
+			else:
+				_screen_bounds = Rect2(-1000, -1000, 3920, 3160)  # Large fallback
+	
+	return _screen_bounds.has_point(global_position)
+
 func _process(delta: float) -> void:
 	# If stunned, do nothing (frozen in time)
 	if _is_stunned:
 		return
+	
+	# PERFORMANCE: Skip expensive processing for off-screen enemies
+	# Still update timers and movement, but skip HP bar/visual sync
+	var on_screen := _is_on_screen()
 
 	if _damage_timer > 0:
 		_damage_timer -= delta
@@ -405,49 +432,54 @@ func _process(delta: float) -> void:
 		visuals.update_state(movement_component.velocity, movement_component.velocity)
 		
 	# Dynamic Text Scaling: Keep text physically large but rendered sharply
-	if hp_label and hp_bar:
-		# Optimization: Only recalculate if scale changed significantly
-		var p_scale_x = abs(scale.x)
-		if abs(p_scale_x - _prev_scale_x) > 0.01:
-			_prev_scale_x = p_scale_x
+	# PERFORMANCE: Skip HP label updates for off-screen enemies
+	if hp_label and hp_bar and on_screen:
+		# Early exit if not visible or bars are hidden
+		if not hp_bar.visible:
+			pass  # Skip all HP label processing
+		else:
+			# Optimization: Only recalculate if scale changed significantly
+			var p_scale_x = abs(scale.x)
+			if abs(p_scale_x - _prev_scale_x) > 0.01:
+				_prev_scale_x = p_scale_x
+				
+				if p_scale_x > 0.001:
+					# Reset pivot to default to simplified position math
+					hp_label.pivot_offset = Vector2.ZERO
+					
+					# Ensure centered text (only check once per scale change)
+					if hp_label.vertical_alignment != VERTICAL_ALIGNMENT_CENTER:
+						hp_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+						hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+					
+					# Math: Previous visual scale was pow(scale, 0.7).
+					# Base Font = 10.
+					var visual_factor = pow(p_scale_x, 0.7)
+					var target_font_size = int(10 * visual_factor)
+					var target_outline = int(4 * visual_factor) # Scale outline so it doesn't look thin
+					
+					# Apply only if changed (Optimized using local cache variable)
+					if _cached_font_size != target_font_size:
+						hp_label.add_theme_font_size_override("font_size", target_font_size)
+						hp_label.add_theme_constant_override("outline_size", target_outline)
+						_cached_font_size = target_font_size
 			
-			if p_scale_x > 0.001:
-				# Reset pivot to default to simplified position math
-				hp_label.pivot_offset = Vector2.ZERO
+			# Reset scale to 1.0 for sharp rendering (Cheap operation, keep per-frame)
+			hp_label.scale = Vector2.ONE
 				
-				# Ensure centered text
-				if hp_label.vertical_alignment != VERTICAL_ALIGNMENT_CENTER:
-					hp_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-					hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			# Center Alignment relative to the BAR (only every 2nd frame for performance)
+			if Engine.get_process_frames() % 2 == 0:
+				var bar_global_pos = hp_bar.global_position
+				var bar_visual_size = hp_bar.size * hp_bar.scale
+				var bar_center_global = bar_global_pos + bar_visual_size * 0.5
 				
-				# Math: Previous visual scale was pow(scale, 0.7).
-				# Base Font = 10.
-				var visual_factor = pow(p_scale_x, 0.7)
-				var target_font_size = int(10 * visual_factor)
-				var target_outline = int(4 * visual_factor) # Scale outline so it doesn't look thin
+				# Label size is now "pure" (unscaled) but reflects the larger font
+				var label_size = hp_label.size
 				
-				# Apply only if changed (Optimized using local cache variable)
-				if _cached_font_size != target_font_size:
-					hp_label.add_theme_font_size_override("font_size", target_font_size)
-					hp_label.add_theme_constant_override("outline_size", target_outline)
-					_cached_font_size = target_font_size
-		
-		# Reset scale to 1.0 for sharp rendering (Cheap operation, keep per-frame)
-		hp_label.scale = Vector2.ONE
-			
-		# Center Alignment relative to the BAR
-		# Bar is detached and scaled by 'scale'.
-		var bar_global_pos = hp_bar.global_position
-		var bar_visual_size = hp_bar.size * hp_bar.scale
-		var bar_center_global = bar_global_pos + bar_visual_size * 0.5
-		
-		# Label size is now "pure" (unscaled) but reflects the larger font
-		var label_size = hp_label.size
-		
-		# Set global position to center
-		# CRITICAL FIX: Round to integer pixel coordinates to prevent jitter/blur
-		var exact_pos = bar_center_global - label_size * 0.5
-		hp_label.global_position = exact_pos.round()
+				# Set global position to center
+				# CRITICAL FIX: Round to integer pixel coordinates to prevent jitter/blur
+				var exact_pos = bar_center_global - label_size * 0.5
+				hp_label.global_position = exact_pos.round()
 				
 	# Damage Logic (Attack Current Target)
 	if is_instance_valid(_current_target):
@@ -505,51 +537,60 @@ func _process(delta: float) -> void:
 		visuals.update_state(movement_component.velocity, movement_component.velocity)
 
 	# Sync HP Bar position and scale (since it's now on EffectsLayer and detached)
+	# Sync HP Bar position and scale (since it's now on EffectsLayer and detached)
+	# PERFORMANCE: Skip position sync for off-screen enemies
 	if hp_bar and is_instance_valid(hp_bar):
-		# Sync scale fully for the bar
-		hp_bar.scale = scale
-		# Calculate offset based on scale to keep it above the sprite
-		# Default offset (-25, -47) for unscaled sprite
-		var offset = Vector2(-25, -47) * scale
-		hp_bar.global_position = (global_position + offset).round()
-		
-		# Sync Shield Bar (skip for bosses - they use ShielderShield's own bar)
-		if shield_bar and is_instance_valid(shield_bar) and not is_in_group("boss") and not is_in_group("super_boss"):
-			shield_bar.scale = scale
-			shield_bar.size.x = hp_bar.size.x
-			var sb_offset = offset + Vector2(0, -9.0 * scale.y)
-			shield_bar.global_position = (global_position + sb_offset).round()
+		if on_screen:
+			# Sync scale fully for the bar
+			hp_bar.scale = scale
+			# Calculate offset based on scale to keep it above the sprite
+			# Default offset (-25, -47) for unscaled sprite
+			var offset = Vector2(-25, -47) * scale
+			hp_bar.global_position = (global_position + offset).round()
 			
-			var s_stats = get_active_shield_stats()
-			if s_stats.y > 0 and s_stats.x > 0:
-				shield_bar.max_value = s_stats.y
-				shield_bar.value = s_stats.x
-				shield_bar.visible = true
-
+			# Ensure visible
+			if not hp_bar.visible:
+				hp_bar.visible = true
+			
+			# Sync Shield Bar (skip for bosses - they use ShielderShield's own bar)
+			if shield_bar and is_instance_valid(shield_bar) and not is_in_group("boss") and not is_in_group("super_boss"):
+				shield_bar.scale = scale
+				shield_bar.size.x = hp_bar.size.x
+				var sb_offset = offset + Vector2(0, -9.0 * scale.y)
+				shield_bar.global_position = (global_position + sb_offset).round()
 				
-				# Sync Shield Label (using global_position since top_level=true)
-				if shield_label and is_instance_valid(shield_label):
-					shield_label.text = str(int(s_stats.x)) + "/" + str(int(s_stats.y))
-					# Use same position as shield bar for proper centering
-					shield_label.size = Vector2(hp_bar.size.x * scale.x, 12)
-					shield_label.global_position = shield_bar.global_position
-					shield_label.visible = true
+				var s_stats = get_active_shield_stats()
+				if s_stats.y > 0 and s_stats.x > 0:
+					shield_bar.max_value = s_stats.y
+					shield_bar.value = s_stats.x
+					shield_bar.visible = true
 
-
-
-			else:
+					# Sync Shield Label (using global_position since top_level=true)
+					if shield_label and is_instance_valid(shield_label):
+						shield_label.text = str(int(s_stats.x)) + "/" + str(int(s_stats.y))
+						# Use same position as shield bar for proper centering
+						shield_label.size = Vector2(hp_bar.size.x * scale.x, 12)
+						shield_label.global_position = shield_bar.global_position
+						shield_label.visible = true
+				else:
+					shield_bar.visible = false
+					if shield_label:
+						shield_label.visible = false
+						
+			# Sync HP Label visibility (it might have been hidden by caching logic above)
+			if hp_label and not hp_label.visible:
+				hp_label.visible = true
+				
+		else:
+			# OFF-SCREEN: Hide detached UI elements so they don't float at last known pos
+			if hp_bar.visible:
+				hp_bar.visible = false
+			if hp_label and hp_label.visible:
+				hp_label.visible = false
+			if shield_bar and is_instance_valid(shield_bar) and shield_bar.visible:
 				shield_bar.visible = false
-				if shield_label:
-					shield_label.visible = false
-
-
-
-	
-	# Show bars after first position sync (prevents flicker at origin)
-	if hp_bar and not hp_bar.visible:
-		hp_bar.visible = true
-	if hp_label and not hp_label.visible:
-		hp_label.visible = true
+			if shield_label and is_instance_valid(shield_label) and shield_label.visible:
+				shield_label.visible = false
 
 func _reparent_hp_bars_to_effects_layer() -> void:
 	"""DISABLED: Using top_level and unshaded material instead of reparenting."""
@@ -899,14 +940,24 @@ func reset() -> void:
 	scale = Vector2.ONE
 	
 	# 2. Reset Health
-	# 2. Reset Health
-	# Note: Max HP is set by Spawner config immediately after retrieval
+	# CRITICAL: Reset Max HP to base value (from stats or default). 
+	# If we don't do this, EnemySpawner will multiply the ALREADY MULTIPLIED max_hp 
+	# from the previous life, causing exponential stats growth.
+	var base_hp = 100
+	if stats and "max_hp" in stats:
+		base_hp = stats.max_hp
+	
+	# Apply base HP to component
 	if health_component:
-		if health_component.has_method("reset"):
-			health_component.reset()
-		else:
-			health_component.current_hp = health_component.max_hp
-			# Fallback if reset() missing (legacy safety)
+		health_component.max_hp = base_hp # Directly set base
+		health_component.current_hp = base_hp # Full heal
+		
+		# Update UI immediately so bars reflect base state before Spawner updates them
+		if hp_bar: 
+			hp_bar.max_value = base_hp
+			hp_bar.value = base_hp
+		if hp_label:
+			hp_label.text = str(base_hp) + "/" + str(base_hp)
 	
 	# 3. Reset State Flags
 	_can_shoot = true
@@ -931,7 +982,25 @@ func reset() -> void:
 		if is_in_group(g):
 			remove_from_group(g)
 			
-	# 6. Reset Visuals
+	# 6. CLEANUP POOLED CHILDREN
+	# Remove attached AI and Effects from previous life
+	var nodes_to_clean = ["BossAI", "BossEffects", "EliteEffects", "TankEffects", "SuperBossEffects", "CharmEffect", "ExploderBehavior"]
+	for node_name in nodes_to_clean:
+		var node = get_node_or_null(node_name)
+		if node:
+			node.queue_free()
+			
+	# Remove Shields
+	if _generic_boss_shield:
+		_generic_boss_shield.queue_free()
+		_generic_boss_shield = null
+	
+	# Remove BurnDOTs (scan children by script path to be safe)
+	for child in get_children():
+		if child.get_script() and child.get_script().resource_path.contains("BurnDOT.gd"):
+			child.queue_free()
+			
+	# 7. Reset Visuals
 	visible = true # Ensure the entire node is valid
 	modulate = Color.WHITE
 	if visuals:
@@ -939,21 +1008,27 @@ func reset() -> void:
 		visuals.modulate = Color.WHITE
 		# Reset any other visual overrides?
 	
-	# 7. Reset UI
+	# 8. Reset UI
 	if hp_bar:
 		hp_bar.visible = false # Hide until position sync
-		# Reset styleboxes to default Green/Grey? 
-		# Actually Spawner re-applies styleboxes based on type, so this is fine.
+		
+		# RESTORE DEFAULT GREEN STYLEBOX
+		# Previous overrides (Red/Purple) persist if not cleared.
+		# Basic enemies rely on the default Green set in _ready().
+		var style_box = StyleBoxFlat.new()
+		style_box.bg_color = Color(0, 1, 0) # Default Green
+		hp_bar.add_theme_stylebox_override("fill", style_box)
+		
 		hp_bar.value = hp_bar.max_value
 	if hp_label:
 		hp_label.visible = false
 	
-	# 8. Reset internal logic
+	# 9. Reset internal logic
 	_cached_font_size = -1
 	_prev_scale_x = 0.0
 	_cached_shield = null
 	
-	# 9. Re-enable processing
+	# 10. Re-enable processing
 	set_process(true)
 	set_physics_process(true)
 	set_process_internal(true)
@@ -965,7 +1040,7 @@ func reset() -> void:
 	if collision_layer == 0:
 		collision_layer = 1 # Restore default
 		
-	# 10. Signals
+	# 11. Signals
 	# Signals should persist, but ensure distinct connections? 
 	# They are connected in _ready once. We don't disconnect them on death.
 	

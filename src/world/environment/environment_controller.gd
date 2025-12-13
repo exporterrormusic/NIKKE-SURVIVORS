@@ -301,7 +301,7 @@ func initialize_environment(seed_override: int = 0, biome_id: StringName = &"", 
 
 func _delegate_boulder_spawn(biome: BiomeDefinition) -> void:
 	if _terrain_features:
-		_terrain_features.spawn_boulders(biome, self, 15)  # Reduced from 40
+		_terrain_features.spawn_boulders(biome, self, 5)  # Reduced to 5 (Rare)
 
 func set_environment(biome_id: StringName, time_id: StringName, seed_override: int = 0) -> void:
 	initialize_environment(seed_override, biome_id, time_id)

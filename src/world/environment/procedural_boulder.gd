@@ -157,7 +157,7 @@ func _on_bullet_entered(area: Area2D) -> void:
 	if area is SnowWhiteBullet or area.name.contains("Sniper") or area.name.contains("SnowWhite"):
 		return
 	
-	if area.is_in_group("bullets") or area.is_in_group("projectiles"):
+	if area.is_in_group("bullets") or area.is_in_group("projectiles") or area.is_in_group("enemy_projectiles"):
 		area.queue_free()
 	elif area.has_method("_retire"):
 		area._retire()

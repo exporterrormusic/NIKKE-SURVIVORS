@@ -10,7 +10,7 @@ var _time: float = 0.0
 var _last_position: Vector2 = Vector2.ZERO
 var _boss: Node2D = null
 var _spawn_distance := 30.0  # Spawn new segment every 30 pixels
-var _trail_width := 120.0  # Width of slime trail (INCREASED 50% from 80 to 120)
+var _trail_width := 120.0  # Width of slime trail
 var _segment_counter := 0  # For wave offset
 
 # Slime colors - dark purple/black liquid
@@ -20,6 +20,15 @@ const SLIME_HIGHLIGHT := Color(0.2, 0.05, 0.25, 0.5)    # Purple sheen
 
 # Damage settings (same as burn zones)
 const DAMAGE_RATE_PERCENT := 0.25  # 25% max HP per second
+var _damage_accum: Dictionary = {}
+
+# Optimization: Single Area2D for entire trail
+var _area: Area2D = null
+
+# Performance Limits
+const MAX_SEGMENTS := 60 # Approx 2000px of trail history
+var _collision_polys: Array[CollisionPolygon2D] = []
+var _mask_polys: Array[Polygon2D] = []
 
 func setup(boss: Node2D) -> void:
 	_boss = boss
@@ -28,6 +37,15 @@ func setup(boss: Node2D) -> void:
 
 func _ready() -> void:
 	z_index = -5  # Below boss but above ground
+	
+	# Create the single physics manager
+	_area = Area2D.new()
+	_area.name = "SlimeArea"
+	_area.collision_layer = 0
+	_area.collision_mask = 2 # Player only (adjust if allies need to be hit)
+	_area.monitorable = false
+	_area.monitoring = true
+	add_child(_area)
 
 func _process(delta: float) -> void:
 	_time += delta
@@ -44,6 +62,48 @@ func _process(delta: float) -> void:
 		_last_position = current_pos
 	
 	queue_redraw()
+
+var _process_timer: float = 0.0
+const PROCESS_INTERVAL: float = 0.1
+
+func _physics_process(delta: float) -> void:
+	if not _area: return
+	
+	_process_timer += delta
+	if _process_timer < PROCESS_INTERVAL:
+		return
+		
+	# Process damage for the accumulated time
+	var process_delta = _process_timer
+	_process_timer = 0.0
+	
+	var bodies = _area.get_overlapping_bodies()
+	for body in bodies:
+		# Only damage player
+		if not body.is_in_group("player"):
+			continue
+			
+		if body.has_method("take_damage"):
+			# Calculate DPS
+			var max_hp = 100.0
+			if "max_hp" in body: 
+				max_hp = float(body.max_hp)
+			
+			var dps = max_hp * DAMAGE_RATE_PERCENT
+			var frame_damage = dps * process_delta
+			
+			# Accumulate
+			var bid = body.get_instance_id()
+			if not _damage_accum.has(bid):
+				_damage_accum[bid] = 0.0
+			
+			_damage_accum[bid] += frame_damage
+			
+			# Apply full integer chunks
+			if _damage_accum[bid] >= 1.0:
+				var dmg_to_apply = int(_damage_accum[bid])
+				_damage_accum[bid] -= dmg_to_apply
+				body.take_damage(dmg_to_apply)
 
 func _spawn_trail_segment(from_pos: Vector2, to_pos: Vector2) -> void:
 	# Create a wavy rectangular polygon for the trail segment
@@ -72,66 +132,42 @@ func _spawn_trail_segment(from_pos: Vector2, to_pos: Vector2) -> void:
 		var wave_offset = sin(_segment_counter * 0.5 + t * PI * 2.0 + PI) * 15.0
 		points.append(pos - perpendicular * (half_width + wave_offset))
 	
-	# Store segment
+	# Store segment for drawing
 	_trail_segments.append(points)
 	_segment_counter += 1
 	
-	# Create damage area for this segment
-	_create_damage_area(points)
+	# Add ONE collision polygon to the shared Area2D
+	if _area:
+		var col = CollisionPolygon2D.new()
+		col.polygon = points
+		_area.add_child(col)
+		_collision_polys.append(col)
+		
+	# Register Eraser for Grass Mask
+	if GrassMaskManager.instance:
+		var mask_poly = Polygon2D.new()
+		mask_poly.polygon = points
+		mask_poly.color = Color.WHITE
+		mask_poly.z_index = 0
+		mask_poly.global_position = global_position # Should be close to 0,0
+		GrassMaskManager.instance.add_eraser(mask_poly)
+		_mask_polys.append(mask_poly)
 
-func _create_damage_area(points: PackedVector2Array) -> void:
-	var area = Area2D.new()
-	area.collision_layer = 0
-	area.collision_mask = 2  # Player is on layer 2
-	area.monitorable = false
-	area.monitoring = true
-	area.set_script(_get_damage_script())
-	add_child(area)
-	
-	var col = CollisionPolygon2D.new()
-	col.polygon = points
-	area.add_child(col)
-
-func _get_damage_script() -> GDScript:
-	var script = GDScript.new()
-	script.source_code = """
-extends Area2D
-
-var damage_rate_percent := 0.25
-var _damage_accum: Dictionary = {}
-
-func _physics_process(delta: float) -> void:
-	var bodies = get_overlapping_bodies()
-	
-	for body in bodies:
-		# Only damage player
-		if not body.is_in_group("player"):
-			continue
-			
-		if body.has_method("take_damage"):
-			# Calculate DPS
-			var max_hp = 100.0
-			if "max_hp" in body: 
-				max_hp = float(body.max_hp)
-			
-			var dps = max_hp * damage_rate_percent
-			var frame_damage = dps * delta
-			
-			# Accumulate
-			var bid = body.get_instance_id()
-			if not _damage_accum.has(bid):
-				_damage_accum[bid] = 0.0
-			
-			_damage_accum[bid] += frame_damage
-			
-			# Apply full integer chunks
-			if _damage_accum[bid] >= 1.0:
-				var dmg_to_apply = int(_damage_accum[bid])
-				_damage_accum[bid] -= dmg_to_apply
-				body.take_damage(dmg_to_apply)
-"""
-	script.reload()
-	return script
+	# Performance Optimization: Limit trail length
+	if _trail_segments.size() > MAX_SEGMENTS:
+		_trail_segments.pop_front()
+		
+		# Cleanup oldest collision polygon
+		if _collision_polys.size() > 0:
+			var old_col = _collision_polys.pop_front()
+			if is_instance_valid(old_col):
+				old_col.queue_free()
+		
+		# Cleanup oldest mask polygon
+		if _mask_polys.size() > 0:
+			var old_mask = _mask_polys.pop_front()
+			if is_instance_valid(old_mask):
+				old_mask.queue_free()
 
 func _draw() -> void:
 	# Draw each trail segment using global coordinates
@@ -163,9 +199,17 @@ func _draw() -> void:
 
 func clear_trails() -> void:
 	_trail_segments.clear()
-	# Clear damage areas
-	for child in get_children():
-		if child is Area2D:
+	
+	# Clear physics shapes
+	if _area:
+		for child in _area.get_children():
 			child.queue_free()
+	_collision_polys.clear()
+			
+	# Clear mask shapes
+	for poly in _mask_polys:
+		if is_instance_valid(poly):
+			poly.queue_free()
+	_mask_polys.clear()
+	
 	queue_redraw()
-

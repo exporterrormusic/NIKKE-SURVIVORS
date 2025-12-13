@@ -73,7 +73,7 @@ func _ready() -> void:
 			_face_sprite.material = mat
 		
 	else:
-		print("DEBUG: Face texture FAILED to load!")
+		pass  # Fallback to procedural drawing if texture not found
 			
 	# Main Face on TOP of Outline
 	_face_sprite.z_index = 1

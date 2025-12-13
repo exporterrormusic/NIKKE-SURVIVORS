@@ -102,30 +102,22 @@ func _draw_clump(clump: Dictionary) -> void:
 		points_left.append(spine_point + normal * width * 0.5)
 		points_right.append(spine_point - normal * width * 0.5)
 	
-	# Combine to polygon (Right points need to be reversed to close loop)
-	points_right.reverse()
-	var raw_polygon = points_left + points_right
+	# Draw Quads for each segment
+	# This avoids "Invalid polygon data" errors from self-intersecting complex polygons
+	# and is much faster than decomposition. Since color is solid, overlap doesn't matter.
+	for j in range(points_left.size() - 1):
+		var p1 = points_left[j]
+		var p2 = points_left[j+1]
+		var p3 = points_right[j+1]
+		var p4 = points_right[j]
+		
+		# Draw as two triangles to be absolutely robust against "bowtie" quads
+		# Triangles cannot fail triangulation
+		draw_colored_polygon(PackedVector2Array([p1, p2, p4]), HAIR_COLOR)
+		draw_colored_polygon(PackedVector2Array([p2, p3, p4]), HAIR_COLOR)
 	
-	# Sanitize Polygon: Remove duplicates and points that are too close
-	var clean_polygon = PackedVector2Array()
-	if raw_polygon.size() > 0:
-		clean_polygon.append(raw_polygon[0])
-		for j in range(1, raw_polygon.size()):
-			if raw_polygon[j].distance_squared_to(clean_polygon[-1]) > 1.0: # Min 1px distance
-				clean_polygon.append(raw_polygon[j])
-				
-		# Check wrap-around distance (last point to first point)
-		if clean_polygon.size() > 2:
-			if clean_polygon[-1].distance_squared_to(clean_polygon[0]) <= 1.0:
-				clean_polygon.remove_at(clean_polygon.size() - 1)
-	
-	if clean_polygon.size() < 3:
-		return
-	
-	# ROBUST FIX: Decompose into convex polygons to handle self-intersections or complexity
-	var convex_polys = Geometry2D.decompose_polygon_in_convex(clean_polygon)
-	for poly in convex_polys:
-		draw_colored_polygon(poly, HAIR_COLOR)
+	# Optional: Draw highlight line on top
+	# draw_polyline(points_left, HIGHLIGHT_COLOR, 2.0)
 	
 	# Draw highlight (thinner strip)
 	# draw_polyline(points_left, HIGHLIGHT_COLOR, 2.0) # Optional highlighting

@@ -810,6 +810,9 @@ func register_burst_hit(_target = null, from_burst: bool = false) -> void:
 	
 	# Commander "Obviously Anderson" upgrade: 2x burst generation
 	var burst_gain: float = burst_per_hit
+	
+
+	
 	if _has_commander_burst_upgrade:
 		burst_gain *= 2.0
 	
@@ -1020,22 +1023,22 @@ func _add_skill_point() -> void:
 	var existing := canvas.get_node_or_null("TalentTree")
 	if existing:
 		existing.add_skill_points(1)
-	else:
-		var TalentTreeScript = preload("res://scripts/ui/TalentTree.gd")
-		var tree = TalentTreeScript.new()
-		tree.name = "TalentTree"
-		tree.set_anchors_preset(Control.PRESET_FULL_RECT)
-		canvas.add_child(tree)
-		tree.add_skill_points(1)
-		tree.talent_unlocked.connect(_on_talent_unlocked)
-		tree.tree_closed.connect(_on_talent_tree_closed)
-		existing = tree
+	
+	# Optimization: Do NOT instantiate TalentTree here. 
+	# It causes a stutter on level up due to resource loading.
+	# Rely on _update_skill_points_notification to inform the user.
+	# The tree will be created when _show_talent_tree is called (TAB).
+	var points_available = 1
+	if existing and existing.has_method("get_skill_points"):
+		points_available = existing.get_skill_points()
+	elif _progression:
+		points_available = _progression.get_skill_points()
 	
 	if overhead_hud:
-		overhead_hud.update_skill_points_available(existing.get_skill_points() > 0)
+		overhead_hud.update_skill_points_available(points_available > 0)
 	
 	# Show/update skill points notification
-	_update_skill_points_notification(existing.get_skill_points())
+	_update_skill_points_notification(points_available)
 
 func _on_talent_unlocked(char_id: int, talent_id: String) -> void:
 	# char_id is a registry index, we need to convert to slot index
@@ -1367,7 +1370,12 @@ func _handle_attacks(aim_direction: Vector2, _delta: float) -> void:
 	
 	# Primary attack - during Kilo burst or auto-fire weapons: continuous while holding, no stamina cost
 	var wants_attack := false
-	if is_kilo_burst or is_auto_fire:
+	
+	# Block attacks if mouse is hovering over music player UI
+	var music_player_script = load("res://scripts/ui/MusicPlayerUI.gd")
+	if music_player_script and music_player_script.is_hovered:
+		wants_attack = false
+	elif is_kilo_burst or is_auto_fire:
 		wants_attack = Input.is_action_pressed("attack")
 	else:
 		wants_attack = Input.is_action_just_pressed("attack")
@@ -1518,12 +1526,18 @@ func _show_talent_tree(add_point: bool = false) -> void:
 	if existing:
 		if add_point:
 			existing.add_skill_points(1)  # Add point for leveling up
+		# Sync points just in case
+		if _progression:
+			existing.set_skill_points(_progression.get_skill_points())
 		existing.show_tree(self)
 		shop_open = true
 		if get_parent().has_method("set_game_paused"):
 			get_parent().call_deferred("set_game_paused", true)
 		return
 	
+	# Sync skill points from progression
+	var current_points = _progression.get_skill_points() if _progression else 0
+
 	# Create new talent tree using preload for proper initialization
 	var TalentTreeScript = preload("res://scripts/ui/TalentTree.gd")
 	var tree = TalentTreeScript.new()
@@ -1544,6 +1558,9 @@ func _show_talent_tree(add_point: bool = false) -> void:
 	# Connect signals
 	tree.talent_unlocked.connect(_on_talent_unlocked)
 	tree.tree_closed.connect(_on_talent_tree_closed)
+	
+	# Initialize points
+	tree.set_skill_points(current_points)
 	
 	if add_point:
 		tree.add_skill_points(1)

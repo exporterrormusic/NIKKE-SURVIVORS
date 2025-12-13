@@ -31,6 +31,7 @@ var _charge_timer: float = 0.0
 var _charge_direction: Vector2 = Vector2.RIGHT
 var _charge_visual: Node2D = null
 var _hit_enemies: Array = []  # Track enemies hit during charge
+var _post_charge_invincibility_timer: float = 0.0 # Safety buffer after charge ends
 
 # Marked enemies (for explosion upgrade)
 var _marked_enemies: Array = []  # [{enemy_ref, mark_time, effect_ref}]
@@ -57,6 +58,9 @@ func _on_process(delta: float) -> void:
 	# Update charge state
 	if _is_charging:
 		_update_charge(delta)
+	
+	if _post_charge_invincibility_timer > 0:
+		_post_charge_invincibility_timer -= delta
 	
 	# Update marked enemies
 	_update_marked_enemies(delta)
@@ -297,6 +301,7 @@ func _spawn_explosion_visual(position: Vector2, radius: float) -> void:
 func _end_charge() -> void:
 	_is_charging = false
 	_charge_timer = 0.0
+	_post_charge_invincibility_timer = 1.0 # 1 second of i-frames to dismount safely
 	_hit_enemies.clear()
 	
 	if _charge_visual and is_instance_valid(_charge_visual):
@@ -319,7 +324,7 @@ func _spawn_charge_visual() -> void:
 	_charge_visual.z_index = 200
 
 func is_invincible() -> bool:
-	return _is_charging  # Invincible during charge
+	return _is_charging or _post_charge_invincibility_timer > 0 # Invincible during charge + buffer
 
 func _on_burst_start() -> void:
 	# Massive golden nova

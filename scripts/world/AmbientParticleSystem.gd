@@ -16,7 +16,7 @@ var _camera: Camera2D = null
 var _spawn_timer := 0.0
 var _ambient_compensation: float = 1.0
 
-const MAX_PARTICLES := 600
+const MAX_PARTICLES := 250  # Reduced from 600 for performance
 const SPAWN_INTERVAL := 0.08
 
 # Particle type configurations
@@ -143,7 +143,7 @@ func _setup_particle_configs() -> void:
 				"glow": false
 			}
 		],
-		"density": 600.0
+		"density": 120.0  # Reduced from 600 for performance
 	}
 
 func configure(biome_id: StringName, is_night: bool) -> void:

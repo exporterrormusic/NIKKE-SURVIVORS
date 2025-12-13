@@ -2,7 +2,7 @@ extends Node
 class_name WaveDirector
 
 ## Wave-based director for stage runs
-## Manages time-based spawning, events, and intensity pacing
+## Manages time-based spawning, events, and intensity pacing (DDA)
 
 signal enemy_spawn_requested(enemy_type: String, count: int, pattern: String)
 signal event_started(event_type: String, event_data: Dictionary)
@@ -13,509 +13,278 @@ signal time_updated(elapsed: float, remaining: float)
 signal wave_changed(wave_number: int)
 signal rapture_event_started()
 
-# Run settings - 11 waves at 30 seconds each = 5.5 minutes
+# Run settings
 const WAVE_DURATION := 30.0
-const TOTAL_WAVES := 11
-const RUN_DURATION := WAVE_DURATION * TOTAL_WAVES  # 330 seconds (5:30)
+const TOTAL_WAVES := 12 # 12 Waves defined in script
+const RUN_DURATION := WAVE_DURATION * TOTAL_WAVES
 
-# Stage difficulty modes
-var _stage_mode := 1  # 1 = normal, 2 = hard (tanks replace basic, etc.)
+# 12-WAVE SCRIPT
+# Defines the specific behavior for each wave
+# rate: Spawns per second (Target: ~4.0 for 120/wave)
+# max: Max concurrent enemies
+var WAVE_SCRIPT := {
+	1:  { "rate": 2.5, "max": 40, "event_type": "", "event_count": 0, "unlocks": ["basic"] },
+	2:  { "rate": 2.7, "max": 45, "event_type": "spawn_tanks", "event_count": 3, "unlocks": ["basic", "tank"] },
+	3:  { "rate": 2.9, "max": 50, "event_type": "spawn_exploders", "event_count": 3, "unlocks": ["basic", "tank", "exploder"] },
+	4:  { "rate": 3.1, "max": 55, "event_type": "spawn_shielders", "event_count": 2, "unlocks": ["basic", "tank", "exploder", "shielder"] },
+	5:  { "rate": 3.3, "max": 60, "event_type": "spawn_elites", "event_count": 3, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] },
+	6:  { "rate": 3.5, "max": 55, "event_type": "boss", "event_count": 1, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] },
+	7:  { "rate": 3.0, "max": 50, "event_type": "", "event_count": 0, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] }, # Breather
+	8:  { "rate": 3.7, "max": 65, "event_type": "boost_shielders", "event_count": 0, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] },
+	9:  { "rate": 4.0, "max": 70, "event_type": "boss", "event_count": 1, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] },
+	10: { "rate": 4.5, "max": 75, "event_type": "super_boss_plus", "event_count": 1, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] },
+	11: { "rate": 3.5, "max": 60, "event_type": "gate_super_bosses", "event_count": 3, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] }, # FINAL WAVE gate
+	12: { "rate": 0.0, "max": 0,  "event_type": "n01", "event_count": 1, "unlocks": [] }, # N01 Solo
+}
 
-# Spawn brackets - 11 waves at 30 second intervals
-# Stage 1: basic enemies, Stage 2: tanks replace basic
-const SPAWN_BRACKETS := [
-	{"time": 0.0, "rate": 3.0, "max": 25, "interval": 0.33},       # Wave 1 (0:00)
-	{"time": 30.0, "rate": 5.0, "max": 35, "interval": 0.20},      # Wave 2 (0:30)
-	{"time": 60.0, "rate": 7.0, "max": 45, "interval": 0.14},      # Wave 3 (1:00)
-	{"time": 90.0, "rate": 10.0, "max": 55, "interval": 0.10},     # Wave 4 (1:30)
-	{"time": 120.0, "rate": 12.0, "max": 65, "interval": 0.08},    # Wave 5 (2:00)
-	{"time": 150.0, "rate": 15.0, "max": 75, "interval": 0.07},    # Wave 6 (2:30)
-	{"time": 180.0, "rate": 18.0, "max": 85, "interval": 0.055},   # Wave 7 (3:00)
-	{"time": 210.0, "rate": 20.0, "max": 95, "interval": 0.05},    # Wave 8 (3:30)
-	{"time": 240.0, "rate": 22.0, "max": 100, "interval": 0.045},  # Wave 9 (4:00)
-	{"time": 270.0, "rate": 25.0, "max": 110, "interval": 0.04},   # Wave 10 (4:30)
-	{"time": 300.0, "rate": 15.0, "max": 60, "interval": 0.07},    # Wave 11 (5:00) - fewer adds during super boss
-]
-
-# Enemy type unlocks by wave (Stage 1)
-# Wave 1: basic only
-# Wave 2: tanks unlock
-# Wave 3: elites unlock
-const ENEMY_UNLOCKS := [
-	{"time": 0.0, "type": "basic"},         # Wave 1: Basic enemies
-	{"time": 30.0, "type": "tank"},         # Wave 2: Tank enemies
-]
-
-# Scheduled events (Stage 1)
-# Events trigger at wave start (0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300)
-# Wave 1: Horde
-# Wave 2: Horde (tanks unlock)
-# Wave 3: Horde + Elite
-# Wave 4: Horde + Elite
-# Wave 5: Horde + Elite + 1 Boss
-# Wave 6: Horde + Elite
-# Wave 7: Horde + Elite + 2 Bosses
-# Wave 8: Horde + Elite
-# Wave 9: Horde + Elite + 3 Bosses
-# Wave 10: Horde + Elite
-# Wave 11: 1 Super Boss + 5 Bosses (FINAL)
-const EVENTS := [
-	# Wave 1 (0:00) - No warning needed, game starts at wave 1
-	# First horde spawns shortly after start
-	{"time": 5.0, "type": "horde", "enemy": "modular_rapture", "count": 15, "duration": 20.0},
-	
-	# Wave 2 (0:30) - Tanks unlock
-	{"time": 30.0, "type": "horde", "enemy": "tank", "count": 4, "duration": 25.0},
-	
-	# Wave 3+
-	{"time": 60.0, "type": "horde", "enemy": "basic", "count": 12, "duration": 30.0},    # Wave 3
-	{"time": 90.0, "type": "horde", "enemy": "tank", "count": 6, "duration": 30.0},      # Wave 4
-	{"time": 120.0, "type": "horde", "enemy": "basic", "count": 15, "duration": 30.0},   # Wave 5
-	{"time": 150.0, "type": "horde", "enemy": "tank", "count": 8, "duration": 30.0},     # Wave 6
-	{"time": 180.0, "type": "horde", "enemy": "basic", "count": 18, "duration": 30.0},   # Wave 7
-	{"time": 210.0, "type": "horde", "enemy": "tank", "count": 9, "duration": 30.0},     # Wave 8
-	{"time": 240.0, "type": "horde", "enemy": "basic", "count": 20, "duration": 30.0},   # Wave 9
-	{"time": 270.0, "type": "horde", "enemy": "tank", "count": 10, "duration": 30.0},    # Wave 10
-	{"time": 300.0, "type": "horde", "enemy": "basic", "count": 12, "duration": 30.0},   # Wave 11 (fewer during super boss)
-	
-	# Elite spawns - at wave start, starting wave 3
-	{"time": 60.0, "type": "elite", "enemy": "basic"},     # Wave 3
-	{"time": 90.0, "type": "elite", "enemy": "basic"},     # Wave 4
-	{"time": 120.0, "type": "elite", "enemy": "basic"},    # Wave 5
-	{"time": 150.0, "type": "elite", "enemy": "basic"},    # Wave 6
-	{"time": 180.0, "type": "elite", "enemy": "basic"},    # Wave 7
-	{"time": 210.0, "type": "elite", "enemy": "basic"},    # Wave 8
-	{"time": 240.0, "type": "elite", "enemy": "basic"},    # Wave 9
-	{"time": 270.0, "type": "elite", "enemy": "basic"},    # Wave 10
-	
-	# Boss spawns - at wave start
-	{"time": 120.0, "type": "boss", "enemy": "boss", "count": 1},      # Wave 5: 1 boss
-	{"time": 180.0, "type": "boss", "enemy": "boss", "count": 2},      # Wave 7: 2 bosses
-	{"time": 240.0, "type": "boss", "enemy": "boss", "count": 3},      # Wave 9: 3 bosses
-	{"time": 300.0, "type": "boss", "enemy": "boss", "count": 5},      # Wave 11: 5 bosses
-	{"time": 300.0, "type": "super_boss", "enemy": "super_boss", "count": 1},  # Wave 11: 1 super boss (FINAL)
-]
+# Unit Weights (Ratios)
+# Basic: 30
+# Tank: 10 (1:3)
+# Exploder: 3 (1:3 Tanks)
+# Shielder: 1 (1:10 Tanks)
+# Elite: 1 (1:10 Tanks)
+var SPAWN_WEIGHTS := {
+	"basic": 30,
+	"tank": 10,
+	"exploder": 3,
+	"shielder": 1,
+	"elite": 1
+}
 
 # State
 var _elapsed_time := 0.0
 var _active := false
 var _paused := false
 var _spawn_timer := 0.0
-var _current_bracket_index := 0
-var _unlocked_enemies: Array[String] = []
-var _triggered_events: Array[int] = []
-var _active_event: Dictionary = {}
-var _event_timer := 0.0
-var _current_enemy_count := 0
-var _boss_active := false
-var _bosses_remaining := 0  # Track remaining bosses to defeat
-var _super_boss_active := false  # Track if super boss has spawned
-var _run_won := false
 var _current_wave := 1
 var _last_wave := 0
-var _endless_mode := false
-var _rapture_active := false
+var _current_enemy_count := 0
+var _boss_active := false
+var _bosses_remaining := 0
+var _intensity_multiplier := 1.0 # DDA Multiplier
+var _active_event: Dictionary = {}
+var _gate_active := false # Wave 11 Gate
+var _n01_active := false # Wave 12
 
 var _rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
 	_rng.randomize()
 
-func set_stage_mode(mode: int) -> void:
-	_stage_mode = mode
-	print("[WaveDirector] Stage mode: ", mode)
-
-func set_endless_mode(enabled: bool) -> void:
-	_endless_mode = enabled
-	print("[WaveDirector] Endless mode: ", enabled)
-
 func start() -> void:
 	_elapsed_time = 0.0
 	_active = true
 	_paused = false
 	_spawn_timer = 0.0
-	_current_bracket_index = 0
-	# Stage 2: tanks are the base enemy instead of basic
-	if _stage_mode == 2:
-		_unlocked_enemies = ["tank"]
-	else:
-		_unlocked_enemies = ["basic"]
-	_triggered_events.clear()
-	_active_event = {}
-	_event_timer = 0.0
-	_current_enemy_count = 0
-	_boss_active = false
-	_bosses_remaining = 0
-	_super_boss_active = false
-	_run_won = false
-	_rapture_active = false
 	_current_wave = 1
 	_last_wave = 0
+	_intensity_multiplier = 1.0
+	_gate_active = false
+	_n01_active = false
+	_boss_active = false
+	_bosses_remaining = 0
 	emit_signal("time_updated", 0.0, RUN_DURATION)
-	emit_signal("wave_changed", 1)
+	_update_wave_state()
 
 func stop() -> void:
 	_active = false
 
-func pause() -> void:
-	_paused = true
-
-func resume() -> void:
-	_paused = false
-
 func set_enemy_count(count: int) -> void:
 	_current_enemy_count = count
 
-func notify_boss_defeated(is_super_boss: bool = false) -> void:
-	if _boss_active:
+func notify_boss_defeated(is_super: bool = false) -> void:
+	if _bosses_remaining > 0:
 		_bosses_remaining -= 1
-		print("[WaveDirector] Boss defeated! Remaining: ", _bosses_remaining, " Super boss active: ", _super_boss_active)
-		
-		# Game ends when super boss is killed
-		if is_super_boss and _super_boss_active:
-			print("[WaveDirector] SUPER BOSS DEFEATED - INITIATING RAPTURE EVENT!")
-			_boss_active = false
-			_super_boss_active = false
-			# Do NOT end run yet - Start Rapture Event
-			_start_rapture_event()
-		elif _bosses_remaining <= 0 and not _super_boss_active:
-			# All bosses cleared but super boss hasn't spawned yet - just reset boss state
-			_boss_active = false
-			emit_signal("event_ended", "boss")
+	
+	# Check Wave 11 Gate
+	if _gate_active and _bosses_remaining <= 0:
+		_gate_active = false
+		_start_wave_12() # Proceed to N01
+
+	# Check Game Win (N01)
+	if _n01_active:
+		_win_game()
 
 func notify_rapture_queen_defeated() -> void:
-	if _rapture_active:
-		print("[WaveDirector] RAPTURE QUEEN DEFEATED - TRUE VICTORY!")
-		_rapture_active = false
-		_run_won = true
-		emit_signal("run_complete", true, _elapsed_time)
-		stop()
+	_win_game()
+
+func _win_game() -> void:
+	_active = false
+	emit_signal("run_complete", true, _elapsed_time)
 
 func _process(delta: float) -> void:
 	if not _active or _paused:
 		return
 	
-	_elapsed_time += delta
+	# Pause timer during Gate (Wave 11) or N01 (Wave 12)
+	if not _gate_active and not _n01_active:
+		_elapsed_time += delta
 	
-	# In endless mode, remaining time is always infinite (show elapsed only)
-	if _endless_mode:
-		emit_signal("time_updated", _elapsed_time, -1.0)  # -1 signals endless
-	else:
-		emit_signal("time_updated", _elapsed_time, RUN_DURATION - _elapsed_time)
+	# Broadcast Time
+	var display_max = RUN_DURATION
+	if _gate_active or _n01_active:
+		display_max = -1.0 # Infinite/Events
+	emit_signal("time_updated", _elapsed_time, display_max)
 	
-	# Check for run timeout (only in non-endless mode)
-	if not _endless_mode and _elapsed_time >= RUN_DURATION and not _boss_active and not _rapture_active:
-		emit_signal("run_complete", true, _elapsed_time)
-		_active = false
-		return
+	# Wave Logic
+	if not _gate_active and not _n01_active:
+		_update_wave_progress()
 	
-	# Update spawn bracket
-	_update_spawn_bracket()
-	
-	# Check for enemy type unlocks
-	_check_enemy_unlocks()
-	
-	# Check for scheduled events (not in endless mode after first cycle)
-	if not _endless_mode or _elapsed_time <= RUN_DURATION:
-		_check_events()
-	
-	# Process active event
-	if not _active_event.is_empty():
-		_process_event(delta)
-	
-	# Normal spawning (reduced during events, stopped during boss)
-	if not _boss_active:
-		if _rapture_active:
-			_process_rapture_flood(delta)
-		else:
-			_process_normal_spawning(delta)
+	# Spawning
+	_process_spawning(delta)
 
-func _update_spawn_bracket() -> void:
-	# In endless mode, we loop through brackets but keep increasing wave number
-	var bracket_time := _elapsed_time
-	if _endless_mode and _elapsed_time > RUN_DURATION:
-		# After 5 minutes, use max bracket settings but keep counting waves
-		bracket_time = RUN_DURATION  # Use max bracket
+func _update_wave_progress() -> void:
+	# Calculate current wave based on time (30s intervals)
+	var time_wave = int(_elapsed_time / WAVE_DURATION) + 1
+	time_wave = min(time_wave, 11) # Cap at 11 by time (12 is manual trigger)
 	
-	for i in range(SPAWN_BRACKETS.size() - 1, -1, -1):
-		if bracket_time >= SPAWN_BRACKETS[i]["time"]:
-			_current_bracket_index = i
-			break
+	if time_wave != _current_wave:
+		_current_wave = time_wave
+		_update_wave_state()
+
+func _update_wave_state() -> void:
+	if _current_wave > TOTAL_WAVES: return
 	
-	# Calculate wave number (in endless mode, keep incrementing past normal brackets)
-	if _endless_mode:
-		# After bracket 8, increment wave every 30 seconds
-		if _elapsed_time <= RUN_DURATION:
-			_current_wave = _current_bracket_index + 1
-		else:
-			var extra_time := _elapsed_time - RUN_DURATION
-			@warning_ignore("integer_division")
-			_current_wave = SPAWN_BRACKETS.size() + int(extra_time / 30.0)
+	emit_signal("wave_changed", _current_wave)
+	EventBus.wave_started.emit(_current_wave)
+	
+	# DDA Check (Only if not Gate/N01)
+	if not _gate_active and not _n01_active:
+		_calculate_dda()
+	
+	# Trigger Event
+	_trigger_wave_event()
+
+func _calculate_dda() -> void:
+	# DDA Logic: Check enemy count
+	# < 5: Crushing (1.5x)
+	# 5-40: On Pace (1.0x)
+	# > 40: Struggling (0.5x)
+	
+	if _current_enemy_count <= 5:
+		_intensity_multiplier = 1.5
+		print("[Director] CRUSHING! Intensity -> 1.5x")
+	elif _current_enemy_count > 40:
+		_intensity_multiplier = 0.5
+		print("[Director] STRUGGLING! Intensity -> 0.5x")
 	else:
-		_current_wave = _current_bracket_index + 1
+		_intensity_multiplier = 1.0
+		print("[Director] ON PACE. Intensity -> 1.0x")
+
+func _trigger_wave_event() -> void:
+	var data = WAVE_SCRIPT.get(_current_wave, {})
+	var type = data.get("event_type", "")
+	var count = data.get("event_count", 0)
 	
-	if _current_wave != _last_wave:
-		_last_wave = _current_wave
-		emit_signal("wave_changed", _current_wave)
-		# Emit to global EventBus for decoupled systems
-		EventBus.wave_started.emit(_current_wave)
+	# Wave 11 Gate
+	if type == "gate_super_bosses":
+		_gate_active = true
+		_bosses_remaining = count
+		emit_signal("enemy_spawn_requested", "super_boss", count, "center")
+		emit_signal("event_started", "boss_gate", {"count": count, "name": "FINAL WAVE"})
+		return
+
+	# Instant Spawns (Tanks, Exploders, Elites)
+	if type in ["spawn_tanks", "spawn_exploders", "spawn_shielders", "spawn_elites"]:
+		var unit = "tank"
+		if type == "spawn_exploders": unit = "exploder"
+		if type == "spawn_shielders": unit = "shielder"
+		if type == "spawn_elites": unit = "elite"
 		
-		# Wave 10 music change
-		if _current_wave == 10:
-			print("[WaveDirector] Wave 10 detected! Requesting music change to wishes.wav")
-			AudioDirector.play_music_by_path("res://assets/sounds/music/bgm/wishes.wav", true, 2.0)
-			print("[WaveDirector] Wave 10 started: Playing wishes.wav")
+		emit_signal("enemy_spawn_requested", unit, count, "horde")
+		emit_signal("event_started", "wave_spawn", {"unit": unit, "count": count})
+	
+	# Bosses
+	if type == "boss":
+		emit_signal("enemy_spawn_requested", "boss", count, "center")
+		emit_signal("event_started", "boss", {"count": count})
+	
+	if type == "super_boss_plus":
+		emit_signal("enemy_spawn_requested", "super_boss", 1, "center")
+		emit_signal("enemy_spawn_requested", "boss", 2, "center")
+		emit_signal("event_started", "boss", {"count": 3, "name": "TITAN SQUAD"})
 
-func get_current_wave() -> int:
-	return _current_wave
+func _start_wave_12() -> void:
+	_current_wave = 12
+	_n01_active = true
+	emit_signal("wave_changed", 12)
+	EventBus.wave_started.emit(12)
+	
+	# Spawn N01
+	emit_signal("rapture_event_started") # Trigger legacy event/music if needed
+	# Actually spawn the queen
+	# Assuming EnemySpawner handles "n01" request or we use the specific signal
+	# But WaveDirector usually requests spawns. 
+	# EnemySpawner has `spawn_rapture_queen()`. Let's assume we can request it or strict bind.
+	
+	# For now, use a special signal or type "rapture_queen"
+	# EnemySpawner logic might need a tweak if "rapture_queen" isn't a standard str
+	# Checking EnemySpawner... it has `spawn_rapture_queen()`.
+	# We'll rely on `rapture_event_started` signal potentially OR allow "rapture_queen" type.
+	# Let's emit a specific intent.
+	var spawner = get_tree().get_first_node_in_group("enemy_spawners")
+	if spawner and spawner.has_method("spawn_rapture_queen"):
+		spawner.spawn_rapture_queen()
 
-## Debug function to skip to the next wave by advancing elapsed time
-func debug_skip_wave() -> void:
-	if not _active:
+func _process_spawning(delta: float) -> void:
+	# Wave 12: No stream
+	if _current_wave == 12: return
+	
+	var data = WAVE_SCRIPT.get(_current_wave, {})
+	var base_rate = data.get("rate", 2.0)
+	var base_max = data.get("max", 50)
+	
+	# Apply DDA
+	var actual_rate = base_rate * _intensity_multiplier
+	var actual_max = int(base_max * _intensity_multiplier)
+	
+	if _current_enemy_count >= actual_max:
 		return
+		
+	_spawn_timer += delta
+	var interval = 1.0 / max(0.1, actual_rate)
 	
-	# Calculate time to start of next wave
-	var current_bracket_time: float = SPAWN_BRACKETS[_current_bracket_index]["time"]
-	var next_bracket_time: float
+	if _spawn_timer >= interval:
+		_spawn_timer = 0.0
+		var unit = _pick_weighted_enemy()
+		emit_signal("enemy_spawn_requested", unit, 1, "ring")
+
+func _pick_weighted_enemy() -> String:
+	var unlocks: Array = WAVE_SCRIPT.get(_current_wave, {}).get("unlocks", ["basic"])
+	var total_weight = 0
+	var current_weights = SPAWN_WEIGHTS.duplicate()
 	
-	if _current_bracket_index < SPAWN_BRACKETS.size() - 1:
-		next_bracket_time = SPAWN_BRACKETS[_current_bracket_index + 1]["time"]
-	else:
-		# Already at last bracket, advance by WAVE_DURATION
-		next_bracket_time = current_bracket_time + WAVE_DURATION
+	# Wave 8 Boost
+	if _current_wave == 8:
+		current_weights["shielder"] = 3 # Boost from 1 to 3 (1:3 Tanks approx)
 	
-	# Set elapsed time to just past next bracket start
-	_elapsed_time = next_bracket_time + 0.1
+	# Calculate total based on what is UNLOCKED
+	for u in unlocks:
+		total_weight += current_weights.get(u, 0)
 	
-	# Update bracket immediately
-	_update_spawn_bracket()
-	
-	print("[WaveDirector] DEBUG: Skipped to wave ", _current_wave)
+	var roll = _rng.randi() % total_weight
+	var cum = 0
+	for u in unlocks:
+		cum += current_weights.get(u, 0)
+		if roll < cum:
+			return u
+	return "basic"
 
 func get_health_multiplier() -> float:
-	# Wave 1: 1x, Wave 2: 2x, Wave 3: 3x, Wave 4: 4x, etc. (linear +1 per wave)
+	# Linear scaling: 1x per wave (Wave 1 = 1x, Wave 2 = 2x, etc.)
 	return float(_current_wave)
 
-func _check_enemy_unlocks() -> void:
-	for unlock in ENEMY_UNLOCKS:
-		if _elapsed_time >= unlock["time"] and not unlock["type"] in _unlocked_enemies:
-			_unlocked_enemies.append(unlock["type"])
-
-func _check_events() -> void:
-	for i in range(EVENTS.size()):
-		if i in _triggered_events:
-			continue
-		
-		var event: Dictionary = EVENTS[i]
-		var event_time: float = event["time"]
-		
-		# Boss warning 10 seconds early
-		if event["type"] == "boss" and _elapsed_time >= event_time - 10.0 and _elapsed_time < event_time:
-			if not (i * 1000) in _triggered_events:  # Use offset index for warning
-				_triggered_events.append(i * 1000)
-				emit_signal("boss_incoming", event["enemy"], event_time - _elapsed_time)
-		
-		# Trigger event at its time
-		if _elapsed_time >= event_time:
-			_triggered_events.append(i)
-			_start_event(event)
-
-func _start_event(event: Dictionary) -> void:
-	var event_type: String = event["type"]
-	print("[WaveDirector] Starting event: ", event_type, " - ", event)
-	
-	# Translate enemy types for Stage 2 (hard mode)
-	var translated_enemy := _translate_enemy_type(event.get("enemy", "basic"))
-	var translated_type := _translate_event_type(event_type)
-	
-	match translated_type:
-		"horde":
-			var translated_event := event.duplicate()
-			translated_event["enemy"] = translated_enemy
-			_active_event = translated_event
-			_event_timer = 0.0
-			emit_signal("event_started", "horde", {"enemy": translated_enemy, "count": event["count"], "wave": _current_wave})
-		
-		"elite":
-			print("[WaveDirector] SPAWNING ELITE - enemy_type: ", translated_enemy)
-			emit_signal("enemy_spawn_requested", translated_enemy, 1, "elite")
-			emit_signal("event_started", "elite", {"enemy": translated_enemy, "wave": _current_wave})
-			await get_tree().create_timer(0.1).timeout
-			emit_signal("event_ended", "elite")
-		
-		"boss":
-			var boss_count: int = event.get("count", 1)
-			_boss_active = true
-			_bosses_remaining += boss_count
-			_active_event = event.duplicate()
-			
-			# Spawn boss(es) - use super_boss for stage 2
-			var boss_type := "super_boss" if _stage_mode == 2 else "boss"
-			for i in range(boss_count):
-				emit_signal("enemy_spawn_requested", boss_type, 1, "center")
-			emit_signal("event_started", "boss", {"count": boss_count, "name": "RAPTURE TITAN", "wave": _current_wave})
-		
-		"super_boss":
-			_boss_active = true
-			_bosses_remaining += 1
-			_super_boss_active = true
-			_active_event = event.duplicate()
-			
-			# Spawn super boss
-			emit_signal("enemy_spawn_requested", "super_boss", 1, "center")
-			emit_signal("event_started", "super_boss", {"count": 1, "name": "RAPTURE QUEEN N01", "wave": _current_wave})
-
-## Translate enemy types based on stage mode
-## Stage 1: normal (basic, tank, elite, boss)
-## Stage 2: hard (tank replaces basic, elite replaces tank, boss replaces elite, super_boss replaces boss)
-func _translate_enemy_type(enemy_type: String) -> String:
-	if _stage_mode != 2:
-		return enemy_type
-	
-	match enemy_type:
-		"basic":
-			return "tank"
-		"tank":
-			return "elite_spawn"  # Special marker for spawning as elite
-		_:
-			return enemy_type
-
-## Translate event types for stage 2
-func _translate_event_type(event_type: String) -> String:
-	if _stage_mode != 2:
-		return event_type
-	
-	# In stage 2, elite events become boss events
-	if event_type == "elite":
-		return "boss"
-	
-	return event_type
-
-func _process_event(delta: float) -> void:
-	var event_type: String = _active_event.get("type", "")
-	
-	match event_type:
-		"horde":
-			_event_timer += delta
-			var duration: float = _active_event.get("duration", 5.0)
-			var total_count: int = _active_event.get("count", 20)
-			var spawn_interval: float = duration / float(total_count)
-			
-			# Spawn enemies rapidly from one direction
-			var spawned: int = _active_event.get("_spawned", 0)
-			var spawn_accumulator: float = _active_event.get("_accumulator", 0.0)
-			spawn_accumulator += delta
-			
-			# Get the translated enemy type from the event
-			var enemy_type: String = _active_event.get("enemy", "basic")
-			
-			while spawn_accumulator >= spawn_interval and spawned < total_count:
-				spawn_accumulator -= spawn_interval
-				spawned += 1
-				# Check if this is an elite_spawn marker (stage 2 tank->elite)
-				if enemy_type == "elite_spawn":
-					emit_signal("enemy_spawn_requested", "basic", 1, "elite")
-				else:
-					emit_signal("enemy_spawn_requested", enemy_type, 1, "horde")
-			
-			_active_event["_spawned"] = spawned
-			_active_event["_accumulator"] = spawn_accumulator
-			
-			if spawned >= total_count:
-				emit_signal("event_ended", "horde")
-				_active_event = {}
-
-func _process_normal_spawning(delta: float) -> void:
-	var bracket: Dictionary = SPAWN_BRACKETS[_current_bracket_index]
-	var max_enemies: int = bracket["max"]
-	var spawn_interval: float = bracket["interval"]
-	
-	# Reduce spawn rate during events
-	if not _active_event.is_empty():
-		spawn_interval *= 2.0
-	
-	# Don't spawn if at max
-	if _current_enemy_count >= max_enemies:
-		return
-	
-	_spawn_timer += delta
-	while _spawn_timer >= spawn_interval and _current_enemy_count < max_enemies:
-		_spawn_timer -= spawn_interval
-		var enemy_type := _pick_random_enemy()
-		emit_signal("enemy_spawn_requested", enemy_type, 1, "ring")
-
-func _pick_random_enemy() -> String:
-	if _unlocked_enemies.is_empty():
-		return "basic"
-	
-	# Weight towards newer enemy types slightly
-	var weights: Array[float] = []
-	var total_weight := 0.0
-	for i in range(_unlocked_enemies.size()):
-		var weight := 1.0 + float(i) * 0.3  # Later unlocks slightly more common
-		weights.append(weight)
-		total_weight += weight
-	
-	var roll := _rng.randf() * total_weight
-	var cumulative := 0.0
-	for i in range(weights.size()):
-		cumulative += weights[i]
-		if roll <= cumulative:
-			return _unlocked_enemies[i]
-	
-	return _unlocked_enemies[0]
-
-func get_elapsed_time() -> float:
-	return _elapsed_time
-
-func get_remaining_time() -> float:
-	return max(0.0, RUN_DURATION - _elapsed_time)
-
-func is_active() -> bool:
-	return _active
-
+# Helpers
+func get_current_wave() -> int: return _current_wave
+func is_active() -> bool: return _active
+func get_elapsed_time() -> float: return _elapsed_time
 func format_time(seconds: float) -> String:
-	@warning_ignore("integer_division")
-	var mins := int(seconds) / 60
-	var secs := int(seconds) % 60
-	return "%d:%02d" % [mins, secs]
-
-func _start_rapture_event() -> void:
-	if _rapture_active: return
-	
-	_rapture_active = true
-	emit_signal("rapture_event_started")
-	print("[WaveDirector] RAPTURE EVENT STARTED - FLOOD MODE ACTIVE")
-	
-	# Play Timer Music
-	AudioDirector.play_queen_timer_music()
-	
-	# Stop any other active event
-	_active_event = {}
-	_event_timer = 0.0
-
-func _process_rapture_flood(delta: float) -> void:
-	# Flood mode: Spawn basic enemies very rapidly
-	_spawn_timer += delta
-	var flood_interval := 0.3 # Reduced spawn rate (was 0.15)
-	
-	while _spawn_timer >= flood_interval:
-		_spawn_timer -= flood_interval
-		# Force 'modular_rapture' or 'basic'
-		emit_signal("enemy_spawn_requested", "basic", 1, "horde")
-
-# Dev Tool Helpers
-func debug_jump_to_wave(wave: int) -> void:
-	if not _active: return
-	
-	# Find start time of wave (wave 1 is index 0)
-	var target_index = clamp(wave - 1, 0, SPAWN_BRACKETS.size() - 1)
-	var target_time = SPAWN_BRACKETS[target_index]["time"]
-	
-	_elapsed_time = target_time
-	_update_spawn_bracket()
-	print("[WaveDirector] DEBUG: Jumped to wave ", wave, " (Time: ", target_time, ")")
-
-func debug_start_rapture_event() -> void:
-	if not _active: start()
-	_start_rapture_event()
+	var m = int(seconds / 60)
+	var s = int(seconds) % 60
+	return "%d:%02d" % [m, s]
+func debug_jump_to_wave(w: int) -> void:
+	if w < 12:
+		_elapsed_time = (w - 1) * 30.0
+		_update_wave_progress()
+	else:
+		_start_wave_12()

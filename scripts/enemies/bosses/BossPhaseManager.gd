@@ -98,8 +98,6 @@ func _trigger_phase_transition(new_phase_index: int) -> void:
 		EventBus.boss_spawned.emit(boss)  # Reuse for phase changes
 	
 	phase_changed.emit(old_phase, new_phase_index)
-	
-	print("[BossPhaseManager] Phase transition: ", old_phase, " -> ", new_phase_index)
 
 
 ## Apply phase modifiers to the boss
@@ -121,8 +119,6 @@ func _apply_phase(phase_index: int) -> void:
 	# Spawn transition effect
 	if phase.transition_effect_path != "":
 		_spawn_transition_effect(phase.transition_effect_path)
-	
-	print("[BossPhaseManager] Applied phase: ", phase.phase_name)
 
 
 ## Spawn a phase transition effect

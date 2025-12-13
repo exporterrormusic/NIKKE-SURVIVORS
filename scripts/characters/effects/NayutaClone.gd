@@ -19,7 +19,7 @@ var owner_player: Node2D = null
 var weapon_type: String = "smg"  # smg, sword, rocket, sniper
 var max_hp: int = 5
 var current_hp: int = 5
-var attack_multiplier: float = 0.5
+var attack_multiplier: float = 0.25
 var should_heal_on_death: bool = false
 var player_level: int = 1  # Player level for damage/HP scaling
 
@@ -504,6 +504,19 @@ func _apply_separation() -> void:
 		var dist := to_self.length()
 		if dist < 40.0 and dist > 0:
 			separation += to_self.normalized() * (40.0 - dist)
+	
+	# Separate from Shielder shields (avoid going inside)
+	var shields := TargetCache.get_shielder_shields()
+	for shield in shields:
+		if not is_instance_valid(shield) or not shield is Node2D:
+			continue
+		var shield_node := shield as Node2D
+		var to_self := global_position - shield_node.global_position
+		var dist := to_self.length()
+		var shield_radius := 80.0  # Approximate shield radius
+		if dist < shield_radius and dist > 0:
+			# Strong push-back from shields
+			separation += to_self.normalized() * (shield_radius - dist) * 2.0
 	
 	velocity += separation * 3.0
 

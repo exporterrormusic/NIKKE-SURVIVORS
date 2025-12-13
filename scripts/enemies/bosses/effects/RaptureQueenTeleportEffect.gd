@@ -6,7 +6,7 @@ extends Node2D
 enum Phase { DISSOLVE, REFORM }
 
 # Configuration
-const PARTICLE_COUNT := 250  # Number of liquid droplets (INCREASED for visibility)
+const PARTICLE_COUNT := 120  # Optimized from 250
 const DISSOLVE_DURATION := 0.4
 const REFORM_DURATION := 0.3
 const PARTICLE_LIFETIME := 0.8
@@ -160,23 +160,15 @@ func _draw() -> void:
 		var color = particle.color
 		color.a *= alpha_mult
 		
-		# Draw particle with soft glow
+		# Optimized Draw: Reduced from 4 overlapping circles to 2
 		var pos = particle.position
 		var size = particle.size
 		
-		# Outer glow
-		draw_circle(pos, size * 2.5, Color(color.r, color.g, color.b, color.a * 0.15))
-		# Mid glow
-		draw_circle(pos, size * 1.5, Color(color.r, color.g, color.b, color.a * 0.3))
-		# Core
+		# Single Soft Glow (combined outer/mid)
+		draw_circle(pos, size * 2.0, Color(color.r, color.g, color.b, color.a * 0.2))
+		
+		# Core with highlight
 		draw_circle(pos, size, color)
-		# Bright center
-		draw_circle(pos, size * 0.5, Color(
-			min(1.0, color.r * 1.5),
-			min(1.0, color.g * 1.5),
-			min(1.0, color.b * 1.5),
-			color.a * 0.8
-		))
 
 func is_finished() -> bool:
 	return _finished

@@ -62,11 +62,14 @@ func _despawn() -> void:
 		return
 	queue_free()
 
+# Frame counter for throttled checks
+var _frame_counter: int = 0
+
 func _ready():
 	# VISUAL DEBUG: Turn BLUE if script loads successfully
 	if $Sprite2D: $Sprite2D.modulate = Color(0, 0, 10, 1)
 	
-	print("[BULLET_DEBUG] Spawned at ", global_position, " Layer: ", collision_layer, " Mask: ", collision_mask)
+	# DEBUG PRINT REMOVED FOR PERFORMANCE
 	connect("body_entered", Callable(self, "_on_body_entered"))
 	connect("area_entered", Callable(self, "_on_body_entered")) # Handle HitboxComponent (Area2D) hits
 	# Don't set start_position here - bullet isn't positioned yet
@@ -88,7 +91,10 @@ func _ready():
 	# Layer 1(1) = World, Layer 2(2) = Player/Enemies(Old), Layer 3(4) = Hitbox/Enemies
 	# Set mask to 1 | 2 | 4 = 7
 	collision_mask = 7
-	collision_layer = 0 # Bullets shouldn't be hit by things?
+	# Set layer to 4 (Enemy Projectiles) so Scarlet can slash them
+	collision_layer = 4 
+	add_to_group("enemy_projectiles")
+	print("[Bullet] initialized. Groups: ", get_groups())
 	
 	# Dynamic lights are VERY expensive with many bullets - disabled by default
 	if ENABLE_BULLET_LIGHTS:
@@ -162,20 +168,21 @@ func _physics_process(delta):
 			_despawn()
 			return
 	
-	# Check boulder collision (reparenting to EffectsLayer breaks Area2D overlap)
+	# Check boulder collision every frame for accuracy
+	_frame_counter += 1
 	if _check_boulder_collision():
 		_despawn()
 		return
 
 func _check_boulder_collision() -> bool:
-	"""Manual boulder collision check since bullets are in EffectsLayer (different scene tree branch)."""
-	var boulders := get_tree().get_nodes_in_group("boulders")
+	"""Manual boulder collision check using cached boulder list for performance."""
+	var boulders := TargetCache.get_boulders()
 	for boulder in boulders:
 		if not is_instance_valid(boulder):
 			continue
 		var boulder_pos: Vector2 = boulder.global_position
 		var boulder_radius: float = boulder.boulder_size * 0.5 if "boulder_size" in boulder else 150.0
-		if global_position.distance_to(boulder_pos) < boulder_radius:
+		if global_position.distance_squared_to(boulder_pos) < boulder_radius * boulder_radius:
 			return true
 	return false
 

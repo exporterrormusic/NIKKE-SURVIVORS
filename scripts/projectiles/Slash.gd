@@ -11,7 +11,10 @@ const CRIT_MULTIPLIER := 2.0  # 2x damage on crit
 var base_damage := 2
 
 func _ready():
+	# Ensure we can hit enemy projectiles (Layer 3 / Value 4)
+	collision_mask |= 4
 	connect("body_entered", Callable(self, "_on_body_entered"))
+	connect("area_entered", Callable(self, "_on_area_entered"))
 	visual.update_visual({
 		"radius": 260.0,
 		"arc_degrees": 90.0,
@@ -75,3 +78,15 @@ func _on_body_entered(body):
 			killer_source = "summon"
 		body.take_damage(damage, is_crit, hit_direction, false, killer_source)
 		_hit_bodies.append(body)
+
+func _on_area_entered(area):
+	# Scarlet's blade destroys enemy normal projectiles
+	if area.is_in_group("enemy_projectiles"):
+		print("[Slash] Hit enemy projectile: ", area.name)
+		# Exclude rockets and special attacks
+		if not area.is_in_group("rockets") and not area.is_in_group("special_attacks"):
+			# Destroy the bullet
+			area.queue_free()
+			
+			# Optional: Play a small "clash" sound or effect?
+			# For now just destroy as requested.

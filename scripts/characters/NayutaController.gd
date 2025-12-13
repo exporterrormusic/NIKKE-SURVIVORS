@@ -113,9 +113,6 @@ func _summon_clone() -> void:
 	# Use call() to ensure proper method resolution after set_script
 	clone.call("initialize", player, weapon, clone_hp, clone_attack, clone_heal_level > 0, player_level)
 	
-	# Debug print weapon pool
-	print("[NayutaController] Summoned clone with weapon: %s (pool: %s)" % [weapon, _weapon_pool])
-	
 	# Connect signals
 	clone.clone_died.connect(_on_clone_died.bind(clone))
 	
@@ -137,6 +134,12 @@ func _on_clone_died(clone: Node2D) -> void:
 func _on_burst_start() -> void:
 	# Galaxy explosion - damages all enemies on screen
 	_perform_galaxy_burst()
+	
+	# Nayuta's burst is instant, not sustained - immediately end burst state
+	# This allows rapid re-triggering if the player has enough burst gauge
+	burst_active = false
+	burst_timer = 0.0
+	burst_ended.emit()
 
 func _perform_galaxy_burst() -> void:
 	var tree := player.get_tree()
@@ -250,9 +253,18 @@ var _max_radius: float = 800.0
 
 func _ready() -> void:
 	z_index = 100
+	# Use unscaled time so burst plays at full speed during time dilation
+	process_mode = Node.PROCESS_MODE_ALWAYS
 
-func _process(delta: float) -> void:
-	_time += delta
+func _process(_delta: float) -> void:
+	# Use real time instead of scaled delta for consistent animation speed
+	var real_delta = _delta
+	if Engine.time_scale > 0.01:
+		real_delta = _delta / Engine.time_scale
+	else:
+		real_delta = 1.0 / 60.0  # Fallback during complete freeze
+	
+	_time += real_delta
 	if _time >= _duration:
 		queue_free()
 		return
@@ -273,8 +285,8 @@ func _draw() -> void:
 	draw_circle(Vector2.ZERO, radius * 0.6, mid_color)
 	draw_circle(Vector2.ZERO, radius, outer_color)
 	
-	# Draw swirling stars
-	var num_stars := 30
+	# Draw swirling stars (reduced from 30 to 15 for performance)
+	var num_stars := 15
 	for i in range(num_stars):
 		var angle := (TAU / num_stars) * i + _time * 3.0 + i * 0.2
 		var star_dist := radius * (0.3 + 0.6 * (float(i) / num_stars))
@@ -283,11 +295,11 @@ func _draw() -> void:
 		var star_alpha := alpha * (0.5 + 0.5 * sin(_time * 4.0 + i * 0.5))
 		draw_circle(star_pos, star_size, Color(1.0, 0.8, 1.0, star_alpha))
 	
-	# Draw spiral arms
-	for arm in range(3):
-		var arm_base_angle := (TAU / 3.0) * arm + _time * 2.0
-		for seg in range(20):
-			var seg_progress := float(seg) / 20.0
+	# Draw spiral arms (reduced from 3 to 2 arms, 20 to 12 segments for performance)
+	for arm in range(2):
+		var arm_base_angle := (TAU / 2.0) * arm + _time * 2.0
+		for seg in range(12):
+			var seg_progress := float(seg) / 12.0
 			var spiral_angle := arm_base_angle + seg_progress * PI
 			var spiral_radius := radius * seg_progress * 0.9
 			var pos := Vector2(cos(spiral_angle), sin(spiral_angle)) * spiral_radius
@@ -306,14 +318,22 @@ var _time: float = 0.0
 
 func _ready() -> void:
 	z_index = 50
+	# Use unscaled time for consistent animation during time dilation
+	process_mode = Node.PROCESS_MODE_ALWAYS
 
-func _process(delta: float) -> void:
-	_time += delta
+func _process(_delta: float) -> void:
+	# Use real time instead of scaled delta
+	var real_delta = _delta
+	if Engine.time_scale > 0.01:
+		real_delta = _delta / Engine.time_scale
+	else:
+		real_delta = 1.0 / 60.0
+	_time += real_delta
 	queue_redraw()
 
 func _draw() -> void:
-	# Purple galaxy star effect around debuffed enemy
-	var num_stars := 6
+	# Purple galaxy star effect around debuffed enemy (reduced from 6 to 4 stars)
+	var num_stars := 4
 	for i in range(num_stars):
 		var angle := (TAU / num_stars) * i + _time * 2.0
 		var radius := 25.0 + sin(_time * 3.0 + i) * 5.0
@@ -324,14 +344,11 @@ func _draw() -> void:
 		var star_size := 4.0
 		draw_circle(pos, star_size, Color(0.7, 0.3, 1.0, star_alpha))
 		
-		# Add twinkle lines
-		var line_len := star_size * 1.5
-		draw_line(pos - Vector2(line_len, 0), pos + Vector2(line_len, 0), Color(1.0, 0.8, 1.0, star_alpha * 0.5), 1.0)
-		draw_line(pos - Vector2(0, line_len), pos + Vector2(0, line_len), Color(1.0, 0.8, 1.0, star_alpha * 0.5), 1.0)
+		# Twinkle lines removed for performance
 	
-	# Outer ring
+	# Outer ring (reduced segments from 32 to 16)
 	var ring_alpha := 0.3 + 0.1 * sin(_time * 2.0)
-	draw_arc(Vector2.ZERO, 35.0, 0, TAU, 32, Color(0.5, 0.2, 0.8, ring_alpha), 2.0)
+	draw_arc(Vector2.ZERO, 35.0, 0, TAU, 16, Color(0.5, 0.2, 0.8, ring_alpha), 2.0)
 """
 	script.reload()
 	return script

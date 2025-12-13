@@ -179,13 +179,31 @@ func get_burst_texture() -> Texture2D:
 	var path = get_asset_path(burst_texture_path)
 	if ResourceLoader.exists(path):
 		return load(path)
+		
+	# Fallback check for optimized .webp format
+	var webp_path = path.get_base_dir() + "/" + path.get_file().get_basename() + ".webp"
+	if ResourceLoader.exists(webp_path):
+		return load(webp_path)
+		
 	return null
 
-## Get the burst sound
+## Get the burst sound (robust lookup)
 func get_burst_sound() -> AudioStream:
 	var path = get_asset_path(burst_sound_path)
+	
+	# Try configured path first
 	if ResourceLoader.exists(path):
 		return load(path)
+	
+	# If configured path fails (e.g. set to .wav but only .ogg exists), try alternatives
+	var base_path = path.get_base_dir() + "/" + path.get_file().get_basename()
+	var extensions = [".wav", ".ogg", ".mp3"]
+	
+	for ext in extensions:
+		var check_path = base_path + ext
+		if ResourceLoader.exists(check_path):
+			return load(check_path)
+			
 	return null
 
 ## Get the controller script

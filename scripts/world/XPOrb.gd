@@ -92,7 +92,9 @@ func _physics_process(delta):
 		return
 	
 	_age += delta
-	_update_visuals(delta)
+	# PERFORMANCE: Only update expensive visuals every 2nd frame
+	if Engine.get_process_frames() % 2 == 0:
+		_update_visuals(delta * 2.0)  # Compensate delta for skipped frame
 	# _update_trail(delta) # Disabled for performance
 	
 	var progress = float(player.xp) / player.xp_to_next

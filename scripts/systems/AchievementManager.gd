@@ -30,7 +30,9 @@ enum AchievementType {
 	BOSS_SLAYER,      # Defeat a boss enemy
 	FIRST_BLOOD,      # Complete a Stage 1 map
 	NO_DAMAGE,        # Complete a wave without taking damage
-	ALL_MAPS          # Play on all maps
+	ALL_MAPS,          # Play on all maps
+	ABANDONED_WISHES, # Reach Wave 10
+	SHE_DESCENDS      # Spawn N01
 }
 
 const GENERAL_ID := "general"
@@ -68,6 +70,8 @@ func _ready() -> void:
 			EventBus.wave_started.connect(_on_wave_started)
 		if EventBus.has_signal("wave_completed"):
 			EventBus.wave_completed.connect(_on_wave_completed)
+		if EventBus.has_signal("biome_changed"):
+			EventBus.biome_changed.connect(_on_biome_changed)
 		if EventBus.has_signal("player_damaged"):
 			EventBus.player_damaged.connect(_on_player_damaged)
 	
@@ -127,6 +131,10 @@ func get_achievement_id(type: AchievementType, char_id: String) -> String:
 			return "no_damage"
 		AchievementType.ALL_MAPS:
 			return "all_maps"
+		AchievementType.ABANDONED_WISHES:
+			return "abandoned_wishes"
+		AchievementType.SHE_DESCENDS:
+			return "she_descends"
 	return ""
 
 
@@ -199,6 +207,32 @@ func get_character_achievements(char_id: String) -> Array[Dictionary]:
 			"unlocked": am_data.get("unlocked", false),
 			"progress": am_data.get("progress", 0),
 			"target": MAP_TARGET_COUNT
+		})
+		
+		# Abandoned Wishes
+		var aw_id := get_achievement_id(AchievementType.ABANDONED_WISHES, "")
+		var aw_data: Dictionary = _achievements.get(aw_id, {"unlocked": false, "progress": 0})
+		achievements.append({
+			"id": aw_id,
+			"title": "ABANDONED WISHES",
+			"desc": "Reach Wave 10",
+			"category": "GENERAL",
+			"unlocked": aw_data.get("unlocked", false),
+			"progress": aw_data.get("progress", 0),
+			"target": 1
+		})
+		
+		# She Descends
+		var sd_id := get_achievement_id(AchievementType.SHE_DESCENDS, "")
+		var sd_data: Dictionary = _achievements.get(sd_id, {"unlocked": false, "progress": 0})
+		achievements.append({
+			"id": sd_id,
+			"title": "SHE DESCENDS",
+			"desc": "Spawn N01",
+			"category": "GENERAL",
+			"unlocked": sd_data.get("unlocked", false),
+			"progress": sd_data.get("progress", 0),
+			"target": 1
 		})
 		
 		return achievements
@@ -414,6 +448,10 @@ func _get_target_for_type(type: AchievementType) -> int:
 			return 1
 		AchievementType.ALL_MAPS:
 			return MAP_TARGET_COUNT
+		AchievementType.ABANDONED_WISHES:
+			return 1
+		AchievementType.SHE_DESCENDS:
+			return 1
 	return 1
 
 
@@ -437,6 +475,10 @@ func _get_achievement_title(type: AchievementType, display_name: String) -> Stri
 			return "Untouchable"
 		AchievementType.ALL_MAPS:
 			return "World Traveler"
+		AchievementType.ABANDONED_WISHES:
+			return "ABANDONED WISHES"
+		AchievementType.SHE_DESCENDS:
+			return "SHE DESCENDS"
 	return "Unknown Achievement"
 
 
@@ -468,16 +510,16 @@ func _on_enemy_killed_event(enemy: Node, killer_source: String) -> void:
 func _on_run_started(map_id: String) -> void:
 	_current_map_id = map_id
 	_wave_damaged = false
-	
-	# Track map for World Traveler
-	_track_map_progress(map_id)
 
 
 func _on_run_completed(is_win: bool, map_id: String, _duration: float) -> void:
-	if is_win:
-		# Check First Blood (Stage 1)
-		if map_id == "stage_1":
-			_unlock_achievement(get_achievement_id(AchievementType.FIRST_BLOOD, ""), "", AchievementType.FIRST_BLOOD)
+	# Track first blood (Stage 1)
+	if is_win and map_id == "stage_1":
+		_unlock_achievement(get_achievement_id(AchievementType.FIRST_BLOOD, ""), "", AchievementType.FIRST_BLOOD)
+		
+func _on_biome_changed(biome_id: StringName) -> void:
+	# Track biome for World Traveler (Play on all environments)
+	_track_world_traveler_progress(str(biome_id))
 
 
 func _on_wave_started(_wave_number: int) -> void:
@@ -508,18 +550,25 @@ func _track_massacre_progress() -> void:
 		_save_achievements()
 
 
-func _track_map_progress(map_id: String) -> void:
+func _track_world_traveler_progress(biome_id: String) -> void:
 	var achievement_id := get_achievement_id(AchievementType.ALL_MAPS, "")
 	if not _achievements.has(achievement_id):
-		_achievements[achievement_id] = {"unlocked": false, "progress": 0, "maps_played": []}
+		_achievements[achievement_id] = {"unlocked": false, "progress": 0, "biomes_played": []}
 	
-	var played_maps: Array = _achievements[achievement_id].get("maps_played", [])
-	if map_id not in played_maps:
-		played_maps.append(map_id)
-		_achievements[achievement_id]["maps_played"] = played_maps
-		_achievements[achievement_id]["progress"] = played_maps.size()
+	# Check if using legacy key "maps_played" and migrate if needed
+	if _achievements[achievement_id].has("maps_played"):
+		_achievements[achievement_id]["biomes_played"] = _achievements[achievement_id]["maps_played"]
+		_achievements[achievement_id].erase("maps_played")
+	
+	var played_biomes: Array = _achievements[achievement_id].get("biomes_played", [])
+	if biome_id not in played_biomes:
+		played_biomes.append(biome_id)
+		_achievements[achievement_id]["biomes_played"] = played_biomes
+		_achievements[achievement_id]["progress"] = played_biomes.size()
 		
-		if played_maps.size() >= MAP_TARGET_COUNT:
+		print("[AchievementManager] World Traveler progress: Visited %s (%d/%d)" % [biome_id, played_biomes.size(), MAP_TARGET_COUNT])
+		
+		if played_biomes.size() >= MAP_TARGET_COUNT:
 			_unlock_achievement(achievement_id, "", AchievementType.ALL_MAPS)
 		
 		_save_achievements()

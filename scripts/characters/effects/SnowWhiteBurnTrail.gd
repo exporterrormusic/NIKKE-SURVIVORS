@@ -31,6 +31,16 @@ const MAX_POINTS := 150
 
 func _ready() -> void:
 	z_index = 8
+	
+	# Register mask proxy
+	if GrassMaskManager.instance:
+		_mask_proxy = TrailMaskProxy.new()
+		_mask_proxy.z_index = 0
+		GrassMaskManager.instance.add_eraser(_mask_proxy)
+
+func _exit_tree() -> void:
+	if _mask_proxy and is_instance_valid(_mask_proxy):
+		_mask_proxy.queue_free()
 
 func add_point(global_pos: Vector2) -> void:
 	# Limit points for performance
@@ -118,6 +128,57 @@ func _draw() -> void:
 	_draw_trail_layer(lengths, total_length, 1.0, Color(0.2, 0.5, 1.0, 0.4 * flicker) * inverse)   # Outer blue
 	_draw_trail_layer(lengths, total_length, 0.65, Color(0.4, 0.8, 1.0, 0.7 * flicker) * inverse)  # Mid cyan  
 	_draw_trail_layer(lengths, total_length, 0.3, Color(0.9, 1.0, 1.0, 0.9) * inverse)              # Core white
+
+	# Update Grass Mask Proxy
+	if _mask_proxy and is_instance_valid(_mask_proxy):
+		_mask_proxy.points = _points.duplicate()
+		_mask_proxy.widths.clear()
+		# Pre-calculate widths for the proxy to draw
+		for i in range(_points.size()):
+			var u := lengths[i] / total_length
+			var back_taper := _smoothstep(0.0, 0.12, u)
+			var front_taper := _smoothstep(1.0, 0.95, u)
+			_mask_proxy.widths.append(trail_width * back_taper * front_taper)
+		_mask_proxy.queue_redraw()
+
+var _mask_proxy: Node2D = null
+
+class TrailMaskProxy extends Node2D:
+	var points: PackedVector2Array = []
+	var widths: PackedFloat32Array = []
+	
+	func _draw() -> void:
+		if points.size() < 2: return
+		
+		# Draw solid white shape matching the trail
+		var top_pts := PackedVector2Array()
+		var bottom_pts := PackedVector2Array()
+		
+		for i in range(points.size()):
+			var pos := points[i]
+			# Viewport camera matches Main camera. So Global Coords work directly.
+			# We'll keep Proxy at (0,0).
+			
+			var perp := Vector2.UP
+			if i < points.size() - 1:
+				var dir := (points[i + 1] - points[i]).normalized()
+				perp = Vector2(-dir.y, dir.x)
+			elif i > 0:
+				var dir := (points[i] - points[i - 1]).normalized()
+				perp = Vector2(-dir.y, dir.x)
+			
+			var w = widths[i]
+			top_pts.append(pos - perp * w)
+			bottom_pts.append(pos + perp * w)
+			
+		var poly := PackedVector2Array()
+		poly.append_array(top_pts)
+		# Add bottom points in reverse
+		var rev_bottom = bottom_pts.duplicate()
+		rev_bottom.reverse()
+		poly.append_array(rev_bottom)
+		
+		draw_colored_polygon(poly, Color.WHITE)
 
 func _draw_trail_layer(lengths: PackedFloat32Array, total_length: float, width_mult: float, color: Color) -> void:
 	if _points.size() < 2:

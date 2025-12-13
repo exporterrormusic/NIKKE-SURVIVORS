@@ -23,7 +23,7 @@ const PLAYER_HIT_COLOR := Color(1.0, 0.3, 0.3, 1.0)  # Red
 const BLOOM_BOOST := 1.5
 
 const SPARK_SIZE := 35.0  # Bigger sparks
-const LINE_COUNT := 6  # More spark lines
+const LINE_COUNT := 4  # Reduced from 6 for performance
 
 func _ready() -> void:
 	z_index = 50
@@ -71,7 +71,7 @@ func _draw() -> void:
 	
 	var current_size = SPARK_SIZE * _scale_anim * size_mult
 	
-	# Draw star burst pattern
+	# Draw star burst pattern (simplified for performance)
 	for i in range(LINE_COUNT):
 		var angle = (TAU / LINE_COUNT) * i
 		var line_dir = Vector2.from_angle(angle)
@@ -79,21 +79,10 @@ func _draw() -> void:
 		# Main line - THICKER
 		var line_end = line_dir * current_size
 		draw_line(Vector2.ZERO, line_end, bloom_color, 4.0 * _scale_anim, true)
-		
-		# Secondary shorter lines between main lines
-		var secondary_angle = angle + (TAU / LINE_COUNT) * 0.5
-		var secondary_dir = Vector2.from_angle(secondary_angle)
-		var secondary_end = secondary_dir * current_size * 0.5
-		draw_line(Vector2.ZERO, secondary_end, bloom_color, 2.5 * _scale_anim, true)
 	
-	# Center glow circle
-	var glow_color = bloom_color
-	glow_color.a = alpha * 0.6
-	draw_circle(Vector2.ZERO, current_size * 0.3, glow_color)
-	
-	# Bright center - boost white for bloom
+	# Bright center only - removed outer glow for performance
 	var center_color = Color(BLOOM_BOOST, BLOOM_BOOST, BLOOM_BOOST, alpha)
-	draw_circle(Vector2.ZERO, current_size * 0.15, center_color)
+	draw_circle(Vector2.ZERO, current_size * 0.2, center_color)
 
 # ============ STATIC SPAWNERS ============
 

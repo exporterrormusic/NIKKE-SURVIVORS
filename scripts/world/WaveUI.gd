@@ -37,6 +37,23 @@ const BAR_FLASH_COLOR := Color(1.0, 0.9, 0.5, 1.0)
 const BAR_BORDER_COLOR := Color(0.4, 0.45, 0.5, 1.0)
 
 
+# Local override to ensure UI stays correct even if GameState flags are flaky
+var _goddess_mode_override: bool = false
+
+func set_goddess_mode(enabled: bool) -> void:
+	_goddess_mode_override = enabled
+	if enabled:
+		# Force redraw/update immediately
+		if _wave_label:
+			_wave_label.text = "ENDGAME"
+			_wave_label.add_theme_color_override("font_color", Color(1.0, 0.2, 0.2))
+		if _timer_label:
+			_timer_label.text = "2:55"
+			_timer_label.add_theme_color_override("font_color", Color.WHITE)
+		if _progress_bar:
+			_progress_bar.queue_redraw()
+
+
 func _ready() -> void:
 	_setup_ui()
 
@@ -60,23 +77,26 @@ func _setup_ui() -> void:
 	_progress_container.add_child(_progress_bar)
 	_progress_bar.draw.connect(_draw_progress_bar)
 	
-	# Timer label (left side)
+	# Timer label (Centered)
 	_timer_label = Label.new()
 	_timer_label.name = "TimerLabel"
-	_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_timer_label.set_anchors_preset(Control.PRESET_FULL_RECT) # Cover whole bar
+	_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_timer_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_timer_label.add_theme_font_size_override("font_size", 18)
+	_timer_label.add_theme_font_size_override("font_size", 20) # Slightly bigger
 	_timer_label.add_theme_color_override("font_color", Color.WHITE)
 	_timer_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
 	_timer_label.add_theme_constant_override("shadow_offset_x", 1)
 	_timer_label.add_theme_constant_override("shadow_offset_y", 1)
 	_timer_label.text = "0:00"
-	_timer_label.position = Vector2(10, 0)
-	_timer_label.size = Vector2(60, BAR_HEIGHT)
 	_progress_container.add_child(_timer_label)
 	
-	# Wave label removed - wave number is shown in warnings instead
-	# The progress bar just shows timer on the left
+	# Boss warning - thin red bar across middle of screen
+	var warning_container := Control.new()
+	warning_container.name = "WarningContainer"
+	warning_container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	warning_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(warning_container)
 	
 	# Event notification (center screen, larger)
 	_event_label = Label.new()
@@ -95,13 +115,6 @@ func _setup_ui() -> void:
 	_event_label.size = Vector2(400, 60)
 	add_child(_event_label)
 	
-	# Boss warning - thin red bar across middle of screen
-	var warning_container := Control.new()
-	warning_container.name = "WarningContainer"
-	warning_container.set_anchors_preset(Control.PRESET_FULL_RECT)
-	warning_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(warning_container)
-	
 	_boss_warning = preload("res://scripts/world/WarningBar.gd").new()
 	_boss_warning.name = "BossWarning"
 	_boss_warning.visible = false
@@ -112,18 +125,30 @@ func _draw_progress_bar() -> void:
 	var bar := _progress_bar
 	var rect := Rect2(Vector2.ZERO, bar.size)
 	
+	# Check mode for colors
+	var is_goddess: bool = _goddess_mode_override
+	if GameState and (GameState.she_descends_mode or GameState.goddess_fall_mode):
+		is_goddess = true
+	
 	# Background
-	bar.draw_rect(rect, BAR_BG_COLOR)
+	var bg_color := BAR_BG_COLOR
+	if is_goddess:
+		bg_color = Color.BLACK # Black background for Goddess mode
+	bar.draw_rect(rect, bg_color)
 	
 	# Fill based on progress within current wave
 	var fill_width := rect.size.x * _current_progress
 	var fill_rect := Rect2(Vector2.ZERO, Vector2(fill_width, rect.size.y))
 	
-	# Flash when wave changes
+	# Fill Color
 	var fill_color := BAR_FILL_COLOR
+	if is_goddess:
+		fill_color = Color(0.9, 0.0, 0.0, 1.0) # Red fill for Goddess mode
+	
+	# Flash when wave changes
 	if _bar_flash_timer > 0:
 		var flash_t := _bar_flash_timer / 0.5
-		fill_color = BAR_FILL_COLOR.lerp(BAR_FLASH_COLOR, flash_t)
+		fill_color = fill_color.lerp(BAR_FLASH_COLOR, flash_t)
 	
 	bar.draw_rect(fill_rect, fill_color)
 	
@@ -141,6 +166,15 @@ func _draw_progress_bar() -> void:
 
 
 func _process(delta: float) -> void:
+	# Force override for She Descends mode
+	var is_goddess: bool = _goddess_mode_override
+	if GameState and (GameState.she_descends_mode or GameState.goddess_fall_mode):
+		is_goddess = true
+		
+	if is_goddess:
+		if _wave_label and _wave_label.text != "ENDGAME":
+			_wave_label.text = "ENDGAME"
+			
 	# Smooth progress bar
 	_current_progress = lerp(_current_progress, _target_progress, delta * 8.0)
 	if _progress_bar:
@@ -164,7 +198,64 @@ func _process(delta: float) -> void:
 
 
 func update_time(elapsed: float, remaining: float) -> void:
+	# Special Countdown for Goddess Fall / She Descends (2:55 = 175s)
+	
+	var is_goddess: bool = _goddess_mode_override
+	if GameState and (GameState.she_descends_mode or GameState.goddess_fall_mode):
+		is_goddess = true
+
+	if is_goddess:
+		# Use elapsed to calculate count DOWN from 175s
+		var total_duration := 175.0
+		var time_left := clampf(total_duration - elapsed, 0.0, total_duration)
+		
+		@warning_ignore("integer_division")
+		var mins := int(time_left) / 60
+		var secs := int(time_left) % 60
+		
+		if _timer_label:
+			_timer_label.text = "%d:%02d" % [mins, secs]
+			_timer_label.add_theme_color_override("font_color", Color.WHITE) # White timer
+			
+		# Bar empties as time runs out (visual countdown)
+		# 175s total duration. Starts at 1.0, goes to 0.0.
+		_target_progress = time_left / total_duration
+		_current_progress = _target_progress
+		if _progress_bar:
+			_progress_bar.queue_redraw()
+		
+	else:
+		# Standard Mode: Count UP using elapsed or DOWN using remaining if defined
+		# Default WaveDirector uses remaining for wave timer.
+		var t_val: float = remaining if remaining > 0 else elapsed
+		
+		@warning_ignore("integer_division")
+		var mins := int(t_val) / 60
+		var secs := int(t_val) % 60
+		
+		if _timer_label:
+			_timer_label.text = "%d:%02d" % [mins, secs]
+			_timer_label.remove_theme_color_override("font_color")
+	if GameState and (GameState.she_descends_mode or GameState.goddess_fall_mode):
+		var total_duration := 175.0
+		var time_left := clampf(total_duration - elapsed, 0.0, total_duration)
+		
+		@warning_ignore("integer_division")
+		var mins := int(time_left) / 60
+		var secs := int(time_left) % 60
+		
+		if _timer_label:
+			_timer_label.text = "%d:%02d" % [mins, secs]
+			_timer_label.add_theme_color_override("font_color", Color.WHITE) # White timer (User Request)
+			
+		# Bar empties as time runs out (visual countdown)
+		# 175s total duration. Starts at 1.0, goes to 0.0.
+		_target_progress = clampf(1.0 - (elapsed / total_duration), 0.0, 1.0)
+		return
+
+	# Standard Logic
 	if _timer_label:
+		_timer_label.remove_theme_color_override("font_color") # Reset color
 		@warning_ignore("integer_division")
 		var mins := int(elapsed) / 60
 		var secs := int(elapsed) % 60
@@ -191,7 +282,16 @@ func update_wave(wave_number: int) -> void:
 	_current_wave = wave_number
 	
 	if _wave_label:
-		_wave_label.text = "WAVE %d" % wave_number
+		var is_goddess: bool = _goddess_mode_override
+		if GameState and (GameState.she_descends_mode or GameState.goddess_fall_mode):
+			is_goddess = true
+			
+		if is_goddess:
+			_wave_label.text = "ENDGAME"
+			_wave_label.add_theme_color_override("font_color", Color(1.0, 0.2, 0.2)) # Red text
+		else:
+			_wave_label.text = "WAVE %d" % wave_number
+			_wave_label.remove_theme_color_override("font_color")
 
 
 func show_event(event_type: String, event_data: Dictionary, elapsed_time: float = 0.0) -> void:
@@ -207,8 +307,16 @@ func show_event(event_type: String, event_data: Dictionary, elapsed_time: float 
 	var text := ""
 	var show_warning_bar := false
 	
+	# Helper buffer for text
+	var is_she_descends: bool = (GameState and (GameState.get("she_descends_mode") or GameState.get("goddess_fall_mode")))
+	var custom_text: String = "ENDGAME"
+	
 	match event_type:
 		"wave":
+			# Surpress wave notification in She Descends mode
+			if is_she_descends:
+				return
+			
 			# Show wave number (only for wave 2+)
 			var wave_num: int = event_data.get("wave", _current_wave)
 			text = "WAVE %d" % wave_num
@@ -216,12 +324,12 @@ func show_event(event_type: String, event_data: Dictionary, elapsed_time: float 
 		"horde":
 			# Horde is just a wave with more enemies (only for wave 2+)
 			var wave_num: int = event_data.get("wave", _current_wave)
-			text = "WAVE %d" % wave_num
+			text = custom_text if is_she_descends else "WAVE %d" % wave_num
 			show_warning_bar = true
 		"elite":
 			# Elite spawn - still show wave number (only for wave 2+)
 			var wave_num: int = event_data.get("wave", _current_wave)
-			text = "WAVE %d" % wave_num
+			text = custom_text if is_she_descends else "WAVE %d" % wave_num
 			show_warning_bar = true
 		"boss":
 			var boss_name: String = event_data.get("name", "BOSS")

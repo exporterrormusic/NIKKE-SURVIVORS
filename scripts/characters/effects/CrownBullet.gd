@@ -5,6 +5,7 @@ class_name CrownBullet
 
 var velocity: Vector2 = Vector2.ZERO
 var owner_node: Node = null
+var killer_source: String = "minigun"  # For ShielderShield collision detection
 var base_damage: int = 2
 var lifespan: float = 3.0
 var _age: float = 0.0
@@ -74,6 +75,11 @@ func _process(delta: float) -> void:
 	if _check_boulder_collision():
 		queue_free()
 		return
+		
+	# Check shield collision (Manual check due to reparenting)
+	if _check_shield_collision():
+		queue_free()
+		return
 	
 	# Redraw for shader animation
 	queue_redraw()
@@ -89,6 +95,39 @@ func _check_boulder_collision() -> bool:
 		if global_position.distance_to(boulder_pos) < boulder_radius:
 			return true
 	return false
+
+func _check_shield_collision() -> bool:
+	"""Manual shield collision check."""
+	# Check boss shields first
+	var shields := get_tree().get_nodes_in_group("boss_shields")
+	# Also check generic shields
+	shields.append_array(get_tree().get_nodes_in_group("shielder_shields"))
+	
+	for shield in shields:
+		if not is_instance_valid(shield): continue
+		if shield.has_method("is_active") and not shield.is_active(): continue
+		if not (shield is Node2D): continue
+		
+		# Determine radius
+		var radius: float = 120.0
+		if "shield_radius" in shield:
+			radius = shield.shield_radius
+		
+		if global_position.distance_to((shield as Node2D).global_position) < radius:
+			if shield.has_method("take_shield_damage"):
+				var dmg = _calculate_damage()
+				shield.take_shield_damage(dmg, "minigun")
+				return true
+	return false
+
+func _calculate_damage() -> int:
+	var crit_chance := BASE_CRIT_CHANCE
+	var player = get_tree().get_first_node_in_group("player")
+	if player and player.has_method("get_crit_chance"):
+		crit_chance += player.get_crit_chance()
+	crit_chance = minf(crit_chance, 1.0)
+	var is_crit := randf() < crit_chance
+	return int(base_damage * CRIT_MULTIPLIER) if is_crit else base_damage
 
 
 func _draw() -> void:
@@ -160,9 +199,9 @@ func _hit_target(target: Node) -> void:
 		var hit_direction := velocity.normalized()
 		target.take_damage(damage, is_crit, hit_direction)
 		
-		# Register burst hit
+		# Register burst hit with weapon type
 		if owner_node and owner_node.has_method("register_burst_hit"):
-			owner_node.register_burst_hit(target)
+			owner_node.register_burst_hit(target, false, "minigun", false)
 	
 	# Destroy bullet after hitting
 	queue_free()

@@ -60,4 +60,4 @@ func _apply_damage() -> void:
 	damage = maxi(damage, 1)  # At least 1 damage per tick
 	
 	# Apply damage without crit (burn is consistent damage)
-	_target.take_damage(damage, false, Vector2.ZERO)
+	_target.take_damage(damage, false, Vector2.ZERO, false, "burn_dot")

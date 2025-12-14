@@ -27,9 +27,14 @@ var _has_dealt_damage: bool = false
 var player_level: int = 1
 
 # Talent bonuses
+# Talent bonuses
 var burn_level: int = 0  # 0=none, 1-3=talent level for frostburn
 var gauge_on_kill: bool = false  # Soul Harvest talent
 var _enemies_killed: int = 0  # Track kills for gauge generation
+
+# Source identification for Shield/Burst logic
+var source: String = "SnowWhiteBurst"
+var killer_source: String = "SnowWhiteBurst"
 
 func _ready() -> void:
 	set_physics_process(true)
@@ -139,7 +144,7 @@ func _apply_cone_damage() -> void:
 				var shield_id = shield_root.get_instance_id()
 				if not hit_shields.has(shield_id):
 					print("[SnowWhiteBeam] Damaging Shield: ", shield_root.name)
-					shield_root.take_shield_damage(scaled_damage)
+					shield_root.take_shield_damage(scaled_damage, "SnowWhiteBurst")
 					hit_shields[shield_id] = true
 			
 			# BLOCK the hit on the enemy (Snow White's beam does not pierce shields)
@@ -154,13 +159,16 @@ func _apply_cone_damage() -> void:
 			enemy_hp_before = enemy.hp
 		
 		if enemy.has_method("take_damage"):
-			enemy.take_damage(scaled_damage, false, hit_direction, true)  # from_burst = true
+			enemy.take_damage(scaled_damage, false, hit_direction, true, "SnowWhiteBurst")  # from_burst = true
+		elif enemy.has_method("apply_damage_with_source"):
+			enemy.apply_damage_with_source(scaled_damage, "SnowWhiteBurst")
 		elif enemy.has_method("apply_damage"):
-			enemy.apply_damage(scaled_damage)
-		
+			enemy.apply_damage(scaled_damage, "SnowWhiteBurst")
+			
 		# Check if enemy was killed
 		if "hp" in enemy and enemy.hp <= 0 and enemy_hp_before > 0:
 			_enemies_killed += 1
+
 	
 	# Apply frostburn DOT to surviving enemies if talent is unlocked
 	if burn_level > 0:

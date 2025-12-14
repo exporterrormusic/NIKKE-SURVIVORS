@@ -214,7 +214,7 @@ func get_character_achievements(char_id: String) -> Array[Dictionary]:
 		var aw_data: Dictionary = _achievements.get(aw_id, {"unlocked": false, "progress": 0})
 		achievements.append({
 			"id": aw_id,
-			"title": "ABANDONED WISHES",
+			"title": "Abandoned Wishes",
 			"desc": "Reach Wave 10",
 			"category": "GENERAL",
 			"unlocked": aw_data.get("unlocked", false),
@@ -227,7 +227,7 @@ func get_character_achievements(char_id: String) -> Array[Dictionary]:
 		var sd_data: Dictionary = _achievements.get(sd_id, {"unlocked": false, "progress": 0})
 		achievements.append({
 			"id": sd_id,
-			"title": "SHE DESCENDS",
+			"title": "She Descends",
 			"desc": "Spawn N01",
 			"category": "GENERAL",
 			"unlocked": sd_data.get("unlocked", false),
@@ -476,9 +476,9 @@ func _get_achievement_title(type: AchievementType, display_name: String) -> Stri
 		AchievementType.ALL_MAPS:
 			return "World Traveler"
 		AchievementType.ABANDONED_WISHES:
-			return "ABANDONED WISHES"
+			return "Abandoned Wishes"
 		AchievementType.SHE_DESCENDS:
-			return "SHE DESCENDS"
+			return "She Descends"
 	return "Unknown Achievement"
 
 

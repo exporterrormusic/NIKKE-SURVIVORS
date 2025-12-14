@@ -64,6 +64,19 @@ func add_burst(from_burst: bool = false) -> void:
 		burst_ready.emit()
 
 
+func gain_burst(amount: float) -> void:
+	"""Add arbitrary burst amount (e.g. from damage dealt)."""
+	if not is_unlocked():
+		return
+		
+	var was_ready := is_ready()
+	burst_current = minf(burst_current + amount, burst_max)
+	burst_changed.emit(burst_current, burst_max)
+	
+	if is_ready() and not was_ready:
+		burst_ready.emit()
+
+
 func use_burst() -> bool:
 	"""Attempt to use burst. Returns true if successful."""
 	if not is_ready():

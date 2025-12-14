@@ -224,7 +224,8 @@ func _on_freeze_complete(frozen_enemies: Array) -> void:
 			if burst_boss_damage and enemy.has_method("take_damage"):
 				var max_hp_val: int = enemy.get("max_hp") if enemy.get("max_hp") else 100
 				var damage := int(max_hp_val * BURST_BOSS_DAMAGE_PERCENT)
-				enemy.take_damage(damage, false, Vector2.ZERO, true)
+				# Tag as CecilBurst so it doesn't recharge burst
+				enemy.take_damage(damage, false, Vector2.ZERO, true, "CecilBurst")
 		else:
 			# Hack (charm) non-elite enemies
 			_hack_enemy(enemy)

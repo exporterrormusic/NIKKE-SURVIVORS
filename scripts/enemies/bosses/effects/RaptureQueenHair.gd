@@ -111,10 +111,16 @@ func _draw_clump(clump: Dictionary) -> void:
 		var p3 = points_right[j+1]
 		var p4 = points_right[j]
 		
-		# Draw as two triangles to be absolutely robust against "bowtie" quads
-		# Triangles cannot fail triangulation
-		draw_colored_polygon(PackedVector2Array([p1, p2, p4]), HAIR_COLOR)
-		draw_colored_polygon(PackedVector2Array([p2, p3, p4]), HAIR_COLOR)
+		# Draw as two triangles to be absolutely robust to invalid geometry
+		# And validate area is non-zero
+		var tri1 = PackedVector2Array([p1, p2, p4])
+		var tri2 = PackedVector2Array([p2, p3, p4])
+		
+		# Only draw if points are distinct (simple check)
+		if not p1.is_equal_approx(p2) and not p1.is_equal_approx(p4) and not p2.is_equal_approx(p4):
+			draw_colored_polygon(tri1, HAIR_COLOR)
+		if not p2.is_equal_approx(p3) and not p2.is_equal_approx(p4) and not p3.is_equal_approx(p4):
+			draw_colored_polygon(tri2, HAIR_COLOR)
 	
 	# Optional: Draw highlight line on top
 	# draw_polyline(points_left, HIGHLIGHT_COLOR, 2.0)

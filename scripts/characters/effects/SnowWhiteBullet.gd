@@ -11,6 +11,8 @@ const SnowWhiteBurnTrailScript = preload("res://scripts/characters/effects/SnowW
 var velocity := Vector2.ZERO
 var lifetime: float = 0.0
 var owner_node: Node = null
+var killer_source: String = "sniper"  # For ShielderShield and other collision handlers
+var killer_source_override: String = ""  # For manual override (e.g., summons)
 var start_position: Vector2 = Vector2.ZERO
 var _start_position_set: bool = false
 
@@ -141,7 +143,11 @@ func _handle_hit(target: Node, is_shield: bool = false) -> void:
 	var hit_direction = velocity.normalized()
 	
 	if is_shield:
-		target.take_shield_damage(damage)
+		# Determine killer source for burst tracking
+		var shield_source := "sniper"
+		if killer_source_override != "":
+			shield_source = killer_source_override
+		target.take_shield_damage(damage, shield_source)
 		# Force stop on shield hit (Shields block piercing shots)
 		_finalize_trail()
 		queue_free()
@@ -152,12 +158,15 @@ func _handle_hit(target: Node, is_shield: bool = false) -> void:
 		if target.has_method("is_protected_by_shield") and target.is_protected_by_shield():
 			protected = true
 			
-		# Determine killer source for burst tracking
-		var killer_source := "player"
-		if is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
-			killer_source = "summon"
+		# Determine killer source for burst tracking and Goddess Fall XP
+		var effective_source := killer_source  # Use class property (defaults to "sniper")
+		if killer_source_override != "":
+			effective_source = killer_source_override
+		elif is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
+			effective_source = "summon"
 			
-		target.take_damage(damage, is_crit, hit_direction, false, killer_source)
+		var is_burst_attack: bool = "burst" in effective_source.to_lower()
+		target.take_damage(damage, is_crit, hit_direction, is_burst_attack, effective_source)
 		
 		# If protected, the damage was redirected to the shield, but we MUST stop the bullet from piercing
 		if protected:

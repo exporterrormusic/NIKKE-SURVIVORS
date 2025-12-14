@@ -152,7 +152,7 @@ func _on_body_entered(body: Node) -> void:
 	
 	# Determine killer source based on owner type
 	var hit_direction := velocity.normalized() if velocity.length() > 0 else Vector2.RIGHT
-	var killer_source := "player"
+	var killer_source := "sword"  # Scarlet weapon type for BurstConfig (5% per hit)
 	if is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
 		killer_source = "summon"
 	

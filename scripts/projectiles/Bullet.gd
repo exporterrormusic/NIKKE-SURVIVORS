@@ -24,6 +24,14 @@ const BASE_CRIT_CHANCE := 0.15  # 15% base chance to crit
 const CRIT_MULTIPLIER := 2.0  # 2x damage on crit
 var base_damage := 3
 
+# Weapon type source for Goddess Fall XP/Burst tracking
+var weapon_type_source: String = ""
+
+# For ShielderShield collision detection - uses weapon_type_source or defaults to "smg"
+var killer_source: String:
+	get:
+		return weapon_type_source if weapon_type_source != "" else "smg"
+
 var _hit_nodes: Array = []
 
 # Default max ranges by weapon type
@@ -248,8 +256,8 @@ func _on_body_entered(body):
 	# Pass hit direction (bullet's travel direction) to enemy for knockback visual
 	var hit_direction = velocity.normalized()
 	
-	# Determine killer source based on owner type
-	var killer_source := "player"
+	# Determine killer source based on owner type and weapon type
+	var killer_source := weapon_type_source if weapon_type_source != "" else "player"
 	if is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
 		killer_source = "summon"
 	

@@ -74,6 +74,10 @@ var invincible: bool = false:
 	get: return _health.invincible if _health else false
 	set(value): if _health: _health.invincible = value
 
+func add_invincibility(duration: float) -> void:
+	if _health:
+		_health.add_invincibility(duration)
+
 # Progression system (delegated)
 var _progression: PlayerProgression = null
 # Legacy accessors (for compatibility)
@@ -139,6 +143,19 @@ func _ready() -> void:
 	set_collision_mask_value(2, false) # Don't collide with other players/allies
 	
 	_create_shadow()
+	
+	# Register default squad switching actions if they don't exist
+	if not InputMap.has_action("next_character"):
+		InputMap.add_action("next_character")
+		var ev = InputEventMouseButton.new()
+		ev.button_index = MOUSE_BUTTON_WHEEL_UP
+		InputMap.action_add_event("next_character", ev)
+		
+	if not InputMap.has_action("prev_character"):
+		InputMap.add_action("prev_character")
+		var ev = InputEventMouseButton.new()
+		ev.button_index = MOUSE_BUTTON_WHEEL_DOWN
+		InputMap.action_add_event("prev_character", ev)
 	
 	# Register sprite for night glow effect (Managed via universal shader now)
 	# if _animator:
@@ -598,6 +615,17 @@ func get_base_damage() -> float:
 func calc_damage(multiplier: float = 1.0) -> int:
 	return calculate_damage(get_base_damage(), multiplier)
 
+## Add burst charge directly (e.g. from Goddess Fall mechanics)
+func add_burst_charge(amount: float) -> void:
+	if _burst_system:
+		_burst_system.gain_burst(amount)
+		# Debug for infinite burst
+		print("[PlayerCore] AddBurst: ", amount, " NewVal: ", _burst_system.burst_current, " Max: ", _burst_system.burst_max)
+
+func gain_burst(amount: float) -> void:
+	"""Alias for add_burst_charge."""
+	add_burst_charge(amount)
+
 func is_burst_unlocked() -> bool:
 	if _current_controller:
 		# Check if burst talent is unlocked for this character
@@ -802,33 +830,82 @@ func _heal_nayuta_clones(player_heal_amount: int) -> void:
 
 # ============= BURST SYSTEM =============
 
-func register_burst_hit(_target = null, from_burst: bool = false) -> void:
+func register_burst_hit(_target = null, from_burst: bool = false, weapon_type: String = "", is_summon: bool = false) -> void:
+	## Register a hit for burst generation using per-weapon-type percentages.
+	## weapon_type: String identifier for the weapon (e.g., "sniper", "smg", "minigun")
+	## is_summon: If true, applies 1/3 rate multiplier
 	if from_burst:
 		return
 	if not is_burst_unlocked():
 		return
 	
+	# Get burst rate from BurstConfig based on weapon type
+	var burst_rate: float
+	if weapon_type == "":
+		# Fallback: try to get from current character
+		weapon_type = _get_current_weapon_type()
+	
+	if is_summon:
+		burst_rate = BurstConfig.get_summon_rate(weapon_type)
+	else:
+		burst_rate = BurstConfig.get_rate(weapon_type)
+	
 	# Commander "Obviously Anderson" upgrade: 2x burst generation
-	var burst_gain: float = burst_per_hit
-	
-
-	
 	if _has_commander_burst_upgrade:
-		burst_gain *= 2.0
+		burst_rate *= 2.0
 	
-	burst_current = min(burst_current + burst_gain, burst_max)
+	burst_current = min(burst_current + burst_rate, burst_max)
 	if player_hud:
 		player_hud.update_burst(burst_current, burst_max, true)
 	if overhead_hud:
 		overhead_hud.update_burst(burst_current, burst_max)
 
+func _get_current_weapon_type() -> String:
+	## Get weapon type string for current character
+	if not _registry:
+		return "smg"  # Fallback
+	
+	var all_ids = _registry.get_all_character_ids()
+	if current_character < 0 or current_character >= _selected_char_indices.size():
+		return "smg"
+	
+	var char_idx = _selected_char_indices[current_character]
+	if char_idx < 0 or char_idx >= all_ids.size():
+		return "smg"
+	
+	var char_id = all_ids[char_idx]
+	
+	# Map character ID to weapon type
+	match char_id:
+		"snow_white":
+			return "sniper"
+		"scarlet":
+			return "sword"
+		"rapunzel":
+			return "rocket"
+		"commander":
+			return "assault"
+		"nayuta", "cecil", "sin":
+			return "smg"
+		"marian", "crown":
+			return "minigun"
+		"kilo":
+			return "shotgun"
+		_:
+			return "smg"
+
 func is_burst_ready() -> bool:
+	if _burst_system:
+		return _burst_system.is_ready()
 	return burst_current >= burst_max
 
 func use_burst() -> bool:
 	if not is_burst_ready():
 		return false
-	# Debug: don't consume burst if infinite burst enabled
+	# Delegate to BurstSystem to ensure proper reset and signal emission
+	if _burst_system:
+		return _burst_system.use_burst()
+	# Legacy fallback if BurstSystem not available
 	if not (has_meta("debug_infinite_burst") and get_meta("debug_infinite_burst")):
 		burst_current = 0.0
 	if player_hud:
@@ -851,9 +928,24 @@ func _attempt_burst_activation() -> void:
 			_current_controller.activate_burst()
 
 func _play_burst_voice() -> void:
-	if current_character < 0 or current_character >= _burst_sounds.size():
-		return
-	var sound = _burst_sounds[current_character]
+	# Get current character ID for runtime sound lookup
+	var char_id: String = ""
+	if _registry and current_character >= 0:
+		var all_ids = _registry.get_all_character_ids()
+		if current_character < _selected_char_indices.size():
+			var char_idx = _selected_char_indices[current_character]
+			if char_idx >= 0 and char_idx < all_ids.size():
+				char_id = all_ids[char_idx]
+	
+	# Get sound at runtime (enables Commander random selection)
+	var sound: AudioStream = null
+	if char_id != "" and _registry:
+		sound = _registry.get_burst_sound(char_id)
+	else:
+		# Fallback to cached sound
+		if current_character >= 0 and current_character < _burst_sounds.size():
+			sound = _burst_sounds[current_character]
+	
 	if sound == null:
 		return
 	
@@ -919,6 +1011,7 @@ func _on_progression_level_up(new_level: int, skill_points_gained: int) -> void:
 	
 	# UI flash
 	if xp_ui and xp_ui.has_method("flash_level_up"):
+		xp_ui.set_level(new_level)
 		xp_ui.flash_level_up()
 	
 	# Play level up sound
@@ -1457,12 +1550,11 @@ func _input(event: InputEvent) -> void:
 	if shop_open:
 		return
 	
-	# Mouse wheel for character switching
-	if event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			switch_character(1)  # Next character
-		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			switch_character(-1)  # Previous character
+	# Character switching (using remappable actions)
+	if event.is_action_pressed("next_character"):
+		switch_character(1)
+	elif event.is_action_pressed("prev_character"):
+		switch_character(-1)
 	
 	# Keyboard inputs
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -1481,6 +1573,8 @@ func _input(event: InputEvent) -> void:
 				_try_manual_reload()
 			KEY_TAB:
 				_show_talent_tree()
+
+
 
 func _select_character_by_index(index: int) -> void:
 	if index in unlocked_characters and index in _controllers:

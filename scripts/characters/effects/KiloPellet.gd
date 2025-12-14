@@ -8,6 +8,7 @@ class_name KiloPellet
 var velocity := Vector2.ZERO
 var lifetime := 0.0
 var owner_node: Node = null
+var killer_source: String = "shotgun"  # For ShielderShield collision detection
 var start_position := Vector2.ZERO
 var _start_position_set := false  # Track if start position has been captured
 
@@ -170,8 +171,7 @@ func _draw_connecting_lines() -> void:
 		_draw_special_web_lines(pellet_array)
 
 func _draw_burst_zigzag_lines(pellet_array: Array[KiloPellet]) -> void:
-	# Find our connection partner(s) for zigzag pattern
-	# Each wave alternates: wave 0 connects right-to-left, wave 1 connects left-to-right
+	# AGGRESSIVE CONNECTION: Connect all pellets in adjacent waves to create full coverage
 	
 	for pellet in pellet_array:
 		if pellet == self or not is_instance_valid(pellet):
@@ -185,48 +185,12 @@ func _draw_burst_zigzag_lines(pellet_array: Array[KiloPellet]) -> void:
 			if pellet.pellet_index == pellet_index + 1:
 				should_connect = true
 		
-		# Adjacent waves: connect edge pellets for zigzag
-		elif pellet.wave_index == wave_index + 1:
-			# From wave N to wave N+1
-			# Even waves: rightmost (high index) connects to rightmost of next wave
-			# Odd waves: leftmost (index 0) connects to leftmost of next wave
-			if wave_index % 2 == 0:
-				# Even wave: connect our rightmost to their rightmost
-				# We are the rightmost if we have highest pellet_index in our wave
-				var our_wave_pellets := pellet_array.filter(func(p): return is_instance_valid(p) and p.wave_index == wave_index)
-				var their_wave_pellets := pellet_array.filter(func(p): return is_instance_valid(p) and p.wave_index == wave_index + 1)
-				
-				if our_wave_pellets.size() > 0 and their_wave_pellets.size() > 0:
-					var our_max_idx := 0
-					var their_max_idx := 0
-					for p in our_wave_pellets:
-						if p.pellet_index > our_max_idx:
-							our_max_idx = p.pellet_index
-					for p in their_wave_pellets:
-						if p.pellet_index > their_max_idx:
-							their_max_idx = p.pellet_index
-					
-					# We connect if we're the rightmost and they're the rightmost
-					if pellet_index == our_max_idx and pellet.pellet_index == their_max_idx:
-						should_connect = true
-			else:
-				# Odd wave: connect our leftmost to their leftmost
-				var our_wave_pellets := pellet_array.filter(func(p): return is_instance_valid(p) and p.wave_index == wave_index)
-				var their_wave_pellets := pellet_array.filter(func(p): return is_instance_valid(p) and p.wave_index == wave_index + 1)
-				
-				if our_wave_pellets.size() > 0 and their_wave_pellets.size() > 0:
-					var our_min_idx := 999
-					var their_min_idx := 999
-					for p in our_wave_pellets:
-						if p.pellet_index < our_min_idx:
-							our_min_idx = p.pellet_index
-					for p in their_wave_pellets:
-						if p.pellet_index < their_min_idx:
-							their_min_idx = p.pellet_index
-					
-					# We connect if we're the leftmost and they're the leftmost
-					if pellet_index == our_min_idx and pellet.pellet_index == their_min_idx:
-						should_connect = true
+		# Adjacent waves: CONNECT ALL PELLETS (more aggressive than before)
+		elif abs(pellet.wave_index - wave_index) == 1:
+			# Connect ALL pellets between adjacent waves for full coverage
+			# Only draw from lower wave to higher wave to avoid double drawing
+			if pellet.wave_index > wave_index:
+				should_connect = true
 		
 		if not should_connect:
 			continue
@@ -416,7 +380,8 @@ func _check_line_damage(_delta: float) -> void:
 			var line_damage: int = maxi(1, int(base_damage * 0.5))
 			var hit_dir: Vector2 = (enemy_pos - point_on_line).normalized()
 			# Pass is_burst as from_burst to prevent burst charge during burst attacks
-			enemy.take_damage(line_damage, false, hit_dir, is_burst)
+			var source_name := "KiloBurst" if is_burst else "projectile"
+			enemy.take_damage(line_damage, false, hit_dir, is_burst, source_name)
 			_line_hit_enemies[enemy_id] = now
 
 func _closest_point_on_segment(a: Vector2, b: Vector2, p: Vector2) -> Vector2:
@@ -452,11 +417,12 @@ func _on_body_entered(body: Node2D) -> void:
 	
 	var hit_direction := velocity.normalized()
 	# Pass is_burst as from_burst to prevent burst charge during burst attacks
-	body.take_damage(damage, is_crit, hit_direction, is_burst)
+	var source_name := "KiloBurst" if is_burst else "projectile"
+	body.take_damage(damage, is_crit, hit_direction, is_burst, source_name)
 	
-	# Register burst hit (only if not from burst)
+	# Register burst hit with weapon type (only if not from burst)
 	if owner_node and owner_node.has_method("register_burst_hit"):
-		owner_node.register_burst_hit(body, is_burst)
+		owner_node.register_burst_hit(body, is_burst, "shotgun", false)
 		
 	_hit_nodes.append(body)
 	

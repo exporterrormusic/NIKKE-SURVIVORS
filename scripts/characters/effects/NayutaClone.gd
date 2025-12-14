@@ -164,12 +164,17 @@ func _create_collision_shape() -> void:
 	add_child(collision)
 
 func _create_health_bar() -> void:
+	# Create unshaded material for HP bar to prevent night darkening
+	var hp_bar_mat := CanvasItemMaterial.new()
+	hp_bar_mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+	
 	# Background (dark)
 	_health_bar_bg = ColorRect.new()
 	_health_bar_bg.size = Vector2(HEALTH_BAR_WIDTH, HEALTH_BAR_HEIGHT)
 	_health_bar_bg.position = Vector2(-HEALTH_BAR_WIDTH / 2.0, HEALTH_BAR_OFFSET_Y)
 	_health_bar_bg.color = Color(0.1, 0.1, 0.1, 0.8)
 	_health_bar_bg.z_index = 100
+	_health_bar_bg.material = hp_bar_mat
 	add_child(_health_bar_bg)
 	
 	# Fill (green)
@@ -178,6 +183,7 @@ func _create_health_bar() -> void:
 	_health_bar_fill.position = Vector2(-HEALTH_BAR_WIDTH / 2.0, HEALTH_BAR_OFFSET_Y)
 	_health_bar_fill.color = Color(0.3, 0.9, 0.3, 1.0)  # Green
 	_health_bar_fill.z_index = 101
+	_health_bar_fill.material = hp_bar_mat.duplicate()  # Use duplicate to avoid shared state issues
 	add_child(_health_bar_fill)
 	
 	# HP text label using custom draw script (like EnemyHPLabel) for world-space rendering

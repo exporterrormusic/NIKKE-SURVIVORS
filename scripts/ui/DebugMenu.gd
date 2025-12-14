@@ -457,9 +457,12 @@ func _on_toggle_infinite_burst(btn: Button) -> void:
 	
 	if _player:
 		_player.set_meta("debug_infinite_burst", _infinite_burst_enabled)
-		# Also fill burst gauge to max when enabling
-		if _infinite_burst_enabled and "burst_current" in _player and "burst_max" in _player:
-			_player.burst_current = _player.burst_max
+		# Also fill burst gauge to max when enabling - use BurstSystem
+		if _infinite_burst_enabled:
+			if "_burst_system" in _player and _player._burst_system:
+				_player._burst_system.burst_current = _player._burst_system.burst_max
+			elif "burst_current" in _player and "burst_max" in _player:
+				_player.burst_current = _player.burst_max
 	
 	print("[DEBUG] Infinite Burst: ", _infinite_burst_enabled)
 
@@ -489,13 +492,20 @@ func _on_toggle_show_fps(btn: Button) -> void:
 # === PLAYER CALLBACKS ===
 
 func _on_fill_burst() -> void:
-	if _player and "burst_current" in _player and "burst_max" in _player:
-		_player.burst_current = _player.burst_max
-		if _player.has_node("PlayerHud"):
-			_player.get_node("PlayerHud").update_burst(_player.burst_current, _player.burst_max, true)
-		if "overhead_hud" in _player and _player.overhead_hud:
-			_player.overhead_hud.update_burst(_player.burst_current, _player.burst_max)
-		print("[DEBUG] Burst gauge filled")
+	if _player:
+		# Use BurstSystem if available
+		if "_burst_system" in _player and _player._burst_system:
+			_player._burst_system.burst_current = _player._burst_system.burst_max
+			# Emit signal to update UI
+			_player._burst_system.burst_changed.emit(_player._burst_system.burst_current, _player._burst_system.burst_max)
+			print("[DEBUG] Burst gauge filled via BurstSystem")
+		elif "burst_current" in _player and "burst_max" in _player:
+			_player.burst_current = _player.burst_max
+			if _player.has_node("PlayerHud"):
+				_player.get_node("PlayerHud").update_burst(_player.burst_current, _player.burst_max, true)
+			if "overhead_hud" in _player and _player.overhead_hud:
+				_player.overhead_hud.update_burst(_player.burst_current, _player.burst_max)
+			print("[DEBUG] Burst gauge filled (legacy)")
 
 func _on_force_level_up() -> void:
 	if _player and _player.has_method("add_xp"):
@@ -707,7 +717,30 @@ func _on_complete_achievements() -> void:
 	if achievement_manager.has_method("_save_achievements"):
 		achievement_manager._save_achievements()
 	
-	print("[DEBUG] Completed %d achievements!" % count)
+	# Also unlock general achievements
+	var general_achievements := [
+		"first_blood",        # First Blood
+		"kill_50000",         # Massacre
+		"boss_slayer",        # Boss Slayer
+		"no_damage",          # Untouchable
+		"all_maps",           # World Traveler
+		"abandoned_wishes",   # Abandoned Wishes
+		"she_descends"        # She Descends
+	]
+	
+	for ach_id in general_achievements:
+		achievement_manager._achievements[ach_id] = {
+			"unlocked": true,
+			"progress": 100,
+			"unlocked_at": int(Time.get_unix_time_from_system())
+		}
+		count += 1
+	
+	# Save again with general achievements
+	if achievement_manager.has_method("_save_achievements"):
+		achievement_manager._save_achievements()
+	
+	print("[DEBUG] Completed %d achievements (including general)!" % count)
 
 func _on_add_pristine_core() -> void:
 	if GameState and GameState.has_method("add_pristine_cores"):

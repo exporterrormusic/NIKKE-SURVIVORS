@@ -25,7 +25,7 @@ const MENU_OPTIONS: Array[Dictionary] = [
 
 const TITLE_TEXT := "KINGDOM CLEANUP"
 const SUBTITLE_TEXT := "A NIKKE FAN GAME"
-const VERSION_TEXT := "v0.1A"
+const VERSION_TEXT := "v0.1B"
 
 @onready var _button_row: HBoxContainer = get_node_or_null("%ButtonRow")
 @onready var _title_label: Label = get_node_or_null("%TitleLabel")
@@ -41,6 +41,14 @@ func _ready() -> void:
 	_setup_buttons()
 	_connect_signals()
 	_update_selection()
+	
+	# If we are the root scene (loaded via change_scene), register with MenuManager
+	# to ensure signals are connected and navigation works
+	if MenuManager and get_tree().current_scene == self:
+		call_deferred("_register_with_manager")
+
+func _register_with_manager() -> void:
+	MenuManager.register_root_main_menu(self)
 
 
 func _setup_title() -> void:
@@ -49,7 +57,7 @@ func _setup_title() -> void:
 	if _subtitle_label:
 		_subtitle_label.text = SUBTITLE_TEXT
 	if _version_label:
-		_version_label.text = VERSION_TEXT
+		pass  # Use text from scene file directly
 
 
 func _setup_buttons() -> void:

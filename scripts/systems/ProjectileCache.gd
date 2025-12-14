@@ -121,6 +121,10 @@ static func create_rocket() -> Node:
 	return RocketScene.instantiate()
 
 static func create_explosion() -> Node:
+	# DEBUG: User reports "Purple Explosion" during Scarlet Burst.
+	# Scarlet should NOT spawn explosions. Trace who calls this.
+	print("[DEBUG] create_explosion called! Stack trace:")
+	print_stack() 
 	return ExplosionScene.instantiate()
 
 static func create_explosion_effect() -> Node:

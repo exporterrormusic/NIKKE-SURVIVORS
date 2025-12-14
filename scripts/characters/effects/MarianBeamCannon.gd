@@ -270,8 +270,56 @@ func _apply_damage() -> void:
 	# DebugLog.log("[MarianBeam] Scanning " + str(enemies.size()) + " enemies")
 	
 	# Collect beam hit candidates
-	var candidates := []
+	# 1. Find the closest blocking shield (if any)
+	var closest_shield_dist: float = BEAM_RANGE + 100.0
+	var closest_shield_node: Node2D = null
 	
+	var shields := tree.get_nodes_in_group("boss_shields")
+	shields.append_array(tree.get_nodes_in_group("shielder_shields"))
+	
+	var beam_dir := Vector2.RIGHT.rotated(rotation)
+	
+	for shield in shields:
+		if not is_instance_valid(shield) or not shield is Node2D:
+			continue
+		if shield.has_method("is_active") and not shield.is_active():
+			continue
+			
+		var shield_node := shield as Node2D
+		var to_shield := shield_node.global_position - global_position
+		# Project onto beam direction
+		var along := to_shield.dot(beam_dir)
+		
+		# Shield must be in front
+		if along < 0 or along > BEAM_RANGE:
+			continue
+			
+		# Check width/radius intersection
+		var perp_dist: float = abs(to_shield.dot(beam_dir.orthogonal()))
+		var shield_radius: float = 120.0 # Default
+		if "shield_radius" in shield:
+			shield_radius = shield.shield_radius
+			
+		# Conservative hit check: beam width + shield radius
+		if perp_dist < shield_radius + BEAM_WIDTH * 0.5:
+			# Hit! Calculate distance to surface
+			var hit_dist := along - shield_radius + 20.0 # Approximate surface
+			if hit_dist < 0: hit_dist = 0.0
+			
+			if hit_dist < closest_shield_dist:
+				print("[MarianBeam] Blocked by shield: ", shield.name, " Dist: ", hit_dist)
+				closest_shield_dist = hit_dist
+				closest_shield_node = shield_node
+	
+	# 2. Damage the closest shield
+	if closest_shield_node:
+		if closest_shield_node.has_method("take_shield_damage"):
+			closest_shield_node.take_shield_damage(_damage, "beam")
+			# Also register burst hit for the shield
+			if player and player.has_method("register_burst_hit"):
+				player.register_burst_hit(closest_shield_node, false, "beam", false)
+
+	# 3. Iterate enemies, checking against closest_shield_dist
 	for enemy in enemies:
 		if not is_instance_valid(enemy) or not enemy is Node2D:
 			continue
@@ -294,6 +342,10 @@ func _apply_damage() -> void:
 			# DebugLog.log("[MarianBeam] FAIL: %s out of range X: %.1f" % [enemy.name, to_enemy_local.x])
 			continue
 		
+		# BLOCKED BY SHIELD?
+		if to_enemy_local.x > closest_shield_dist:
+			continue
+		
 		# Check perpendicular distance (Y in local space)
 		var perp_dist: float = abs(to_enemy_local.y)
 		if perp_dist > BEAM_WIDTH * 0.5:
@@ -310,12 +362,11 @@ func _apply_damage() -> void:
 		enemy.take_damage(_damage, false, Vector2.RIGHT.rotated(rotation), false, "projectile")
 		_hit_enemies_this_tick.append(enemy)
 		
-		# Register burst hit on the player
+		# Register burst hit on the player with beam weapon type (0.25% per tick)
 		if player and player.has_method("register_burst_hit"):
-			# Pass true for is_burst if this is considered a burst attack? 
-			# No, Beam Cannon is a BASIC attack replacement ("Main Heroine" upgrade).
+			# Beam Cannon is a BASIC attack replacement ("Main Heroine" upgrade).
 			# So it SHOULD generate burst charge.
-			player.register_burst_hit(enemy)
+			player.register_burst_hit(enemy, false, "beam", false)
 
 func _is_boulder_blocking(distance_along_beam: float) -> bool:
 	"""Check if any boulder blocks the beam before the given distance."""
@@ -382,6 +433,34 @@ func _get_visible_beam_range(max_range: float) -> float:
 	var beam_dir: Vector2 = Vector2.RIGHT.rotated(rotation)
 	var closest_hit: float = max_range
 	
+	# 0. Check Shields
+	var shields := get_tree().get_nodes_in_group("boss_shields")
+	shields.append_array(get_tree().get_nodes_in_group("shielder_shields"))
+	
+	for shield in shields:
+		if not is_instance_valid(shield) or not shield is Node2D:
+			continue
+		var shield_node := shield as Node2D
+		
+		# Check simple projection onto beam
+		var to_shield := shield_node.global_position - beam_origin
+		var along := to_shield.dot(beam_dir)
+		if along < 0: continue
+		
+		var perp_dist: float = abs(to_shield.dot(beam_dir.orthogonal()))
+		# Calculate actual radius including scale
+		var shield_radius: float = 120.0 
+		if "shield_radius" in shield:
+			shield_radius = shield.shield_radius
+		# Use global scale (assuming uniform scale)
+		if shield_node.global_scale.x != 1.0:
+			shield_radius *= shield_node.global_scale.x
+			
+		if perp_dist < shield_radius + BEAM_WIDTH * 0.5:
+			var hit_dist: float = along - shield_radius + 20.0
+			if hit_dist > 0 and hit_dist < closest_hit:
+				closest_hit = hit_dist
+				
 	# 1. Check Boulders
 	for boulder in boulders:
 		if not is_instance_valid(boulder):

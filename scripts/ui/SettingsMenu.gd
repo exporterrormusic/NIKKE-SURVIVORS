@@ -29,7 +29,7 @@ const DEFAULT_RESOLUTIONS: Array[Vector2i] = [
 	Vector2i(3840, 2160)
 ]
 
-const CONTROL_ACTION_DEFINITIONS := [
+var _control_action_definitions: Array = [
 	{"action": "move_up", "label": "Move Up", "node": "%MoveUpButton"},
 	{"action": "move_down", "label": "Move Down", "node": "%MoveDownButton"},
 	{"action": "move_left", "label": "Move Left", "node": "%MoveLeftButton"},
@@ -107,8 +107,11 @@ func _ready() -> void:
 	if _fullscreen_options:
 		_fullscreen_options.item_selected.connect(_on_fullscreen_selected)
 
+	# Inject Squad Switching buttons dynamically since we can't edit the scene
+	_inject_squad_buttons()
+
 	# Setup control buttons
-	for definition in CONTROL_ACTION_DEFINITIONS:
+	for definition in _control_action_definitions:
 		var button: Button = get_node_or_null(definition["node"])
 		if button:
 			button.focus_mode = Control.FOCUS_NONE
@@ -325,27 +328,37 @@ func _unhandled_input(event: InputEvent) -> void:
 		# Block ALL input during capture to prevent UI bleed-through (e.g. clicking tabs)
 		get_viewport().set_input_as_handled()
 		
-		# Only process Key Press events for binding
-		if not (event is InputEventKey):
-			return
-		
-		var key_event: InputEventKey = event as InputEventKey
-		if not key_event.is_pressed() or key_event.is_echo():
-			return
-			
-		var is_escape: bool = key_event.physical_keycode == KEY_ESCAPE or key_event.keycode == KEY_ESCAPE
-		
-		# If escape pressed while capturing, cancel the capture instead of binding
-		if is_escape:
-			# Exception: Allow binding Escape to 'ui_cancel' (Pause)
-			if _capturing_action == "ui_cancel":
-				_apply_key_binding(_capturing_action, key_event)
+		# Handle Keyboard binding
+		if event is InputEventKey:
+			var key_event: InputEventKey = event as InputEventKey
+			if not key_event.is_pressed() or key_event.is_echo():
 				return
 				
-			_cancel_key_capture()
-			return
+			var is_escape: bool = key_event.physical_keycode == KEY_ESCAPE or key_event.keycode == KEY_ESCAPE
 			
-		_apply_key_binding(_capturing_action, key_event)
+			# If escape pressed while capturing, cancel the capture instead of binding
+			if is_escape:
+				# Exception: Allow binding Escape to 'ui_cancel' (Pause)
+				if _capturing_action == "ui_cancel":
+					_apply_key_binding(_capturing_action, key_event)
+					return
+					
+				_cancel_key_capture()
+				return
+				
+			_apply_key_binding(_capturing_action, key_event)
+			return
+		
+		# Handle Mouse Button binding (including wheel)
+		if event is InputEventMouseButton:
+			var mouse_event: InputEventMouseButton = event as InputEventMouseButton
+			if not mouse_event.pressed:
+				return
+			# Only allow wheel up/down and extra mouse buttons (not left/right click to avoid UI issues)
+			if mouse_event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN, MOUSE_BUTTON_MIDDLE, MOUSE_BUTTON_XBUTTON1, MOUSE_BUTTON_XBUTTON2]:
+				_apply_mouse_binding(_capturing_action, mouse_event)
+				return
+		
 		return
 	
 	# Normal Menu Navigation
@@ -398,6 +411,25 @@ func _apply_key_binding(action: String, event: InputEventKey) -> void:
 		emit_signal("key_binding_changed", action, copy.physical_keycode)
 		if get_node_or_null("/root/SettingsManager"):
 			get_node("/root/SettingsManager").set_key_binding(action, copy.physical_keycode)
+	
+	# Prevent _cancel_key_capture from reverting the button text to the old value
+	_capturing_original_text = ""
+	_cancel_key_capture()
+
+
+func _apply_mouse_binding(action: String, event: InputEventMouseButton) -> void:
+	var copy: InputEventMouseButton = InputEventMouseButton.new()
+	copy.button_index = event.button_index
+	
+	var existing: Array = InputMap.action_get_events(action)
+	for ev in existing:
+		InputMap.action_erase_event(action, ev)
+	InputMap.action_add_event(action, copy)
+	
+	_update_button_for_action(action, 0, event.button_index)
+	if not _suppress_signals:
+		emit_signal("key_binding_changed", action, event.button_index)
+		# Note: SettingsManager may need to handle mouse bindings differently
 	
 	# Prevent _cancel_key_capture from reverting the button text to the old value
 	_capturing_original_text = ""
@@ -517,7 +549,7 @@ func set_fullscreen(enabled: bool) -> void:
 
 func set_key_bindings(bindings: Dictionary) -> void:
 	_suppress_signals = true
-	for definition in CONTROL_ACTION_DEFINITIONS:
+	for definition in _control_action_definitions:
 		var action: String = definition["action"]
 		if bindings.has(action):
 			var keycode: int = int(bindings[action])
@@ -538,7 +570,7 @@ func clear_capture_state() -> void:
 
 
 func _refresh_key_binding_labels() -> void:
-	for definition in CONTROL_ACTION_DEFINITIONS:
+	for definition in _control_action_definitions:
 		var action: String = definition["action"]
 		if not InputMap.has_action(action):
 			continue
@@ -559,6 +591,7 @@ func _refresh_key_binding_labels() -> void:
 
 # Sci-fi styled Back Button
 class _BackButtonContainer extends Button:
+	# ... (existing content preserved, just appending at end of class)
 	const UI := preload("res://scripts/ui/UITheme.gd")
 	const CONTAINER_WIDTH := 200.0  # Match PristineCoreContainer
 	const CONTAINER_HEIGHT := 75.0
@@ -651,3 +684,106 @@ class _BackButtonContainer extends Button:
 		
 		draw_line(Vector2(CORNER_CUT + 5, 5), Vector2(CORNER_CUT + 30, 5), deco_color, 2.0)
 		draw_line(Vector2(w - CORNER_CUT - 30, h - 5), Vector2(w - CORNER_CUT - 5, h - 5), deco_color, 2.0)
+
+
+func _inject_squad_buttons() -> void:
+	# Register default squad switching actions if they don't exist yet
+	# (This ensures defaults are set even if PlayerCore hasn't loaded yet)
+	if not InputMap.has_action("next_character"):
+		InputMap.add_action("next_character")
+		var ev = InputEventMouseButton.new()
+		ev.button_index = MOUSE_BUTTON_WHEEL_UP
+		InputMap.action_add_event("next_character", ev)
+		
+	if not InputMap.has_action("prev_character"):
+		InputMap.add_action("prev_character")
+		var ev = InputEventMouseButton.new()
+		ev.button_index = MOUSE_BUTTON_WHEEL_DOWN
+		InputMap.action_add_event("prev_character", ev)
+	
+	# Find a container to add to. %MoveUpButton parent is likely the Grid or VBox.
+	var ref_btn = get_node_or_null("%MoveUpButton")
+	if not ref_btn:
+		return
+		
+	# MoveUpButton is child of HBox (Row), which is child of VBox (ControlsPanel)
+	# Per .tscn: MoveUpRow -> ControlsPanel
+	var row_hbox = ref_btn.get_parent()
+	var parent_container = row_hbox.get_parent()
+	
+	if not parent_container:
+		return
+		
+	# Helper to create a setting row
+	var create_row = func(action: String, label_text: String) -> Button:
+		var hbox = HBoxContainer.new()
+		hbox.name = "Row_" + action
+		hbox.layout_mode = 2
+		hbox.add_theme_constant_override("separation", 24)
+		
+		# Create Label
+		var lbl = Label.new()
+		lbl.text = label_text
+		lbl.layout_mode = 2
+		lbl.custom_minimum_size = Vector2(180, 0)
+		lbl.add_theme_color_override("font_color", Color(0.94, 0.96, 0.97, 1))
+		# Use basic styling, theme handles font if default
+		hbox.add_child(lbl)
+		
+		# Create Button
+		var btn = Button.new()
+		btn.name = "Btn_" + action
+		btn.layout_mode = 2
+		btn.custom_minimum_size = Vector2(160, 40)
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.text = "UNBOUND"
+		btn.focus_mode = Control.FOCUS_NONE
+		hbox.add_child(btn)
+		
+		parent_container.add_child(hbox)
+		return btn
+
+	# Add "Next Squad Member"
+	var next_btn = create_row.call("next_character", "NEXT SQUAD MEMBER")
+	_control_action_definitions.append({
+		"action": "next_character", 
+		"label": "NEXT SQUAD MEMBER", 
+		"node": str(next_btn.get_path())
+	})
+	# Register button for capture and update display
+	next_btn.pressed.connect(_begin_key_capture.bind("next_character", next_btn))
+	_control_buttons["next_character"] = next_btn
+	
+	# Add "Previous Squad Member"
+	var prev_btn = create_row.call("prev_character", "PREV SQUAD MEMBER")
+	_control_action_definitions.append({
+		"action": "prev_character", 
+		"label": "PREV SQUAD MEMBER", 
+		"node": str(prev_btn.get_path())
+	})
+	# Register button for capture and update display
+	prev_btn.pressed.connect(_begin_key_capture.bind("prev_character", prev_btn))
+	_control_buttons["prev_character"] = prev_btn
+	
+	# Update button labels to show current bindings (Mouse Wheel defaults)
+	_update_squad_button_labels()
+
+
+func _update_squad_button_labels() -> void:
+	# Update labels for dynamically added squad buttons
+	for action in ["next_character", "prev_character"]:
+		if not InputMap.has_action(action):
+			continue
+		var events: Array = InputMap.action_get_events(action)
+		var keycode: int = 0
+		var button_index: int = 0
+		for ev in events:
+			if ev is InputEventKey:
+				var key_event: InputEventKey = ev
+				keycode = key_event.physical_keycode if key_event.physical_keycode != 0 else key_event.keycode
+				break
+			elif ev is InputEventMouseButton:
+				var mouse_event: InputEventMouseButton = ev
+				button_index = mouse_event.button_index
+				break
+		_update_button_for_action(action, keycode, button_index)

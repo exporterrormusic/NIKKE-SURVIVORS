@@ -4,18 +4,22 @@ extends Area2D
 
 var _hit_bodies: Array = []
 var owner_node: Node = null  # Track who created this slash
+var killer_source: String = "sword"  # For ShielderShield collision detection
+var killer_source_override: String = ""
 
 # Critical hit settings
 const BASE_CRIT_CHANCE := 0.15  # 15% base chance to crit
 const CRIT_MULTIPLIER := 2.0  # 2x damage on crit
 var base_damage := 2
+var override_visual_params: Dictionary = {}
 
 func _ready():
 	# Ensure we can hit enemy projectiles (Layer 3 / Value 4)
 	collision_mask |= 4
 	connect("body_entered", Callable(self, "_on_body_entered"))
 	connect("area_entered", Callable(self, "_on_area_entered"))
-	visual.update_visual({
+	
+	var params = {
 		"radius": 260.0,
 		"arc_degrees": 90.0,
 		"core_color": Color(0.95, 0.85, 1.0, 0.9),
@@ -25,7 +29,13 @@ func _ready():
 		"wipe_progress": 0.0,
 		"sparkle_count": 8,
 		"sparkle_seed": randi()
-	})
+	}
+	
+	# Apply any pre-set overrides (Fixes 1-frame color glitch)
+	if not override_visual_params.is_empty():
+		params.merge(override_visual_params, true)
+		
+	visual.update_visual(params)
 	
 	# Sweep animation - fast swing like Link to the Past
 	var tween = create_tween()
@@ -42,11 +52,14 @@ func _ready():
 	
 	queue_free()
 
+var tracking: bool = true
+
 func _process(_delta):
-	var mouse_pos = get_global_mouse_position()
-	var direction = (mouse_pos - get_parent().global_position).normalized()
-	position = direction * 30
-	rotation = direction.angle()
+	if tracking:
+		var mouse_pos = get_global_mouse_position()
+		var direction = (mouse_pos - get_parent().global_position).normalized()
+		position = direction * 30
+		rotation = direction.angle()
 
 func _on_body_entered(body):
 	if body == get_parent():
@@ -73,10 +86,14 @@ func _on_body_entered(body):
 		# Pass hit direction (slash direction) for knockback visual
 		var hit_direction = Vector2.from_angle(rotation)
 		# Determine killer source based on owner type
-		var killer_source := "player"
-		if is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
+		var killer_source := "sword"  # Scarlet weapon type for BurstConfig (5% per hit)
+		if killer_source_override != "":
+			killer_source = killer_source_override
+		elif is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
 			killer_source = "summon"
-		body.take_damage(damage, is_crit, hit_direction, false, killer_source)
+			
+		var is_burst_attack: bool = "burst" in killer_source.to_lower()
+		body.take_damage(damage, is_crit, hit_direction, is_burst_attack, killer_source)
 		_hit_bodies.append(body)
 
 func _on_area_entered(area):

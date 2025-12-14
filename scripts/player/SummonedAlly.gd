@@ -235,7 +235,7 @@ func _configure_rapunzel() -> void:
 	max_hp = int(55 * hp_mult)
 	move_speed = 220.0  # Mobile launcher
 	# Damage uses player's full multiplier (level + shop ATK) × weapon base
-	attack_damage = _get_scaled_damage(10)  # Rapunzel's base_damage
+	attack_damage = _get_scaled_damage(15)  # Rapunzel's base_damage (Registry: 15.0)
 	attack_range = 500.0  # Rockets
 	attack_cooldown = 1.5  # Slower rockets (was 0.3)
 	_special_cooldown = 4.0
@@ -493,6 +493,8 @@ func _attack_scarlet(direction: Vector2) -> void:
 	slash.rotation = direction.angle()
 	slash.base_damage = attack_damage
 	slash.owner_node = self  # Set owner for killer_source tracking
+	if "killer_source_override" in slash:
+		slash.killer_source_override = "CommanderBurst"
 	add_child(slash)  # Attach to self
 	slash.position = Vector2.ZERO
 	
@@ -520,6 +522,8 @@ func _attack_snow_white(direction: Vector2) -> void:
 	bullet.velocity = direction * 2200.0  # Same speed as player
 	bullet.rotation = direction.angle()
 	bullet.owner_node = self
+	if "killer_source_override" in bullet:
+		bullet.killer_source_override = "CommanderBurst"
 	bullet.base_damage = attack_damage
 	bullet.pierce_all = true  # Snow White's signature piercing
 
@@ -539,7 +543,12 @@ func _attack_rapunzel(direction: Vector2) -> void:
 	if rocket == null:
 		return
 	
+	if rocket == null:
+		return
+	
 	rocket.owner_node = self  # Set self as owner so rocket ignores us
+	if "killer_source_override" in rocket:
+		rocket.killer_source_override = "CommanderBurst"
 	rocket.direction = direction
 	rocket.target_position = _target_enemy.global_position if _target_enemy else global_position + direction * 400
 	rocket.speed = 400.0
@@ -872,6 +881,10 @@ func take_damage(amount: int, _is_crit: bool = false, _direction: Vector2 = Vect
 		_die()
 
 func _die() -> void:
+	# Trigger burst on death if not used (ensure value)
+	if not _has_used_burst:
+		_perform_burst()
+		
 	# Start despawn animation (faster for death)
 	if not _is_despawning:
 		_is_despawning = true

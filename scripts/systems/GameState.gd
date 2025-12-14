@@ -54,6 +54,8 @@ var selected_time: String = "day"
 var difficulty_multiplier: int = 1
 # Goddess Fall mode: enhanced enemy abilities, boss enrage timer
 var goddess_fall_mode: bool = false
+# She Descends easter egg mode: immediate N01 fight with modified rules
+var she_descends_mode: bool = false
 
 
 func _ready() -> void:

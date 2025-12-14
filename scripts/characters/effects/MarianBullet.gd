@@ -5,6 +5,7 @@ class_name MarianBullet
 
 var velocity: Vector2 = Vector2.ZERO
 var owner_node: Node = null
+var killer_source: String = "minigun"  # For ShielderShield collision detection
 var base_damage: int = 2
 var lifespan: float = 3.0
 var _age: float = 0.0
@@ -93,13 +94,18 @@ func _process(delta: float) -> void:
 	if _check_boulder_collision():
 		queue_free()
 		return
+
+	# Check shield collision (Manual check due to reparenting)
+	if _check_shield_collision():
+		queue_free()
+		return
 	
 	# Redraw for shader animation
 	queue_redraw()
 
 func _check_boulder_collision() -> bool:
 	"""Manual boulder collision check since bullets are in EffectsLayer (different scene tree branch)."""
-	var boulders := get_tree().get_nodes_in_group("boulders")
+	var boulders := TargetCache.get_boulders()
 	for boulder in boulders:
 		if not is_instance_valid(boulder):
 			continue
@@ -108,6 +114,45 @@ func _check_boulder_collision() -> bool:
 		if global_position.distance_to(boulder_pos) < boulder_radius:
 			return true
 	return false
+
+func _check_shield_collision() -> bool:
+	"""Manual shield collision check."""
+	# Check boss shields first
+	var shields := get_tree().get_nodes_in_group("boss_shields")
+	# Also check generic shields
+	shields.append_array(get_tree().get_nodes_in_group("shielder_shields"))
+	
+	for shield in shields:
+		if not is_instance_valid(shield): continue
+		if shield.has_method("is_active") and not shield.is_active(): continue
+		if not (shield is Node2D): continue
+		
+		# Determine radius
+		var radius: float = 120.0
+		if "shield_radius" in shield:
+			radius = shield.shield_radius
+		
+		if global_position.distance_to((shield as Node2D).global_position) < radius:
+			if shield.has_method("take_shield_damage"):
+				var dmg = _calculate_damage()
+				shield.take_shield_damage(dmg, "minigun")
+				return true
+	return false
+
+func _calculate_damage() -> int:
+	# Basic damage calc - simplified for manual check
+	# Usually would use player crit stats, but for now just use base
+	# To be perfectly accurate we'd need player ref, but this is a fallback
+	var player = get_tree().get_first_node_in_group("player")
+	var is_crit = false
+	if player and player.has_method("get_crit_chance"):
+		if randf() < player.get_crit_chance():
+			is_crit = true
+			
+	if is_crit:
+		return base_damage * 2
+	return base_damage
+
 
 
 func _draw() -> void:
@@ -160,9 +205,9 @@ func _hit_target(target: Node) -> void:
 	elif "hp" in target:
 		target.hp -= base_damage
 	
-	# Register burst hit (Essential for burst accumulation)
+	# Register burst hit with weapon type (Essential for burst accumulation)
 	if owner_node and owner_node.has_method("register_burst_hit"):
-		owner_node.register_burst_hit(target)
+		owner_node.register_burst_hit(target, false, "minigun", false)
 	
 	# Destroy bullet
 	queue_free()

@@ -95,10 +95,9 @@ func initialize(player: Node2D, delay: float = 0.0, spread_index: int = 0, total
 	_launch_delay = delay
 	damage = scaled_damage
 	
-	# Goddess Fall: 30% faster charge/launch times
-	if GameState and GameState.goddess_fall_mode:
-		_launch_phase_duration = BASE_LAUNCH_PHASE_DURATION * 0.7
-		_turn_phase_duration = BASE_TURN_PHASE_DURATION * 0.7
+	# 30% faster charge/launch times (Baseline behavior)
+	_launch_phase_duration = BASE_LAUNCH_PHASE_DURATION * 0.7
+	_turn_phase_duration = BASE_TURN_PHASE_DURATION * 0.7
 	
 	# Store boss position for launch animation
 	_boss_position = global_position
@@ -176,8 +175,8 @@ func _ready() -> void:
 	_velocity = _direction * _current_speed
 	_trail_points.append(global_position)
 	_trail_ages.append(0.0)
-	# Start behind boss sprite so missiles appear to shoot out from inside
-	z_index = -1
+	# Render ABOVE boss sprite (was -1, hidden behind large sprites like Queen)
+	z_index = 50
 	_ensure_glow_sprite()
 	queue_redraw()
 

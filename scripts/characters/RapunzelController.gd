@@ -45,7 +45,7 @@ func _perform_attack(direction: Vector2) -> void:
 	missile.damage = base_dmg
 	missile.explosion_damage = base_dmg
 	missile.ground_fire_damage = maxi(int(base_dmg / 3.0), 1)  # Ground fire does 1/3 of missile damage
-	missile.ground_fire_radius = 100.0
+	missile.ground_fire_radius = 120.0
 	
 	_play_sound("rocket")
 

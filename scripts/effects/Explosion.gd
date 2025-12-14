@@ -60,7 +60,7 @@ func _try_damage_body(body) -> void:
     _damaged_bodies.append(body)
     var hit_direction = (body.global_position - global_position).normalized()
     # Determine killer source - use override if set, otherwise check owner type
-    var killer_source := "player"
+    var killer_source := "rocket"  # Default to rocket (Rapunzel) for BurstConfig (10% per hit)
     if killer_source_override != "":
         killer_source = killer_source_override
     elif is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):

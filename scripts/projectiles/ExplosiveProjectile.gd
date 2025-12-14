@@ -15,6 +15,7 @@ class_name ExplosiveProjectile
 @export var explosion_radius: float = 150.0
 @export var explosion_color: Color = Color(1.0, 0.5, 0.2, 0.8)
 @export var owner_node: Node = null
+var killer_source: String = "rocket"  # For ShielderShield collision detection
 var killer_source_override: String = ""  # Override killer_source if set (for summon-spawned turrets)
 @export var render_style: String = "grenade" # "grenade" | "rocket"
 @export var special_attack: bool = false
@@ -356,6 +357,29 @@ func _play_explosion_sound() -> void:
 			audio.play_rocket_explosion_sound()
 
 func _apply_explosion_damage() -> void:
+	# Determine killer source - use override if set, otherwise check owner type
+	var killer_source := "rocket"  # Rapunzel weapon type for BurstConfig (10% per hit)
+	if killer_source_override != "":
+		killer_source = killer_source_override
+	elif is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
+		killer_source = "summon"
+
+	# Check for shields in range first (boss shields like ShielderShield)
+	var shields := get_tree().get_nodes_in_group("boss_shields")
+	for shield in shields:
+		if not is_instance_valid(shield):
+			continue
+		if not (shield is Node2D):
+			continue
+		if not shield.has_method("take_shield_damage"):
+			continue
+		if shield.has_method("is_active") and not shield.is_active():
+			continue
+		var shield_node := shield as Node2D
+		var distance := shield_node.global_position.distance_to(global_position)
+		if distance <= explosion_radius + 100.0:  # Generous radius for shields
+			shield.take_shield_damage(explosion_damage, killer_source)
+	
 	var enemies := get_tree().get_nodes_in_group("enemies")
 	for enemy in enemies:
 		if not is_instance_valid(enemy):
@@ -369,15 +393,14 @@ func _apply_explosion_damage() -> void:
 		var enemy_hitbox_bonus: float = 30.0 * (enemy_scale - 1.0)
 		var effective_radius: float = explosion_radius + enemy_hitbox_bonus
 		if distance <= effective_radius:
-			# Determine killer source - use override if set, otherwise check owner type
-			var killer_source := "player"
-			if killer_source_override != "":
-				killer_source = killer_source_override
-			elif is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
-				killer_source = "summon"
-			enemy_node.take_damage(explosion_damage, false, Vector2.ZERO, false, killer_source)
+
+			
+			var is_burst_attack: bool = "burst" in killer_source.to_lower()
+			enemy_node.take_damage(explosion_damage, false, Vector2.ZERO, is_burst_attack, killer_source)
+			# Register burst hit with weapon type and summon flag
 			if owner_node and is_instance_valid(owner_node) and owner_node.has_method("register_burst_hit"):
-				owner_node.register_burst_hit(enemy_node)
+				var is_summon: bool = (owner_node is NayutaClone or owner_node is SummonedAlly)
+				owner_node.register_burst_hit(enemy_node, is_burst_attack, "rocket", is_summon)
 	
 	# Only damage clones/allies if this explosion is from an enemy projectile
 	# Player/ally explosions should NOT damage friendly units

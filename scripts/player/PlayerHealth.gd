@@ -98,7 +98,11 @@ func heal(amount: int) -> void:
 ## Trigger invincibility
 func _trigger_invincibility(duration: float) -> void:
 	invincible = true
-	_invincibility_timer = duration
+	_invincibility_timer = maxf(_invincibility_timer, duration)
+
+## Public API to add invincibility
+func add_invincibility(duration: float) -> void:
+	_trigger_invincibility(duration)
 
 
 ## Handle death (returns false if revived, true if actually dead)

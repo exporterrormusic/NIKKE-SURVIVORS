@@ -461,9 +461,9 @@ func _finish_close() -> void:
 	modulate.a = 1.0
 	if _scanline_overlay:
 		_scanline_overlay.visible = false
-	if _pending_unpause:
-		_pending_unpause = false
-		get_tree().paused = false
+	# Always unpause on close to resume gameplay
+	_pending_unpause = false
+	get_tree().paused = false
 	emit_signal("tree_closed")
 
 func _build_stats_panel() -> PanelContainer:
@@ -595,56 +595,41 @@ func _update_stats_panel(char_id: int = -1) -> void:
 	var char_name: String = CHARACTER_NAMES[display_char] if display_char >= 0 and display_char < CHARACTER_NAMES.size() else "Current"
 	_set_char_label(char_name)
 	
-	# Get current stats from player if available, otherwise use base stats
+	# Get base character stats from CharacterRegistry for the hovered character
+	# This shows the character's BASE stats, not the current player's in-game stats
 	var current_level: int = 1
 	var display_damage: int = 1
 	var display_hp: int = 10
 	var display_speed: int = 400
 	var display_crit: float = 0.2
-	var burst_rate: float = 5.0
+	var burst_rate: float = 1.0
 	
-	if _player_ref and is_instance_valid(_player_ref):
-		# Get actual player values
-		current_level = _player_ref.level if "level" in _player_ref else 1
-		
-		# Get calculated damage (includes level + shop ATK bonuses)
-		if _player_ref.has_method("calc_damage"):
-			display_damage = _player_ref.calc_damage()
-		elif "base_damage" in _player_ref:
-			display_damage = _player_ref.base_damage
-		
-		# Get max HP (includes shop HP bonus)
-		if "max_hp" in _player_ref:
-			display_hp = _player_ref.max_hp
-		
-		# Get speed (includes shop speed bonus)
-		if "move_speed" in _player_ref:
-			display_speed = int(_player_ref.move_speed)
-		
-		# Get crit rate (includes shop crit bonus)
-		if _player_ref.has_method("get_crit_chance"):
-			display_crit = _player_ref.get_crit_chance()
-		elif "_shop_crit_bonus" in _player_ref:
-			display_crit = _player_ref._shop_crit_bonus
-		
-		# Get burst gen rate
-		if "burst_per_hit" in _player_ref:
-			burst_rate = _player_ref.burst_per_hit
-	else:
-		# Fallback to base character stats from CharacterRegistry
-		if _character_registry:
-			var char_data = _character_registry.get_character_by_index(display_char)
-			if char_data:
-				display_damage = char_data.base_damage
-				display_hp = char_data.base_hp
-				display_speed = int(char_data.base_speed)
-				display_crit = char_data.crit_chance if "crit_chance" in char_data else 0.2
+	# Get level from player if in-game
+	if _player_ref and is_instance_valid(_player_ref) and "level" in _player_ref:
+		current_level = _player_ref.level
+	
+	# Always get base stats from the hovered character's data (not the player)
+	if _character_registry:
+		var char_data = _character_registry.get_character_by_index(display_char)
+		if char_data:
+			display_damage = int(char_data.base_damage)
+			display_hp = char_data.base_hp
+			display_speed = int(char_data.base_speed)
+			display_crit = char_data.crit_chance if "crit_chance" in char_data else 0.2
+			
+			# Get burst rate from BurstConfig based on weapon type
+			var weapon_type := _get_weapon_type_for_index(display_char)
+			burst_rate = BurstConfig.get_rate(weapon_type)
 	
 	# Update labels with current values
+	# Apply level damage multiplier (25% per level) to ATK display
+	var level_damage_mult := 1.0 + (current_level - 1) * 0.25
+	var scaled_damage := int(display_damage * level_damage_mult)
+	
 	_set_stat_value("LevelRow", str(current_level))
-	_set_stat_value("AtkRow", str(display_damage))
+	_set_stat_value("AtkRow", str(scaled_damage))
 	_set_stat_value("HpRow", str(display_hp))
-	_set_stat_value("BurstRow", "%.0f%%" % burst_rate)
+	_set_stat_value("BurstRow", "%.1f%%" % burst_rate if burst_rate < 1.0 else "%.0f%%" % burst_rate)
 	@warning_ignore("integer_division")
 	_set_stat_value("SpeedRow", str(display_speed / 10))  # Display as /10 for readability
 	_set_stat_value("CritRow", "%.0f%%" % (display_crit * 100.0))
@@ -666,6 +651,34 @@ func _set_stat_value(row_name: String, value: String) -> void:
 		var value_label := row.get_node_or_null("Value")
 		if value_label != null:
 			value_label.text = value
+
+func _get_weapon_type_for_index(char_index: int) -> String:
+	# Map character index to weapon type for BurstConfig lookup
+	# Indices: 0=snow_white, 1=scarlet, 2=rapunzel, 3=nayuta, 4=commander, 
+	#          5=marian, 6=crown, 7=kilo, 8=cecil, 9=sin
+	match char_index:
+		0:  # Snow White
+			return "sniper"
+		1:  # Scarlet
+			return "sword"
+		2:  # Rapunzel
+			return "rocket"
+		3:  # Nayuta
+			return "smg"
+		4:  # Commander
+			return "assault"
+		5:  # Marian
+			return "minigun"
+		6:  # Crown
+			return "minigun"
+		7:  # Kilo
+			return "shotgun"
+		8:  # Cecil
+			return "smg"
+		9:  # Sin
+			return "smg"
+		_:
+			return "smg"
 
 func _build_character_panel() -> void:
 	# Skill points display - enhanced and prominent
@@ -1419,6 +1432,10 @@ func show_tree(player: Node = null) -> void:
 	_anim_state = 1
 	_anim_progress = 0.0
 	_anim_time = 0.0
+	
+	# Pause the game (and timers)
+	get_tree().paused = true
+	_pending_unpause = true
 	
 	# Position scanline overlay over main panel after a frame so layout is computed
 	if _scanline_overlay and _main_panel:

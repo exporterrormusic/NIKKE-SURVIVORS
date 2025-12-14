@@ -5,6 +5,7 @@ var target_pos = Vector2.ZERO
 var acceleration = 1000
 var max_speed = 1000
 var owner_node: Node = null
+var killer_source: String = "turret"  # For ShielderShield collision detection (Snow White turret missiles)
 var create_burning_ground: bool = false  # Only true for Rapunzel's missiles
 
 # These match the original simple missile but can be set externally
@@ -175,7 +176,7 @@ func explode():
 			var hit_direction = (enemy.global_position - global_position).normalized()
 			if enemy.has_method("take_damage"):
 				# Determine killer source based on owner type
-				var killer_source := "player"
+				var killer_source := "turret"  # Snow White turret missiles for BurstConfig (3% per hit)
 				if is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
 					killer_source = "summon"
 				enemy.take_damage(base_damage, false, hit_direction, false, killer_source)

@@ -5,6 +5,7 @@ var acceleration = 500
 var max_speed = 1200
 var player
 var owner_node: Node = null  # Track who fired this rocket
+var killer_source: String = "rocket"  # For ShielderShield collision detection
 var killer_source_override: String = ""  # Override killer_source if set (for summon-spawned turrets)
 var target_enemy = null
 var last_target_pos = Vector2.ZERO
@@ -183,7 +184,7 @@ func _on_body_entered(body):
 	if body.has_method("take_damage"):
 		var hit_direction = velocity.normalized()
 		# Determine killer source - use override if set, otherwise check owner type
-		var killer_source := "player"
+		var killer_source := "rocket"  # Rapunzel weapon type for BurstConfig (10% per hit)
 		if killer_source_override != "":
 			killer_source = killer_source_override
 		elif is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):

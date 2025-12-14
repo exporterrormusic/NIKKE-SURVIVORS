@@ -52,6 +52,17 @@ func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector
 	if health_component:
 		health_component.damage(final_damage, source)
 	
+	# Add burst charge to player (unless this hit is from a burst attack)
+	if team == "enemy" and not is_burst and is_inside_tree():
+		var tree = get_tree()
+		if tree:
+			var player = tree.get_first_node_in_group("player")
+			if player and player.has_method("add_burst_charge"):
+				# Skip burst sources
+				if not BurstConfig.is_burst_source(source):
+					var burst_rate := BurstConfig.get_rate(source)
+					player.add_burst_charge(burst_rate)
+	
 	# Emit damage_dealt to EventBus for stats tracking
 	if EventBus and team == "enemy":
 		# Create a simple DamageInfo-like dict

@@ -386,7 +386,8 @@ func _spawn_burst_nova() -> void:
 			if "level" in player:
 				level_mult = 1.0 + (player.level - 1) * 0.5
 			var scaled_damage := int(BURST_DAMAGE * level_mult)
-			enemy.take_damage(scaled_damage, false, hit_dir, from_burst)
+			# Tag as CrownBurst so it doesn't recharge burst in Goddess Fall mode
+			enemy.take_damage(scaled_damage, false, hit_dir, from_burst, "CrownBurst")
 		
 		# Register hit for burst gauge if upgrade unlocked
 		if burst_charge_unlocked and player.has_method("register_burst_hit"):
@@ -465,7 +466,8 @@ func _damage_enemies_in_beam() -> void:
 			if "level" in player:
 				level_mult = 1.0 + (player.level - 1) * 0.5
 			var scaled_beam_damage := int(BEAM_DAMAGE * level_mult)
-			enemy.take_damage(scaled_beam_damage, false, _beam_direction, from_burst)
+			# Tag as CrownBurst so it doesn't recharge burst in Goddess Fall mode
+			enemy.take_damage(scaled_beam_damage, false, _beam_direction, from_burst, "CrownBurst")
 		
 		if burst_charge_unlocked and player.has_method("register_burst_hit"):
 			player.register_burst_hit(enemy, false)

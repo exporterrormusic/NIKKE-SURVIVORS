@@ -110,7 +110,7 @@ func _load_all_characters() -> void:
 		"burst_color": Color(1.0, 0.95, 0.5),
 		"base_speed": 310.0,
 		"base_hp": 12,
-		"base_damage": 10.0,
+		"base_damage": 15.0,
 		"crit_chance": 0.10,  # 10% crit - support focused
 		"weapon_type": 2,  # Launcher
 		"ammo_capacity": 4,
@@ -401,6 +401,14 @@ func get_portrait(id: String) -> Texture2D:
 
 ## Get character burst sound
 func get_burst_sound(id: String) -> AudioStream:
+	# Commander special case: randomly pick between burst-1.mp3 and burst-2.mp3
+	if id == "commander":
+		var burst_num: int = randi_range(1, 2)
+		var sound_path := "res://assets/characters/commander/burst-%d.mp3" % burst_num
+		if ResourceLoader.exists(sound_path):
+			return load(sound_path)
+		# Fallback to default if random file doesn't exist
+	
 	var data = get_character(id)
 	if data:
 		return data.get_burst_sound()

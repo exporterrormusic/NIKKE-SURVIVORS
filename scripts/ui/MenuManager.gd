@@ -554,18 +554,18 @@ func _finish_intro_transition() -> void:
 		_menu_stack.clear()
 		_menu_stack.push_back(main_menu)
 		
-		# Connect signals
-		if main_menu.has_signal("play_selected"):
+		# Connect signals (Robust Check)
+		if main_menu.has_signal("play_selected") and not main_menu.play_selected.is_connected(_on_play_selected):
 			main_menu.play_selected.connect(_on_play_selected)
-		if main_menu.has_signal("settings_selected"):
+		if main_menu.has_signal("settings_selected") and not main_menu.settings_selected.is_connected(_on_settings_selected):
 			main_menu.settings_selected.connect(_on_settings_selected)
-		if main_menu.has_signal("achievements_selected"):
+		if main_menu.has_signal("achievements_selected") and not main_menu.achievements_selected.is_connected(_on_achievements_selected):
 			main_menu.achievements_selected.connect(_on_achievements_selected)
-		if main_menu.has_signal("quit_selected"):
+		if main_menu.has_signal("quit_selected") and not main_menu.quit_selected.is_connected(_on_quit_selected):
 			main_menu.quit_selected.connect(_on_quit_selected)
-		if main_menu.has_signal("leaderboards_selected"):
+		if main_menu.has_signal("leaderboards_selected") and not main_menu.leaderboards_selected.is_connected(_on_leaderboards_selected):
 			main_menu.leaderboards_selected.connect(_on_leaderboards_selected)
-		if main_menu.has_signal("shop_selected"):
+		if main_menu.has_signal("shop_selected") and not main_menu.shop_selected.is_connected(_on_shop_selected):
 			main_menu.shop_selected.connect(_on_shop_selected)
 		
 		print("[MenuManager] Main menu shown (was pre-instantiated)")
@@ -656,66 +656,7 @@ func _setup_music() -> void:
 		push_error("[MenuManager] Music stream loaded but not playing")
 
 
-## Stop menu music - can be called from anywhere
-func stop_menu_music() -> void:
-	if _music_player and _music_player.playing:
-		print("[MenuManager] Stopping menu music")
-		_music_player.stop()
-
-
-## Start menu music - can be called when returning to menus
-func start_menu_music() -> void:
-	if _music_player == null:
-		_setup_music()
-		return
-	
-	if _music_player.stream == null:
-		# Stream wasn't loaded, try to set it up again
-		_setup_music()
-		return
-	
-	if not _music_player.playing:
-		print("[MenuManager] Starting menu music")
-		_music_player.play()
-
-
-## Return to main menu from game - clears everything and shows main menu
-func return_to_main_menu() -> void:
-	print("[MenuManager] return_to_main_menu called")
-	
-	# First change scene to remove the Level/game scene
-	get_tree().change_scene_to_file("res://scenes/ui/MainMenu.tscn")
-	
-	# Wait for scene change, then set up MenuManager's menu properly
-	await get_tree().process_frame
-	await get_tree().process_frame
-	
-	# Get the new MainMenu that was loaded
-	var root := get_tree().current_scene
-	if root and root is MainMenu:
-		print("[MenuManager] Found MainMenu scene, connecting signals")
-		# Clear our internal state
-		_clear_stack()
-		_current_menu = root
-		
-		# Connect signals to make buttons work
-		if root.has_signal("play_selected"):
-			root.play_selected.connect(_on_play_selected)
-		if root.has_signal("settings_selected"):
-			root.settings_selected.connect(_on_settings_selected)
-		if root.has_signal("achievements_selected"):
-			root.achievements_selected.connect(_on_achievements_selected)
-		if root.has_signal("quit_selected"):
-			root.quit_selected.connect(_on_quit_selected)
-		if root.has_signal("leaderboards_selected"):
-			root.leaderboards_selected.connect(_on_leaderboards_selected)
-		if root.has_signal("shop_selected"):
-			root.shop_selected.connect(_on_shop_selected)
-		
-		# Start menu music
-		start_menu_music()
-	else:
-		push_warning("[MenuManager] Could not find MainMenu scene after return")
+	pass
 
 
 func show_main_menu() -> void:
@@ -913,3 +854,78 @@ func _on_game_start_requested(squad: Array[int], stage_id: String) -> void:
 	# Change to Level scene
 	print("[MenuManager] Changing to Level scene...")
 	get_tree().change_scene_to_file("res://scenes/levels/Level.tscn")
+
+
+# --- Music Control API ---
+
+func start_menu_music() -> void:
+	## Start the main menu music (used when returning from game)
+	if _music_player and not _music_player.playing:
+		_music_player.play()
+		print("[MenuManager] Menu music started")
+	elif not _music_player:
+		# Create player if needed
+		_music_player = AudioStreamPlayer.new()
+		_music_player.bus = "Music"
+		add_child(_music_player)
+		var stream = load(MENU_MUSIC_PATH)
+		if stream:
+			_music_player.stream = stream
+			_music_player.play()
+			print("[MenuManager] Menu music player created and started")
+
+
+func stop_menu_music() -> void:
+	## Stop the main menu music (used before starting game)
+	if _music_player and _music_player.playing:
+		_music_player.stop()
+		print("[MenuManager] Menu music stopped")
+
+
+func return_to_main_menu() -> void:
+	## Return to main menu from anywhere (game, pause menu, etc.)
+	print("[MenuManager] Returning to main menu...")
+	
+	# Unpause in case game was paused
+	get_tree().paused = false
+	
+	# Stop any game music/ambient sounds
+	if AudioDirector:
+		AudioDirector.play_ui_music() # Switch to menu music (handles fade)
+		AudioDirector.stop_ambient(0.3)
+	
+	# Clear any She Descends mode state
+	if GameState:
+		GameState.she_descends_mode = false
+	
+	# Clear menu stack
+	_clear_stack()
+	
+	# Change to main menu scene
+	# Change to main menu scene
+	get_tree().change_scene_to_file("res://scenes/ui/MainMenu.tscn")
+
+
+func register_root_main_menu(menu: Control) -> void:
+	## Registers an externally loaded MainMenu (e.g. from change_scene)
+	## Connects signals so MenuManager can handle navigation
+	print("[MenuManager] Registering root main menu")
+	
+	# Ensure stack is clear (we are at root)
+	_clear_stack()
+	_current_menu = menu 
+	
+	# Connect signals
+	if menu.has_signal("play_selected") and not menu.play_selected.is_connected(_on_play_selected):
+		menu.play_selected.connect(_on_play_selected)
+	if menu.has_signal("settings_selected") and not menu.settings_selected.is_connected(_on_settings_selected):
+		menu.settings_selected.connect(_on_settings_selected)
+	if menu.has_signal("achievements_selected") and not menu.achievements_selected.is_connected(_on_achievements_selected):
+		menu.achievements_selected.connect(_on_achievements_selected)
+	if menu.has_signal("quit_selected") and not menu.quit_selected.is_connected(_on_quit_selected):
+		menu.quit_selected.connect(_on_quit_selected)
+	if menu.has_signal("leaderboards_selected") and not menu.leaderboards_selected.is_connected(_on_leaderboards_selected):
+		menu.leaderboards_selected.connect(_on_leaderboards_selected)
+	if menu.has_signal("shop_selected") and not menu.shop_selected.is_connected(_on_shop_selected):
+		menu.shop_selected.connect(_on_shop_selected)
+

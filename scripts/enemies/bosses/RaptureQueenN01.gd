@@ -30,12 +30,36 @@ var _explosion_triggered: bool = false
 const EVENT_WARNING_TIME := 168.0 # 2:48
 const EVENT_EXPLOSION_TIME := 174.0 # 2:54
 
+# XP Deduplication - prevent double XP from duplicate damage signals
+var _last_xp_frame: int = -1
+var _last_xp_amount: int = 0
+var _xp_accumulator: float = 0.0  # Accumulates partial XP for fast weapons (e.g. Minigun 0.5%)
+
 func _ready() -> void:
 	# Mark as boss BEFORE super._ready() so ModularEnemy can see the group
 	add_to_group("boss")
 	set_meta("enemy_tier", "boss")
 	
 	super._ready()
+	
+	# Setup health and movement override (MOVED BEFORE HUD NOTIFICATION)
+	if health_component:
+		# Goddess Fall / She Descends override: 999 HP (Hardcore)
+		if GameState and (GameState.she_descends_mode or GameState.goddess_fall_mode):
+			health_component.max_hp = 999
+			health_component.current_hp = 999
+			# Connect damaged signal for XP-from-damage
+			if not health_component.damaged.is_connected(_on_she_descends_damaged):
+				health_component.damaged.connect(_on_she_descends_damaged)
+		else:
+			# Normal Boss Mode
+			health_component.max_hp = 9999
+			health_component.current_hp = 9999
+
+	# Update local HP bar specifically because ModularEnemy initialized it with old values
+	if hp_bar:
+		hp_bar.max_value = health_component.max_hp
+		hp_bar.value = health_component.current_hp
 	
 	# FORCE BOSS BAR (User Request)
 	
@@ -57,10 +81,7 @@ func _ready() -> void:
 	if has_node("Visuals"):
 		_visuals = $Visuals
 	
-	# Setup health and movement override
-	if health_component:
-		health_component.max_hp = 9999
-		health_component.current_hp = 9999
+	# Health setup moved to start of _ready
 	
 	if movement_component:
 		movement_component.max_speed = 120.0 # Increased from 40.0
@@ -90,6 +111,20 @@ func _ready() -> void:
 	_setup_boss_shield()
 
 # Removed _setup_visual_overlays as logic is now in Visuals node
+
+func _exit_tree() -> void:
+	# CLEANUP: Remove global overlays on scene switch/restart
+	var overlay = get_tree().root.get_node_or_null("QueenEventOverlay")
+	if overlay:
+		overlay.queue_free()
+	
+	var explosion = get_tree().root.get_node_or_null("QueenEventExplosion")
+	if explosion:
+		explosion.queue_free()
+		
+	var explosion_end = get_tree().root.get_node_or_null("QueenExplosionEnd")
+	if explosion_end:
+		explosion_end.queue_free()
 
 func _process(delta: float) -> void:
 	super._process(delta)
@@ -165,6 +200,14 @@ func _setup_boss_shield() -> void:
 		_shield_ready_to_deploy = true
 	)
 	
+	# 3. Boss Shield XP
+	# Connect to the shield's damage signal to award XP when hitting shield
+	if GameState and (GameState.she_descends_mode or GameState.goddess_fall_mode):
+		if _boss_shield and _boss_shield.has_signal("shield_damaged"):
+			if not _boss_shield.shield_damaged.is_connected(Callable(self, "_on_she_descends_damaged")):
+				# Pass the actual source from the shield instead of hardcoding "boss_shield"
+				_boss_shield.shield_damaged.connect(func(amount, source): _on_she_descends_damaged(amount, source))
+	
 	# Start inactive but ready
 	_boss_shield.deactivate_initially()
 	_shield_ready_to_deploy = true
@@ -183,16 +226,23 @@ func get_active_shield_stats() -> Vector2:
 func _process_event_timer(delta: float) -> void:
 	_event_timer += delta
 	
+	# Debug print every 10 seconds
+	if int(_event_timer) % 10 == 0 and int(_event_timer) != int(_event_timer - delta):
+		print("[Queen] Event Timer: %.1f" % _event_timer)
+	
 	# 2:48 - Warning Phase (Red Tint + Charging)
 	if _event_timer >= EVENT_WARNING_TIME and not _warning_triggered:
+		print("[Queen] Triggering Event Warning at %.1f" % _event_timer)
 		_trigger_event_warning()
 	
 	# 2:54 - Explosion Phase (Game Over)
 	if _event_timer >= EVENT_EXPLOSION_TIME and not _explosion_triggered:
+		print("[Queen] Triggering Event Explosion at %.1f" % _event_timer)
 		_trigger_event_explosion()
 
 func _trigger_event_warning() -> void:
 	_warning_triggered = true
+	print("[Queen] Creating Warning Overlay")
 	
 	# Create Red Overlay
 	var canvas = CanvasLayer.new()
@@ -215,6 +265,18 @@ func _trigger_event_warning() -> void:
 		var charge_tween = create_tween()
 		charge_tween.tween_property(_visuals, "modulate", Color(10.0, 0.5, 0.5, 1.0), 6.0) # Glow intense red
 
+func _on_death(amount: int = 1) -> void:
+	# Notify Director of Victory!
+	var directors = get_tree().get_nodes_in_group("wave_director")
+	if directors.size() > 0:
+		if directors[0].has_method("notify_rapture_queen_defeated"):
+			directors[0].notify_rapture_queen_defeated()
+		else:
+			# Fallback if specific method missing
+			directors[0].notify_boss_defeated()
+			
+	super._on_death(amount)
+
 func _trigger_event_explosion() -> void:
 	_explosion_triggered = true
 	
@@ -223,28 +285,36 @@ func _trigger_event_explosion() -> void:
 	if overlay:
 		overlay.queue_free()
 	
-	# Massive Explosion Effect (White Flash)
+	# Massive Explosion Effect (White Flash -> Fade to Black)
 	var canvas = CanvasLayer.new()
 	canvas.layer = 120
+	canvas.name = "QueenExplosionEnd"
 	get_tree().root.add_child(canvas)
 	
 	var flash = ColorRect.new()
 	flash.set_anchors_preset(Control.PRESET_FULL_RECT)
 	flash.color = Color.WHITE
+	flash.mouse_filter = Control.MOUSE_FILTER_STOP # Block inputs
 	canvas.add_child(flash)
 	
-	# Kill all players instantly
-	var players = get_tree().get_nodes_in_group("player")
-	for p in players:
-		if p.has_method("die"):
-			p.die()
-		elif p.has_method("take_damage"):
-			# True damage, ensure kill
-			p.take_damage(999999, false, Vector2.ZERO, true)
+	# Animation Sequence
+	var tween = create_tween()
 	
-	# Also kill boss to end run logically (if needed) or just let WaveDirector handle 'run lost' via player death
-	# But prompt says "all players will die. This ends the match."
-	# Player death usually triggers run end.
+	# 1. Hold White for 0.5s (Impact)
+	tween.tween_interval(0.5)
+	
+	# 2. Fade to Black over 2.0s
+	tween.tween_property(flash, "color", Color.BLACK, 2.0).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_CUBIC)
+	
+	# 3. Trigger Defeat Menu (Player Death)
+	tween.tween_callback(func():
+		var players = get_tree().get_nodes_in_group("player")
+		for p in players:
+			if p.has_method("die"):
+				p.die()
+			elif p.has_method("take_damage"):
+				p.take_damage(999999, false, Vector2.ZERO, true)
+	)
 
 func _process_passive_regeneration(delta: float) -> void:
 	# Don't regen if dead
@@ -255,11 +325,11 @@ func _process_passive_regeneration(delta: float) -> void:
 	var regen_rate_percent = 0.0
 	
 	if hp_percent >= 0.50:
-		regen_rate_percent = 0.01 # 1%
+		regen_rate_percent = 0.01 # 1% (Reverted per user request)
 	elif hp_percent >= 0.25:
-		regen_rate_percent = 0.025 # 2.5%
-	else:
 		regen_rate_percent = 0.05 # 5%
+	else:
+		regen_rate_percent = 0.10 # 10%
 		
 	# Apply Heal
 	var heal_amount = health_component.max_hp * regen_rate_percent * delta
@@ -283,11 +353,13 @@ func _trigger_self_destruct() -> void:
 	_is_self_destructing = true
 	_self_destruct_timer = 10.0 # 10 seconds
 	
-	# Visual Warning
+	# Visual Warning (Reuse Timer Event Warning)
+	if not _warning_triggered:
+		_trigger_event_warning()
+	
+	# Visual Warning Local
 	if hp_label:
 		hp_label.modulate = Color(1, 0, 0) # Red Text
-		
-	# Could play alarm sound or flash effect here
 
 func _process_self_destruct(delta: float) -> void:
 	_self_destruct_timer -= delta
@@ -300,8 +372,9 @@ func _process_self_destruct(delta: float) -> void:
 	modulate.g = abs(sin(_self_destruct_timer * 5.0))
 	modulate.b = abs(sin(_self_destruct_timer * 5.0))
 	
-	if _self_destruct_timer <= 0:
-		_execute_instant_kill()
+	if _self_destruct_timer <= 0 and not _explosion_triggered:
+		# Use cinematic explosion instead of instant kill
+		_trigger_event_explosion()
 
 func _execute_instant_kill() -> void:
 	var player = get_tree().get_first_node_in_group("player")
@@ -427,3 +500,65 @@ func get_velocity_for_hair() -> Vector2:
 	if movement_component:
 		return movement_component.velocity
 	return Vector2.ZERO
+
+
+# --- SHE DESCENDS EASTER EGG ---
+
+func _on_she_descends_damaged(amount: int, _source: String) -> void:
+	## Award XP and Burst to player based on weapon type in She Descends mode
+	## Uses unified BurstConfig for rates (same as normal mode burst gen)
+	
+	# Deduplication: Skip if same damage amount received in same frame
+	# This handles the duplicate signal issue from body + hitbox collision
+	var current_frame := Engine.get_process_frames()
+	if current_frame == _last_xp_frame and amount == _last_xp_amount:
+		return  # Duplicate, skip
+	_last_xp_frame = current_frame
+	_last_xp_amount = amount
+	
+	var player_node = get_tree().get_first_node_in_group("player")
+	if not player_node:
+		return
+	
+	var src_lower: String = _source.to_lower()
+	
+	# Skip burst attacks entirely - no XP or Burst gain from burst skills
+	if BurstConfig.is_burst_source(src_lower):
+		# print("Skipping Burst Source: ", src_lower)
+		return
+	
+	# If source doesn't map to a known weapon type (e.g., 'player', 'boss_shield', 'unknown'),
+	# fall back to getting the weapon type from the player's current character
+	var gain_percent: float = BurstConfig.get_rate(src_lower)
+	
+	# Debug tracing for burst refill bug
+	# Log if we gain ANY burst to see values
+	if gain_percent > 0.0:
+		if player_node.has_method("get_burst_current"):
+			var cur = player_node.get_burst_current()
+			print("XP Add: ", gain_percent, " OldBurst: ", cur, " Source: ", src_lower)
+		else:
+			print("XP Add: ", gain_percent, " Source: ", src_lower)
+
+	# Only fall back to player weapon for truly ambiguous sources (player, boss_shield)
+	# Do NOT fall back for 'projectile' or 'unknown' - these could be beam/collision debris
+	if gain_percent == 1.0 and src_lower in ["player", "boss_shield"]:
+		# Source didn't map correctly - get weapon type from current character
+		if player_node.has_method("_get_current_weapon_type"):
+			var weapon_type: String = player_node._get_current_weapon_type()
+			gain_percent = BurstConfig.get_rate(weapon_type)
+			src_lower = weapon_type  # For debug
+	
+	# Apply XP gain (% of 100 XP to next level)
+	if player_node.has_method("add_xp") and gain_percent > 0:
+		_xp_accumulator += gain_percent
+		var xp_gain := int(_xp_accumulator)  # Get only the whole number part
+		if xp_gain >= 1:
+			player_node.add_xp(xp_gain)
+			_xp_accumulator -= xp_gain  # Remove ONLY the awarded part, keep fraction
+	
+	# Apply Burst gain (% of 100 max burst)
+	if player_node.has_method("add_burst_charge") and gain_percent > 0:
+		player_node.add_burst_charge(gain_percent)
+
+

@@ -139,6 +139,10 @@ func _on_burst_start() -> void:
 	player.hp = max(player.hp - hp_cost, 1)
 	player._update_health_display(-hp_cost, true)
 	
+	# Manually enable invincibility during the burst sequence
+	# The burst effect will take time to complete (0.2s per enemy)
+	player.invincible = true
+	
 	# Create burst effect
 	var effect = ScarletBurstEffectScript.new()
 	effect.owner_node = player
@@ -151,6 +155,13 @@ func _on_burst_start() -> void:
 	_play_sound("sword")
 
 func _on_burst_complete(teleport_position: Vector2) -> void:
+	# Disable manual invincibility
+	player.invincible = false
+	
+	# Grant 1 second of post-burst safety
+	if player.has_method("add_invincibility"):
+		player.add_invincibility(1.0)
+	
 	if teleport_position != Vector2.ZERO:
 		player.global_position = teleport_position
 	burst_active = false

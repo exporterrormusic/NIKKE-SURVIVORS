@@ -400,7 +400,7 @@ func _update_burst_dot(_delta: float) -> void:
 		
 		# Deal damage
 		if enemy.has_method("take_damage"):
-			enemy.take_damage(damage, false, Vector2.ZERO, not burst_charge_on_kill)
+			enemy.take_damage(damage, false, Vector2.ZERO, not burst_charge_on_kill, "SinBurst")
 			enemies_damaged += 1
 			
 			if burst_charge_on_kill and player.has_method("register_burst_hit"):
@@ -484,7 +484,7 @@ func _spawn_burst_explosion(position: Vector2) -> void:
 		
 		if enemy.has_method("take_damage"):
 			var hit_dir := ((enemy as Node2D).global_position - position).normalized()
-			enemy.take_damage(damage, false, hit_dir, true)  # true = from burst
+			enemy.take_damage(damage, false, hit_dir, true, "SinBurst")  # true = from burst
 	
 	# Visual explosion
 	var visual := Node2D.new()

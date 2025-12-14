@@ -73,9 +73,22 @@ func _handle_escape() -> void:
 
 func _go_back() -> void:
 	UISounds.play_back()
-	# If we came from Level (pause menu), use MenuManager to go to main menu
-	# Check if MenuManager exists and is the proper way back
-	if MenuManager:
+	
+	# Reset stage selector if interacting with it (clears music/modes)
+	# Reset stage selector if interacting with it (clears music/modes)
+	if _stage_selector and _stage_selector.has_method("clear_goddess_flags"):
+		# _stage_selector.clear_goddess_flags() # DISABLED: Prevents aggressive flag clearing
+		pass
+	elif _stage_selector and _stage_selector.has_method("reset_state"):
+		# _stage_selector.reset_state()
+		pass
+	
+	# If we are being managed by MenuManager (sub-menu), just ask to go back
+	# This avoids reloading the MainMenu scene which breaks state/music
+	if back_requested.get_connections().size() > 0:
+		back_requested.emit()
+	elif MenuManager:
+		# Fallback only if we have no connections (e.g. Pause Menu context)
 		MenuManager.return_to_main_menu()
 	else:
 		back_requested.emit()
@@ -563,15 +576,13 @@ func _play_burst_sfx(char_id: String) -> void:
 	if _burst_audio.playing:
 		_burst_audio.stop()
 	
-	# Build path to burst sound - char_id uses underscores, folders use hyphens
-	var folder_name := char_id.replace("_", "-")
-	var sound_path := "res://assets/characters/%s/burst.wav" % folder_name
+	# Use CharacterRegistry for sound loading (supports Commander random selection)
+	var registry = CharacterRegistry.get_instance()
+	var stream: AudioStream = registry.get_burst_sound(char_id)
 	
-	if ResourceLoader.exists(sound_path):
-		var stream := load(sound_path) as AudioStream
-		if stream:
-			_burst_audio.stream = stream
-			_burst_audio.play()
+	if stream:
+		_burst_audio.stream = stream
+		_burst_audio.play()
 
 func _on_slot_cleared(_index: int) -> void:
 	_update_card_states()
@@ -614,6 +625,15 @@ func _transition_to_squad() -> void:
 	if _phase == Phase.SQUAD:
 		return
 	_phase = Phase.SQUAD
+	
+	# Reset stage selector state (music, easter eggs)
+	# Reset stage selector state (music, easter eggs)
+	if _stage_selector and _stage_selector.has_method("clear_goddess_flags"):
+		# _stage_selector.clear_goddess_flags() # DISABLED: Prevents aggressive flag clearing
+		pass
+	elif _stage_selector and _stage_selector.has_method("reset_state"):
+		# _stage_selector.reset_state()
+		pass
 	
 	if _transition_tween:
 		_transition_tween.kill()

@@ -25,6 +25,7 @@ var draw_hp_bar: bool = true
 
 # Signals
 signal recharge_complete
+signal shield_damaged(amount, source)
 
 # Regeneration
 var _regen_timer: float = 0.0
@@ -81,6 +82,7 @@ func activate() -> void:
 func _ready() -> void:
 	z_index = 35
 	add_to_group("shielder_shields")
+	add_to_group("boss_shields")  # For explosion collision detection
 	
 	# Fix for Night Mode: Use unshaded material to ignore CanvasModulate darkening
 	var mat = CanvasItemMaterial.new()
@@ -120,6 +122,10 @@ func _on_body_entered(body: Node2D) -> void:
 
 
 func _handle_projectile_hit(projectile: Node2D) -> void:
+	# Skip enemy projectiles (boss missiles, etc) - shields shouldn't block own team
+	if projectile.is_in_group("enemy_projectiles"):
+		return
+	
 	# Check if it's a projectile
 	if not projectile.is_in_group("player_projectiles") and not projectile.is_in_group("projectiles"):
 		if not ("velocity" in projectile or "damage" in projectile or "base_damage" in projectile):
@@ -132,7 +138,28 @@ func _handle_projectile_hit(projectile: Node2D) -> void:
 	elif "damage" in projectile:
 		damage = projectile.damage
 	
-	take_shield_damage(damage)
+	# Try to identify source from projectile/area
+	var src: String = "projectile"
+	
+	# Check properties directly on the collider first
+	if projectile.get("killer_source"):
+		src = projectile.killer_source
+	elif projectile.has_method("get_source"):
+		src = projectile.get_source()
+	elif "source" in projectile:
+		src = projectile.source
+	else:
+		# Check parent (e.g. Area2D child of a Beam node)
+		var parent = projectile.get_parent()
+		if parent:
+			if parent.get("killer_source"):
+				src = parent.killer_source
+			elif parent.has_method("get_source"):
+				src = parent.get_source()
+			elif "source" in parent:
+				src = parent.source
+	
+	take_shield_damage(damage, src)
 	
 	# Destroy projectile
 	if projectile.has_method("queue_free"):
@@ -202,11 +229,17 @@ func _start_reforming() -> void:
 	_crack_points.clear()
 
 
-func take_shield_damage(amount: int) -> void:
-	if not _is_active or shield_hp <= 0:
+func take_shield_damage(amount: int, source: String = "unknown") -> void:
+	if not _is_active:
 		return
-	
+		
 	shield_hp -= amount
+	
+	# Visual feedback
+	# _play_hit_effect() # This function is not defined in the provided code.
+	
+	# Emit signal using the source
+	shield_damaged.emit(amount, source)
 	_hit_flash = 1.0
 	_generate_cracks()
 	

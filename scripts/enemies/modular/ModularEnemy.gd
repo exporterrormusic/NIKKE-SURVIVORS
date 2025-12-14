@@ -733,6 +733,11 @@ func _on_damaged(_amount: int, source: String) -> void:
 		var player = get_tree().get_first_node_in_group("player")
 		if player and player.has_method("register_burst_hit"):
 			player.register_burst_hit(self)
+	# Charmed enemies generate burst at reduced rate (0.5% per hit)
+	elif source == "charmed_enemy":
+		var player = get_tree().get_first_node_in_group("player")
+		if player and player.has_method("register_burst_hit"):
+			player.register_burst_hit(self, false, "charmed", false)
 
 func _on_death(overkill: int = 0) -> void:
 	# Defer ENTIRE death sequence to avoid physics locking
@@ -828,16 +833,17 @@ func _spawn_pristine_core_orb(value: int) -> void:
 # Forwarding 'take_damage' for direct calls that bypass HitboxComponent
 func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector2.ZERO, is_burst: bool = false, source: String = "unknown") -> void:
 	# Check if protected by a Shielder's shield
-	if _check_shielder_protection(amount):
+	if _check_shielder_protection(amount, source):
 		return  # Damage absorbed by shield
 	hitbox_component.take_damage(amount, is_crit, direction, is_burst, source)
 
-func _check_shielder_protection(damage_amount: int) -> bool:
+func _check_shielder_protection(damage_amount: int, source: String = "unknown") -> bool:
 	"""Check if this enemy is protected by a Shielder's shield. Returns true if damage was absorbed."""
 	# Check protection status and get the shield instance
 	var shielding_unit = _get_protecting_shield()
 	if shielding_unit:
-		shielding_unit.take_shield_damage(damage_amount)
+		if shielding_unit.has_method("take_shield_damage"):
+			shielding_unit.take_shield_damage(damage_amount, source)
 		return true
 	return false
 

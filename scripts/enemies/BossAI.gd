@@ -14,7 +14,7 @@ const ATTACK_START_DELAY := 3.0       # Delay before boss starts attacking
 const MISSILES_BOSS := 4      # Bosses fire 4 missiles (2 per side)
 const MISSILES_ELITE := 1     # Elites fire 1 missile
 const MISSILES_TANK := 1      # Tanks fire 1 missile
-const MISSILE_SPAWN_OFFSET := 30.0  # Distance from boss to spawn missiles (close to body)
+const MISSILE_SPAWN_OFFSET := 80.0  # Distance from boss to spawn missiles (increased for large bosses like Queen)
 
 # Beam settings
 const BEAM_CHARGE_TIME := 2.0
@@ -54,11 +54,11 @@ func _ready() -> void:
 	_is_boss = _boss.is_in_group("boss") and not _is_tank and not _is_elite
 	
 	# Safety check: Tanks should only have BossAI in Goddess Fall mode
-	# If somehow a tank got BossAI in normal mode, disable missile firing
-	if _is_tank and not GameState.goddess_fall_mode:
-		push_warning("[BossAI] Tank has BossAI but not in Goddess Fall mode - disabling")
-		queue_free()
-		return
+	# UPDATE: Mechanics are now baseline.
+	# if _is_tank and not GameState.goddess_fall_mode:
+	# 	push_warning("[BossAI] Tank has BossAI but not in Goddess Fall mode - disabling")
+	# 	queue_free()
+	# 	return
 	
 	if _is_tank:
 		_missile_cooldown = MISSILE_COOLDOWN_TANK
@@ -75,14 +75,12 @@ func _ready() -> void:
 	# Start with half cooldown
 	_missile_timer = _missile_cooldown / 2.0
 	
-	# Goddess Fall: 30% faster attack rates
-	if GameState.goddess_fall_mode:
-		_missile_cooldown *= 0.7
 	
-	# Goddess Fall: 30% faster charge times (beam)
-	var _beam_charge_time := BEAM_CHARGE_TIME
-	if GameState.goddess_fall_mode:
-		_beam_charge_time = BEAM_CHARGE_TIME * 0.7
+	# Faster attack rates (was Goddess Fall exclusive)
+	_missile_cooldown *= 0.7
+	
+	# Faster charge times (was Goddess Fall exclusive)
+	var _beam_charge_time := BEAM_CHARGE_TIME * 0.7
 	set_meta("beam_charge_time", _beam_charge_time)
 	
 	# Find player

@@ -338,9 +338,15 @@ func _apply_tier_stats(enemy: Node2D, tier_name: String) -> void:
 		new_max = 1
 	enemy.max_hp = new_max
 	enemy.hp = enemy.max_hp
+
+	# FORCE HP OVERRIDE for N01 in Goddess Fall mode
+	if tier_name == "super_boss" and GameState.goddess_fall_mode:
+		enemy.max_hp = 9999
+		enemy.hp = 9999
 	
 	# Apply speed
 	var speed_mult: float = tier.speed_mult
+	# Only apply Goddess Fall speed modifier in that mode
 	if GameState.goddess_fall_mode:
 		speed_mult *= EnemyTierConfigClass.GODDESS_FALL_SPEED_MULT
 	enemy.speed = int(enemy.speed * speed_mult)
@@ -372,14 +378,16 @@ func _apply_tier_stats(enemy: Node2D, tier_name: String) -> void:
 	
 	# Handle core drops
 	var core_chance: float = tier.get("core_drop_chance", 0.0)
-	if GameState.goddess_fall_mode and tier_name == "elite":
+	# Elite core drop chance (20%) is now baseline
+	if tier_name == "elite":
 		core_chance = EnemyTierConfigClass.GODDESS_FALL_ELITE_CORE_CHANCE
 	if core_chance > 0.0 and randf() < core_chance:
 		enemy.set_meta("pristine_core_drop", difficulty_mult)
 	
 	# Add boss AI if needed
 	var needs_boss_ai: bool = tier.get("has_boss_ai", false)
-	if tier_name == "tank" and GameState.goddess_fall_mode:
+	# Tank Boss AI and Elite Enhanced AI are now baseline
+	if tier_name == "tank":
 		needs_boss_ai = EnemyTierConfigClass.GODDESS_FALL_TANK_BOSS_AI
 	
 	if needs_boss_ai:
@@ -391,7 +399,7 @@ func _apply_tier_stats(enemy: Node2D, tier_name: String) -> void:
 			# Set metadata based on tier
 			if tier_name == "tank":
 				ai_node.set_meta("tank_mode", true)
-			elif tier_name == "elite" and GameState.goddess_fall_mode:
+			elif tier_name == "elite":
 				ai_node.set_meta("elite_enhanced", true)
 			enemy.add_child(ai_node)
 	
@@ -405,12 +413,11 @@ func _apply_tier_stats(enemy: Node2D, tier_name: String) -> void:
 			fx.name = "%sEffects" % tier_name.capitalize().replace("_", "")
 			enemy.add_child(fx)
 	
-	# Goddess Fall special features
-	if GameState.goddess_fall_mode:
-		if tier.get("has_aura", false):
-			_setup_super_boss_aura(enemy)
-		if tier_name in ["boss", "super_boss"]:
-			_setup_boss_enrage_timer(enemy)
+	# Special features (Aura / Enrage) are now baseline
+	if tier.get("has_aura", false):
+		_setup_super_boss_aura(enemy)
+	if tier_name in ["boss", "super_boss"]:
+		_setup_boss_enrage_timer(enemy)
 	
 	# Show boss health bar if applicable
 	var health_bar_name: String = tier.get("health_bar_name", "")
@@ -735,6 +742,11 @@ func spawn_rapture_queen() -> Node2D:
 			spawn_pos.y = clamp(spawn_pos.y, _map_bounds.position.y + 300, _map_bounds.end.y - 300)
 	
 	queen.global_position = spawn_pos
+	
+	# FORCE HP OVERRIDE for Goddess Fall (Critical Fix)
+	if GameState.goddess_fall_mode:
+		queen.max_hp = 9999
+		queen.hp = 9999
 	
 	# Apply Boss Glow (Crucial for visibility in Night mode)
 	# Using Purple/Pink glow for Rapture Queen

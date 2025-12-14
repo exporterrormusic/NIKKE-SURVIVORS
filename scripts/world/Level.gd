@@ -99,6 +99,11 @@ func _setup_hud() -> void:
 	# Initialize environment from stage (or random fallback)
 	_initialize_stage_environment()
 	
+	# She Descends easter egg mode: spawn N01 immediately
+	if GameState and (GameState.she_descends_mode or GameState.goddess_fall_mode):
+		_start_she_descends_mode()
+		return  # Skip normal run start
+	
 	# Notify run started
 	if GameState and EventBus:
 		EventBus.run_started.emit(GameState.current_stage_id)
@@ -246,7 +251,7 @@ func _on_quit_requested() -> void:
 	
 	# Stop battle music and ambient sounds
 	if AudioDirector:
-		AudioDirector.stop_music(0.5)
+		# Don't stop music here, let MenuManager handle the transition to menu music
 		AudioDirector.stop_ambient(0.5)
 	
 	# Use MenuManager to return to main menu so signals get connected properly
@@ -348,12 +353,40 @@ func _initialize_stage_environment() -> void:
 	# Initialize environment
 	environment.initialize_environment(0, biome, time)
 	
+	# Debug what script is on environment
+	if environment.get_script():
+		print("[Level] Environment script path: ", environment.get_script().resource_path)
+	
+	# Cleanup boulders near edges to prevent getting stuck
+	# Call deferred to ensure they are spawned
+	call_deferred("_cleanup_edge_boulders")
+	
 	# Update ambient particles
 	_update_ambient_systems(biome, time)
 
 func _initialize_random_environment() -> void:
 	# Legacy function - redirects to stage-based initialization
 	_initialize_stage_environment()
+
+func _cleanup_edge_boulders() -> void:
+	# World size is 4000 (-2000 to 2000)
+	# Keep boulders away from edges (margin of 300 units = 1700 limit)
+	var limit := 1700.0
+	
+	var boulders := get_tree().get_nodes_in_group("boulders")
+	var removed_count := 0
+	
+	for boulder in boulders:
+		if not is_instance_valid(boulder):
+			continue
+			
+		var pos: Vector2 = boulder.global_position
+		if abs(pos.x) > limit or abs(pos.y) > limit:
+			boulder.queue_free()
+			removed_count += 1
+	
+	if removed_count > 0:
+		print("[Level] Removed ", removed_count, " boulders near map edges to prevent stuck issues.")
 
 func _update_ambient_systems(biome_id: StringName, time_id: StringName) -> void:
 	var is_night := _is_night_time(time_id)
@@ -616,10 +649,18 @@ class _PristineCoreIcon extends Control:
 		var highlight_radius: float = radius * 0.2
 		draw_circle(center + highlight_offset, highlight_radius, Color(1.0, 1.0, 1.0, 0.6))
 
-func _process(_delta: float) -> void:
+var _goddess_elapsed: float = 0.0
+
+func _process(delta: float) -> void:
 	# Update wave director with current enemy count (throttled for performance)
 	if _wave_director and _enemy_container and Engine.get_process_frames() % 10 == 0:
 		_wave_director.set_enemy_count(_enemy_container.get_child_count())
+	
+	# Handle Goddess Fall Timer (WaveDirector is deleted in this mode)
+	if GameState and (GameState.goddess_fall_mode or GameState.she_descends_mode) and _wave_director == null:
+		_goddess_elapsed += delta
+		if _wave_ui:
+			_wave_ui.update_time(_goddess_elapsed, 175.0)
 
 func _on_enemy_spawn_requested(enemy_type: String, count: int, pattern: String) -> void:
 	# print("[Level] _on_enemy_spawn_requested: type=", enemy_type, " count=", count, " pattern=", pattern)
@@ -798,6 +839,107 @@ func _trigger_rapture_weather() -> void:
 			
 	# 3. Start Lightning
 	_start_lightning_system()
+
+
+# --- SHE DESCENDS EASTER EGG MODE ---
+
+func _start_she_descends_mode() -> void:
+	## Easter egg mode: immediate N01 fight with modified rules
+	print("[Level] SHE DESCENDS mode activated!")
+	_is_rapture_active = true
+	
+	# Force night and weather effects
+	_trigger_rapture_weather()
+	
+	# Disable wave director
+	if _wave_director:
+		_wave_director.queue_free()
+		_wave_director = null
+	
+	# Force UI into Goddess Mode (Override)
+	# This ensures HUD says ENDGAME even if GameState flags are flaky
+	if _wave_ui and _wave_ui.has_method("set_goddess_mode"):
+		_wave_ui.set_goddess_mode(true)
+	
+	# Spawn N01 immediately (with short delay for dramatic effect)
+	await get_tree().create_timer(1.5).timeout
+	
+	if _enemy_spawner and _enemy_spawner.has_method("spawn_rapture_queen"):
+		var queen = _enemy_spawner.spawn_rapture_queen()
+		if queen:
+			# Connect defeat handler
+			queen.tree_exiting.connect(_on_she_descends_queen_defeated)
+			
+			# Entrance animation: start above screen, descend dramatically
+			_animate_queen_descent(queen)
+	
+	# Play timer.mp3 theme (fresh start)
+	if AudioDirector:
+		AudioDirector.play_music_by_path("res://assets/sounds/music/bgm/timer.mp3", true, 0.5)
+
+
+func _animate_queen_descent(queen: Node2D) -> void:
+	## Animate N01 descending from above the screen
+	if not queen or not is_instance_valid(queen):
+		return
+	
+	# Get player position for target
+	var target_pos := Vector2.ZERO
+	if player and is_instance_valid(player):
+		target_pos = player.global_position + Vector2(0, -400)  # Above player
+	
+	# Start N01 way above the screen
+	var start_pos := target_pos + Vector2(0, -1200)
+	queen.global_position = start_pos
+	
+	# Disable attacks during descent
+	if queen.has_method("set_attacks_enabled"):
+		queen.set_attacks_enabled(false)
+	var boss_ai = queen.get_node_or_null("BossAI")
+	if boss_ai:
+		boss_ai.process_mode = Node.PROCESS_MODE_DISABLED
+	
+	# Camera zoom out for dramatic effect
+	_on_rapture_queen_spawned()
+	
+	# Animate descent over 3 seconds
+	var tween := create_tween()
+	tween.set_trans(Tween.TRANS_SINE)
+	tween.set_ease(Tween.EASE_OUT)
+	tween.tween_property(queen, "global_position", target_pos, 3.0)
+	
+	# After descent, enable attacks
+	tween.tween_callback(func():
+		if queen and is_instance_valid(queen):
+			if queen.has_method("set_attacks_enabled"):
+				queen.set_attacks_enabled(true)
+			if boss_ai:
+				boss_ai.process_mode = Node.PROCESS_MODE_INHERIT
+			print("[Level] N01 descent complete, attacks enabled!")
+	)
+
+
+func _on_she_descends_queen_defeated() -> void:
+	## Called when N01 is defeated in easter egg mode
+	print("[Level] SHE DESCENDS: N01 defeated!")
+	
+	# Reset camera
+	if CombatJuice.instance:
+		var tween = create_tween()
+		tween.tween_property(CombatJuice.instance, "_base_zoom", Vector2.ONE, 2.0)
+	
+	# Reset the mode flag
+	if GameState:
+		GameState.she_descends_mode = false
+	
+	# Show victory screen after brief delay
+	await get_tree().create_timer(2.0).timeout
+	if _wave_director == null and player and is_instance_valid(player) and player.hp > 0:
+		# Player won this special mode
+		if GameState:
+			GameState.record_run_result("")
+		# Trigger victory/end (show defeat menu which can show victory state)
+		show_defeat_menu()
 
 func _start_lightning_system() -> void:
 	# Check if already running

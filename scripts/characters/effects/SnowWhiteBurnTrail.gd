@@ -222,13 +222,27 @@ func _draw_trail_layer(lengths: PackedFloat32Array, total_length: float, width_m
 		return
 	
 	# Build closed polygon
+	# Build closed polygon
 	var polygon := PackedVector2Array()
-	for pt in top_pts:
-		polygon.append(pt)
-	for i in range(bottom_pts.size() - 1, -1, -1):
-		polygon.append(bottom_pts[i])
 	
-	draw_colored_polygon(polygon, color)
+	# Add top points
+	for pt in top_pts:
+		if polygon.size() == 0 or not pt.is_equal_approx(polygon[-1]):
+			polygon.append(pt)
+			
+	# Add bottom points in reverse
+	for i in range(bottom_pts.size() - 1, -1, -1):
+		var pt = bottom_pts[i]
+		if polygon.size() == 0 or not pt.is_equal_approx(polygon[-1]):
+			polygon.append(pt)
+			
+	# Close loop check (ensure last != first)
+	if polygon.size() > 2 and polygon[-1].is_equal_approx(polygon[0]):
+		polygon.remove_at(polygon.size() - 1)
+		
+	# Ensure valid triangle at least
+	if polygon.size() >= 3:
+		draw_colored_polygon(polygon, color)
 
 func _check_enemies() -> void:
 	var tree := get_tree()
@@ -277,7 +291,7 @@ func _process_enemy(body: Node2D) -> void:
 		dot.setup(body, DOT_SOURCE_ID)
 	
 	if body.has_method("take_damage"):
-		body.take_damage(damage_per_tick, false, Vector2.ZERO)
+		body.take_damage(damage_per_tick, false, Vector2.ZERO, false, "burn_dot")
 
 func _smoothstep(edge0: float, edge1: float, x: float) -> float:
 	var t := clampf((x - edge0) / (edge1 - edge0), 0.0, 1.0)

@@ -62,9 +62,9 @@ const MUSIC_METADATA := {
 	"sin.mp3": { "name": "TASTE MY SILVER TONGUE (Sin's Theme)", "unlock_id": "" },
 	"snow.mp3": { "name": "UNYIELDING (Snow White's Theme)", "unlock_id": "" },
 	"western.mp3": { "name": "WESTERN", "unlock_id": "" },
-	"wishes.mp3": { "name": "ABANDON YOUR WISHES (Scheherezade's Theme)", "unlock_id": "abandoned_wishes" },
+	"wishes.mp3": { "name": "ABANDON YOUR WISHES (Scheherezade's Theme)", "unlock_id": "abandoned_wishes", "event_only": true },
 	"main-menu.mp3": { "name": "MAIN MENU", "unlock_id": "" },
-	"timer.mp3": { "name": "TIMER", "unlock_id": "she_descends" },
+	"timer.mp3": { "name": "TIMER", "unlock_id": "she_descends", "event_only": true },
 }
 
 signal music_track_changed(track_name: String)
@@ -97,7 +97,15 @@ func initialize() -> void:
 func play_random_battle_track(fade_time: float = 0.5) -> void:
 	# Use ResourceManifest for export-safe file listing
 	ResourceManifest.ensure_initialized()
-	var candidates: Array[String] = ResourceManifest.battle_music.duplicate()
+	var candidates: Array[String] = []
+	# Filter out event_only songs (timer.mp3, wishes.mp3)
+	for path in ResourceManifest.battle_music:
+		var file_name = path.get_file()
+		if MUSIC_METADATA.has(file_name):
+			var data = MUSIC_METADATA[file_name]
+			if data.get("event_only", false):
+				continue  # Skip event-only songs from random selection
+		candidates.append(path)
 	if candidates.is_empty():
 		push_warning("AudioDirector: No battle music files in manifest")
 		return
@@ -676,9 +684,9 @@ func _update_playlist() -> void:
 			_playlist.append(file_path)
 
 func play_next_random_song(force_start: bool = false) -> void:
-	if _playlist.is_empty():
-		_update_playlist()
-		if _playlist.is_empty(): return
+	# Always refresh playlist to pick up newly unlocked songs
+	_update_playlist()
+	if _playlist.is_empty(): return
 	
 	# Shuffle queue system: play all songs once before reshuffling
 	if _shuffled_queue.is_empty():

@@ -49,8 +49,14 @@ var _shader_material: ShaderMaterial = null
 var _particles: Array = []
 var _ring_phase: float = 0.0
 
+# Audio
+var _beam_audio_player: AudioStreamPlayer2D = null
+
 func _ready() -> void:
 	z_index = 500
+	
+	# Start continuous beam audio
+	_start_beam_audio()
 	
 	# Load beam shader
 	var shader = load("res://resources/shaders/marian_beam.gdshader")
@@ -85,7 +91,12 @@ func _assign_to_effects_layer() -> void:
 func _process(delta: float) -> void:
 	_age += delta
 	
+	# Manual loop check: verify beam sound is playing
+	if _beam_sound and is_instance_valid(_beam_sound) and not _beam_sound.playing:
+		_beam_sound.play()
+	
 	if _age >= duration:
+		_stop_beam_audio()
 		beam_ended.emit()
 		queue_free()
 		return
@@ -160,7 +171,7 @@ func _deal_beam_damage() -> void:
 		# Check if enemy is within beam
 		if _is_point_in_beam(enemy_node.global_position):
 			if enemy.has_method("take_damage"):
-				enemy.take_damage(damage_this_tick, false, _beam_direction, true)
+				enemy.take_damage(damage_this_tick, false, _beam_direction, true, "MarianBurst")
 			elif "hp" in enemy:
 				enemy.hp -= damage_this_tick
 
@@ -232,6 +243,8 @@ func _fire_homing_missiles() -> void:
 	var targets := enemies.slice(0, mini(_missiles_per_volley, enemies.size()))
 	
 	# Spawn missiles
+	# Play rocket launch sound
+	_play_rocket_sound()
 	for i in range(targets.size()):
 		var target = targets[i]
 		if not is_instance_valid(target):
@@ -298,9 +311,16 @@ func _record_burn_positions() -> void:
 func _create_burn_area() -> void:
 	_burn_area = Node2D.new()
 	_burn_area.set_script(_get_burn_area_script())
-	_burn_area.z_index = 5
+	_burn_area.z_as_relative = false
+	_burn_area.z_index = -5
 	_burn_area.global_position = Vector2.ZERO  # Keep at origin, use global coords
-	get_parent().add_child(_burn_area)
+	
+	# PARENTING FIX: Add to World (Player's parent) instead of EffectsLayer
+	# EffectsLayer forces high rendering order, ignoring negative Z-index relative to world
+	if player_ref and is_instance_valid(player_ref) and player_ref.get_parent():
+		player_ref.get_parent().add_child(_burn_area)
+	else:
+		get_parent().add_child(_burn_area)
 
 func _get_burn_area_script() -> GDScript:
 	var script := GDScript.new()
@@ -356,7 +376,18 @@ func _add_burn_rect(corners: Array, direction: Vector2, width: float) -> void:
 		if center.distance_to(ex_center) < width * 0.3:
 			return
 	
-	burn_rects.append({corners = corners.duplicate(), time = _current_time, direction = direction, width = width})
+	var entry = {corners = corners.duplicate(), time = _current_time, direction = direction, width = width, mask_node = null}
+	
+	# Add Eraser to Grass Mask
+	if GrassMaskManager.instance:
+		var mask_poly = Polygon2D.new()
+		mask_poly.polygon = PackedVector2Array(corners)
+		mask_poly.color = Color.WHITE
+		mask_poly.z_index = 0
+		GrassMaskManager.instance.add_eraser(mask_poly)
+		entry.mask_node = mask_poly
+		
+	burn_rects.append(entry)
 	queue_redraw()
 
 func _process(delta: float) -> void:
@@ -367,6 +398,11 @@ func _process(delta: float) -> void:
 	while i < burn_rects.size():
 		var age: float = _current_time - burn_rects[i].time
 		if age >= point_lifespan:
+			# Cleanup mask
+			var entry = burn_rects[i]
+			if entry.get("mask_node") and is_instance_valid(entry.mask_node):
+				entry.mask_node.queue_free()
+				
 			burn_rects.remove_at(i)
 			queue_redraw()
 		else:
@@ -649,3 +685,36 @@ func _draw_origin_effect(intensity: float) -> void:
 		var spoke_end := Vector2(cos(angle), sin(angle)) * beam_width * 0.6
 		var spoke_color := Color(inner_color.r, inner_color.g, inner_color.b, 0.4 * intensity * pulse)
 		draw_line(Vector2.ZERO, spoke_end, spoke_color, 3.0, true)
+
+# --- Audio Functions ---
+
+const BEAM_SOUND_PATH := "res://assets/sounds/sfx/weapons/minigun/beam.wav"
+var _beam_sound: AudioStreamPlayer2D = null
+
+func _start_beam_audio() -> void:
+	# Create beam sound player like MarianBeamCannon does
+	if _beam_sound != null:
+		return  # Already created
+	
+	_beam_sound = AudioStreamPlayer2D.new()
+	_beam_sound.bus = "SFX"
+	_beam_sound.max_distance = 2000.0
+	_beam_sound.volume_db = 6.0  # Same volume as MarianBeamCannon (6.0 dB)
+	add_child(_beam_sound)
+	
+	# Load standard beam sound
+	var beam_audio = load(BEAM_SOUND_PATH)
+	if beam_audio:
+		_beam_sound.stream = beam_audio
+		_beam_sound.play()
+
+func _stop_beam_audio() -> void:
+	if _beam_sound and is_instance_valid(_beam_sound):
+		_beam_sound.stop()
+		_beam_sound.queue_free()
+		_beam_sound = null
+
+func _play_rocket_sound() -> void:
+	var player = get_tree().get_first_node_in_group("player")
+	if player and player.audio_director:
+		player.audio_director.play_weapon_fire_sound("rocket")

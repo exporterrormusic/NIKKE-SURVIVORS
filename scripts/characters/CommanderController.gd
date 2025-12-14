@@ -221,9 +221,8 @@ func _summon_allies() -> void:
 	# Shuffle to randomize selection
 	available_types.shuffle()
 	
-	# Play ONE random burst sound from the allies being summoned
-	var sound_ally_type: int = available_types[randi() % mini(count, available_types.size())]
-	_play_ally_burst_sound(sound_ally_type)
+	# Note: Commander's burst voice is handled by PlayerCore._play_burst_voice
+	# which uses CharacterRegistry.get_burst_sound("commander") -> random burst-1/burst-2.mp3
 	
 	# Summon allies with staggered timing to prevent lag
 	for i in range(mini(count, available_types.size())):

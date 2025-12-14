@@ -25,7 +25,7 @@ var _buttons: Dictionary = {}
 var _stats_panel: Node = null  # StatsPanel instance
 
 func _ready() -> void:
-	layer = 100
+	layer = 125 # Higher than Queen Explosion (120)
 	visible = false
 	# Process even when game is paused
 	process_mode = Node.PROCESS_MODE_ALWAYS

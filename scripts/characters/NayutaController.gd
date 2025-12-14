@@ -78,6 +78,9 @@ func _perform_special(_direction: Vector2) -> void:
 	# Set cooldown
 	special_timer = data.special_cooldown
 
+# Max active clones
+const MAX_CLONES := 15
+
 func _summon_clone() -> void:
 	if not player or not is_instance_valid(player):
 		return
@@ -85,6 +88,17 @@ func _summon_clone() -> void:
 	var parent = player.get_parent()
 	if not parent:
 		return
+		
+	# Clean up dead list first
+	_cleanup_clones()
+	
+	# Enforce clone limit (15) - Despawn oldest if full
+	if _active_clones.size() >= MAX_CLONES:
+		# FIFO - Remove the first (oldest) valid clone
+		var oldest_ref: WeakRef = _active_clones.pop_front()
+		var oldest_clone = oldest_ref.get_ref() if oldest_ref else null
+		if oldest_clone and is_instance_valid(oldest_clone):
+			oldest_clone.queue_free()
 	
 	# Pick random weapon from pool
 	var weapon: String = _weapon_pool[randi() % _weapon_pool.size()]
@@ -186,7 +200,7 @@ func _perform_galaxy_burst() -> void:
 		
 		# Deal damage
 		if enemy.has_method("take_damage"):
-			enemy.take_damage(damage, false, Vector2.ZERO, true)
+			enemy.take_damage(damage, false, Vector2.ZERO, true, "NayutaBurst")
 		
 		# Apply boss/elite effects
 		if is_elite:

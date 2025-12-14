@@ -215,8 +215,8 @@ func _handle_collision(b: SimpleBullet, collider: Object) -> bool:
 	var final_damage = b.damage * 2 if is_crit else b.damage
 	
 	var hit_dir = b.velocity.normalized()
-	# Apply
-	collider.take_damage(final_damage, is_crit, hit_dir, false, "player")
+	# Apply with weapon type source for Goddess Fall tracking
+	collider.take_damage(final_damage, is_crit, hit_dir, false, "smg")
 	
 	b.hit_uids[id] = true
 	

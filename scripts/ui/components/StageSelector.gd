@@ -18,7 +18,7 @@ const MAPS := [
 {"id": "sakura_night", "name": "Ark Outskirts", "subtitle": "Night", "biome": "sakura_grove", "time": "night", "preview": "res://assets/backgrounds/rapturefield2.jpg"},
 {"id": "snow_day", "name": "The Frozen North", "subtitle": "Day", "biome": "snowfield", "time": "day", "preview": "res://assets/backgrounds/snow-day.jpg"},
 {"id": "snow_night", "name": "The Frozen North", "subtitle": "Night", "biome": "snowfield", "time": "night", "preview": "res://assets/backgrounds/snow-night.jpg"},
-{"id": "storm", "name": "Stormbringer", "subtitle": "", "biome": "rain_forest", "time": "night", "preview": "res://assets/backgrounds/rapturefield1.jpg"},
+{"id": "storm", "name": "Stormbringer", "subtitle": "Night", "biome": "rain_forest", "time": "night", "preview": "res://assets/backgrounds/rapturefield1.jpg"},
 ]
 
 var _preview_rect: TextureRect
@@ -36,7 +36,21 @@ var _atk_scale_label: Label
 var _core_scale_label: Label
 var _elite_core_label: Label
 
+# She Descends easter egg tracking
+var _goddess_toggle_count: int = 0
+var _she_descends_activated: bool = false
+var _drip_overlay: Control = null
+var _red_filter: ColorRect = null
+var _she_descends_text_label: Label = null
+var _she_descends_tween_zoom: Tween = null
+var _she_descends_tween_pulse: Tween = null
+
 func _ready() -> void:
+	# Reset goddess/she_descends mode flags to ensure clean state for new game selection
+	# This fixes bug where mode persists after returning to menu from a goddess fall game
+	GameState.goddess_fall_mode = false
+	GameState.she_descends_mode = false
+	
 	_build_ui()
 	_select_first_unlocked()
 	_start_pulse_animation()
@@ -44,6 +58,7 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		UISounds.play_back()
+		_reset_she_descends_tracking() # Ensure reset happens before leaving
 		back_requested.emit()
 		get_viewport().set_input_as_handled()
 
@@ -109,8 +124,7 @@ func _build_ui() -> void:
 	modifier_container.add_child(divider)
 	
 	# Goddess Fall as the last modifier card
-	var goddess_card := _create_goddess_fall_card()
-	modifier_container.add_child(goddess_card)
+	_create_goddess_fall_card(modifier_container)
 	
 	# RIGHT SIDE: Preview + Difficulty + Buttons
 	var right := VBoxContainer.new()
@@ -170,17 +184,17 @@ func _build_ui() -> void:
 	# Banner content - horizontal layout with arrows
 	var banner_hbox := HBoxContainer.new()
 	banner_hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	banner_hbox.offset_left = 8
-	banner_hbox.offset_right = -8
-	banner_hbox.offset_top = 4
-	banner_hbox.offset_bottom = -4
+	banner_hbox.offset_left = 16
+	banner_hbox.offset_right = -16
+	banner_hbox.offset_top = 8
+	banner_hbox.offset_bottom = -8
 	banner_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	banner.add_child(banner_hbox)
 	
 	# Left arrow button
 	_map_left_btn = Button.new()
 	_map_left_btn.text = "◀"
-	_map_left_btn.custom_minimum_size = Vector2(70, 50)
+	_map_left_btn.custom_minimum_size = Vector2(100, 135)
 	_map_left_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_apply_arrow_button_style(_map_left_btn)
 	_map_left_btn.pressed.connect(_on_map_prev)
@@ -211,7 +225,7 @@ func _build_ui() -> void:
 	# Right arrow button
 	_map_right_btn = Button.new()
 	_map_right_btn.text = "▶"
-	_map_right_btn.custom_minimum_size = Vector2(70, 50)
+	_map_right_btn.custom_minimum_size = Vector2(100, 135)
 	_map_right_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_apply_arrow_button_style(_map_right_btn)
 	_map_right_btn.pressed.connect(_on_map_next)
@@ -295,7 +309,11 @@ func _build_ui() -> void:
 	back_btn.text = "BACK"
 	back_btn.custom_minimum_size = Vector2(120, 45)
 	_apply_back_button_style(back_btn)
-	back_btn.pressed.connect(func(): UISounds.play_back(); back_requested.emit())
+	back_btn.pressed.connect(func():
+		UISounds.play_back()
+		_reset_she_descends_tracking()
+		back_requested.emit()
+	)
 	btn_row.add_child(back_btn)
 	
 	_start_btn = Button.new()
@@ -366,6 +384,69 @@ func _build_ui() -> void:
 	
 	_update_scaling_labels(GameState.difficulty_multiplier)
 
+func _create_goddess_fall_card(parent: Control) -> void:
+	# Goddess Fall - Hardcore/Easter Egg Mode Button
+	# Simple styled button with Skull icon and Centered Text
+	
+	_goddess_fall_btn = Button.new()
+	_goddess_fall_btn.custom_minimum_size = Vector2(280, 140) # Slightly taller for centered layout
+	_goddess_fall_btn.toggle_mode = true
+	_goddess_fall_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	parent.add_child(_goddess_fall_btn)
+	
+	# Connect toggle signal
+	_goddess_fall_btn.toggled.connect(_on_goddess_fall_toggled)
+	
+	_rebuild_goddess_fall_button()
+
+func _rebuild_goddess_fall_button() -> void:
+	if not _goddess_fall_btn:
+		return
+		
+	# Keep functionality to rebuild standard state
+	for child in _goddess_fall_btn.get_children():
+		child.queue_free()
+		
+	# Apply the red danger style
+	var accent_color := UITheme.MOD_GODDESS
+	_apply_goddess_fall_style(_goddess_fall_btn, accent_color)
+		
+	# HBox container matching standard modifier cards
+	var hbox := HBoxContainer.new()
+	hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.alignment = BoxContainer.ALIGNMENT_BEGIN # Align start like others
+	hbox.offset_left = 20
+	hbox.offset_right = -20
+	hbox.offset_top = 16
+	hbox.offset_bottom = -16
+	hbox.add_theme_constant_override("separation", 20)
+	_goddess_fall_btn.add_child(hbox)
+	
+	# Skull Icon (Left, Fixed Width 70px like standard buttons)
+	var icon := Label.new()
+	icon.text = "☠"
+	icon.add_theme_font_size_override("font_size", 52)
+	icon.add_theme_color_override("font_color", Color(0.8, 0.2, 0.2)) # Reddish tint
+	icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	icon.custom_minimum_size.x = 70 # Match standard icon width
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(icon)
+	
+	# Title (Right, Fill available space)
+	var title := Label.new()
+	title.text = "GODDESS FALL"
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER # Center within the remaining space
+	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 56) # HUGE Text
+	title.add_theme_color_override("font_color", Color(0.9, 0.2, 0.2)) # Red text
+	title.add_theme_constant_override("outline_size", 4)
+	title.add_theme_color_override("font_outline_color", Color.BLACK)
+	hbox.add_child(title)
+
+
 func _on_difficulty_changed(value: float) -> void:
 	GameState.difficulty_multiplier = int(value)
 	_difficulty_label.text = "x%d" % int(value)
@@ -391,12 +472,191 @@ func _update_scaling_labels(difficulty: int) -> void:
 	_elite_core_label.visible = false
 
 func _on_goddess_fall_toggled(pressed: bool) -> void:
+	if not is_inside_tree(): return # Ignore signals during teardown
+	
 	if pressed:
 		UISounds.play_select()
+		# Direct activation - No secret clicks needed anymore
+		_activate_she_descends_mode()
 	else:
 		UISounds.play_back()
+		# Direct deactivation - Explicitly clear flags
+		clear_goddess_flags()
+	
 	GameState.goddess_fall_mode = pressed
 	_update_scaling_labels(GameState.difficulty_multiplier)
+
+func _activate_she_descends_mode() -> void:
+	_she_descends_activated = true
+	GameState.she_descends_mode = true
+	GameState.goddess_fall_mode = true  # Force it on
+	_goddess_fall_btn.button_pressed = true
+	# _goddess_fall_btn.disabled = true  <-- Removed so it can be un-toggled
+	
+	# Update button visualization (darken and change text)
+	_update_she_descends_button_visuals()
+	
+	# Make Mission Start button red
+	_apply_she_descends_start_style()
+	
+	# Stop Main Menu music (managed by MenuManager)
+	if MenuManager:
+		MenuManager.stop_menu_music()
+	
+	# Stop any AudioDirector music (just in case) and play timer
+	if AudioDirector:
+		AudioDirector.stop_music(0.1)
+		AudioDirector.play_music_by_path("res://assets/sounds/music/bgm/timer.mp3", true, 0.5)
+	
+	# Play ominous sound
+	UISounds.play_select()
+
+
+func _update_she_descends_button_visuals() -> void:
+	# Clear current children to remove icon/stripes/etc
+	for child in _goddess_fall_btn.get_children():
+		child.queue_free()
+	
+	# Simple dark background (no border/stylebox overrides that cause artifacts)
+	# Just use a ColorRect to darken the existing button background
+	var bg = ColorRect.new()
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.color = Color(0.05, 0.0, 0.0, 0.95)  # Very dark red/black
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_goddess_fall_btn.add_child(bg)
+	
+	# Use an HBox to match the standard Goddess Fall layout (Left Icon, Right Text)
+	var hbox := HBoxContainer.new()
+	hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	hbox.alignment = BoxContainer.ALIGNMENT_BEGIN
+	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.offset_left = 20
+	hbox.offset_right = -20
+	hbox.offset_top = 16
+	hbox.offset_bottom = -16
+	hbox.add_theme_constant_override("separation", 20)
+	_goddess_fall_btn.add_child(hbox)
+	
+	# Skull Icon (Left, Fixed Width 70px)
+	var icon := Label.new()
+	icon.text = "☠"
+	icon.add_theme_font_size_override("font_size", 52)
+	icon.add_theme_color_override("font_color", Color(1.0, 0.0, 0.0)) # Bright red
+	icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	icon.custom_minimum_size.x = 70
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(icon)
+	
+	# "SHE DESCENDS" text (Right, Fill Space)
+	var text_label := Label.new()
+	text_label.text = "SHE DESCENDS"
+	text_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	text_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	text_label.add_theme_font_size_override("font_size", 64) # Massive text
+	text_label.add_theme_color_override("font_color", Color(0.7, 0.0, 0.1, 1.0))  # Blood red
+	text_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.9))
+	text_label.add_theme_constant_override("shadow_offset_x", 4)
+	text_label.add_theme_constant_override("shadow_offset_y", 4)
+	text_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Pivot offset approx center for tweening
+	text_label.pivot_offset = Vector2(250, 40) 
+	_she_descends_text_label = text_label
+	hbox.add_child(text_label)
+	
+	# Animate text fade in
+	text_label.modulate.a = 0.0
+	var text_tween := create_tween()
+	text_tween.tween_property(text_label, "modulate:a", 1.0, 0.8).set_delay(0.3)
+	text_tween.finished.connect(func(): text_tween.kill()) # Cleanup
+	
+	# Slow zoom in/out animation
+	_she_descends_tween_zoom = create_tween().set_loops()
+	_she_descends_tween_zoom.tween_property(text_label, "scale", Vector2(1.15, 1.15), 2.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_she_descends_tween_zoom.tween_property(text_label, "scale", Vector2(0.95, 0.95), 2.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	
+	# Subtle pulsing color effect
+	_she_descends_tween_pulse = create_tween().set_loops()
+	_she_descends_tween_pulse.tween_property(text_label, "modulate", Color(1.2, 0.8, 0.8, 1.0), 1.5)
+	_she_descends_tween_pulse.tween_property(text_label, "modulate", Color(0.8, 0.6, 0.6, 1.0), 1.5)
+
+
+func _apply_she_descends_start_style() -> void:
+	# Make Mission Start button red/danger themed
+	var danger_normal := StyleBoxFlat.new()
+	danger_normal.bg_color = Color(0.4, 0.0, 0.05, 1.0)  # Dark red
+	danger_normal.border_color = Color(0.8, 0.1, 0.1, 1.0)  # Bright red border
+	danger_normal.set_border_width_all(4)
+	danger_normal.set_corner_radius_all(12)
+	danger_normal.shadow_color = Color(0.6, 0.0, 0.0, 0.5)
+	danger_normal.shadow_size = 8
+	_start_btn.add_theme_stylebox_override("normal", danger_normal)
+	
+	var danger_hover := danger_normal.duplicate()
+	danger_hover.bg_color = Color(0.5, 0.05, 0.08, 1.0)
+	danger_hover.shadow_size = 12
+	_start_btn.add_theme_stylebox_override("hover", danger_hover)
+	
+	var danger_pressed := danger_normal.duplicate()
+	danger_pressed.bg_color = Color(0.6, 0.1, 0.1, 1.0)
+	_start_btn.add_theme_stylebox_override("pressed", danger_pressed)
+
+
+func reset_state() -> void:
+	_reset_she_descends_tracking()
+
+func _reset_she_descends_tracking() -> void:
+	# Called when leaving the selector - reset VISUALS only
+	# GameState flags should only be reset by explicit actions (toggle off, back button)
+	_goddess_toggle_count = 0
+	
+	_she_descends_activated = false
+	
+	# Kill tweens
+	if _she_descends_tween_zoom:
+		_she_descends_tween_zoom.kill()
+		_she_descends_tween_zoom = null
+	if _she_descends_tween_pulse:
+		_she_descends_tween_pulse.kill()
+		_she_descends_tween_pulse = null
+	
+	# Remove red filter
+	if _red_filter and is_instance_valid(_red_filter):
+		_red_filter.queue_free()
+		_red_filter = null
+	
+	# Restore start button to normal style
+	_apply_start_button_style()
+	
+	# Restore Goddess Fall button
+	_goddess_fall_btn.disabled = false
+	_goddess_fall_btn.set_pressed_no_signal(false) # Prevent signal loop
+	
+	if _drip_overlay and is_instance_valid(_drip_overlay):
+		_drip_overlay.queue_free()
+		_drip_overlay = null
+
+func clear_goddess_flags() -> void:
+	# Helper to explicitly clear game state (e.g. from back button)
+	GameState.she_descends_mode = false
+	GameState.goddess_fall_mode = false
+	
+	# Stop timer music if playing
+	if AudioDirector:
+		AudioDirector.stop_music(0.1)
+	
+	# Restart Main Menu music
+	if MenuManager:
+		MenuManager.start_menu_music()
+		
+	reset_state()
+	if _drip_overlay and is_instance_valid(_drip_overlay):
+		_drip_overlay.queue_free()
+		_drip_overlay = null
+	
+	# Rebuild Goddess Fall button content
+	_rebuild_goddess_fall_button()
 
 func _get_difficulty_color(value: int) -> Color:
 	if value <= 1:
@@ -510,86 +770,7 @@ func _create_danger_divider() -> Control:
 	return container
 
 
-func _create_goddess_fall_card() -> Button:
-	var btn := Button.new()
-	btn.toggle_mode = true
-	btn.button_pressed = GameState.goddess_fall_mode
-	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	btn.custom_minimum_size = Vector2(0, 100)
-	btn.set_meta("stage_id", "goddess_fall")
-	btn.clip_contents = true
-	_goddess_fall_btn = btn
-	
-	# Red/danger color scheme with glowing red background
-	var accent_color := UITheme.MOD_GODDESS
-	_apply_goddess_fall_style(btn, accent_color)
-	btn.toggled.connect(_on_goddess_fall_toggled)
-	
-	# Diagonal warning stripes overlay (behind content)
-	var stripes := Control.new()
-	stripes.set_anchors_preset(Control.PRESET_FULL_RECT)
-	stripes.set_script(preload("res://scripts/ui/components/DiagonalStripes.gd"))
-	stripes.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	btn.add_child(stripes)
-	
-	# Hologram scanline overlay
-	var scanlines := Control.new()
-	scanlines.set_anchors_preset(Control.PRESET_FULL_RECT)
-	scanlines.set_script(preload("res://scripts/ui/components/HologramScanlines.gd"))
-	scanlines.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	btn.add_child(scanlines)
-	
-	# Button content
-	btn.text = ""
-	
-	var content := HBoxContainer.new()
-	content.set_anchors_preset(Control.PRESET_FULL_RECT)
-	content.offset_left = 20
-	content.offset_right = -20
-	content.offset_top = 16
-	content.offset_bottom = -16
-	content.add_theme_constant_override("separation", 20)
-	content.alignment = BoxContainer.ALIGNMENT_BEGIN
-	content.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	btn.add_child(content)
-	
-	# Icon
-	var icon_lbl := Label.new()
-	icon_lbl.text = "☠"
-	icon_lbl.add_theme_font_size_override("font_size", 52)
-	icon_lbl.add_theme_color_override("font_color", accent_color)
-	icon_lbl.custom_minimum_size.x = 70
-	icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	icon_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	content.add_child(icon_lbl)
-	
-	# Text content
-	var text_vbox := VBoxContainer.new()
-	text_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	text_vbox.add_theme_constant_override("separation", 6)
-	text_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	text_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	content.add_child(text_vbox)
-	
-	var title := Label.new()
-	title.text = "GODDESS FALL"
-	title.add_theme_font_override("font", UITheme.FONT_BOLD)
-	title.add_theme_font_size_override("font_size", 42)
-	title.add_theme_color_override("font_color", accent_color)
-	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	text_vbox.add_child(title)
-	
-	var desc := Label.new()
-	desc.text = "Enemies 30% faster. Elites drop cores (20%). Tanks fire missiles. Bosses enrage!"
-	desc.add_theme_font_size_override("font_size", 26)
-	desc.add_theme_color_override("font_color", UITheme.TEXT_MUTED)
-	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	text_vbox.add_child(desc)
-	
-	return btn
+
 
 
 func _apply_goddess_fall_style(btn: Button, _accent_color: Color) -> void:

@@ -336,8 +336,10 @@ func _get_view_size() -> Vector2:
 	if viewport == null:
 		return Vector2(1920, 1080)
 	var size := viewport.get_visible_rect().size
-	if _camera:
-		size *= _camera.zoom
+	if _camera and _camera.zoom.x > 0 and _camera.zoom.y > 0:
+		# DIVIDE by zoom - when zoomed OUT (zoom < 1), visible world area is LARGER
+		# E.g., zoom = 0.5 means we can see 2x the world area
+		size /= _camera.zoom
 	return size
 
 func _draw() -> void:

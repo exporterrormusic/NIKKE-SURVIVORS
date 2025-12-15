@@ -3,7 +3,7 @@ class_name SnowWhiteController
 ## Snow White - Sniper with piercing bullets and turret special
 
 # Shop upgrade reference
-const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
+
 
 # Turret special state
 var turret_charges: int = 0
@@ -29,7 +29,7 @@ func _on_initialize() -> void:
 	turret_charges = turret_max_charges
 	
 	# Check if "Best Girl" upgrade is purchased
-	_has_best_girl_upgrade = ShopMenuScript.has_character_upgrade("snow_white", "basic_attack")
+	_has_best_girl_upgrade = has_upgrade("snow_white", "basic_attack")
 
 func _on_process(delta: float) -> void:
 	# Update turret recharge - fully refills all charges when timer expires

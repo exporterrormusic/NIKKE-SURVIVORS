@@ -34,6 +34,7 @@ const CHARACTER_UPGRADES := {
 	],
 	"scarlet": [
 		{"id": "basic_attack", "name": "Rose's Core", "desc": "Sword slashes release 5 rose petal projectiles dealing full damage.", "max_level": 1, "base_cost": 10, "icon": "🌹"},
+		{"id": "low_hp_damage", "name": "Scraping the Bottle", "desc": "Deal up to +100% damage based on missing HP (max bonus at 15% HP).", "max_level": 1, "base_cost": 20, "icon": "🩸"},
 	],
 	"rapunzel": [
 		{"id": "basic_attack", "name": "I'm a healer, but...", "desc": "All squad kills heal player for 2% max HP.", "max_level": 1, "base_cost": 10, "icon": "💖"},
@@ -51,10 +52,11 @@ const CHARACTER_UPGRADES := {
 		{"id": "basic_attack", "name": "Royal Knowledge", "desc": "All squad members earn XP at 2x rate.", "max_level": 1, "base_cost": 10, "icon": "👑"},
 	],
 	"kilo": [
-		{"id": "basic_attack", "name": "Protect Me Talos", "desc": "Kills generate shield HP. Max 50% of HP, +1% per kill.", "max_level": 1, "base_cost": 10, "icon": "🛡️"},
+		{"id": "talos_ammo", "name": "Build-a-Bullet", "desc": "Ammo Capacity: +100% for Rocket/Sniper, +50% for Minigun/SMG/Shotgun. Applies to Squad.", "max_level": 1, "base_cost": 10, "icon": "🤖"},
 	],
 	"cecil": [
 		{"id": "basic_attack", "name": "Three Wishes...", "desc": "Gain 3 extra lives. Revive at full HP with 5s invincibility.", "max_level": 1, "base_cost": 10, "icon": "✨"},
+		{"id": "eden_shield", "name": "Noah's Defiance", "desc": "Kills generate shield HP. Max 50% of HP, +1% per kill.", "max_level": 1, "base_cost": 20, "icon": "🛡️"},
 	],
 	"sin": [
 		{"id": "basic_attack", "name": "Magnetic Personality", "desc": "Passive aura permanently mind-controls nearby regular enemies.", "max_level": 1, "base_cost": 10, "icon": "🔮"},
@@ -78,6 +80,8 @@ var _currency_label: Label = null
 var _currency_icon: Control = null
 var _unlock_panel: Control = null
 var _button_group: ButtonGroup = null
+var _warning_popup: ConfirmationDialog = null
+var _pending_purchase_callback: Callable = Callable()
 
 
 func _ready() -> void:
@@ -88,6 +92,7 @@ func _ready() -> void:
 	
 	_load_shop_data()
 	_build_ui()
+	_create_warning_popup()
 	_select_filter(GENERAL_FILTER)
 
 
@@ -622,7 +627,7 @@ func _build_general_upgrades() -> void:
 		_upgrade_grid.add_child(card)
 	
 	# Add reset button in bottom right
-	_add_reset_button_to_content("general")
+	_add_reset_button_to_content(GENERAL_FILTER)
 
 
 func _build_character_upgrades(char_id: String) -> void:
@@ -666,7 +671,7 @@ func _create_upgrade_card(upgrade: Dictionary, category: String) -> Control:
 	
 	# Connect card click to purchase
 	if not is_maxed:
-		card.card_clicked.connect(_on_upgrade_purchased_with_card.bind(upgrade_id, cost, card))
+		card.card_clicked.connect(_request_purchase_with_warning.bind(upgrade_id, cost, card))
 	
 	var vbox := VBoxContainer.new()
 	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -727,7 +732,16 @@ func _create_upgrade_card(upgrade: Dictionary, category: String) -> Control:
 	desc_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	if UI.FONT_MEDIUM:
 		desc_label.add_theme_font_override("font", UI.FONT_MEDIUM)
-	desc_label.add_theme_font_size_override("font_size", 24)
+	
+	# Auto-scale text to fit
+	var desc_len = upgrade["desc"].length()
+	var font_size = 24
+	if desc_len > 100:
+		font_size = 18
+	elif desc_len > 80:
+		font_size = 20
+	desc_label.add_theme_font_size_override("font_size", font_size)
+	
 	desc_label.add_theme_color_override("font_color", UI.TEXT_SECONDARY)
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -847,9 +861,9 @@ func _create_core_cost_button(cost: int, upgrade_id: String, parent_card: _Upgra
 	
 	# Connect with parent card for visual feedback
 	if parent_card:
-		btn.pressed.connect(_on_upgrade_purchased_with_card.bind(upgrade_id, cost, parent_card))
+		btn.pressed.connect(_request_purchase_with_warning.bind(upgrade_id, cost, parent_card))
 	else:
-		btn.pressed.connect(_on_upgrade_purchased.bind(upgrade_id, cost))
+		btn.pressed.connect(_request_purchase_with_warning.bind(upgrade_id, cost, null))
 	
 	# Flash red on click if can't afford
 	if not can_afford and parent_card:
@@ -1164,8 +1178,13 @@ func _on_category_reset(category: String) -> void:
 	
 	# Reset upgrade levels for this category
 	var keys_to_remove: Array[String] = []
+	# Handle special prefix for General category ("GENERAL" spent key vs "general_" upgrade prefix)
+	var prefix = category + "_"
+	if category == GENERAL_FILTER:
+		prefix = "general_"
+		
 	for upgrade_id in _upgrade_levels.keys():
-		if upgrade_id.begins_with(category + "_"):
+		if upgrade_id.begins_with(prefix):
 			keys_to_remove.append(upgrade_id)
 	for key in keys_to_remove:
 		_upgrade_levels.erase(key)
@@ -1756,6 +1775,9 @@ class _BackButtonContainer extends Button:
 		if _is_hovered:
 			queue_redraw()
 	
+
+	# ... (Previous _BackButtonContainer code) ...
+	
 	func _build_content() -> void:
 		var center := CenterContainer.new()
 		center.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1825,3 +1847,28 @@ class _BackButtonContainer extends Button:
 		
 		draw_line(Vector2(CORNER_CUT + 5, 5), Vector2(CORNER_CUT + 30, 5), deco_color, 2.0)
 		draw_line(Vector2(w - CORNER_CUT - 30, h - 5), Vector2(w - CORNER_CUT - 5, h - 5), deco_color, 2.0)
+
+func _create_warning_popup() -> void:
+	_warning_popup = ConfirmationDialog.new()
+	_warning_popup.title = "Important Info"
+	_warning_popup.initial_position = Window.WINDOW_INITIAL_POSITION_CENTER_MAIN_WINDOW_SCREEN
+	_warning_popup.dialog_text = "When a unit is selected as a support, they must be unlocked in the skill tree during a match to activate their shop upgrade.\n\ne.g. Rapunzel's heal won't trigger unless she has been unlocked in the skill tree menu (TAB)."
+	_warning_popup.ok_button_text = "Understood"
+	_warning_popup.get_label().horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_warning_popup.confirmed.connect(_on_warning_confirmed)
+	add_child(_warning_popup)
+
+func _request_purchase_with_warning(upgrade_id: String, cost: int, card: _UpgradeCard = null) -> void:
+	# Store the callback for the purchase
+	if card:
+		_pending_purchase_callback = _on_upgrade_purchased_with_card.bind(upgrade_id, cost, card)
+	else:
+		_pending_purchase_callback = _on_upgrade_purchased.bind(upgrade_id, cost)
+	
+	# Show warning
+	_warning_popup.popup_centered()
+
+func _on_warning_confirmed() -> void:
+	# Execute the pending purchase
+	if _pending_purchase_callback.is_valid():
+		_pending_purchase_callback.call()

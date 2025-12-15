@@ -626,8 +626,16 @@ func _update_stats_panel(char_id: int = -1) -> void:
 	var level_damage_mult := 1.0 + (current_level - 1) * 0.25
 	var scaled_damage := int(display_damage * level_damage_mult)
 	
-	_set_stat_value("LevelRow", str(current_level))
-	_set_stat_value("AtkRow", str(scaled_damage))
+	# Apply Scarlet's Low HP Bonus if applicable
+	if display_char == 1 and _player_ref and _player_ref.has_method("get_low_hp_damage_multiplier"):
+		var low_hp_mult: float = _player_ref.get_low_hp_damage_multiplier()
+		if low_hp_mult > 1.0:
+			var bonus_atk = int(scaled_damage * low_hp_mult)
+			_set_stat_value("AtkRow", "%d (+%d%%)" % [bonus_atk, int((low_hp_mult - 1.0) * 100)])
+		else:
+			_set_stat_value("AtkRow", str(scaled_damage))
+	else:
+		_set_stat_value("AtkRow", str(scaled_damage))
 	_set_stat_value("HpRow", str(display_hp))
 	_set_stat_value("BurstRow", "%.1f%%" % burst_rate if burst_rate < 1.0 else "%.0f%%" % burst_rate)
 	@warning_ignore("integer_division")

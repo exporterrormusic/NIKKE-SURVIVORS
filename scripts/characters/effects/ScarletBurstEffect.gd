@@ -468,6 +468,10 @@ func _execute_pending_kills() -> void:
 				
 		var damage_amount: int = damage_base * 10
 		
+		# Apply Scraping the Bottle multiplier if available
+		if owner_node and owner_node.has_method("get_low_hp_damage_multiplier"):
+			damage_amount = int(float(damage_amount) * owner_node.get_low_hp_damage_multiplier())
+		
 		if execute_talent and not is_elite_or_boss:
 			damage_amount = 999999
 			will_execute = true

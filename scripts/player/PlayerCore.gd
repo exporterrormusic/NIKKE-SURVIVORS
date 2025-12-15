@@ -126,10 +126,11 @@ var _has_crown_xp_upgrade: bool = false  # "Royal Knowledge" - 2x XP
 var _has_cecil_lives_upgrade: bool = false  # "Three Wishes..." - 3 extra lives
 var _cecil_lives_remaining: int = 0  # Remaining extra lives
 var _cecil_revive_invincible_timer: float = 0.0  # 5s invincibility after revive
-var _has_kilo_shield_upgrade: bool = false  # "Protect Me Talos" - shield on kills
-var _kilo_shield_current: int = 0  # Current shield amount
-var _kilo_shield_max: int = 0  # Max shield (50% of max_hp)
-var _kilo_shield_visual: Node2D = null  # Visual shield effect
+# Eden Shield (Generic/Cecil)
+var _has_eden_shield_upgrade: bool = false
+var _eden_shield_max: int = 0
+var _eden_shield_current: int = 0
+var _eden_shield_visual: Node2D = null  # Visual shield effect
 var _has_nayuta_duplicity_upgrade: bool = false  # "Duplicity" - 10% clone spawn on kills
 
 func _ready() -> void:
@@ -246,8 +247,8 @@ func _on_burst_changed(current: float, maximum: float) -> void:
 
 func _on_shield_changed(current: int, maximum: int) -> void:
 	"""Handle shield updates from CharacterUpgrades component."""
-	_kilo_shield_current = current
-	_kilo_shield_max = maximum
+	_eden_shield_current = current
+	_eden_shield_max = maximum
 	if overhead_hud:
 		overhead_hud.update_shield(current, maximum)
 
@@ -393,15 +394,18 @@ func _apply_character_shop_upgrades(all_ids: Array) -> void:
 					_has_cecil_lives_upgrade = true
 					_cecil_lives_remaining = 3
 					print("[PlayerCore] Cecil 'Three Wishes...' upgrade active (3 lives)")
-			"kilo":
-				if ShopMenuScript.has_character_upgrade("kilo", "basic_attack"):
-					_has_kilo_shield_upgrade = true
-					_kilo_shield_max = int(max_hp * 0.5)
-					_kilo_shield_current = 0  # Shield starts empty
-					_create_kilo_shield_visual()
-					# Update the HUD to show empty shield bar
+				
+				# Noah's Defiance (Eden's Shield)
+				if ShopMenuScript.has_character_upgrade("cecil", "eden_shield"):
+					_has_eden_shield_upgrade = true
+					_eden_shield_max = int(max_hp * 0.5)
+					_eden_shield_current = 0  # Shield starts empty
+					_create_eden_shield_visual()
 					call_deferred("_update_shield_display")
-					print("[PlayerCore] Kilo 'Protect Me Talos' upgrade active (max shield: %d)" % _kilo_shield_max)
+					print("[PlayerCore] Cecil 'Noah's Defiance' upgrade active")
+			"kilo":
+				# Kilo has no active player-core upgrades (Ammo is handled in CharacterController)
+				pass
 			"nayuta":
 				if ShopMenuScript.has_character_upgrade("nayuta", "basic_attack"):
 					_has_nayuta_duplicity_upgrade = true
@@ -435,14 +439,17 @@ func _apply_upgrade_for_character(char_idx: int) -> void:
 				_has_cecil_lives_upgrade = true
 				_cecil_lives_remaining = 3
 				print("[PlayerCore] Cecil 'Three Wishes...' upgrade now active (unlocked)")
-		"kilo":
-			if ShopMenuScript.has_character_upgrade("kilo", "basic_attack"):
-				_has_kilo_shield_upgrade = true
-				_kilo_shield_max = int(max_hp * 0.5)
-				_kilo_shield_current = 0  # Shield starts empty
-				_create_kilo_shield_visual()
+			
+			if ShopMenuScript.has_character_upgrade("cecil", "eden_shield"):
+				_has_eden_shield_upgrade = true
+				_eden_shield_max = int(max_hp * 0.5)
+				_eden_shield_current = 0
+				_create_eden_shield_visual()
 				call_deferred("_update_shield_display")
-				print("[PlayerCore] Kilo 'Protect Me Talos' upgrade now active (unlocked)")
+				print("[PlayerCore] Cecil 'Noah's Defiance' upgrade now active (unlocked)")
+		"kilo":
+			# Kilo has no active player-core upgrades (Ammo is handled in CharacterController)
+			pass
 		"nayuta":
 			if ShopMenuScript.has_character_upgrade("nayuta", "basic_attack"):
 				_has_nayuta_duplicity_upgrade = true
@@ -489,13 +496,10 @@ func on_enemy_killed(_enemy: Node2D, killer_source: String = "player") -> void:
 			heal_amount = 1
 		heal(heal_amount)
 	
-	# Kilo: "Protect Me Talos" - Gain 1% of max HP as shield per kill (only valid kills)
-	if _has_kilo_shield_upgrade and valid_kill:
-		var shield_gain: int = int(max_hp * 0.01)
-		if shield_gain < 1:
-			shield_gain = 1
-		_kilo_shield_current = min(_kilo_shield_current + shield_gain, _kilo_shield_max)
-		_update_shield_display()
+	# Regen Eden Shield on kill (1% of max HP)
+	if _has_eden_shield_upgrade and _eden_shield_current < _eden_shield_max:
+		var regen_amount: int = maxi(1, int(max_hp * 0.01))
+		gain_shield(regen_amount)
 	
 	# Nayuta: "Duplicity" - 10% chance to spawn a clone when an enemy dies (any kill)
 	if _has_nayuta_duplicity_upgrade and randf() < 0.10:
@@ -724,21 +728,18 @@ func take_damage(dmg: int, is_crit: bool = false, direction: Vector2 = Vector2.Z
 			# Shield absorbed the hit
 			return
 	
-	# Check if Kilo's "Protect Me Talos" shield can absorb damage
-	if _has_kilo_shield_upgrade and _kilo_shield_current > 0:
-		if _kilo_shield_current >= dmg:
-			# Shield fully absorbs the hit
-			_kilo_shield_current -= dmg
-			_update_shield_display()
+	# Eden Shield damage absorption
+	if _has_eden_shield_upgrade and _eden_shield_current > 0:
+		var shield_damage = min(dmg, _eden_shield_current)
+		if shield_damage > 0:
+			_eden_shield_current -= shield_damage
+			dmg -= shield_damage
 			_spawn_shield_hit_effect()
-			return
-		else:
-			# Shield partially absorbs
-			dmg -= _kilo_shield_current
-			_kilo_shield_current = 0
-			_update_shield_display()
-			_spawn_shield_hit_effect()
-			# Continue with reduced damage
+			call_deferred("_update_shield_display")
+			
+			# If damage fully absorbed, return early
+			if dmg <= 0:
+				return
 	
 	var prev_hp = hp
 	hp -= dmg
@@ -1068,40 +1069,50 @@ func _spawn_revive_effect() -> void:
 	get_parent().add_child(effect)
 	effect.global_position = global_position
 
-func _create_kilo_shield_visual() -> void:
-	## Creates the visual shield effect for Kilo's upgrade
-	if _kilo_shield_visual and is_instance_valid(_kilo_shield_visual):
+func _create_eden_shield_visual() -> void:
+	## Creates the visual shield effect for Eden's Shield upgrade
+	if _eden_shield_visual and is_instance_valid(_eden_shield_visual):
 		return
 	
 	var KiloShieldVisualScript = preload("res://scripts/effects/KiloShieldVisual.gd")
-	_kilo_shield_visual = KiloShieldVisualScript.new()
-	_kilo_shield_visual.name = "KiloShieldVisual"
-	call_deferred("_add_kilo_shield_visual")
+	_eden_shield_visual = KiloShieldVisualScript.new()
+	_eden_shield_visual.name = "EdenShieldVisual"
+	call_deferred("_add_eden_shield_visual")
 
-func _add_kilo_shield_visual() -> void:
-	if _kilo_shield_visual and is_instance_valid(_kilo_shield_visual):
-		get_parent().add_child(_kilo_shield_visual)
-		_kilo_shield_visual.initialize(self)
+func _add_eden_shield_visual() -> void:
+	if _eden_shield_visual and is_instance_valid(_eden_shield_visual):
+		get_parent().add_child(_eden_shield_visual)
+		_eden_shield_visual.initialize(self)
 
 func _update_shield_display() -> void:
 	## Updates the overhead HUD and visual shield with current shield status
 	if overhead_hud and overhead_hud.has_method("update_shield"):
-		overhead_hud.update_shield(_kilo_shield_current, _kilo_shield_max)
+		overhead_hud.update_shield(_eden_shield_current, _eden_shield_max)
 	
 	# Update visual shield
-	if _kilo_shield_visual and is_instance_valid(_kilo_shield_visual):
-		_kilo_shield_visual.update_shield(_kilo_shield_current, _kilo_shield_max)
+	if _eden_shield_visual and is_instance_valid(_eden_shield_visual):
+		_eden_shield_visual.update_shield(_eden_shield_current, _eden_shield_max)
 
 func _spawn_shield_hit_effect() -> void:
-	## Spawns a cyan shield hit effect when Kilo's shield absorbs damage
+	## Spawns a cyan shield hit effect when Eden's shield absorbs damage
 	var ShieldHitScript = preload("res://scripts/effects/ShieldHitEffect.gd")
 	var effect = ShieldHitScript.new()
 	get_parent().add_child(effect)
 	effect.global_position = global_position
 	
 	# Also trigger flash on visual shield
-	if _kilo_shield_visual and is_instance_valid(_kilo_shield_visual) and _kilo_shield_visual.has_method("on_shield_hit"):
-		_kilo_shield_visual.on_shield_hit()
+	if _eden_shield_visual and is_instance_valid(_eden_shield_visual) and _eden_shield_visual.has_method("on_shield_hit"):
+		_eden_shield_visual.on_shield_hit()
+
+func gain_shield(amount: int) -> void:
+	## Add shield HP, up to max
+	if _has_eden_shield_upgrade and _eden_shield_current < _eden_shield_max:
+		var old = _eden_shield_current
+		_eden_shield_current = mini(_eden_shield_current + amount, _eden_shield_max)
+		if _eden_shield_current != old:
+			call_deferred("_update_shield_display")
+			# Optional: Visual effect for gaining shield?
+			# For now just update display
 
 func update_xp_bar() -> void:
 	if xp_ui and xp_ui.has_method("set_xp"):
@@ -1133,6 +1144,29 @@ func _add_skill_point() -> void:
 	# Show/update skill points notification
 	_update_skill_points_notification(points_available)
 
+func is_character_in_squad(char_id: String) -> bool:
+	"""Check if a specific character is currently unlocked in the squad."""
+	if not _registry:
+		return false
+	
+	# Check if any unlocked slot maps to this character ID
+	for slot_idx in unlocked_characters:
+		if slot_idx < 0 or slot_idx >= _selected_char_indices.size():
+			continue
+		
+		var registry_idx: int = _selected_char_indices[slot_idx]
+		var id = _registry.get_character_id(registry_idx)
+		if id == char_id:
+			return true
+	
+	return false
+
+func _refresh_squad_synergies() -> void:
+	"""Notify all controllers to update stats based on current squad composition."""
+	for controller in _controllers:
+		if controller and controller.has_method("apply_squad_upgrades"):
+			controller.apply_squad_upgrades()
+
 func _on_talent_unlocked(char_id: int, talent_id: String) -> void:
 	# char_id is a registry index, we need to convert to slot index
 	var slot_idx: int = _selected_char_indices.find(char_id)
@@ -1147,6 +1181,9 @@ func _on_talent_unlocked(char_id: int, talent_id: String) -> void:
 			
 			# Apply shop upgrades for the newly unlocked character
 			_apply_upgrade_for_character(char_id)
+			
+			# Refresh squad synergies (e.g. Kilo's ammo buff needing Kilo in squad)
+			_refresh_squad_synergies()
 	
 	# Forward talent to controller - use slot index
 	if slot_idx >= 0 and slot_idx < _controllers.size():
@@ -1161,6 +1198,11 @@ func _on_talent_unlocked(char_id: int, talent_id: String) -> void:
 	
 	# Update burst visibility
 	_update_burst_visibility()
+	
+	# Sync progression skill points
+	var tree := _get_talent_tree()
+	if tree and _progression and tree.has_method("get_skill_points"):
+		_progression.set_skill_points(tree.get_skill_points())
 
 func _on_talent_tree_closed() -> void:
 	shop_open = false
@@ -1393,6 +1435,7 @@ func _process(delta: float) -> void:
 		stamina = max(stamina - running_stamina_drain * delta, 0)
 		if player_hud:
 			player_hud.update_stamina(stamina, max_stamina, true)
+
 	else:
 		if infinite_stamina:
 			stamina = max_stamina
@@ -1620,9 +1663,9 @@ func _show_talent_tree(add_point: bool = false) -> void:
 	if existing:
 		if add_point:
 			existing.add_skill_points(1)  # Add point for leveling up
-		# Sync points just in case
-		if _progression:
-			existing.set_skill_points(_progression.get_skill_points())
+		# Sync points if needed (only if mismatch, but usually trust tree)
+		# if _progression:
+		# 	existing.set_skill_points(_progression.get_skill_points()) -> CAUSES INFINITE POINTS EXPLOIT
 		existing.show_tree(self)
 		shop_open = true
 		if get_parent().has_method("set_game_paused"):
@@ -1664,3 +1707,9 @@ func _show_talent_tree(add_point: bool = false) -> void:
 	shop_open = true
 	if get_parent().has_method("set_game_paused"):
 		get_parent().call_deferred("set_game_paused", true)
+
+func get_low_hp_damage_multiplier() -> float:
+	## Wrapper to get damage multiplier from current controller (for UI stats)
+	if _current_controller and _current_controller.has_method("get_low_hp_damage_multiplier"):
+		return _current_controller.get_low_hp_damage_multiplier()
+	return 1.0

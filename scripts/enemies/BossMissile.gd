@@ -531,6 +531,7 @@ func _explode() -> void:
 	# Remove ground indicator
 	if _ground_indicator and is_instance_valid(_ground_indicator):
 		_ground_indicator.queue_free()
+		_ground_indicator = null
 	
 	# Create AOE explosion effect
 	var explosion := Node2D.new()
@@ -543,6 +544,13 @@ func _explode() -> void:
 		get_parent().add_child(explosion)
 	
 	queue_free()
+
+func _exit_tree() -> void:
+	# Failsafe: Ensure indicator is removed if missile is deleted without exploding
+	# (e.g. by being cleared by a wave manager or projectile killer)
+	if _ground_indicator and is_instance_valid(_ground_indicator):
+		_ground_indicator.queue_free()
+		_ground_indicator = null
 
 ## Smooth cubic easing function for turn phase
 func _ease_out_cubic(t: float) -> float:

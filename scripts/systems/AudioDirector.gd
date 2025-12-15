@@ -50,6 +50,7 @@ var _ambient_crossfade_step_timer: Timer = null
 var _ambient_crossfade_progress: float = 0.0
 var _ambient_crossfade_step_dt: float = 0.05
 var _ambient_base_db: float = 6.0
+var _music_tween: Tween = null  # Track active music fade tween to prevent race conditions
 
 # --- MUSIC PLAYER ADDITIONS ---
 # Name: [Display Name, Unlock Condition (Achievement ID or empty if unlocked)]
@@ -129,6 +130,10 @@ func play_music_by_path(path: String, loop: bool = true, fade_time: float = 0.5)
 	
 	var prepared := _ensure_loop_state(stream, loop)
 	
+	# Kill any pending music fade/stop tween
+	if _music_tween and _music_tween.is_valid():
+		_music_tween.kill()
+	
 	if fade_time > 0.05 and _music_player.playing:
 		print("[AudioDirector] Branch: CROSSFADE")
 		_start_music_with_fade(prepared, fade_time)
@@ -139,23 +144,30 @@ func play_music_by_path(path: String, loop: bool = true, fade_time: float = 0.5)
 		_music_player.volume_db = -12.0 if fade_time > 0.05 else 0.0
 		_music_player.play()
 		if fade_time > 0.05:
-			var tween := create_tween()
-			tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS) # Run even if paused
-			tween.tween_property(_music_player, "volume_db", 0.0, fade_time)
+			_music_tween = create_tween()
+			_music_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS) # Run even if paused
+			_music_tween.tween_property(_music_player, "volume_db", 0.0, fade_time)
 	_current_music_path = path
 	_current_track_path = path  # Sync for Music Player UI
 
 func stop_music(fade_time: float = 0.3) -> void:
 	if _music_player == null or not _music_player.playing:
 		return
+	
+	# Kill any active tween
+	if _music_tween and _music_tween.is_valid():
+		_music_tween.kill()
+		
 	if fade_time <= 0.05:
 		_music_player.stop()
 		_current_music_path = ""
 		return
-	var tween := create_tween()
+	
+	_music_tween = create_tween()
+	_music_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	var player_ref := _music_player
-	tween.tween_property(player_ref, "volume_db", -48.0, fade_time)
-	tween.finished.connect(func():
+	_music_tween.tween_property(player_ref, "volume_db", -48.0, fade_time)
+	_music_tween.finished.connect(func():
 		if not is_instance_valid(self):
 			return
 		if is_instance_valid(player_ref):
@@ -460,11 +472,16 @@ func stop_ambient(fade_time: float = 0.3) -> void:
 
 func _start_music_with_fade(stream: AudioStream, fade_time: float) -> void:
 	print("[AudioDirector] Starting music crossfade. Time: ", fade_time)
-	var fade_out := create_tween()
-	fade_out.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS) # Run even if game is paused
+	
+	# Kill any active tween
+	if _music_tween and _music_tween.is_valid():
+		_music_tween.kill()
+		
+	_music_tween = create_tween()
+	_music_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS) # Run even if game is paused
 	var player_ref := _music_player
-	fade_out.tween_property(player_ref, "volume_db", -48.0, fade_time * 0.5)
-	fade_out.finished.connect(func():
+	_music_tween.tween_property(player_ref, "volume_db", -48.0, fade_time * 0.5)
+	_music_tween.finished.connect(func():
 		if not is_instance_valid(self):
 			return
 		if not is_instance_valid(player_ref):
@@ -473,9 +490,10 @@ func _start_music_with_fade(stream: AudioStream, fade_time: float) -> void:
 		player_ref.stream = stream
 		player_ref.volume_db = -30.0
 		player_ref.play()
-		var fade_in := create_tween()
-		fade_in.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS) # Run even if game is paused
-		fade_in.tween_property(player_ref, "volume_db", 0.0, max(0.01, fade_time * 0.5))
+		# Start fade in (reuse same tween variable, create new tween)
+		_music_tween = create_tween()
+		_music_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS) # Run even if game is paused
+		_music_tween.tween_property(player_ref, "volume_db", 0.0, max(0.01, fade_time * 0.5))
 	)
 
 func _request_sfx_player() -> AudioStreamPlayer:

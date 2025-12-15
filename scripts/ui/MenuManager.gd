@@ -51,7 +51,8 @@ var _menu_container: Control = null
 var _debug_menu: CanvasLayer = null
 
 # Music player
-var _music_player: AudioStreamPlayer = null
+# Music player handled by AudioDirector now
+# var _music_player: AudioStreamPlayer = null
 const MENU_MUSIC_PATH := "res://assets/sounds/music/menu/main-menu.mp3"
 
 # Intro screen
@@ -538,7 +539,7 @@ func _finish_intro_transition() -> void:
 	_placeholder_node = null
 	
 	# Setup music now that intro is done
-	_setup_music()
+	start_menu_music()
 	
 	# Setup debug menu now (deferred from startup to avoid blocking intro animation)
 	if _debug_menu == null:
@@ -617,46 +618,7 @@ func _get_or_load_scene(scene_key: String, allow_blocking: bool = true) -> Packe
 			return null
 
 
-func _setup_music() -> void:
-	_music_player = AudioStreamPlayer.new()
-	_music_player.name = "MenuMusic"
-	_music_player.bus = "Music"  # Use Music bus for background music
-	add_child(_music_player)
-	
-	# Try to get music from threaded load, fall back to sync load
-	var music_stream: AudioStream = null
-	var status := ResourceLoader.load_threaded_get_status(MENU_MUSIC_PATH)
-	if status == ResourceLoader.THREAD_LOAD_LOADED or status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
-		music_stream = ResourceLoader.load_threaded_get(MENU_MUSIC_PATH) as AudioStream
-	else:
-		music_stream = load(MENU_MUSIC_PATH)
-	
-	if music_stream == null:
-		push_error("[MenuManager] Failed to load music file: " + MENU_MUSIC_PATH + " - Make sure the file is imported in Godot")
-		return
-	
-	_music_player.stream = music_stream
-	_music_player.volume_db = -8.0
-	_music_player.autoplay = false
-	
-	# Ensure music loops - check stream type and set loop
-	if music_stream is AudioStreamMP3:
-		(music_stream as AudioStreamMP3).loop = true
-	elif music_stream is AudioStreamOggVorbis:
-		(music_stream as AudioStreamOggVorbis).loop = true
-	elif music_stream is AudioStreamWAV:
-		(music_stream as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_FORWARD
-	
-	# Start playing
-	_music_player.play()
-	
-	if _music_player.playing:
-		print("[MenuManager] Menu music playing successfully")
-	else:
-		push_error("[MenuManager] Music stream loaded but not playing")
-
-
-	pass
+# _setup_music removed - handled by AudioDirector
 
 
 func show_main_menu() -> void:
@@ -838,12 +800,7 @@ func _on_game_start_requested(squad: Array[int], stage_id: String) -> void:
 		GameState.current_stage_id = stage_id
 	
 	# Stop menu music
-	if _music_player:
-		print("[MenuManager] Stopping menu music...")
-		_music_player.stop()
-		print("[MenuManager] Music player stopped, playing=", _music_player.playing)
-	else:
-		print("[MenuManager] No music player found!")
+	stop_menu_music()
 	
 	# Emit signal for game to handle
 	emit_signal("game_started", squad, stage_id)
@@ -860,26 +817,16 @@ func _on_game_start_requested(squad: Array[int], stage_id: String) -> void:
 
 func start_menu_music() -> void:
 	## Start the main menu music (used when returning from game)
-	if _music_player and not _music_player.playing:
-		_music_player.play()
-		print("[MenuManager] Menu music started")
-	elif not _music_player:
-		# Create player if needed
-		_music_player = AudioStreamPlayer.new()
-		_music_player.bus = "Music"
-		add_child(_music_player)
-		var stream = load(MENU_MUSIC_PATH)
-		if stream:
-			_music_player.stream = stream
-			_music_player.play()
-			print("[MenuManager] Menu music player created and started")
+	if AudioDirector:
+		AudioDirector.play_music_by_path(MENU_MUSIC_PATH, true, 0.5)
+		print("[MenuManager] Requesting menu music via AudioDirector")
 
 
 func stop_menu_music() -> void:
 	## Stop the main menu music (used before starting game)
-	if _music_player and _music_player.playing:
-		_music_player.stop()
-		print("[MenuManager] Menu music stopped")
+	if AudioDirector:
+		AudioDirector.stop_music(0.5)
+		print("[MenuManager] Requesting stop music via AudioDirector")
 
 
 func return_to_main_menu() -> void:

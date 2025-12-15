@@ -226,6 +226,13 @@ func _configure_snow_white() -> void:
 	# Get ammo from registry
 	var snow_white_data := _registry.get_character("snow_white") if _registry else null
 	_snow_white_ammo = snow_white_data.ammo_capacity if snow_white_data else 7
+	
+	# Apply "Build-a-Bullet" upgrade (2x for Sniper)
+	var Shop = load("res://scripts/ui/ShopMenu.gd")
+	if Shop and Shop.has_character_upgrade("kilo", "talos_ammo"):
+		_snow_white_ammo *= 2
+		print("[SummonedAlly] Snow White received Build-a-Bullet boost (Ammo: %d)" % _snow_white_ammo)
+		
 	_snow_white_max_ammo = _snow_white_ammo
 	_load_sprite("snow_white")
 
@@ -243,6 +250,13 @@ func _configure_rapunzel() -> void:
 	var rapunzel_data := _registry.get_character("rapunzel") if _registry else null
 	var base_ammo: int = rapunzel_data.ammo_capacity if rapunzel_data else 4
 	_rapunzel_ammo = int(base_ammo * 1.5)
+	
+	# Apply "Build-a-Bullet" upgrade (2x for Rocket)
+	var Shop = load("res://scripts/ui/ShopMenu.gd")
+	if Shop and Shop.has_character_upgrade("kilo", "talos_ammo"):
+		_rapunzel_ammo *= 2
+		print("[SummonedAlly] Rapunzel received Build-a-Bullet boost (Ammo: %d)" % _rapunzel_ammo)
+		
 	_rapunzel_max_ammo = _rapunzel_ammo
 	_load_sprite("rapunzel")
 

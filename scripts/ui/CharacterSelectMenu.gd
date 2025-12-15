@@ -492,6 +492,10 @@ func _on_random_pressed() -> void:
 	
 	# Reconnect the signal
 	_squad_slots.squad_complete.connect(_on_squad_complete)
+	
+	# Manually check if complete, since we suppressed the signal during adding
+	if _squad_slots.is_complete():
+		_on_squad_complete()
 
 func _apply_next_button_style(btn: Button) -> void:
 	var normal := StyleBoxFlat.new()

@@ -73,6 +73,13 @@ func add_xp(amount: int, bonus_multiplier: float = 1.0) -> bool:
 	return leveled_up
 
 
+
+## Set skill points (for sync)
+func set_skill_points(amount: int) -> void:
+	_skill_points = amount
+	skill_point_added.emit(_skill_points)
+
+
 ## Get current skill points
 func get_skill_points() -> int:
 	return _skill_points

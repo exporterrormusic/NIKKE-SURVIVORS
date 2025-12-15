@@ -9,7 +9,7 @@ const MarianCharmEffectScript = preload("res://scripts/characters/effects/Marian
 const MarianBulletScript = preload("res://scripts/characters/effects/MarianBullet.gd")
 const MarianBeamScript = preload("res://scripts/characters/effects/MarianBeam.gd")
 const MarianBeamCannonScript = preload("res://scripts/characters/effects/MarianBeamCannon.gd")
-const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
+
 
 # Charm area indicator (similar to Sin)
 var _charm_indicator: Node2D = null
@@ -43,7 +43,7 @@ func _on_initialize() -> void:
 	data.special_cooldown = charm_cooldown
 	
 	# Check for "Main Heroine" upgrade
-	_has_beam_cannon_upgrade = ShopMenuScript.has_character_upgrade("marian", "basic_attack")
+	_has_beam_cannon_upgrade = has_upgrade("marian", "basic_attack")
 	if _has_beam_cannon_upgrade:
 		print("[MarianController] 'Main Heroine' upgrade active - beam cannon enabled")
 

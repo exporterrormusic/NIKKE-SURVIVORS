@@ -52,12 +52,43 @@ func _register_with_manager() -> void:
 
 
 func _setup_title() -> void:
+	print("[MainMenu] Setting up title...")
+	
+	# Attempt to load logo
+	var logo_path = "res://assets/ui/logo.png"
+	if not ResourceLoader.exists(logo_path):
+		print("[MainMenu] ERROR: Logo file not found at ", logo_path)
+		return
+		
+	var tex = load(logo_path)
+	print("[MainMenu] Logo loaded: ", tex)
+	
+	var logo = TextureRect.new()
+	logo.texture = tex
+	logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	logo.custom_minimum_size = Vector2(600, 200)
+	logo.name = "GameLogo"
+	
 	if _title_label:
-		_title_label.text = TITLE_TEXT
-	if _subtitle_label:
-		_subtitle_label.text = SUBTITLE_TEXT
-	if _version_label:
-		pass  # Use text from scene file directly
+		print("[MainMenu] Found TitleLabel, replacing with logo.")
+		_title_label.visible = false
+		if _subtitle_label:
+			_subtitle_label.visible = false
+			
+		var parent = _title_label.get_parent()
+		if parent:
+			parent.add_child(logo)
+			parent.move_child(logo, _title_label.get_index())
+			# Center in container
+			logo.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			logo.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	else:
+		print("[MainMenu] TitleLabel NOT found. Adding logo to root securely.")
+		# Fallback: Add to MainMenu directly at top center
+		add_child(logo)
+		logo.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		logo.position.y = 50 # Add some margin from top
 
 
 func _setup_buttons() -> void:

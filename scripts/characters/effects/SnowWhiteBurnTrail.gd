@@ -171,14 +171,14 @@ class TrailMaskProxy extends Node2D:
 			top_pts.append(pos - perp * w)
 			bottom_pts.append(pos + perp * w)
 			
-		var poly := PackedVector2Array()
-		poly.append_array(top_pts)
-		# Add bottom points in reverse
-		var rev_bottom = bottom_pts.duplicate()
-		rev_bottom.reverse()
-		poly.append_array(rev_bottom)
-		
-		draw_colored_polygon(poly, Color.WHITE)
+		# Draw as quad strips
+		for i in range(top_pts.size() - 1):
+			var quad := PackedVector2Array()
+			quad.append(top_pts[i])
+			quad.append(top_pts[i+1])
+			quad.append(bottom_pts[i+1])
+			quad.append(bottom_pts[i])
+			draw_colored_polygon(quad, Color.WHITE)
 
 func _draw_trail_layer(lengths: PackedFloat32Array, total_length: float, width_mult: float, color: Color) -> void:
 	if _points.size() < 2:
@@ -222,27 +222,14 @@ func _draw_trail_layer(lengths: PackedFloat32Array, total_length: float, width_m
 		return
 	
 	# Build closed polygon
-	# Build closed polygon
-	var polygon := PackedVector2Array()
-	
-	# Add top points
-	for pt in top_pts:
-		if polygon.size() == 0 or not pt.is_equal_approx(polygon[-1]):
-			polygon.append(pt)
-			
-	# Add bottom points in reverse
-	for i in range(bottom_pts.size() - 1, -1, -1):
-		var pt = bottom_pts[i]
-		if polygon.size() == 0 or not pt.is_equal_approx(polygon[-1]):
-			polygon.append(pt)
-			
-	# Close loop check (ensure last != first)
-	if polygon.size() > 2 and polygon[-1].is_equal_approx(polygon[0]):
-		polygon.remove_at(polygon.size() - 1)
-		
-	# Ensure valid triangle at least
-	if polygon.size() >= 3:
-		draw_colored_polygon(polygon, color)
+	# Draw as quad strips to prevent triangulation errors
+	for i in range(top_pts.size() - 1):
+		var quad := PackedVector2Array()
+		quad.append(top_pts[i])
+		quad.append(top_pts[i+1])
+		quad.append(bottom_pts[i+1])
+		quad.append(bottom_pts[i])
+		draw_colored_polygon(quad, color)
 
 func _check_enemies() -> void:
 	var tree := get_tree()

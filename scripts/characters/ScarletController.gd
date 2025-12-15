@@ -3,7 +3,7 @@ class_name ScarletController
 ## Scarlet - Melee fighter with sword attacks and dash abilities
 
 # Shop upgrade reference
-const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
+
 const RosePetalScript = preload("res://scripts/characters/effects/RosePetal.gd")
 
 # Scarlet-specific state
@@ -17,6 +17,7 @@ var damage_accumulator: float = 0.0  # Tracks fractional self-damage
 
 # Shop upgrade state
 var _has_roses_core_upgrade: bool = false
+var _has_low_hp_upgrade: bool = false
 
 # Talent states
 var special_cd_level: int = 0  # Quick Dash: reduces cooldown
@@ -34,7 +35,9 @@ func _on_initialize() -> void:
 	special_ammo = special_max_ammo
 	
 	# Check if "Rose's Core" upgrade is purchased
-	_has_roses_core_upgrade = ShopMenuScript.has_character_upgrade("scarlet", "basic_attack")
+	_has_roses_core_upgrade = has_upgrade("scarlet", "basic_attack")
+	# Check if "Scraping the Bottle" upgrade is purchased
+	_has_low_hp_upgrade = has_upgrade("scarlet", "low_hp_damage")
 
 func _on_process(delta: float) -> void:
 	# Update special reload
@@ -52,7 +55,8 @@ func _perform_attack(direction: Vector2) -> void:
 	var slash = ProjectileCache.create_slash()
 	slash.rotation = direction.angle()
 	# Use character's base damage with level scaling
-	var damage: int = player.calc_damage()
+	# Use character's base damage with level scaling
+	var damage: int = int(float(player.calc_damage()) * get_low_hp_damage_multiplier())
 	slash.base_damage = damage
 	player.add_child(slash)  # Attach to player, not parent
 	slash.position = Vector2.ZERO  # Centered on player
@@ -116,7 +120,8 @@ func _perform_special(direction: Vector2) -> void:
 	w.owner_node = player
 	w.pierce_all = true
 	# Use character's base damage with level scaling (special does 0.8x base damage)
-	w.damage = player.calc_damage(0.8)
+	# Use character's base damage with level scaling (special does 0.8x base damage)
+	w.damage = int(float(player.calc_damage(0.8)) * get_low_hp_damage_multiplier())
 	w.base_damage = w.damage
 	if special_heal_level > 0:
 		w.heal_mode = true
@@ -222,3 +227,29 @@ func get_special_cooldown_progress() -> float:
 	if special_reloading:
 		return 1.0 - (special_reload_timer / special_reload_time)
 	return 1.0
+
+func get_low_hp_damage_multiplier() -> float:
+	## Returns damage multiplier based on missing HP if upgrade is unlocked
+	## 1.0 (no bonus) at 100% HP -> 2.0 (+100% bonus) at <= 15% HP
+	if not _has_low_hp_upgrade:
+		return 1.0
+	
+	if player.max_hp <= 0:
+		return 1.0
+		
+	var hp_pct: float = float(player.hp) / float(player.max_hp)
+	
+	# If HP > 100% (somehow), no bonus
+	if hp_pct >= 1.0:
+		return 1.0
+	
+	# If HP <= 15%, max bonus (+100% = x2.0)
+	if hp_pct <= 0.15:
+		return 2.0
+	
+	# Linear scaling between 15% and 100% HP
+	# Remap: [0.15, 1.0] -> [1.0, 0.0] (bonus amount)
+	# Formula: bonus = (1.0 - hp_pct) / (1.0 - 0.15)
+	# Wait, at 0.15: (0.85)/0.85 = 1.0. At 1.0: 0/0.85 = 0.
+	var bonus: float = (1.0 - hp_pct) / 0.85
+	return 1.0 + bonus

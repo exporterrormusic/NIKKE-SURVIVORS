@@ -12,6 +12,7 @@ var data: Resource = null  # CharacterData
 # State tracking
 var ammo: int = -1
 var max_ammo: int = -1
+var base_max_ammo: int = -1
 var is_reloading: bool = false
 var reload_timer: float = 0.0
 
@@ -39,6 +40,11 @@ func initialize(p_player: Node2D, p_data: Resource) -> void:  # CharacterData
 	
 	# Initialize ammo
 	max_ammo = data.ammo_capacity
+	base_max_ammo = max_ammo
+	
+	# Apply initial squad upgrades (if any apply at start, e.g. main character)
+	apply_squad_upgrades()
+			
 	ammo = max_ammo
 	
 	# Reset timers
@@ -49,6 +55,44 @@ func initialize(p_player: Node2D, p_data: Resource) -> void:  # CharacterData
 	
 	# Character-specific initialization
 	_on_initialize()
+
+## Apply dynamic squad upgrades (called when squad composition changes)
+func apply_squad_upgrades() -> void:
+	# Reset to base stats before re-applying modifiers
+	max_ammo = base_max_ammo
+	
+	# Kilo's "Build-a-Bullet" (Ammo Boost)
+	# Requires: 1. Upgrade purchased, 2. Kilo unlocked in current squad
+	if has_upgrade("kilo", "talos_ammo"):
+		# Check if Kilo is in the squad using PlayerCore helper
+		var kilo_active = false
+		if player and player.has_method("is_character_in_squad"):
+			kilo_active = player.is_character_in_squad("kilo")
+		
+		if kilo_active:
+			var w_type = _get_weapon_type_name().to_lower()
+			# +100% for Rocket/Sniper/Launcher
+			if w_type in ["sniper", "rocket", "launcher"]:
+				max_ammo *= 2
+				print("[CharacterController] Applied Kilo Ammo Boost (2x) to %s. New Max: %d" % [w_type, max_ammo])
+			# +50% for Minigun/SMG/Shotgun/Assault Rifle
+			elif w_type in ["minigun", "smg", "assault_rifle", "shotgun", "assault rifle"]:
+				max_ammo = int(max_ammo * 1.5)
+				print("[CharacterController] Applied Kilo Ammo Boost (1.5x) to %s. New Max: %d" % [w_type, max_ammo])
+				
+	# If current ammo exceeds new max, clamp it. If we just gained ammo capacity, we usually don't fill it instantly unless reloading.
+	if ammo > max_ammo:
+		ammo = max_ammo
+	
+	# Notify UI
+	ammo_changed.emit(ammo, max_ammo)
+
+## Helper to check for shop upgrades without creating circular dependency
+func has_upgrade(char_id: String, upgrade_id: String) -> bool:
+	var shop = load("res://scripts/ui/ShopMenu.gd")
+	if shop:
+		return shop.has_character_upgrade(char_id, upgrade_id)
+	return false
 
 ## Called when controller is initialized - override for custom setup
 func _on_initialize() -> void:

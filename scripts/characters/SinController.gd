@@ -8,7 +8,7 @@ class_name SinController
 const SinDebuffEffectScript = preload("res://scripts/characters/effects/SinDebuffEffect.gd")
 const SinCharmEffectScript = preload("res://scripts/characters/effects/SinCharmEffect.gd")
 const SinMagneticAuraScript = preload("res://scripts/characters/effects/SinMagneticAura.gd")
-const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
+
 
 # Charm area indicator
 var _charm_indicator: SinCharmAreaIndicator = null
@@ -51,7 +51,7 @@ func _on_initialize() -> void:
 	# Note: Indicator is created lazily in _on_process to ensure scene is ready
 	
 	# Check for "Magnetic Personality" upgrade
-	_has_magnetic_upgrade = ShopMenuScript.has_character_upgrade("sin", "basic_attack")
+	_has_magnetic_upgrade = has_upgrade("sin", "basic_attack")
 	if _has_magnetic_upgrade:
 		print("[SinController] 'Magnetic Personality' upgrade active - creating aura")
 		# Aura will be created lazily when player parent is available

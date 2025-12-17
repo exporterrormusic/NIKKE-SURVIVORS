@@ -29,6 +29,7 @@ var _beam_timer := BEAM_COOLDOWN
 var _initial_delay := ATTACK_START_DELAY
 var _beam_active := false
 var _current_beam: Node2D = null
+var _spawn_beam_blocker := 6.0 # Hard cooldown after spawn
 
 # Enemy type tracking
 var _is_tank := false
@@ -105,6 +106,7 @@ func _process(delta: float) -> void:
 	# Update timers
 	_missile_timer -= delta
 	_beam_timer -= delta
+	_spawn_beam_blocker -= delta
 	
 	# Fire missiles
 	if _missile_timer <= 0:
@@ -112,7 +114,8 @@ func _process(delta: float) -> void:
 		_missile_timer = _missile_cooldown
 	
 	# Fire beam (only true bosses fire beams, not tanks or elites)
-	if _beam_timer <= 0 and _is_boss:
+	# Must wait for spawn blocker (6s) to prevent instant spawn-killing
+	if _beam_timer <= 0 and _spawn_beam_blocker <= 0 and _is_boss:
 		_fire_beam()
 		_beam_timer = BEAM_COOLDOWN
 

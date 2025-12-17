@@ -3,6 +3,9 @@ class_name RosePetal
 ## Small rose petal projectile shot from Scarlet's sword when "Rose's Core" upgrade is purchased
 ## Travels a short distance and deals full slash damage
 
+# Cached ShopMenu reference to avoid load() in hot paths
+const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
+
 var velocity := Vector2.ZERO
 var lifetime: float = 0.0
 var max_lifetime: float = 0.6  # Longer travel time for more range
@@ -20,10 +23,12 @@ var _trail_positions: Array = []  # For motion trail
 var _max_trail: int = 6
 
 func _ready() -> void:
-	collision_layer = 0
-	collision_mask = 2  # Enemies are on layer 2
+	add_to_group("player_projectiles")
+	add_to_group("projectiles")  # Also needed for Wells' Chrono-Intangibility boulder detection
+	collision_layer = 4  # Layer 3 (Projectiles)
+	collision_mask = 7   # 1(World) + 2(Enemies) + 4(Shields/Hitboxes)
 	monitoring = true
-	monitorable = false
+	monitorable = true   # Must be monitorable for Shield to detect it too
 	
 	var shape := CircleShape2D.new()
 	shape.radius = _size * 0.6  # Hitbox slightly smaller than visual
@@ -32,6 +37,7 @@ func _ready() -> void:
 	add_child(collider)
 	
 	body_entered.connect(_on_body_entered)
+	area_entered.connect(_on_body_entered) # Support hitting Area2D shields
 	
 	# Consistent rotation to keep petal pointing in travel direction with slight spin
 	_rotation_speed = randf_range(3.0, 6.0) * (1 if randf() > 0.5 else -1)
@@ -39,15 +45,52 @@ func _ready() -> void:
 	# Z-index for visibility
 	z_index = 50
 	
+	# Make petal unshaded (glows in dark)
+	var mat := CanvasItemMaterial.new()
+	mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+	material = mat
+	
 	queue_redraw()
 
-func _process(delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	# Track trail positions
 	_trail_positions.push_front(global_position)
 	if _trail_positions.size() > _max_trail:
 		_trail_positions.pop_back()
 	
-	global_position += velocity * delta
+	var frame_movement = velocity * delta
+	var current_pos = global_position
+	var next_pos = current_pos + frame_movement
+	
+	# Raycast check to prevent tunneling
+	var space_state = get_world_2d().direct_space_state
+	# Mask 7 = World(1) + Enemy(2) + Shield/Hitbox(4)
+	var query = PhysicsRayQueryParameters2D.create(current_pos, next_pos, 7, [self])
+	query.collide_with_areas = true
+	query.collide_with_bodies = true
+	
+	var result = space_state.intersect_ray(query)
+	if result:
+		# Check if this is a boulder we should phase through BEFORE setting position
+		var collider = result.collider
+		if collider is StaticBody2D and collider.is_in_group("boulders"):
+			var player_ref = get_tree().get_first_node_in_group("player")
+			if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player_ref and player_ref.has_method("is_character_in_squad") and player_ref.is_character_in_squad("wells"):
+				# Phase through boulder - continue to next_pos, don't stop at collision point
+				global_position = next_pos
+				# Skip the rest of the collision handling
+			else:
+				# Not phasing - normal collision handling
+				global_position = result.position
+				_on_body_entered(collider)
+				return
+		else:
+			# Not a boulder - normal collision handling
+			global_position = result.position
+			_on_body_entered(collider)
+			return
+	
+	global_position = next_pos
 	rotation += _rotation_speed * delta
 	
 	lifetime += delta
@@ -71,13 +114,19 @@ func _process(delta: float) -> void:
 
 func _check_boulder_collision() -> bool:
 	"""Manual boulder collision check since petals don't reparent but still need check."""
+	# Skip if Chrono-Intangibility upgrade is active AND Wells is in squad
+	var player = get_tree().get_first_node_in_group("player")
+	if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+		return false
+		
 	var boulders := get_tree().get_nodes_in_group("boulders")
 	for boulder in boulders:
 		if not is_instance_valid(boulder):
 			continue
 		var boulder_pos: Vector2 = boulder.global_position
 		var boulder_radius: float = boulder.boulder_size * 0.5 if "boulder_size" in boulder else 150.0
-		if global_position.distance_to(boulder_pos) < boulder_radius:
+		# Use 5% larger radius to match collision shape edge cases
+		if global_position.distance_to(boulder_pos) < boulder_radius * 1.05:
 			return true
 	return false
 
@@ -91,8 +140,48 @@ func _on_body_entered(body: Node2D) -> void:
 		return
 	if body.is_in_group("charmed_allies"):
 		return
+		
+	# 1. Check for Shield Hit (Area2D child of ShielderShield) via explicit detection
+	# (This handles the case where we hit the shield area directly)
+	var shield_root = null
+	if body is Area2D:
+		shield_root = body.get_parent()
+	elif body.has_method("take_shield_damage"):
+		shield_root = body
+		
+	if shield_root and shield_root.has_method("take_shield_damage"):
+		# Shield hit!
+		shield_root.take_shield_damage(base_damage, "projectile") 
+		if shield_root.has_method("is_active") and shield_root.is_active():
+			# Shield absorbed it (still active)
+			queue_free()
+			return
+		else:
+			# Shield BROKE from this hit
+			# We must still destroy the petal because it spent its energy breaking the shield
+			queue_free()
+			return
+
 	if not body.has_method("take_damage"):
 		return
+		
+	# Check if this "damageable" body is actually a boulder (destructible terrain)
+	if body.is_in_group("boulders") or (body.get_parent() and body.get_parent().is_in_group("boulders")):
+		var check_player = get_tree().get_first_node_in_group("player")
+		if ShopMenu.has_character_upgrade("wells", "chrono_intangibility") and check_player and check_player.has_method("is_character_in_squad") and check_player.is_character_in_squad("wells"):
+			return # Ignore boulder hitting
+			
+	# Backup spatial check for boulders in body_entered if group check failed
+	var boulders = get_tree().get_nodes_in_group("boulders")
+	for b in boulders:
+		if is_instance_valid(b):
+			var b_rad = 150.0
+			if "boulder_size" in b: b_rad = b.boulder_size * 0.5
+			if global_position.distance_squared_to(b.global_position) < (b_rad * 1.2) ** 2:
+				# It is inside a boulder radius, treat as boulder
+				var check_player = get_tree().get_first_node_in_group("player")
+				if ShopMenu.has_character_upgrade("wells", "chrono_intangibility") and check_player and check_player.has_method("is_character_in_squad") and check_player.is_character_in_squad("wells"):
+					return
 	
 	_has_hit = true
 	

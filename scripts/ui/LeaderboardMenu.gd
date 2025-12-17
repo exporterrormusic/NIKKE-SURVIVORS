@@ -650,12 +650,66 @@ func _build_detail_popup() -> void:
 	_detail_popup.add_child(center_container)
 	
 	# Create stats panel
+	# 1. Main Wrapper Panel (The "Box" that encompasses everything)
+	var main_panel := PanelContainer.new()
+	# Match StatsPanel style
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.06, 0.08, 0.12, 0.98)
+	panel_style.border_color = Color(0.5, 0.5, 0.6, 0.8)
+	panel_style.set_border_width_all(2)
+	panel_style.set_corner_radius_all(10)
+	main_panel.add_theme_stylebox_override("panel", panel_style)
+	center_container.add_child(main_panel)
+	
+	# 2. Layout
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 20) # Added spacing (User Request)
+	main_panel.add_child(vbox)
+	
+	# 3. Stats Panel (Content)
 	if ResourceLoader.exists("res://scripts/ui/StatsPanel.gd"):
 		var stats_script = load("res://scripts/ui/StatsPanel.gd")
 		_detail_stats_panel = Panel.new()
 		_detail_stats_panel.set_script(stats_script)
 		_detail_stats_panel.custom_minimum_size = Vector2(400, 500)
-		center_container.add_child(_detail_stats_panel)
+		
+		# Enable embedded mode to remove internal border/bg
+		if _detail_stats_panel.has_method("set_embedded"):
+			_detail_stats_panel.set_embedded(true)
+			
+		vbox.add_child(_detail_stats_panel)
+		
+	# 4. Close Button Footer
+	var footer := MarginContainer.new()
+	footer.add_theme_constant_override("margin_bottom", 24) # Bottom padding
+	footer.add_theme_constant_override("margin_top", 4)
+	vbox.add_child(footer)
+	
+	var close_btn := Button.new()
+	close_btn.text = "CLOSE"
+	close_btn.custom_minimum_size = Vector2(160, 45)
+	close_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	
+	# Red Button Styling
+	var normal_style := StyleBoxFlat.new()
+	normal_style.bg_color = Color(0.7, 0.2, 0.2, 1.0) # Red
+	normal_style.set_corner_radius_all(4)
+	
+	var hover_style := StyleBoxFlat.new()
+	hover_style.bg_color = Color(0.8, 0.3, 0.3, 1.0) # Brighter Red
+	hover_style.set_corner_radius_all(4)
+	
+	var pressed_style := StyleBoxFlat.new()
+	pressed_style.bg_color = Color(0.5, 0.1, 0.1, 1.0) # Dark Red
+	pressed_style.set_corner_radius_all(4)
+	
+	close_btn.add_theme_stylebox_override("normal", normal_style)
+	close_btn.add_theme_stylebox_override("hover", hover_style)
+	close_btn.add_theme_stylebox_override("pressed", pressed_style)
+	close_btn.add_theme_font_size_override("font_size", 20)
+	
+	close_btn.pressed.connect(_hide_detail_popup)
+	footer.add_child(close_btn)
 
 
 func _on_popup_overlay_click(event: InputEvent) -> void:

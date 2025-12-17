@@ -67,7 +67,9 @@ func _process(delta: float) -> void:
 			visible = _is_visible  # Restore normal visibility state
 		queue_redraw()
 	elif _is_visible:
-		queue_redraw()
+		# PERFORMANCE: Only redraw every 3rd frame during idle state
+		if Engine.get_process_frames() % 3 == 0:
+			queue_redraw()
 
 func show_indicator() -> void:
 	if _is_visible:

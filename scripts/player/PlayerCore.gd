@@ -133,6 +133,17 @@ var _eden_shield_current: int = 0
 var _eden_shield_visual: Node2D = null  # Visual shield effect
 var _has_nayuta_duplicity_upgrade: bool = false  # "Duplicity" - 10% clone spawn on kills
 
+# Marian "She'll Eat Anything" upgrade state
+var _has_marian_beam_absorb: bool = false
+var _marian_beam_buff_active: bool = false
+var _marian_beam_buff_timer: float = 0.0
+const MARIAN_BEAM_BUFF_DURATION: float = 5.0
+var _marian_beam_buff_visual: Node2D = null
+
+# Sin "I WISH They Were Gone" upgrade state
+var _has_sin_wish_upgrade: bool = false
+var _sin_wish_used_this_match: bool = false
+
 func _ready() -> void:
 	add_to_group("player")
 	
@@ -410,6 +421,14 @@ func _apply_character_shop_upgrades(all_ids: Array) -> void:
 				if ShopMenuScript.has_character_upgrade("nayuta", "basic_attack"):
 					_has_nayuta_duplicity_upgrade = true
 					print("[PlayerCore] Nayuta 'Duplicity' upgrade active (10% clone spawn)")
+			"marian":
+				if ShopMenuScript.has_character_upgrade("marian", "beam_absorb"):
+					_has_marian_beam_absorb = true
+					print("[PlayerCore] Marian 'She'll Eat Anything' upgrade active")
+			"sin":
+				if ShopMenuScript.has_character_upgrade("sin", "wish_save"):
+					_has_sin_wish_upgrade = true
+					print("[PlayerCore] Sin 'I WISH They Were Gone' upgrade active")
 
 func _apply_upgrade_for_character(char_idx: int) -> void:
 	"""Apply shop upgrade for a specific character when unlocked during gameplay."""
@@ -454,6 +473,14 @@ func _apply_upgrade_for_character(char_idx: int) -> void:
 			if ShopMenuScript.has_character_upgrade("nayuta", "basic_attack"):
 				_has_nayuta_duplicity_upgrade = true
 				print("[PlayerCore] Nayuta 'Duplicity' upgrade now active (unlocked)")
+		"marian":
+			if ShopMenuScript.has_character_upgrade("marian", "beam_absorb"):
+				_has_marian_beam_absorb = true
+				print("[PlayerCore] Marian 'She'll Eat Anything' upgrade now active (unlocked)")
+		"sin":
+			if ShopMenuScript.has_character_upgrade("sin", "wish_save"):
+				_has_sin_wish_upgrade = true
+				print("[PlayerCore] Sin 'I WISH They Were Gone' upgrade now active (unlocked)")
 
 func _apply_all_talents_to_controllers() -> void:
 	"""Apply all unlocked talents to controllers when the game starts."""
@@ -509,7 +536,8 @@ func _spawn_duplicity_clone() -> void:
 	"""Spawn a clone at the player's position for Nayuta's Duplicity upgrade."""
 	var NayutaCloneScript = preload("res://scripts/characters/effects/NayutaClone.gd")
 	var clone: Node2D = NayutaCloneScript.new()
-	get_parent().add_child(clone)
+	# Deferred add to avoid "parent busy" errors during physics callbacks
+	get_parent().call_deferred("add_child", clone)
 	clone.global_position = global_position + Vector2(randf_range(-30, 30), randf_range(-30, 30))
 	
 	# Clone stats: 25% player HP with level scaling, 20% damage multiplier, no heal on death
@@ -713,12 +741,20 @@ func _on_environment_modulate_changed(color: Color) -> void:
 # ============= DAMAGE / HEALING =============
 
 func take_damage(dmg: int, is_crit: bool = false, direction: Vector2 = Vector2.ZERO, is_true_damage: bool = false, source: String = "enemy") -> void:
+	if CheatManager.is_cheat_active("invincible"):
+		return
+		
 	if invincible and not is_true_damage:
 		return
 	# Debug invincibility from debug menu
 	if has_meta("debug_invincible") and get_meta("debug_invincible"):
 		return
 	if _current_controller and _current_controller.is_invincible():
+		return
+	
+	# Marian "She'll Eat Anything" - absorb boss beam attacks
+	if source == "boss_beam" and _has_marian_beam_absorb and _current_controller is MarianController:
+		_activate_marian_beam_buff()
 		return
 	
 	# Check if Cecil's shield can absorb the hit
@@ -744,13 +780,18 @@ func take_damage(dmg: int, is_crit: bool = false, direction: Vector2 = Vector2.Z
 	var prev_hp = hp
 	hp -= dmg
 	
-	if screen_flash and screen_flash.has_method("flash_damage"):
-		screen_flash.flash_damage()
+	# Check if Sin's wish will save the player (don't show damage effects if so)
+	var sin_wish_will_save = hp <= 0 and _has_sin_wish_upgrade and not _sin_wish_used_this_match and is_character_in_squad("sin")
 	
-	# Hit effects
-	var HitSparkScript = preload("res://scripts/effects/HitSpark.gd")
-	if get_parent() and HitSparkScript:
-		HitSparkScript.spawn_player_hit(get_parent(), global_position)
+	# Only show damage effects if not being saved by Sin's wish
+	if not sin_wish_will_save:
+		if screen_flash and screen_flash.has_method("flash_damage"):
+			screen_flash.flash_damage()
+		
+		# Hit effects
+		var HitSparkScript = preload("res://scripts/effects/HitSpark.gd")
+		if get_parent() and HitSparkScript:
+			HitSparkScript.spawn_player_hit(get_parent(), global_position)
 	
 	# Camera shake disabled for player damage
 	# var combat_juice_script = load("res://scripts/CombatJuice.gd")
@@ -770,6 +811,14 @@ func take_damage(dmg: int, is_crit: bool = false, direction: Vector2 = Vector2.Z
 		_on_player_death()
 
 func _on_player_death() -> void:
+	# Sin "I WISH They Were Gone" upgrade: Trigger wish sequence if Sin in squad
+	if _has_sin_wish_upgrade and not _sin_wish_used_this_match and is_character_in_squad("sin"):
+		_sin_wish_used_this_match = true
+		hp = 1  # Prevent death
+		_trigger_sin_wish_sequence()
+		print("[PlayerCore] Sin's wish save triggered!")
+		return
+	
 	# Cecil "Three Wishes..." upgrade: Use an extra life if available
 	if _has_cecil_lives_upgrade and _cecil_lives_remaining > 0:
 		_cecil_lives_remaining -= 1
@@ -795,6 +844,15 @@ func _on_player_death() -> void:
 		var root = get_tree().current_scene
 		if root and root.has_method("show_defeat_menu"):
 			root.show_defeat_menu()
+
+func add_skill_points(amount: int) -> void:
+	if _progression:
+		_progression.add_skill_points(amount)
+		# Show/update skill points notification
+		_update_skill_points_notification(_progression.get_skill_points())
+	
+	if overhead_hud:
+		overhead_hud.update_skill_points_available(true)
 
 func heal(amount: int) -> void:
 	var prev_hp = hp
@@ -855,11 +913,16 @@ func register_burst_hit(_target = null, from_burst: bool = false, weapon_type: S
 	if _has_commander_burst_upgrade:
 		burst_rate *= 2.0
 	
-	burst_current = min(burst_current + burst_rate, burst_max)
-	if player_hud:
-		player_hud.update_burst(burst_current, burst_max, true)
-	if overhead_hud:
-		overhead_hud.update_burst(burst_current, burst_max)
+	# Delegate to BurstSystem if available (fixes desync)
+	if _burst_system:
+		_burst_system.gain_burst(burst_rate)
+	else:
+		# Fallback for safe compatibility
+		burst_current = min(burst_current + burst_rate, burst_max)
+		if player_hud:
+			player_hud.update_burst(burst_current, burst_max, true)
+		if overhead_hud:
+			overhead_hud.update_burst(burst_current, burst_max)
 
 func _get_current_weapon_type() -> String:
 	## Get weapon type string for current character
@@ -993,6 +1056,10 @@ func add_xp(amount: int) -> void:
 	# Crown "Royal Knowledge" upgrade: 2x XP gain
 	if _has_crown_xp_upgrade:
 		xp_multiplier *= 2.0
+		
+	# Cheat: Recipes (50x XP)
+	if CheatManager.is_cheat_active("xp_boost"):
+		xp_multiplier *= 50.0
 	
 	_progression.set_xp_multiplier(xp_multiplier)
 	
@@ -1111,8 +1178,119 @@ func gain_shield(amount: int) -> void:
 		_eden_shield_current = mini(_eden_shield_current + amount, _eden_shield_max)
 		if _eden_shield_current != old:
 			call_deferred("_update_shield_display")
-			# Optional: Visual effect for gaining shield?
-			# For now just update display
+
+# ============= MARIAN BEAM BUFF =============
+
+func _activate_marian_beam_buff() -> void:
+	"""Activate Marian's beam absorption buff (+100% damage, enhanced beam)."""
+	_marian_beam_buff_active = true
+	_marian_beam_buff_timer = MARIAN_BEAM_BUFF_DURATION
+	
+	# Notify controller
+	if _current_controller is MarianController:
+		_current_controller.set_beam_buff_active(true)
+	
+	# Create purple glow visual
+	_create_marian_buff_visual()
+	
+	print("[PlayerCore] Marian beam buff activated! +100% damage for 5s")
+
+func _create_marian_buff_visual() -> void:
+	"""Create smoky purple glow around player."""
+	if _marian_beam_buff_visual and is_instance_valid(_marian_beam_buff_visual):
+		return
+	
+	_marian_beam_buff_visual = Node2D.new()
+	_marian_beam_buff_visual.name = "MarianBeamBuffGlow"
+	_marian_beam_buff_visual.set_script(_get_marian_buff_glow_script())
+	add_child(_marian_beam_buff_visual)
+
+func _get_marian_buff_glow_script() -> GDScript:
+	var script := GDScript.new()
+	script.source_code = """
+extends Node2D
+
+var _time: float = 0.0
+var _particles: Array = []
+
+func _ready() -> void:
+	z_index = -1
+	for i in range(12):
+		_particles.append({
+			"angle": randf() * TAU,
+			"dist": randf_range(30, 60),
+			"speed": randf_range(0.5, 1.5),
+			"size": randf_range(15, 30),
+			"alpha": randf_range(0.3, 0.6)
+		})
+
+func _process(delta: float) -> void:
+	_time += delta
+	for p in _particles:
+		p.angle += p.speed * delta
+	queue_redraw()
+
+func _draw() -> void:
+	# Smoky purple glow
+	for p in _particles:
+		var pos = Vector2(cos(p.angle), sin(p.angle)) * p.dist
+		var pulse = 0.8 + 0.2 * sin(_time * 3.0 + p.angle)
+		var color = Color(0.6, 0.2, 0.9, p.alpha * pulse)
+		draw_circle(pos, p.size, color)
+	
+	# Central glow
+	var center_alpha = 0.3 + 0.1 * sin(_time * 4.0)
+	draw_circle(Vector2.ZERO, 50, Color(0.5, 0.1, 0.8, center_alpha))
+"""
+	script.reload()
+	return script
+
+func _deactivate_marian_beam_buff() -> void:
+	"""End Marian's beam buff."""
+	_marian_beam_buff_active = false
+	_marian_beam_buff_timer = 0.0
+	
+	# Notify controller
+	if _current_controller is MarianController:
+		_current_controller.set_beam_buff_active(false)
+	
+	# Remove visual
+	if _marian_beam_buff_visual and is_instance_valid(_marian_beam_buff_visual):
+		_marian_beam_buff_visual.queue_free()
+		_marian_beam_buff_visual = null
+	
+	print("[PlayerCore] Marian beam buff ended")
+
+# ============= SIN WISH SAVE =============
+
+func _trigger_sin_wish_sequence() -> void:
+	"""Trigger Sin's 'I WISH They Were Gone' death save sequence."""
+	var SinWishEffectScript = load("res://scripts/characters/effects/SinWishEffect.gd")
+	if not SinWishEffectScript:
+		push_error("[PlayerCore] Failed to load SinWishEffect.gd!")
+		return
+	
+	var effect = SinWishEffectScript.new()
+	effect.player_ref = self
+	get_parent().add_child(effect)
+	effect.global_position = global_position
+	
+	# Connect completion signal to grant invulnerability
+	effect.sequence_complete.connect(_on_sin_wish_complete)
+
+func _on_sin_wish_complete() -> void:
+	"""Called when Sin's wish sequence finishes."""
+	# Grant 3 seconds of invulnerability
+	invincible = true
+	_cecil_revive_invincible_timer = 3.0  # Reuse Cecil's timer for invincibility
+	hp = max_hp  # Full heal
+	_update_health_display(max_hp, false)
+	print("[PlayerCore] Sin wish sequence complete. 3s invulnerability granted.")
+
+func reset_sin_wish_for_new_match() -> void:
+	"""Reset Sin's wish usage for a new match."""
+	_sin_wish_used_this_match = false
+
 
 func update_xp_bar() -> void:
 	if xp_ui and xp_ui.has_method("set_xp"):
@@ -1420,14 +1598,44 @@ func _update_overhead_special() -> void:
 			overhead_hud.update_special_ability_with_charges(unlocked, progress, charges, max_charges)
 			return
 	
-	overhead_hud.update_special_ability(unlocked, progress)
+	# Check for Wells locked state (Future Marian active)
+	var is_locked: bool = false
+	if "_special_blocked" in _current_controller:
+		is_locked = _current_controller._special_blocked
+	
+	overhead_hud.update_special_ability(unlocked, progress, is_locked)
 
 # ============= MAIN GAME LOOP =============
 
 func _process(delta: float) -> void:
+	# Cheats
+	if CheatManager.is_cheat_active("infinite_burst"):
+		if burst_current < burst_max:
+			burst_current = burst_max
+			if player_hud:
+				player_hud.update_burst(burst_current, burst_max, false)
+			if overhead_hud:
+				overhead_hud.update_burst(burst_current, burst_max)
+				
+	if CheatManager.is_cheat_active("give_skill_points"):
+		# One-shot trigger: give 99 points then disable
+		CheatManager.set_cheat_active("give_skill_points", false)
+		add_skill_points(99)
+		print("[PlayerCore] Cheat BLEED activated: +99 Skill Points")
+		
+		# Show notification via overhead hud if possible
+		if overhead_hud and overhead_hud.has_method("show_message"):
+			overhead_hud.show_message("+99 SKILL POINTS")
+
 	# Update controller
 	if _current_controller:
 		_current_controller.process(delta)
+	
+	# Marian beam buff timer
+	if _marian_beam_buff_active:
+		_marian_beam_buff_timer -= delta
+		if _marian_beam_buff_timer <= 0:
+			_deactivate_marian_beam_buff()
 	
 	# Stamina management
 	var infinite_stamina: bool = has_meta("debug_infinite_stamina") and get_meta("debug_infinite_stamina")
@@ -1486,6 +1694,10 @@ func _physics_process(delta: float) -> void:
 	
 	# Handle movement
 	_handle_movement(input_vector, delta)
+	
+	# Update current controller physics (for DoT, healing, etc.)
+	if _current_controller and _current_controller.has_method("physics_process"):
+		_current_controller.physics_process(delta)
 	
 	# Character swap and burst are handled in _input()
 
@@ -1621,6 +1833,10 @@ func _input(event: InputEvent) -> void:
 
 func _select_character_by_index(index: int) -> void:
 	if index in unlocked_characters and index in _controllers:
+		# Cleanup previous controller (removes active effects like Bullet Time audio/visuals)
+		if _current_controller and _current_controller.has_method("cleanup"):
+			_current_controller.cleanup()
+			
 		current_character = index
 		_current_controller = _controllers[current_character]
 		
@@ -1633,6 +1849,8 @@ func _select_character_by_index(index: int) -> void:
 			# Pass registry index (not slot index) for proper ammo display
 			var registry_idx: int = _selected_char_indices[current_character] if current_character < _selected_char_indices.size() else 0
 			overhead_hud.update_character(registry_idx)
+
+
 
 func _try_manual_reload() -> void:
 	# Allow player to manually reload with R key
@@ -1713,3 +1931,10 @@ func get_low_hp_damage_multiplier() -> float:
 	if _current_controller and _current_controller.has_method("get_low_hp_damage_multiplier"):
 		return _current_controller.get_low_hp_damage_multiplier()
 	return 1.0
+
+func _exit_tree() -> void:
+	# Cleanup all controllers to ensure global effects (AudioServer, etc) are removed
+	for controller in _controllers:
+		if controller and controller.has_method("cleanup"):
+			controller.cleanup()
+

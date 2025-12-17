@@ -76,6 +76,7 @@ static var TIERS := {
 		"has_boss_ai": true,
 		"can_shoot": true,
 		"effects_script": "res://scripts/enemies/effects/EliteEffects.gd",
+		"core_drop_chance": 0.5,  # 50% chance to drop a core
 	},
 	"boss": {
 		"scale": 4.5,

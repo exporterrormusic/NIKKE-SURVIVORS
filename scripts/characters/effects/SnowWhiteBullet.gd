@@ -5,6 +5,8 @@ class_name SnowWhiteBullet
 ## Should be instantiated from SnowWhiteBullet.tscn for proper sprite display.
 
 const SnowWhiteBurnTrailScript = preload("res://scripts/characters/effects/SnowWhiteBurnTrail.gd")
+# Cached ShopMenu reference to avoid load() in hot collision path
+const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
 
 @onready var sprite = $Sprite2D
 
@@ -37,6 +39,9 @@ var _original_modulate = Color(0.6, 0.9, 1.0, 1.0)
 func _ready() -> void:
 	connect("body_entered", _on_body_entered)
 	connect("area_entered", _on_area_entered)
+	
+	# Add to projectiles group for ShielderShield detection
+	add_to_group("projectiles")
 	
 	# Ensure detection of Shields (Layer 1 = World, Layer 16 = Shields)
 	# Original mask was 2 (Enemies), so we must add 1 if we want to hit walls/shields on Layer 1
@@ -143,20 +148,35 @@ func _handle_hit(target: Node, is_shield: bool = false) -> void:
 	var hit_direction = velocity.normalized()
 	
 	if is_shield:
+		# Check if Chrono-Intangibility upgrade allows phasing through shields
+		var p = get_tree().get_first_node_in_group("player")
+		var wells_in_squad = p and p.has_method("is_character_in_squad") and p.is_character_in_squad("wells")
+		if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and wells_in_squad:
+			# Bullet phases through shield completely - no damage, no stop, continue flying
+			# Don't add to _hit_nodes so it can hit the enemy behind
+			return
+		
 		# Determine killer source for burst tracking
 		var shield_source := "sniper"
 		if killer_source_override != "":
 			shield_source = killer_source_override
 		target.take_shield_damage(damage, shield_source)
+		
 		# Force stop on shield hit (Shields block piercing shots)
 		_finalize_trail()
 		queue_free()
 		return
 	else:
 		# Check if target is protected by a shield (Snow White bullets shouldn't pierce shields via body hits)
+		# UNLESS Chrono-Intangibility is active
 		var protected = false
-		if target.has_method("is_protected_by_shield") and target.is_protected_by_shield():
-			protected = true
+		var p = get_tree().get_first_node_in_group("player")
+		var wells_in_squad = p and p.has_method("is_character_in_squad") and p.is_character_in_squad("wells")
+		var can_pierce_shield = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and wells_in_squad
+		
+		if not can_pierce_shield:
+			if target.has_method("is_protected_by_shield") and target.is_protected_by_shield():
+				protected = true
 			
 		# Determine killer source for burst tracking and Goddess Fall XP
 		var effective_source := killer_source  # Use class property (defaults to "sniper")
@@ -168,7 +188,7 @@ func _handle_hit(target: Node, is_shield: bool = false) -> void:
 		var is_burst_attack: bool = "burst" in effective_source.to_lower()
 		target.take_damage(damage, is_crit, hit_direction, is_burst_attack, effective_source)
 		
-		# If protected, the damage was redirected to the shield, but we MUST stop the bullet from piercing
+		# If protected, the damage was redirected to the shield, stop the bullet
 		if protected:
 			_finalize_trail()
 			queue_free()

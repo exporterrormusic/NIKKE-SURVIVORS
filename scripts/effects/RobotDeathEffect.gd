@@ -16,7 +16,7 @@ var _is_overkill := false  # Enhanced effect for overkill damage
 
 # Sparks - vivid colors with brightness boost for bloom
 var _sparks: Array = []
-var _max_sparks := 12
+var _max_sparks := 6  # Reduced from 12 for performance
 const SPARK_COLORS := [
 	Color(1.0, 0.9, 0.3, 1.0),   # Yellow electric
 	Color(1.0, 0.5, 0.15, 1.0),  # Orange
@@ -27,13 +27,13 @@ const BLOOM_BOOST := 1.5  # Brightness multiplier for bloom
 
 # Smoke/fire - vivid fire color
 var _smoke_puffs: Array = []
-var _max_smoke := 8
+var _max_smoke := 4  # Reduced from 8 for performance
 const SMOKE_COLOR := Color(0.3, 0.3, 0.35, 0.8)
 const FIRE_COLOR := Color(1.0, 0.4, 0.15, 0.7)  # Orange-red fire
 
 # Metal debris
 var _debris: Array = []
-var _max_debris := 6
+var _max_debris := 3  # Reduced from 6 for performance
 const METAL_COLORS := [
 	Color(0.5, 0.5, 0.55, 1.0),   # Dark metal
 	Color(0.7, 0.7, 0.75, 1.0),   # Light metal
@@ -53,12 +53,12 @@ var on_screen_shake: Callable = Callable()
 func set_overkill(is_overkill: bool) -> void:
 	_is_overkill = is_overkill
 	if _is_overkill:
-		# Enhanced effect for overkill (but still reduced for performance)
-		_max_sparks = 20
-		_max_smoke = 12
-		_max_debris = 10
-		_explosion_max_radius = 100.0
-		_duration = 1.5
+		# Enhanced effect for overkill (reduced for performance)
+		_max_sparks = 10  # Was 20
+		_max_smoke = 6    # Was 12
+		_max_debris = 5   # Was 10
+		_explosion_max_radius = 80.0
+		_duration = 1.2
 
 func _ready() -> void:
 	_rng.randomize()
@@ -161,7 +161,9 @@ func _process(delta: float) -> void:
 		queue_free()
 		return
 	
-	queue_redraw()
+	# Throttle redraw to every other frame for performance
+	if Engine.get_process_frames() % 2 == 0:
+		queue_redraw()
 
 func _update_sparks(delta: float) -> void:
 	var i := 0

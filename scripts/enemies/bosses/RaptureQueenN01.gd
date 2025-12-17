@@ -310,6 +310,8 @@ func _trigger_event_explosion() -> void:
 	tween.tween_callback(func():
 		var players = get_tree().get_nodes_in_group("player")
 		for p in players:
+			if not is_instance_valid(p):
+				continue
 			if p.has_method("die"):
 				p.die()
 			elif p.has_method("take_damage"):

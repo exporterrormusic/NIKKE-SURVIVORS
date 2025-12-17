@@ -41,6 +41,14 @@ func _process(delta: float) -> void:
 	if not _enemy or not is_instance_valid(_enemy):
 		return
 	
+	# Always check for scaling changes to ensure text remains constant size
+	if _enemy and is_instance_valid(_enemy):
+		var target_scale: Vector2 = Vector2.ONE / _enemy.scale if _enemy.scale.x > 0 else Vector2.ZERO
+		if not scale.is_equal_approx(target_scale):
+			scale = target_scale
+			# Force redraw if scale changed significantly to ensure visual consistency
+			queue_redraw()
+	
 	# Always check for enrage timer directly each frame and redraw if present
 	var enrage_timer: Timer = _enemy.get_node_or_null("EnrageTimer")
 	if enrage_timer and is_instance_valid(enrage_timer) and enrage_timer.time_left > 0:
@@ -60,8 +68,7 @@ func _draw() -> void:
 	var font_size := int(BASE_FONT_SIZE * parent_scale)
 	var timer_font_size := int(BASE_TIMER_FONT_SIZE * parent_scale)
 	
-	# Counter-scale so text appears at correct visual size
-	scale = Vector2.ONE / _enemy.scale if _enemy.scale.x > 0 else Vector2.ONE
+	# Scale is now handled in _process
 	
 	# Draw HP text
 	var hp_text := "%d/%d" % [_current_hp, _max_hp]

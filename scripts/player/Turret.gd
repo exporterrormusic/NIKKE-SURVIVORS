@@ -4,9 +4,10 @@ var ammo = 4
 var max_ammo = 4
 var spawned_by_summon := false  # Track if this turret was spawned by a SummonedAlly
 var spawner_node: Node = null  # The node that spawned this turret (for killer_source tracking)
+var fire_delay := 0.0  # Stagger fire times to spread CPU load
 
-@onready var ammo_bar = $AmmoBar
-@onready var ammo_label = $AmmoLabel
+@onready var ammo_bar = get_node_or_null("AmmoBar")
+@onready var ammo_label = get_node_or_null("AmmoLabel")
 
 # Visual state
 var _target_angle := 0.0
@@ -35,8 +36,25 @@ func _ready():
 	# max_ammo may have been set before adding to scene
 	if max_ammo < ammo:
 		max_ammo = ammo
-	ammo_bar.max_value = max_ammo
-	ammo_bar.value = ammo
+	
+	# Fix UI Layout - ensure bar fits the text
+	# Text is height 20 (-56 to -36)
+	if ammo_bar:
+		ammo_bar.max_value = max_ammo
+		ammo_bar.value = ammo
+		ammo_bar.size.y = 20.0
+		ammo_bar.position.y = -56.0
+		# Ensure it's wide enough centered
+		ammo_bar.position.x = -35.0
+		ammo_bar.size.x = 70.0
+		
+	if ammo_label:
+		ammo_label.position.y = -58.0 # Fine-tuned for visual center
+		ammo_label.size.y = 20.0
+		ammo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		ammo_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		ammo_label.add_theme_font_size_override("font_size", 16) # Increased font size to be readable and less blurry
+	
 	_update_ammo_label()
 	
 	# Hide the original sprite - we'll draw our own
@@ -47,7 +65,11 @@ func _ready():
 	add_child(timer)
 	timer.wait_time = 2.0
 	timer.connect("timeout", Callable(self, "shoot"))
-	timer.start()
+	# Apply fire_delay to stagger initial shots across turrets
+	if fire_delay > 0.0:
+		get_tree().create_timer(fire_delay).timeout.connect(func(): timer.start())
+	else:
+		timer.start()
 	
 	# Make turret unshaded (bright) to match other summons
 	var mat := CanvasItemMaterial.new()
@@ -82,7 +104,9 @@ func _process(delta: float) -> void:
 	if ammo <= 1:
 		_low_ammo_pulse = sin(_age * 6.0) * 0.5 + 0.5
 	
-	queue_redraw()
+	# Throttle redraws to every 2nd frame for performance
+	if Engine.get_process_frames() % 2 == 0:
+		queue_redraw()
 
 var _enemy_cache: Array = []
 var _enemy_cache_timer := 0.0
@@ -265,12 +289,15 @@ func shoot():
 	# Trigger muzzle flash
 	_muzzle_flash_timer = 0.15
 	
-	# Find enemies to target
-	var enemies = []
-	for enemy in get_tree().get_nodes_in_group("enemies"):
-		if enemy is Node2D and enemy.has_method("take_damage"):
+	# Find enemies to target using TargetCache (much faster than get_nodes_in_group)
+	var cached_enemies := TargetCache.get_enemies()
+	var enemies: Array[Node2D] = []
+	for enemy in cached_enemies:
+		if enemy is Node2D and is_instance_valid(enemy) and enemy.has_method("take_damage"):
 			enemies.append(enemy)
-	enemies.sort_custom(func(a, b): return global_position.distance_to(a.global_position) < global_position.distance_to(b.global_position))
+	
+	# Sort by distance (only the valid enemies)
+	enemies.sort_custom(func(a, b): return global_position.distance_squared_to(a.global_position) < global_position.distance_squared_to(b.global_position))
 	
 	if enemies.size() == 0:
 		return  # No enemies, don't fire
@@ -286,7 +313,8 @@ func shoot():
 	for i in rockets_to_fire:
 		# Consume ammo for each rocket
 		ammo -= 1
-		ammo_bar.value = ammo
+		if ammo_bar:
+			ammo_bar.value = ammo
 		_update_ammo_label()
 		
 		var rocket = ProjectileCache.create_rocket()
@@ -306,19 +334,31 @@ func shoot():
 		rocket.max_speed = 2500
 		rocket.target_position = target_pos
 		rocket.explode_at_target = true
-		rocket.target_node = targets[i]
+		
 		# Set owner_node and killer_source based on who spawned the turret
 		if spawned_by_summon:
 			# Set killer_source_override directly so it persists even after summon is freed
 			rocket.killer_source_override = "summon"
 			if is_instance_valid(spawner_node):
 				rocket.owner_node = spawner_node
+			# Performance optimizations for Rapunzel burst turret rockets:
+			# - No homing (fly straight to target position, explode on arrival or impact)
+			# - No target_node tracking (just use initial target_position)
+			# - Disable exhaust, trail, smoke for lightweight rockets
+			rocket.homing_enabled = false
+			rocket.target_node = null  # Don't track, just fly to position
+			rocket.exhaust_enabled = false
+			rocket.trail_enabled = false
+			rocket.smoke_enabled = false
+			rocket.lightweight_mode = true
 		else:
 			rocket.owner_node = get_parent().get_node_or_null("Player")
+			rocket.target_node = targets[i]  # Normal turrets track targets
+			rocket.homing_enabled = true
+			rocket.homing_strength = 10.0
+		
 		rocket.scale = Vector2(0.5, 0.5)
 		rocket.ground_fire_enabled = false
-		rocket.homing_enabled = true  # Enable homing for turret rockets
-		rocket.homing_strength = 10.0  # Strong homing
 		# Turret damage = 50% of player's calculated damage
 		var player_node = get_parent().get_node_or_null("Player")
 		if player_node and player_node.has_method("calc_damage"):

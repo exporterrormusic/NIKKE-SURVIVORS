@@ -21,6 +21,7 @@ var edge_color := Color(0.3, 0.0, 0.6, 0.5)
 
 var owner_node: Node = null
 var player_ref: Node2D = null  # Reference to player for position tracking
+var target_enemy: Node2D = null  # For summons: track this enemy instead of mouse
 var initial_direction: Vector2 = Vector2.ZERO  # Set by controller before adding to scene
 var _age: float = 0.0
 var _damage_timer: float = 0.0
@@ -34,6 +35,10 @@ var player_level: int = 1
 # Upgrade states
 var missile_upgrade: bool = false  # Left upgrade: fire homing missiles
 var trail_upgrade: bool = false    # Right upgrade: leave burning trail
+
+# "She'll Eat Anything" enhanced mode - 50% wider, brighter purple
+var enhanced_mode: bool = false
+var _base_beam_width: float = 240.0
 
 var _missile_timer: float = 0.0
 var _missiles_per_volley: int = 4
@@ -91,6 +96,15 @@ func _assign_to_effects_layer() -> void:
 func _process(delta: float) -> void:
 	_age += delta
 	
+	# Apply enhanced mode effects (50% wider beam, brighter colors)
+	if enhanced_mode:
+		beam_width = _base_beam_width * 1.5
+		core_color = Color(1.0, 0.8, 1.0, 1.0)
+		inner_color = Color(0.9, 0.5, 1.0, 1.0)
+		outer_color = Color(0.7, 0.2, 1.0, 0.9)
+	else:
+		beam_width = _base_beam_width
+	
 	# Manual loop check: verify beam sound is playing
 	if _beam_sound and is_instance_valid(_beam_sound) and not _beam_sound.playing:
 		_beam_sound.play()
@@ -133,15 +147,64 @@ func _update_beam_direction(delta: float) -> void:
 	if player_ref and is_instance_valid(player_ref):
 		global_position = player_ref.global_position + _beam_direction * 80.0  # Offset further in front of player
 	
-	# Get mouse position and calculate target direction
-	var mouse_pos := get_global_mouse_position()
-	var player_pos := global_position
-	if player_ref and is_instance_valid(player_ref):
-		player_pos = player_ref.global_position
-	var to_mouse := mouse_pos - player_pos
+	# If we have a target enemy (summon mode), track it
+	if target_enemy and is_instance_valid(target_enemy):
+		var player_pos := global_position
+		if player_ref and is_instance_valid(player_ref):
+			player_pos = player_ref.global_position
+		
+		# Check if target is blocked by boulder or out of range
+		var to_target := target_enemy.global_position - player_pos
+		var dist := to_target.length()
+		
+		# If blocked by boulder or too far, force retargeting
+		if dist > beam_range * 1.5 or _is_line_blocked_by_boulder(player_pos, target_enemy.global_position, 10.0):
+			target_enemy = null # Force find new target
+		else:
+			if dist > 10.0:
+				_target_direction = to_target.normalized()
 	
-	if to_mouse.length() > 10.0:
-		_target_direction = to_mouse.normalized()
+	if target_enemy == null:
+		# Target was set but is now invalid (dead) OR blocked - find new closest valid enemy
+		var enemies := TargetCache.get_enemies()
+		var closest_dist: float = 999999.0
+		var player_pos := global_position
+		if player_ref and is_instance_valid(player_ref):
+			player_pos = player_ref.global_position
+		
+		for enemy in enemies:
+			if not is_instance_valid(enemy) or not enemy is Node2D:
+				continue
+			var dist := player_pos.distance_to(enemy.global_position)
+			
+			# Skip if out of range
+			if dist > beam_range:
+				continue
+				
+			# Skip if blocked by boulder
+			if _is_line_blocked_by_boulder(player_pos, enemy.global_position, 10.0):
+				continue
+			
+			if dist < closest_dist:
+				closest_dist = dist
+				target_enemy = enemy
+		
+		# Update direction to new target
+		if target_enemy and is_instance_valid(target_enemy):
+			var to_target := target_enemy.global_position - player_pos
+			if to_target.length() > 10.0:
+				_target_direction = to_target.normalized()
+	
+	if target_enemy == null:
+		# No target set and no valid enemies found - use mouse (player mode) or keep looking
+		var mouse_pos := get_global_mouse_position()
+		var player_pos := global_position
+		if player_ref and is_instance_valid(player_ref):
+			player_pos = player_ref.global_position
+		var to_mouse := mouse_pos - player_pos
+		
+		if to_mouse.length() > 10.0:
+			_target_direction = to_mouse.normalized()
 	
 	# Smoothly rotate beam toward target
 	_beam_direction = _beam_direction.lerp(_target_direction, _turn_speed * delta).normalized()
@@ -195,6 +258,13 @@ func _is_point_in_beam(point: Vector2) -> bool:
 
 func _is_boulder_blocking(distance_along_beam: float) -> bool:
 	"""Check if any boulder blocks the beam before the given distance."""
+	# Skip if Chrono-Intangibility upgrade is active
+	var shop = load("res://scripts/ui/ShopMenu.gd")
+	# Skip if Chrono-Intangibility upgrade is active AND Wells is in squad
+	var player = get_tree().get_first_node_in_group("player")
+	if shop and shop.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+		return false
+	
 	var boulders := TargetCache.get_boulders()
 	
 	# Use player position as beam origin since global_position is offset 80px forward
@@ -223,6 +293,39 @@ func _is_boulder_blocking(distance_along_beam: float) -> bool:
 	
 	return false
 
+func _is_line_blocked_by_boulder(start: Vector2, end: Vector2, width: float) -> bool:
+	# Skip if Chrono-Intangibility upgrade is active
+	var shop = load("res://scripts/ui/ShopMenu.gd")
+	# Skip if Chrono-Intangibility upgrade is active AND Wells is in squad
+	var player = get_tree().get_first_node_in_group("player")
+	if shop and shop.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+		return false
+	
+	var boulders := TargetCache.get_boulders()
+	var to_end := end - start
+	var length := to_end.length()
+	var direction := to_end.normalized()
+	
+	for boulder in boulders:
+		if not is_instance_valid(boulder):
+			continue
+		var boulder_pos: Vector2 = boulder.global_position
+		var boulder_radius: float = boulder.boulder_size * 0.5 if "boulder_size" in boulder else 150.0
+		
+		# Check if line intersects this boulder
+		var to_boulder := boulder_pos - start
+		var along := to_boulder.dot(direction)
+		
+		# Boulder must be in front and before our target point
+		if along < -boulder_radius or along > length + boulder_radius:
+			continue
+		
+		# Check perpendicular distance to line
+		var perp: float = abs(to_boulder.dot(direction.orthogonal()))
+		if perp < boulder_radius + width * 0.5:
+			return true  # Blocked
+			
+	return false
 
 func _fire_homing_missiles() -> void:
 	# Find the 4 closest enemy targets
@@ -262,7 +365,7 @@ func _fire_homing_missiles() -> void:
 		var dir_to_target: Vector2 = (target.global_position - missile.global_position).normalized()
 		
 		# Configure ExplosiveProjectile properties
-		if "owner_node" in missile:
+		if "owner_node" in missile and is_instance_valid(owner_node):
 			missile.owner_node = owner_node
 		if "target_node" in missile:
 			missile.target_node = target
@@ -691,6 +794,8 @@ func _draw_origin_effect(intensity: float) -> void:
 const BEAM_SOUND_PATH := "res://assets/sounds/sfx/weapons/minigun/beam.wav"
 var _beam_sound: AudioStreamPlayer2D = null
 
+@export var beam_volume_db: float = 6.0  # Default to loud (Player/Boss volume)
+
 func _start_beam_audio() -> void:
 	# Create beam sound player like MarianBeamCannon does
 	if _beam_sound != null:
@@ -699,7 +804,7 @@ func _start_beam_audio() -> void:
 	_beam_sound = AudioStreamPlayer2D.new()
 	_beam_sound.bus = "SFX"
 	_beam_sound.max_distance = 2000.0
-	_beam_sound.volume_db = 6.0  # Same volume as MarianBeamCannon (6.0 dB)
+	_beam_sound.volume_db = beam_volume_db
 	add_child(_beam_sound)
 	
 	# Load standard beam sound
@@ -715,6 +820,24 @@ func _stop_beam_audio() -> void:
 		_beam_sound = null
 
 func _play_rocket_sound() -> void:
+	# If volume is reduced (Summon), play locally with attenuation
+	if beam_volume_db < 0:
+		var sfx = AudioStreamPlayer2D.new()
+		sfx.bus = "SFX"
+		sfx.volume_db = beam_volume_db
+		sfx.max_distance = 2000.0
+		# Try to load rocket sound
+		var stream = load("res://assets/sounds/sfx/weapons/rocket/fire_rocket.mp3")
+		if stream:
+			sfx.stream = stream
+			add_child(sfx)
+			sfx.play()
+			sfx.finished.connect(sfx.queue_free)
+		else:
+			sfx.queue_free()
+		return
+
+	# Default behavior (Player/Boss)
 	var player = get_tree().get_first_node_in_group("player")
 	if player and player.audio_director:
 		player.audio_director.play_weapon_fire_sound("rocket")

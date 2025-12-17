@@ -38,6 +38,7 @@ var _selected_index: int = 3  # Default to PLAY (center button)
 
 func _ready() -> void:
 	_setup_title()
+	_setup_patch_notes()
 	_setup_buttons()
 	_connect_signals()
 	_update_selection()
@@ -89,6 +90,113 @@ func _setup_title() -> void:
 		add_child(logo)
 		logo.set_anchors_preset(Control.PRESET_CENTER_TOP)
 		logo.position.y = 50 # Add some margin from top
+
+
+func _setup_patch_notes() -> void:
+	"""Create a patch notes box directly beneath the logo."""
+	var patch_path := "res://patch.txt"
+	
+	# Try to load patch notes
+	var patch_text := ""
+	if FileAccess.file_exists(patch_path):
+		var file := FileAccess.open(patch_path, FileAccess.READ)
+		if file:
+			patch_text = file.get_as_text()
+			file.close()
+	
+	if patch_text.is_empty():
+		print("[MainMenu] No patch notes found at ", patch_path)
+		return
+	
+	# Create the patch notes panel
+	var panel := PanelContainer.new()
+	panel.name = "PatchNotesPanel"
+	
+	# Position will be set after logo is laid out
+	# First add to scene, then position using deferred call
+	var ui_root := get_node_or_null("UiRoot")
+	if ui_root:
+		ui_root.add_child(panel)
+	else:
+		add_child(panel)
+	
+	# Defer positioning until logo layout is complete
+	call_deferred("_position_patch_notes_panel", panel)
+	
+	# Style the panel
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.05, 0.05, 0.1, 0.9)  # Dark translucent
+	panel_style.border_color = UI.ACCENT_PRIMARY
+	panel_style.set_border_width_all(2)
+	panel_style.set_corner_radius_all(10)
+	panel_style.set_content_margin_all(16)  # More padding
+	panel.add_theme_stylebox_override("panel", panel_style)
+	
+	# VBox for title and content
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	panel.add_child(vbox)
+	
+	# Title label
+	var title := Label.new()
+	title.text = "PATCH NOTES"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 20)  # Larger title
+	title.add_theme_color_override("font_color", UI.ACCENT_SECONDARY)
+	vbox.add_child(title)
+	
+	# Separator line
+	var sep := HSeparator.new()
+	sep.modulate = Color(1, 1, 1, 0.3)
+	vbox.add_child(sep)
+	
+	# Content label with scrolling
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	vbox.add_child(scroll)
+	
+	var content := Label.new()
+	content.text = patch_text
+	content.add_theme_font_size_override("font_size", 16)  # Larger text
+	content.add_theme_color_override("font_color", UI.TEXT_SECONDARY)
+	content.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(content)
+	
+	print("[MainMenu] Patch notes panel created successfully")
+
+
+func _position_patch_notes_panel(panel: PanelContainer) -> void:
+	"""Position the patch notes panel centered under the logo."""
+	# Find the logo
+	var logo := get_node_or_null("GameLogo")
+	if not logo:
+		# Try UiRoot
+		var ui_root := get_node_or_null("UiRoot")
+		if ui_root:
+			logo = ui_root.get_node_or_null("GameLogo")
+	
+	# Get logo position and size
+	var panel_width := 400
+	var top_position := 260  # Default: Below logo (50 + 200 + 10px gap)
+	var logo_center_x: float = size.x / 2  # Default to screen center
+	
+	if logo:
+		# Get logo's center position
+		var logo_rect: Rect2 = logo.get_global_rect()
+		logo_center_x = logo_rect.position.x + logo_rect.size.x / 2
+		top_position = int(logo_rect.position.y + logo_rect.size.y + 10)  # 10px below logo
+	
+	# Menu bar is at bottom - 279, so leave margin above it
+	var bottom_margin := 300
+	
+	# Position panel centered under logo
+	panel.position.x = logo_center_x - panel_width / 2
+	panel.position.y = top_position
+	panel.size.x = panel_width
+	panel.size.y = size.y - top_position - bottom_margin
 
 
 func _setup_buttons() -> void:

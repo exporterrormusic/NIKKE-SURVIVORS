@@ -42,6 +42,9 @@ func set_paused(state: bool) -> void:
 func _physics_process(delta: float) -> void:
 	if not _actor or paused:
 		return
+		
+	# Apply Global Enemy Time Scale (Bullet Time)
+	delta *= GameState.enemy_time_scale
 	
 	var direction := Vector2.ZERO
 	
@@ -53,7 +56,8 @@ func _physics_process(delta: float) -> void:
 	
 	# Apply physics
 	if direction != Vector2.ZERO:
-		_velocity = _velocity.move_toward(direction * max_speed, acceleration * delta)
+		var current_max_speed = max_speed * GameState.enemy_time_scale
+		_velocity = _velocity.move_toward(direction * current_max_speed, acceleration * delta)
 		# Smooth rotation
 		if _actor.has_method("look_at"):
 			# Custom rotation smoothing if needed, or direct look_at for turrets

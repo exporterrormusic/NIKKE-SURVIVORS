@@ -86,8 +86,8 @@ func _process(delta: float) -> void:
 	var fade_progress := clampf((progress - FADE_START) / (1.0 - FADE_START), 0.0, 1.0)
 	modulate.a = 1.0 - fade_progress
 	
-	# Only redraw every other frame for performance
-	if Engine.get_process_frames() % 2 == 0:
+	# Only redraw every 3rd frame for performance (was every 2nd)
+	if Engine.get_process_frames() % 3 == 0:
 		queue_redraw()
 
 func _draw() -> void:
@@ -106,15 +106,13 @@ func _draw() -> void:
 	
 	var text := prefix + str(_value)
 	
-	# HoloCure-style thick black outline for readability
+	# HoloCure-style outline for readability (reduced from 4 to 2 directions)
 	var shadow_color := Color(0, 0, 0, color.a * 0.95)
 	
-	# Draw outline at 4 cardinal angles for performance (down from 8)
+	# Draw outline at 2 angles only for performance
 	var outline_offsets := [
-		Vector2(OUTLINE_WIDTH, 0),
-		Vector2(-OUTLINE_WIDTH, 0),
-		Vector2(0, OUTLINE_WIDTH),
-		Vector2(0, -OUTLINE_WIDTH)
+		Vector2(OUTLINE_WIDTH, OUTLINE_WIDTH),
+		Vector2(-OUTLINE_WIDTH, -OUTLINE_WIDTH)
 	]
 	for offset in outline_offsets:
 		draw_string(
@@ -145,6 +143,11 @@ func _ease_out_back(t: float) -> float:
 
 # Static helper to spawn a damage number
 static func spawn(parent: Node, pos: Vector2, value: int, type: NumberType = NumberType.DAMAGE) -> FloatingDamageNumber:
+	# OPTIMIZATION: Delegate to EffectPool to prevent GC stutter
+	if EffectPool.get_instance():
+		return EffectPool.get_instance().spawn_damage_number(parent, pos, value, type)
+		
+	# Fallback if pool unavailable
 	var number := FloatingDamageNumber.new()
 	number.setup(value, type)
 	number.global_position = pos

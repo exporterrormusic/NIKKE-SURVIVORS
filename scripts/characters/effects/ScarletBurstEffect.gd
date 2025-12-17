@@ -44,6 +44,16 @@ func _ready() -> void:
 	# Start the sequential burst logic
 	call_deferred("_start_sequence")
 
+## Safety: Ensure game is unpaused if this node is forcibly deleted
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE:
+		# Emergency cleanup - ensure game isn't left paused
+		if _restored_paused and get_tree():
+			get_tree().paused = false
+		# Clean up filter if still exists
+		if is_instance_valid(_filter_rect):
+			_filter_rect.queue_free()
+
 func _assign_to_effects_layer() -> void:
 	var env = get_tree().get_first_node_in_group("environment_controller")
 	if env:
@@ -494,12 +504,11 @@ func _execute_pending_kills() -> void:
 		if owner_node and owner_node.has_method("register_burst_hit"):
 			owner_node.register_burst_hit(enemy, true)
 			
-	# Apply Healing
+	# Apply Healing - use heal() method for immediate visual feedback
 	if execute_talent and execution_kill_count_total > 0 and owner_node:
 		var heal_amount := int(owner_node.max_hp * 0.15 * execution_kill_count_total)
-		if heal_amount > 0:
-			owner_node._update_health_display(heal_amount, false)
-			owner_node.hp = min(owner_node.hp + heal_amount, owner_node.max_hp)
+		if heal_amount > 0 and owner_node.has_method("heal"):
+			owner_node.heal(heal_amount)  # Proper heal method triggers floating number and updates display
 
 func _apply_vulnerability(enemy: Node2D) -> void:
 	"""Apply 50% increased damage taken debuff to enemy with purple cracked visual."""

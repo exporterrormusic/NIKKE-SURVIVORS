@@ -3,11 +3,17 @@ class_name ProceduralBoulder
 
 ## Procedurally generated boulder obstacle that blocks bullets and movement
 
+# Cached ShopMenu reference to avoid load() in hot collision paths
+const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
+
 @export var boulder_size: float = 240.0  # Tripled from 80.0
 @export var variation_seed: int = 0
 
 var _visual: Polygon2D = null
 var _collision_shape: CollisionShape2D = null
+
+# Static shared material for batching
+static var _shared_mat: ShaderMaterial = null
 
 func _ready():
 	add_to_group("boulders")
@@ -39,85 +45,21 @@ func _create_boulder():
 	
 	_visual.polygon = points
 	
-	# Create shader material for anime-style gray rock texture
-	var mat = ShaderMaterial.new()
-	var shader = Shader.new()
+	# Optimization: Use Shared Material for Batching
+	if not _shared_mat:
+		_shared_mat = ShaderMaterial.new()
+		var shader = load("res://resources/shaders/boulder.gdshader")
+		_shared_mat.shader = shader
+		# Set uniforms once for all boulders
+		_shared_mat.set_shader_parameter("rock_base_color", Vector3(0.65, 0.67, 0.7))
+		_shared_mat.set_shader_parameter("rock_highlight", Vector3(0.9, 0.92, 0.95))
+		_shared_mat.set_shader_parameter("rock_shadow", Vector3(0.4, 0.42, 0.45))
 	
-	shader.code = """
-shader_type canvas_item;
-
-uniform float seed_value = 0.0;
-uniform vec3 rock_base_color : source_color = vec3(0.65, 0.67, 0.7);
-uniform vec3 rock_highlight : source_color = vec3(0.9, 0.92, 0.95);
-uniform vec3 rock_shadow : source_color = vec3(0.4, 0.42, 0.45);
-
-// Simple hash for noise
-float hash(vec2 p) {
-	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-}
-
-// Smooth noise
-float noise(vec2 p) {
-	vec2 i = floor(p);
-	vec2 f = fract(p);
-	f = f * f * (3.0 - 2.0 * f);
+	_visual.material = _shared_mat
 	
-	float a = hash(i);
-	float b = hash(i + vec2(1.0, 0.0));
-	float c = hash(i + vec2(0.0, 1.0));
-	float d = hash(i + vec2(1.0, 1.0));
-	
-	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-}
-
-void fragment() {
-	vec2 uv = UV * 2.0 - 1.0;
-	vec2 noisy_uv = uv * 3.0 + vec2(seed_value * 10.0);
-	
-	// Large scale texture variation
-	float large_noise = noise(noisy_uv * 1.2);
-	
-	// Medium scale rock bumps
-	float medium_noise = noise(noisy_uv * 3.5);
-	
-	// Small details
-	float small_noise = noise(noisy_uv * 7.0);
-	
-	// Combine for surface variation
-	float surface = large_noise * 0.5 + medium_noise * 0.3 + small_noise * 0.2;
-	
-	// Anime-style cel shading - 3 distinct color bands
-	vec3 final_color;
-	if (surface < 0.4) {
-		final_color = rock_shadow;  // Dark shadow areas
-	} else if (surface < 0.7) {
-		final_color = rock_base_color;  // Mid-tone
-	} else {
-		final_color = rock_highlight;  // Bright highlights
-	}
-	
-	// Add edge highlight (top-left light source for anime look)
-	float rim_light = smoothstep(0.2, -0.6, uv.y) * smoothstep(0.2, -0.4, uv.x);
-	if (rim_light > 0.3) {
-		final_color = rock_highlight;  // Sharp highlight on top-left edge
-	}
-	
-	// Vignette for depth
-	float dist = length(uv);
-	float vignette = smoothstep(1.1, 0.6, dist);
-	final_color *= vignette * 0.5 + 0.5;
-	
-	COLOR = vec4(final_color, 1.0);
-}
-"""
-	
-	mat.shader = shader
-	mat.set_shader_parameter("seed_value", rng.randf())
-	mat.set_shader_parameter("rock_base_color", Vector3(0.65, 0.67, 0.7))
-	mat.set_shader_parameter("rock_highlight", Vector3(0.9, 0.92, 0.95))
-	mat.set_shader_parameter("rock_shadow", Vector3(0.4, 0.42, 0.45))
-	
-	_visual.material = mat
+	# Pass random seed via Modulate (Vertex Color) to preserve batching
+	# The shader reads v_seed = COLOR.r
+	_visual.modulate = Color(rng.randf(), 1.0, 1.0, 1.0)
 	
 	# Use simple circle collision shape to avoid concave polygon issues
 	_collision_shape = CollisionShape2D.new()
@@ -157,7 +99,12 @@ func _on_bullet_entered(area: Area2D) -> void:
 	if area is SnowWhiteBullet or area.name.contains("Sniper") or area.name.contains("SnowWhite"):
 		return
 	
-	if area.is_in_group("bullets") or area.is_in_group("projectiles") or area.is_in_group("enemy_projectiles"):
+	# Check for Chrono-Intangibility upgrade (Wells in squad)
+	var player = get_tree().get_first_node_in_group("player")
+	if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+		return # Bullet phases through
+	
+	if area.is_in_group("bullets") or area.is_in_group("projectiles") or area.is_in_group("player_projectiles") or area.is_in_group("enemy_projectiles"):
 		area.queue_free()
 	elif area.has_method("_retire"):
 		area._retire()
@@ -170,7 +117,12 @@ func _on_bullet_body_entered(body: Node2D) -> void:
 	if body is SnowWhiteBullet or body.name.contains("Sniper") or body.name.contains("SnowWhite"):
 		return
 	
-	if body.is_in_group("bullets") or body.is_in_group("projectiles"):
+	# Check for Chrono-Intangibility upgrade (Wells in squad)
+	var player = get_tree().get_first_node_in_group("player")
+	if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+		return # Bullet phases through
+	
+	if body.is_in_group("bullets") or body.is_in_group("projectiles") or body.is_in_group("player_projectiles"):
 		body.queue_free()
 	elif body.has_method("_retire"):
 		body._retire()

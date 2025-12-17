@@ -190,6 +190,17 @@ func _apply_damage_to_node(node: Node) -> void:
 	if node is Node2D:
 		hit_direction = ((node as Node2D).global_position - global_position).normalized()
 	
+	# Check for Shield Hit first
+	var shield_root = null
+	if node is Area2D:
+		shield_root = node.get_parent()
+	elif node.has_method("take_shield_damage"):
+		shield_root = node
+		
+	if shield_root and shield_root.has_method("take_shield_damage"):
+		shield_root.take_shield_damage(damage_per_tick, "burn_dot")
+		return
+
 	# Try different take_damage signatures
 	if node.has_method("take_damage"):
 		var method_info = node.get_method_list()
@@ -199,7 +210,9 @@ func _apply_damage_to_node(node: Node) -> void:
 				arg_count = method["args"].size()
 				break
 		
-		if arg_count >= 3:
+		if arg_count >= 5:
+			node.take_damage(damage_per_tick, false, hit_direction, false, "burn_dot")
+		elif arg_count >= 3:
 			node.take_damage(damage_per_tick, false, hit_direction)
 		elif arg_count >= 2:
 			node.take_damage(damage_per_tick, false)

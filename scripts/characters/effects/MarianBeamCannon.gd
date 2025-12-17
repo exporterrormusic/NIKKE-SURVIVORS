@@ -47,6 +47,10 @@ var _charge_particles: Array = []
 # Sparkle particles (for active beam)
 var _sparkles: Array = []
 
+# "She'll Eat Anything" enhanced mode
+var enhanced_mode: bool = false
+var _base_beam_width: float = BEAM_WIDTH
+
 # Controller reference for ammo state
 var _controller: RefCounted = null
 
@@ -107,6 +111,15 @@ func is_reloading_or_empty() -> bool:
 
 func _process(delta: float) -> void:
 	_time += delta
+	
+	# Apply enhanced mode effects (50% wider beam, brighter colors)
+	if enhanced_mode:
+		_base_beam_width = BEAM_WIDTH * 1.5
+		core_color = Color(1.0, 0.8, 1.0, 1.0)
+		inner_color = Color(0.9, 0.5, 1.0, 1.0)
+		outer_color = Color(0.7, 0.2, 1.0, 0.9)
+	else:
+		_base_beam_width = BEAM_WIDTH
 	
 	if not player or not is_instance_valid(player):
 		queue_free()
@@ -269,6 +282,11 @@ func _apply_damage() -> void:
 	var enemies := tree.get_nodes_in_group("enemies")
 	# DebugLog.log("[MarianBeam] Scanning " + str(enemies.size()) + " enemies")
 	
+	# Check if Chrono-Intangibility upgrade is active
+	var shop = load("res://scripts/ui/ShopMenu.gd")
+	var player = get_tree().get_first_node_in_group("player")
+	var can_pierce_shields = shop and shop.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells")
+	
 	# Collect beam hit candidates
 	# 1. Find the closest blocking shield (if any)
 	var closest_shield_dist: float = BEAM_RANGE + 100.0
@@ -306,7 +324,8 @@ func _apply_damage() -> void:
 			var hit_dist := along - shield_radius + 20.0 # Approximate surface
 			if hit_dist < 0: hit_dist = 0.0
 			
-			if hit_dist < closest_shield_dist:
+			# If we can pierce shields with Chrono-Intangibility, still damage but don't block
+			if hit_dist < closest_shield_dist and not can_pierce_shields:
 				print("[MarianBeam] Blocked by shield: ", shield.name, " Dist: ", hit_dist)
 				closest_shield_dist = hit_dist
 				closest_shield_node = shield_node
@@ -348,7 +367,7 @@ func _apply_damage() -> void:
 		
 		# Check perpendicular distance (Y in local space)
 		var perp_dist: float = abs(to_enemy_local.y)
-		if perp_dist > BEAM_WIDTH * 0.5:
+		if perp_dist > _base_beam_width * 0.5:
 			# DebugLog.log("[MarianBeam] FAIL: %s out of width Y: %.1f" % [enemy.name, to_enemy_local.y])
 			continue
 		
@@ -370,6 +389,13 @@ func _apply_damage() -> void:
 
 func _is_boulder_blocking(distance_along_beam: float) -> bool:
 	"""Check if any boulder blocks the beam before the given distance."""
+	# Skip if Chrono-Intangibility upgrade is active
+	var shop = load("res://scripts/ui/ShopMenu.gd")
+	# Skip if Chrono-Intangibility upgrade is active AND Wells is in squad
+	var player = get_tree().get_first_node_in_group("player")
+	if shop and shop.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+		return false
+	
 	var boulders := get_tree().get_nodes_in_group("boulders")
 	var beam_origin: Vector2 = global_position
 	if player and is_instance_valid(player):
@@ -406,7 +432,7 @@ func _draw() -> void:
 		return
 	
 	var beam_alpha: float = _windup_progress
-	var current_width: float = BEAM_WIDTH * _windup_progress
+	var current_width: float = _base_beam_width * _windup_progress
 	var current_range: float = BEAM_RANGE * (0.3 + 0.7 * _windup_progress)
 	
 	# Calculate visible range (stop at closest boulder OR closest enemy)
@@ -425,6 +451,11 @@ func _draw() -> void:
 
 func _get_visible_beam_range(max_range: float) -> float:
 	"""Calculate how far the beam can visually extend (stops at closest boulder)."""
+	# Check if Chrono-Intangibility upgrade is active
+	var shop = load("res://scripts/ui/ShopMenu.gd")
+	var player = get_tree().get_first_node_in_group("player")
+	var can_pierce = shop and shop.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells")
+	
 	var boulders := get_tree().get_nodes_in_group("boulders")
 	var beam_origin: Vector2 = global_position
 	if player and is_instance_valid(player):
@@ -433,52 +464,54 @@ func _get_visible_beam_range(max_range: float) -> float:
 	var beam_dir: Vector2 = Vector2.RIGHT.rotated(rotation)
 	var closest_hit: float = max_range
 	
-	# 0. Check Shields
-	var shields := get_tree().get_nodes_in_group("boss_shields")
-	shields.append_array(get_tree().get_nodes_in_group("shielder_shields"))
-	
-	for shield in shields:
-		if not is_instance_valid(shield) or not shield is Node2D:
-			continue
-		var shield_node := shield as Node2D
+	# 0. Check Shields (skip if Chrono-Intangibility is active)
+	if not can_pierce:
+		var shields := get_tree().get_nodes_in_group("boss_shields")
+		shields.append_array(get_tree().get_nodes_in_group("shielder_shields"))
 		
-		# Check simple projection onto beam
-		var to_shield := shield_node.global_position - beam_origin
-		var along := to_shield.dot(beam_dir)
-		if along < 0: continue
-		
-		var perp_dist: float = abs(to_shield.dot(beam_dir.orthogonal()))
-		# Calculate actual radius including scale
-		var shield_radius: float = 120.0 
-		if "shield_radius" in shield:
-			shield_radius = shield.shield_radius
-		# Use global scale (assuming uniform scale)
-		if shield_node.global_scale.x != 1.0:
-			shield_radius *= shield_node.global_scale.x
+		for shield in shields:
+			if not is_instance_valid(shield) or not shield is Node2D:
+				continue
+			var shield_node := shield as Node2D
 			
-		if perp_dist < shield_radius + BEAM_WIDTH * 0.5:
-			var hit_dist: float = along - shield_radius + 20.0
-			if hit_dist > 0 and hit_dist < closest_hit:
-				closest_hit = hit_dist
+			# Check simple projection onto beam
+			var to_shield := shield_node.global_position - beam_origin
+			var along := to_shield.dot(beam_dir)
+			if along < 0: continue
+			
+			var perp_dist: float = abs(to_shield.dot(beam_dir.orthogonal()))
+			# Calculate actual radius including scale
+			var shield_radius: float = 120.0 
+			if "shield_radius" in shield:
+				shield_radius = shield.shield_radius
+			# Use global scale (assuming uniform scale)
+			if shield_node.global_scale.x != 1.0:
+				shield_radius *= shield_node.global_scale.x
 				
-	# 1. Check Boulders
-	for boulder in boulders:
-		if not is_instance_valid(boulder):
-			continue
-		var boulder_pos: Vector2 = boulder.global_position
-		var boulder_radius: float = 150.0 
-		if boulder.get("boulder_size") != null:
-			boulder_radius = boulder.boulder_size * 0.5
-		
-		# Check if beam intersects this boulder
-		var to_boulder := boulder_pos - beam_origin
-		var along := to_boulder.dot(beam_dir)
-		if along < 0: continue
-		var perp_dist: float = abs(to_boulder.dot(beam_dir.orthogonal()))
-		if perp_dist < boulder_radius + BEAM_WIDTH * 0.5:
-			var hit_distance: float = along - boulder_radius
-			if hit_distance > 0 and hit_distance < closest_hit:
-				closest_hit = hit_distance
+			if perp_dist < shield_radius + BEAM_WIDTH * 0.5:
+				var hit_dist: float = along - shield_radius + 20.0
+				if hit_dist > 0 and hit_dist < closest_hit:
+					closest_hit = hit_dist
+				
+	# 1. Check Boulders (skip if Chrono-Intangibility is active)
+	if not can_pierce:
+		for boulder in boulders:
+			if not is_instance_valid(boulder):
+				continue
+			var boulder_pos: Vector2 = boulder.global_position
+			var boulder_radius: float = 150.0 
+			if boulder.get("boulder_size") != null:
+				boulder_radius = boulder.boulder_size * 0.5
+			
+			# Check if beam intersects this boulder
+			var to_boulder := boulder_pos - beam_origin
+			var along := to_boulder.dot(beam_dir)
+			if along < 0: continue
+			var perp_dist: float = abs(to_boulder.dot(beam_dir.orthogonal()))
+			if perp_dist < boulder_radius + BEAM_WIDTH * 0.5:
+				var hit_distance: float = along - boulder_radius
+				if hit_distance > 0 and hit_distance < closest_hit:
+					closest_hit = hit_distance
 
 	# 2. Check Enemies (Stop visual at first hit)
 	var enemies := get_tree().get_nodes_in_group("enemies")
@@ -497,7 +530,7 @@ func _get_visible_beam_range(max_range: float) -> float:
 		if along < 0 or along > max_range: continue # Ignore out of range
 		
 		var perp_dist: float = abs(to_enemy.dot(beam_dir.orthogonal()))
-		if perp_dist < BEAM_WIDTH * 0.5 + 20.0: # Add margin for enemy radius
+		if perp_dist < _base_beam_width * 0.5 + 20.0: # Add margin for enemy radius
 			if along < closest_hit:
 				closest_hit = along
 

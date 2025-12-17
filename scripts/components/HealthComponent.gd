@@ -10,6 +10,7 @@ var current_hp: int : set = _set_current_hp
 
 var _is_dead: bool = false
 var _pending_overkill: int = 0
+var _processing_death: bool = false  # Prevent auto-revive during death cleanup
 
 func _ready() -> void:
 	current_hp = max_hp
@@ -23,8 +24,9 @@ func _set_current_hp(value: int) -> void:
 	if current_hp == 0 and not _is_dead:
 		die(_pending_overkill)
 		_pending_overkill = 0
-	elif current_hp > 0 and _is_dead:
+	elif current_hp > 0 and _is_dead and not _processing_death:
 		# Auto-revive if health is restored (fixes spawn race conditions)
+		# Only allow auto-revive when NOT actively processing death
 		_is_dead = false
 		
 
@@ -55,15 +57,21 @@ func heal(amount: int) -> void:
 func die(overkill: int = 0) -> void:
 	if _is_dead:
 		return
+	_processing_death = true  # Prevent auto-revive during death processing
 	_is_dead = true
 	current_hp = 0
 	died.emit(overkill)
+	# Reset processing flag after death signal handlers complete
+	call_deferred("_clear_processing_death")
 
 func is_dead() -> bool:
 	return _is_dead
 
 func reset() -> void:
 	_is_dead = false
+	_processing_death = false
 	current_hp = max_hp
 	_pending_overkill = 0
 
+func _clear_processing_death() -> void:
+	_processing_death = false

@@ -39,6 +39,12 @@ func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector
 	# Check for parent entity and apply modifiers
 	var parent = get_parent()
 	var final_damage = amount
+	
+	# One Hit Kill Cheat
+	if team == "enemy" and CheatManager.is_cheat_active("one_hit_kill"):
+		final_damage = 9999999
+		is_crit = true # Force crit visual for satisfaction
+	
 	if parent:
 		# Vulnerability (Scarlet Talent)
 		if parent.has_meta("damage_vulnerability"):

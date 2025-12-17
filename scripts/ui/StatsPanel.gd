@@ -15,6 +15,13 @@ var _squad_indices: Array = []     # Character indices in the squad
 var _title_label: Label = null
 var _content: VBoxContainer = null
 var _character_registry = null
+var _is_embedded: bool = false
+
+func set_embedded(value: bool) -> void:
+	_is_embedded = value
+	if is_inside_tree():
+		# Re-run build UI if changed at runtime (unlikely but safe)
+		_build_ui()
 
 func _ready() -> void:
 	_build_ui()
@@ -28,12 +35,19 @@ func _load_registry() -> void:
 
 func _build_ui() -> void:
 	# Apply panel style
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.06, 0.08, 0.12, 0.98)
-	style.border_color = Color(0.5, 0.5, 0.6, 0.8)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(10)
-	add_theme_stylebox_override("panel", style)
+	if _is_embedded:
+		add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	else:
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(0.06, 0.08, 0.12, 0.98)
+		style.border_color = Color(0.5, 0.5, 0.6, 0.8)
+		style.set_border_width_all(2)
+		style.set_corner_radius_all(10)
+		add_theme_stylebox_override("panel", style)
+	
+	# Clear existing children if rebuilding
+	for child in get_children():
+		child.queue_free()
 	
 	custom_minimum_size = Vector2(400, 520)
 	

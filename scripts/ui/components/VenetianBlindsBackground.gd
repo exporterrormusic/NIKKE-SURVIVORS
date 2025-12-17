@@ -136,11 +136,14 @@ func _notification(what: int) -> void:
 
 
 func _process(delta: float) -> void:
+	# Skip processing if this control is not visible (hidden menus shouldn't block animation)
+	if not is_visible_in_tree():
+		return
+	
 	# Only update animation once per frame, even if multiple instances exist
 	var current_frame = Engine.get_process_frames()
 	if _last_process_frame == current_frame:
-		queue_redraw()
-		return
+		return  # Skip duplicate processing (removed redundant queue_redraw)
 	_last_process_frame = current_frame
 	
 	var textures = _get_active_textures()
@@ -150,7 +153,10 @@ func _process(delta: float) -> void:
 	if total_width <= 0.0:
 		return
 	_shared_animation_offset = fposmod(_shared_animation_offset + carousel_speed * delta, total_width)
-	queue_redraw()
+	
+	# PERFORMANCE: Only redraw every 3rd frame for background animation
+	if current_frame % 3 == 0:
+		queue_redraw()
 
 
 func _draw() -> void:

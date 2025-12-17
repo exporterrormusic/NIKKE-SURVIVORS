@@ -86,18 +86,33 @@ func _process(delta: float) -> void:
 
 func _check_boulder_collision() -> bool:
 	"""Manual boulder collision check since bullets are in EffectsLayer (different scene tree branch)."""
+	# Skip if Chrono-Intangibility upgrade is active
+	var shop = load("res://scripts/ui/ShopMenu.gd")
+	# Skip if Chrono-Intangibility upgrade is active AND Wells is in squad
+	var player = get_tree().get_first_node_in_group("player")
+	if shop and shop.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+		return false
+	
 	var boulders := TargetCache.get_boulders()
 	for boulder in boulders:
 		if not is_instance_valid(boulder):
 			continue
 		var boulder_pos: Vector2 = boulder.global_position
 		var boulder_radius: float = boulder.boulder_size * 0.5 if "boulder_size" in boulder else 150.0
-		if global_position.distance_to(boulder_pos) < boulder_radius:
+		# Use 5% larger radius to match collision shape edge cases
+		if global_position.distance_to(boulder_pos) < boulder_radius * 1.05:
 			return true
 	return false
 
 func _check_shield_collision() -> bool:
 	"""Manual shield collision check."""
+	# Skip if Chrono-Intangibility upgrade is active
+	var shop = load("res://scripts/ui/ShopMenu.gd")
+	# Skip if Chrono-Intangibility upgrade is active AND Wells is in squad
+	var player = get_tree().get_first_node_in_group("player")
+	if shop and shop.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+		return false
+	
 	# Check boss shields first
 	var shields := get_tree().get_nodes_in_group("boss_shields")
 	# Also check generic shields

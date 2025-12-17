@@ -51,7 +51,7 @@ func _build_ui() -> void:
 	
 	# Center panel (buttons) - this is what gets centered
 	_panel = Panel.new()
-	_panel.custom_minimum_size = Vector2(400, 450)
+	_panel.custom_minimum_size = Vector2(400, 520) # Increased height for extra button
 	_apply_panel_style(_panel)
 	center_wrapper.add_child(_panel)
 	
@@ -97,6 +97,7 @@ func _build_ui() -> void:
 		_stats_panel.offset_bottom = 260
 		_container.add_child(_stats_panel)
 
+	
 func _apply_panel_style(panel: Panel) -> void:
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.08, 0.1, 0.14, 0.98)
@@ -154,6 +155,7 @@ func _create_button(text: String, callback: Callable, is_primary: bool = false, 
 	
 	btn.pressed.connect(callback)
 	return btn
+	# (Skipping unmodified lines until _rebuild_buttons)
 
 func _rebuild_buttons() -> void:
 	# Clear existing buttons
@@ -191,7 +193,7 @@ func _rebuild_buttons() -> void:
 		_button_container.add_child(settings_btn)
 		_buttons["settings"] = settings_btn
 		
-		var quit_btn := _create_button("QUIT", _on_quit_pressed, false, true)
+		var quit_btn := _create_button("MAIN MENU", _on_quit_pressed, false, true)
 		_button_container.add_child(quit_btn)
 		_buttons["quit"] = quit_btn
 	elif _menu_mode == MenuMode.DEFEAT:
@@ -211,11 +213,11 @@ func _rebuild_buttons() -> void:
 		_button_container.add_child(settings_btn)
 		_buttons["settings"] = settings_btn
 		
-		var quit_btn := _create_button("QUIT", _on_quit_pressed, false, true)
+		var quit_btn := _create_button("MAIN MENU", _on_quit_pressed, false, true)
 		_button_container.add_child(quit_btn)
 		_buttons["quit"] = quit_btn
 	else:
-		# Pause menu: RESUME, RESTART, CHARACTER SELECTION, SETTINGS, QUIT
+		# Pause menu: RESUME, RESTART, CHARACTER SELECTION, SETTINGS, QUIT, CHEATS
 		_title_label.text = "PAUSED"
 		_title_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
 		
@@ -231,20 +233,53 @@ func _rebuild_buttons() -> void:
 		_button_container.add_child(char_select_btn)
 		_buttons["character_select"] = char_select_btn
 		
+		var cheats_btn := _create_button("CHEATS", _on_cheats_pressed)
+		_button_container.add_child(cheats_btn)
+		_buttons["cheats"] = cheats_btn
+		
 		var settings_btn := _create_button("SETTINGS", _on_settings_pressed)
 		_button_container.add_child(settings_btn)
 		_buttons["settings"] = settings_btn
 		
-		var quit_btn := _create_button("QUIT", _on_quit_pressed, false, true)
+		var quit_btn := _create_button("MAIN MENU", _on_quit_pressed, false, true)
 		_button_container.add_child(quit_btn)
 		_buttons["quit"] = quit_btn
 
+func _on_cheats_pressed() -> void:
+	var CheatsMenuScript = load("res://scripts/ui/CheatsMenu.gd")
+	if CheatsMenuScript:
+		var menu = CheatsMenuScript.new()
+		
+		# Hide main panel
+		if _panel: _panel.visible = false
+		# Keep Stats Panel visible (requested by user)
+		# if _stats_panel: _stats_panel.visible = false
+		
+		# Add menu to the center wrapper so it replaces the panel
+		# We need to find the center_wrapper. It's the parent of _panel.
+		var center_wrapper = _panel.get_parent()
+		center_wrapper.add_child(menu)
+		
+		menu.close_requested.connect(func():
+			# Restore Pause Menu
+			if _panel: _panel.visible = true
+			# Stats panel stayed visible, so just refresh if needed
+			_refresh_stats_panel()
+		)
+
 func show_pause() -> void:
+	if not _container or not _button_container:
+		_build_ui()
+		
 	_menu_mode = MenuMode.PAUSE
 	_rebuild_buttons()
 	_refresh_stats_panel()
 	visible = true
 	get_tree().paused = true
+	
+	# Ensure main panel is visible (in case it was hidden by cheats)
+	if _panel: _panel.visible = true
+	if _stats_panel: _stats_panel.visible = true
 
 func show_defeat() -> void:
 	_menu_mode = MenuMode.DEFEAT

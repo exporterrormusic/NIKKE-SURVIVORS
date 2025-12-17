@@ -23,13 +23,13 @@ const RUN_DURATION := WAVE_DURATION * TOTAL_WAVES
 # rate: Spawns per second (Target: ~4.0 for 120/wave)
 # max: Max concurrent enemies
 var WAVE_SCRIPT := {
-	1:  { "rate": 2.5, "max": 40, "event_type": "", "event_count": 0, "unlocks": ["basic"] },
-	2:  { "rate": 2.7, "max": 45, "event_type": "spawn_tanks", "event_count": 3, "unlocks": ["basic", "tank"] },
-	3:  { "rate": 2.9, "max": 50, "event_type": "spawn_exploders", "event_count": 3, "unlocks": ["basic", "tank", "exploder"] },
-	4:  { "rate": 3.1, "max": 55, "event_type": "spawn_shielders", "event_count": 2, "unlocks": ["basic", "tank", "exploder", "shielder"] },
-	5:  { "rate": 3.3, "max": 60, "event_type": "spawn_elites", "event_count": 3, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] },
-	6:  { "rate": 3.5, "max": 55, "event_type": "boss", "event_count": 1, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] },
-	7:  { "rate": 3.0, "max": 50, "event_type": "", "event_count": 0, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] }, # Breather
+	1:  { "rate": 2.5, "max": 40, "event_type": "", "event_count": 0, "unlocks": ["basic", "elite"] },
+	2:  { "rate": 2.7, "max": 45, "event_type": "spawn_tanks", "event_count": 3, "unlocks": ["basic", "tank", "elite"] },
+	3:  { "rate": 2.9, "max": 50, "event_type": "spawn_exploders", "event_count": 3, "unlocks": ["basic", "tank", "exploder", "elite"] },
+	4:  { "rate": 3.1, "max": 55, "event_type": "spawn_shielders", "event_count": 2, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] },
+	5:  { "rate": 3.5, "max": 55, "event_type": "boss", "event_count": 1, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] },
+	6:  { "rate": 3.0, "max": 50, "event_type": "", "event_count": 0, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] }, # Breather
+	7:  { "rate": 3.8, "max": 65, "event_type": "boss", "event_count": 2, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] },
 	8:  { "rate": 3.7, "max": 65, "event_type": "boost_shielders", "event_count": 0, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] },
 	9:  { "rate": 4.0, "max": 70, "event_type": "boss", "event_count": 1, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] },
 	10: { "rate": 4.5, "max": 75, "event_type": "super_boss_plus", "event_count": 1, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] },
@@ -271,8 +271,8 @@ func _pick_weighted_enemy() -> String:
 	return "basic"
 
 func get_health_multiplier() -> float:
-	# Linear scaling: 1x per wave (Wave 1 = 1x, Wave 2 = 2x, etc.)
-	return float(_current_wave)
+	# Linear scaling: 25% increase per wave (Wave 1 = 1x, Wave 5 = 2x, Wave 11 = 3.5x)
+	return 1.0 + (float(_current_wave) - 1.0) * 0.25
 
 # Helpers
 func get_current_wave() -> int: return _current_wave

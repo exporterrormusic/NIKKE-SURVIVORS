@@ -31,6 +31,7 @@ const CONTROLLER_SCRIPTS = {
 	"marian": preload("res://scripts/characters/MarianController.gd"),
 	"cecil": preload("res://scripts/characters/CecilController.gd"),
 	"nayuta": preload("res://scripts/characters/NayutaController.gd"),
+	"wells": preload("res://scripts/characters/WellsController.gd"),
 }
 
 ## Get the singleton instance
@@ -122,9 +123,9 @@ func _load_all_characters() -> void:
 		"special_upgrade1": "Rejuvenation: Healing increased to 10/17.5/25% max HP/s.",
 		"special_upgrade2": "Expanding Aura: Zone size/duration +50/150/300%.",
 		"burst_name": "Garden of Shangri-La",
-		"burst_description": "Full heal + 4s stun on all enemies.",
+		"burst_description": "Full heal + 4s stun on all enemies + 8s invincibility.",
 		"burst_upgrade1": "Blinding Radiance: Stun duration increased to 8s.",
-		"burst_upgrade2": "Divine Protection: Grants 8 seconds of invincibility.",
+		"burst_upgrade2": "6,000? Really?: Spawns 20 turrets across the entire map. 4 ammo each.",
 	})
 	
 	_register_character("nayuta", {
@@ -231,8 +232,8 @@ func _load_all_characters() -> void:
 		"projectile_speed": 1100.0,
 		"special_name": "Summon Trombe",
 		"special_description": "Summon Trombe, charge forward with V-damage. Invincible. 2.5s duration, 10s cooldown.",
-		"special_upgrade1": "Swift Steed: -2s cooldown per level. At max: 4s cooldown.",
-		"special_upgrade2": "Royal Charge: Survivors explode after 1.5s for 2x ATK. +50% dmg, +20% range per level.",
+		"special_upgrade1": "Swift Steed: -1.5s cooldown per level. At max: 5.5s cooldown.",
+		"special_upgrade2": "Royal Charge: Survivors explode after 1.5s for 1x/2x/3x ATK.",
 		"burst_name": "Last Kingdom",
 		"burst_description": "Massive golden AoE blast fills the screen for massive damage.",
 		"burst_upgrade1": "One for All: Burst damage contributes to burst gauge charging.",
@@ -324,6 +325,34 @@ func _load_all_characters() -> void:
 		"burst_upgrade1": "You'll Steal for Me: Kills during burst charge burst gauge.",
 		"burst_upgrade2": "You'll Die for Me: Enemies dying during burst explode for 4 damage.",
 	})
+	
+	_register_character("wells", {
+		"display_name": "Wells",
+		"description": "Time Traveler Sniper with Bullet Time",
+		"sprite_path": "wells-sprite.png",
+		"portrait_path": "portrait-sq.png",
+		"burst_sound_path": "burst.wav",
+		"primary_color": Color(0.2, 0.2, 0.25),
+		"secondary_color": Color(0.4, 0.4, 0.6), # Greyish Blue/Purple
+		"burst_color": Color(0.6, 0.8, 1.0),
+		"base_speed": 320.0,
+		"base_hp": 8,
+		"base_damage": 7.0, # Sniper base
+		"crit_chance": 0.30, 
+		"weapon_type": 1,  # Rifle
+		"ammo_capacity": 7,
+		"reload_time": 1.5,
+		"attack_cooldown": 0.35, # Sniper default
+		"projectile_speed": 1650.0,
+		"special_name": "Mnemosyne Project",
+		"special_description": "Hold E to slow time (Bullet Time). Costs Fuel. Recharges over time.",
+		"special_upgrade1": "Secrets of the Past: L1: Heal dur. L2: Speed boost. L3: Inf. Ammo.",
+		"special_upgrade2": "Dust to Dust: DOT to enemies.\nNormal 10/25/34%, Elites 5/10/15%,\nBosses 1/2/3% HP/s.",
+		"burst_name": "Echoes of Hope",
+		"burst_description": "Summons Marian as an ally.",
+		"burst_upgrade1": "A Great King: Also summons Crown. \"Illiterate, but great.\"",
+		"burst_upgrade2": "A Fellow Nerd: Also summons Kilo. \"Smells bad, tastes worse.\"",
+	})
 
 ## Register a character with given data
 func _register_character(id: String, config: Dictionary) -> void:
@@ -405,6 +434,19 @@ func get_burst_sound(id: String) -> AudioStream:
 	if id == "commander":
 		var burst_num: int = randi_range(1, 2)
 		var sound_path := "res://assets/characters/commander/burst-%d.mp3" % burst_num
+		if ResourceLoader.exists(sound_path):
+			return load(sound_path)
+	
+	# Wells special case: weighted priority for burst sounds
+	# burst-1 = 60%, burst-2 = 40%
+	if id == "wells":
+		var roll := randf()
+		var burst_num: int
+		if roll < 0.60:
+			burst_num = 1  # 60% chance
+		else:
+			burst_num = 2  # 40% chance
+		var sound_path := "res://assets/characters/wells/burst-%d.mp3" % burst_num
 		if ResourceLoader.exists(sound_path):
 			return load(sound_path)
 		# Fallback to default if random file doesn't exist

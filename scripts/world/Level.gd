@@ -232,6 +232,16 @@ func _on_settings_closed(canvas_layer: CanvasLayer) -> void:
 
 func _on_character_select_requested() -> void:
 	get_tree().paused = false
+	
+	# Reset Engine time scale in case CombatJuice or other systems modified it
+	Engine.time_scale = 1.0
+	if CombatJuice:
+		CombatJuice.reset()
+	
+	# Reset bullet time (Wells ability) in case it was active
+	if GameState:
+		GameState.enemy_time_scale = 1.0
+	
 	# Record the run result before leaving (save score even if player didn't die)
 	if GameState:
 		GameState.record_run_result("")
@@ -245,6 +255,16 @@ func _on_character_select_requested() -> void:
 
 func _on_quit_requested() -> void:
 	get_tree().paused = false
+	
+	# Reset Engine time scale in case CombatJuice or other systems modified it
+	Engine.time_scale = 1.0
+	if CombatJuice:
+		CombatJuice.reset()
+	
+	# Reset bullet time (Wells ability) in case it was active
+	if GameState:
+		GameState.enemy_time_scale = 1.0
+	
 	# Record the run result before quitting (save score even if player didn't die)
 	if GameState:
 		GameState.record_run_result("")
@@ -535,6 +555,7 @@ func _setup_wave_system() -> void:
 	_wave_ui.set_script(load("res://scripts/world/WaveUI.gd"))
 	_wave_ui.name = "WaveUI"
 	_wave_ui.layer = 10
+	_wave_ui.add_to_group("wave_ui")  # For Future Marian warning access
 	add_child(_wave_ui)
 	
 	# Connect signals
@@ -683,7 +704,10 @@ func _on_enemy_spawn_requested(enemy_type: String, count: int, pattern: String) 
 			# Check for boss death to notify director
 			if enemy.is_in_group("boss"):
 				var is_super := enemy.is_in_group("super_boss")
-				enemy.tree_exiting.connect(_on_boss_died.bind(is_super))
+				# Prevent duplicate signal connection (causes crash on return to menu)
+				var callable = _on_boss_died.bind(is_super)
+				if not enemy.tree_exiting.is_connected(callable):
+					enemy.tree_exiting.connect(callable)
 		else:
 			print("[Level] ERROR: spawn_enemy returned null!")
 

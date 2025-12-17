@@ -104,11 +104,14 @@ func _update_background_style() -> void:
 	elif _is_hovered:
 		bg_color = HOVER_BG
 	
-	var style := StyleBoxFlat.new()
+	# Reuse existing style or create once (avoid allocation on every hover)
+	var style: StyleBoxFlat = _background.get_theme_stylebox("panel") as StyleBoxFlat
+	if not style or not style is StyleBoxFlat:
+		style = StyleBoxFlat.new()
+		style.set_border_width_all(2)
+		style.set_corner_radius_all(4)
 	style.bg_color = bg_color
-	style.set_border_width_all(2)
 	style.border_color = border_color
-	style.set_corner_radius_all(4)
 	_background.add_theme_stylebox_override("panel", style)
 
 

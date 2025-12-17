@@ -1,0 +1,16 @@
+
+
+rigginss
+
+Make a small box the width of the logo on the main screen underneath the logo on the main menu on the left side of the main menu screen, above the main bar.  Have it titled:
+
+"Patch Notes"
+
+And it will pull text to fill it (formating the text to make sense) from a patch.txt file in the project root.
+
+Players are reproting suddenly dying for no reason at hte start of wave 10, or 11.  Why?  Sometimes they also die after being briefly hit by the enemy boss beam attack but not being in it long enough that it hsould actually kill them (they run out, then die).  And when they return to the character select via the menu the game crashes.
+
+ERROR: Signal 'tree_exiting' is already connected to given callable 'Node2D(Level.gd)::_on_boss_died' in that object. at: (core/object/object.cpp1538)
+
+
+Game crashes when 

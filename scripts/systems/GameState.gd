@@ -56,6 +56,8 @@ var difficulty_multiplier: int = 1
 var goddess_fall_mode: bool = false
 # She Descends easter egg mode: immediate N01 fight with modified rules
 var she_descends_mode: bool = false
+# Global time scale for enemies/bullets (Bullet Time)
+var enemy_time_scale: float = 1.0
 
 
 func _ready() -> void:
@@ -79,14 +81,23 @@ func _start_async_init() -> void:
 func _async_init() -> void:
 	# Initialize ResourceManifest - generates manifest in editor, loads in exports
 	# Yield a frame to let animation continue
+	if not get_tree(): return
 	await get_tree().process_frame
+	if not get_tree(): return # Check again after await
+	
 	ResourceManifest.ensure_initialized()
 	
 	# Yield another frame before next task
+	if not get_tree(): return
 	await get_tree().process_frame
+	if not get_tree(): return
+	
 	_load_leaderboard()
 	
+	if not get_tree(): return
 	await get_tree().process_frame
+	if not get_tree(): return
+	
 	_load_stage_progress()
 
 # --- Current Run Tracking ---
@@ -116,6 +127,11 @@ func reset_run_stats() -> void:
 	current_wave = 0
 	current_kills = 0
 	_run_already_recorded = false
+	
+	# Clear volatile run flags
+	if has_meta("killed_by_enrage"):
+		remove_meta("killed_by_enrage")
+	
 	# Reset per-character stats tracker
 	var run_stats_tracker = get_node_or_null("/root/RunStatsTracker")
 	if run_stats_tracker:
@@ -155,6 +171,11 @@ func record_run_result(character_id: String) -> void:
 	# Update totals
 	_total_score_all_time += current_score
 	_total_runs_all_time += 1
+	
+	# Check for cheats before saving to leaderboard
+	if CheatManager.has_cheated_this_session():
+		print("[GameState] Cheats detected! Score will NOT be saved to leaderboard.")
+		return
 	
 	# Create new entry for this run
 	var new_entry := {

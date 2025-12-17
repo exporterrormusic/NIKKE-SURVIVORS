@@ -16,9 +16,10 @@ const RapunzelBurstEffectScript = preload("res://scripts/characters/effects/Rapu
 
 # Character registry for stats
 var _registry: CharacterRegistry = null
+var _shop_script: Script = null
 
 # Ally type enum
-enum AllyType { SCARLET, SNOW_WHITE, RAPUNZEL }
+enum AllyType { SCARLET, SNOW_WHITE, RAPUNZEL, MARIAN, KILO, CROWN }
 
 # Core properties
 var ally_type: AllyType = AllyType.SCARLET
@@ -60,6 +61,9 @@ var _rapunzel_max_ammo: int = 4
 var _rapunzel_reload_timer: float = 0.0
 var _rapunzel_special_used: bool = false  # Limit to 1 special per summon
 
+# Marian-specific
+var _marian_active_beam: Node2D = null  # Only one beam at a time
+
 # Visual
 var _spawn_effect_timer: float = 0.8  # Longer spawn animation
 var _spawn_duration: float = 0.8  # Duration of spawn-in effect
@@ -96,8 +100,8 @@ func _ready() -> void:
 	# Create collision shape
 	_create_collision_shape()
 	
-	# Create health bar
-	_create_health_bar()
+	# Summons are invincible - no health bar needed
+	# _create_health_bar()
 	
 	# Initialize based on type
 	_configure_ally_type()
@@ -192,6 +196,7 @@ func _update_health_bar() -> void:
 func _configure_ally_type() -> void:
 	# Get registry for character stats
 	_registry = CharacterRegistry.get_instance()
+	_shop_script = load("res://scripts/ui/ShopMenu.gd")
 	
 	match ally_type:
 		AllyType.SCARLET:
@@ -200,6 +205,12 @@ func _configure_ally_type() -> void:
 			_configure_snow_white()
 		AllyType.RAPUNZEL:
 			_configure_rapunzel()
+		AllyType.MARIAN:
+			_configure_marian()
+		AllyType.KILO:
+			_configure_kilo()
+		AllyType.CROWN:
+			_configure_crown()
 
 func _configure_scarlet() -> void:
 	# HP scales with player level
@@ -211,6 +222,11 @@ func _configure_scarlet() -> void:
 	attack_range = 120.0  # Melee
 	attack_cooldown = 1.0  # 1 second between slashes for animation
 	_special_cooldown = 3.0
+	
+	# Wells "I Can't Predict the Future" upgrade: +50% ally speed
+	if _shop_script and _shop_script.has_character_upgrade("wells", "ally_speed"):
+		move_speed *= 1.5
+	
 	_load_sprite("scarlet")
 
 func _configure_snow_white() -> void:
@@ -227,13 +243,18 @@ func _configure_snow_white() -> void:
 	var snow_white_data := _registry.get_character("snow_white") if _registry else null
 	_snow_white_ammo = snow_white_data.ammo_capacity if snow_white_data else 7
 	
-	# Apply "Build-a-Bullet" upgrade (2x for Sniper)
-	var Shop = load("res://scripts/ui/ShopMenu.gd")
-	if Shop and Shop.has_character_upgrade("kilo", "talos_ammo"):
+	# Apply "Master Mechanic" upgrade (2x for Sniper)
+	if _shop_script and _shop_script.has_character_upgrade("snow_white", "master_mechanic"):
 		_snow_white_ammo *= 2
-		print("[SummonedAlly] Snow White received Build-a-Bullet boost (Ammo: %d)" % _snow_white_ammo)
+		print("[SummonedAlly] Snow White received Master Mechanic boost (Ammo: %d)" % _snow_white_ammo)
 		
 	_snow_white_max_ammo = _snow_white_ammo
+	
+	# Wells "I Can't Predict the Future" upgrade: +50% ally speed
+	if _shop_script and _shop_script.has_character_upgrade("wells", "ally_speed"):
+		move_speed *= 1.5
+		print("[SummonedAlly] Wells ally speed boost applied: %.0f" % move_speed)
+	
 	_load_sprite("snow_white")
 
 func _configure_rapunzel() -> void:
@@ -251,14 +272,64 @@ func _configure_rapunzel() -> void:
 	var base_ammo: int = rapunzel_data.ammo_capacity if rapunzel_data else 4
 	_rapunzel_ammo = int(base_ammo * 1.5)
 	
-	# Apply "Build-a-Bullet" upgrade (2x for Rocket)
-	var Shop = load("res://scripts/ui/ShopMenu.gd")
-	if Shop and Shop.has_character_upgrade("kilo", "talos_ammo"):
+	# Apply "Master Mechanic" upgrade (2x for Rocket)
+	if _shop_script and _shop_script.has_character_upgrade("snow_white", "master_mechanic"):
 		_rapunzel_ammo *= 2
-		print("[SummonedAlly] Rapunzel received Build-a-Bullet boost (Ammo: %d)" % _rapunzel_ammo)
+		print("[SummonedAlly] Rapunzel received Master Mechanic boost (Ammo: %d)" % _rapunzel_ammo)
 		
 	_rapunzel_max_ammo = _rapunzel_ammo
+	
+	# Wells "I Can't Predict the Future" upgrade: +50% ally speed
+	if _shop_script and _shop_script.has_character_upgrade("wells", "ally_speed"):
+		move_speed *= 1.5
+		print("[SummonedAlly] Wells ally speed boost applied: %.0f" % move_speed)
+	
 	_load_sprite("rapunzel")
+
+func _configure_marian() -> void:
+	var hp_mult := 1.0 + (player_level - 1) * 0.25
+	max_hp = int(50 * hp_mult)
+	move_speed = 200.0
+	attack_damage = _get_scaled_damage(2) # Minigun low dmg high rate
+	attack_range = 450.0
+	attack_cooldown = 0.08 # Fast fire
+	_special_cooldown = 4.0 # Start early (starts at 2.0s)
+	
+	# Wells "I Can't Predict the Future" upgrade: +50% ally speed
+	if _shop_script and _shop_script.has_character_upgrade("wells", "ally_speed"):
+		move_speed *= 1.5
+	
+	_load_sprite("marian")
+
+func _configure_kilo() -> void:
+	var hp_mult := 1.0 + (player_level - 1) * 0.25
+	max_hp = int(65 * hp_mult)
+	move_speed = 210.0
+	attack_damage = _get_scaled_damage(3) # Shotgun pellet
+	attack_range = 300.0
+	attack_cooldown = 0.6
+	_special_cooldown = 6.0
+	
+	# Wells "I Can't Predict the Future" upgrade: +50% ally speed
+	if _shop_script and _shop_script.has_character_upgrade("wells", "ally_speed"):
+		move_speed *= 1.5
+	
+	_load_sprite("kilo")
+
+func _configure_crown() -> void:
+	var hp_mult := 1.0 + (player_level - 1) * 0.25
+	max_hp = int(70 * hp_mult)
+	move_speed = 240.0
+	attack_damage = _get_scaled_damage(2)
+	attack_range = 450.0
+	attack_cooldown = 0.08
+	_special_cooldown = 8.0
+	
+	# Wells "I Can't Predict the Future" upgrade: +50% ally speed
+	if _shop_script and _shop_script.has_character_upgrade("wells", "ally_speed"):
+		move_speed *= 1.5
+	
+	_load_sprite("crown")
 
 ## Get damage scaled by player's full multiplier (level + shop ATK bonus)
 func _get_scaled_damage(base_damage: int) -> int:
@@ -274,7 +345,10 @@ func _load_sprite(character_id: String) -> void:
 	var sprite_paths := {
 		"scarlet": "res://assets/characters/scarlet/scarlet-sprite.png",
 		"snow_white": "res://assets/characters/snow-white/snow-white-sprite.png",
-		"rapunzel": "res://assets/characters/rapunzel/rapunzel-sprite.png"
+		"rapunzel": "res://assets/characters/rapunzel/rapunzel-sprite.png",
+		"marian": "res://assets/characters/marian/marian-sprite.png",
+		"kilo": "res://assets/characters/kilo/kilo-sprite.png",
+		"crown": "res://assets/characters/crown/crown-sprite.png"
 	}
 	
 	var sprite_path: String = sprite_paths.get(character_id, "")
@@ -493,6 +567,13 @@ func _perform_attack() -> void:
 			_attack_snow_white(direction)
 		AllyType.RAPUNZEL:
 			_attack_rapunzel(direction)
+		AllyType.MARIAN:
+			_attack_marian(direction)
+			return  # Marian manages her own attack timer for beam
+		AllyType.KILO:
+			_attack_kilo(direction)
+		AllyType.CROWN:
+			_attack_crown(direction)
 	
 	_attack_timer = attack_cooldown
 
@@ -571,6 +652,82 @@ func _attack_rapunzel(direction: Vector2) -> void:
 	get_parent().add_child(rocket)
 	rocket.global_position = global_position + direction * 50
 
+func _attack_marian(direction: Vector2) -> void:
+	# Marian uses a continuous beam that tracks enemies
+	# Check if beam already active - only one beam at a time (using class variable)
+	if _marian_active_beam != null and is_instance_valid(_marian_active_beam):
+		# Beam still active - don't create another
+		return
+	
+	# Clear invalid reference
+	_marian_active_beam = null
+	
+	# Load and spawn the MarianBeam (smaller summon version)
+	var MarianBeamScript = load("res://scripts/characters/effects/MarianBeam.gd")
+	if not MarianBeamScript:
+		return
+	
+	var beam = Node2D.new()
+	beam.set_script(MarianBeamScript)
+	beam.owner_node = self
+	beam.player_ref = self
+	beam.target_enemy = _target_enemy  # Track this enemy until they die
+	
+	# Scale down for summon - smaller, quieter, less damage, but CONTINUOUS
+	beam.duration = 4.5  # Long duration for continuous coverage
+	beam.beam_width = 60.0  # Much narrower (was 240)
+	beam.beam_range = 2400.0  # Doubled range for better coverage (was 1200)
+	beam.damage_per_second = 12.0  # Less damage (was 40)
+	beam.missile_upgrade = false  # No missile spam
+	beam.trail_upgrade = false  # No burning trail
+	beam.initial_direction = direction
+	beam.beam_volume_db = -5.0  # Quieter (summons should not overpower other sounds)
+	
+	# Set VERY long cooldown - the beam retargets internally when enemies die
+	# We don't want _attack_marian to be called again until beam naturally expires
+	_attack_timer = 999.0
+	
+	# Store beam reference BEFORE adding to scene tree
+	_marian_active_beam = beam
+	
+	get_parent().add_child(beam)
+	beam.global_position = global_position
+	
+	# Clear reference when beam is actually DESTROYED (not just reparented)
+	# MarianBeam reparents to EffectsLayer which triggers tree_exited
+	# We need to wait a frame and check if beam is truly gone
+	beam.tree_exited.connect(func(): 
+		if not is_inside_tree(): return
+		# Wait one frame to see if beam was reparented or destroyed
+		await get_tree().process_frame
+		if not is_instance_valid(beam):
+			# Only clear if we are still tracking THIS beam
+			if _marian_active_beam == beam:
+				_marian_active_beam = null
+				_attack_timer = 0.0  # Allow immediate re-fire of beam
+	)
+
+func _attack_crown(direction: Vector2) -> void:
+	# Crown also uses minigun usually - Gold color
+	var bs = BulletServer.get_instance()
+	if bs:
+		# Gold color for Crown
+		var gold_color = Color(1.0, 0.84, 0.0)
+		bs.spawn_colored_bullet(global_position + direction * 20, direction * 1100.0, attack_damage, self, gold_color)
+
+func _attack_kilo(direction: Vector2) -> void:
+	# Shotgun blast - Orange/Amber color
+	var bs = BulletServer.get_instance()
+	if bs:
+		# Bright orange/amber for Kilo
+		var amber_color = Color(1.0, 0.5, 0.0)
+		var count = 5
+		var spread = 15.0 # Degrees
+		for i in range(count):
+			var angle_offset = deg_to_rad(spread * (float(i) / (count - 1) - 0.5))
+			var final_dir = direction.rotated(angle_offset)
+			bs.spawn_colored_bullet(global_position + direction * 20, final_dir * 850.0, attack_damage, self, amber_color)
+
 func _should_use_special() -> bool:
 	# Use special when:
 	# 1. Multiple enemies nearby
@@ -599,6 +756,9 @@ func _should_use_special() -> bool:
 	if ally_type == AllyType.RAPUNZEL and not _rapunzel_special_used:
 		return true
 	
+	# Marian: Always use special when timer allows (timer configured to be early)
+	# REMOVED: Marian uses _check_burst_usage instead to prevent multiple bursts
+		
 	return false
 
 func _perform_special() -> void:
@@ -609,6 +769,7 @@ func _perform_special() -> void:
 			_special_snow_white()
 		AllyType.RAPUNZEL:
 			_special_rapunzel()
+		# Marian handled by _check_burst_usage (one-time burst)
 	
 	_special_timer = _special_cooldown
 
@@ -714,6 +875,11 @@ func _check_burst_usage() -> void:
 	if _time_alive < 2.0:
 		return
 	
+	# Marian Special Case: Always burst shortly after 2s
+	if ally_type == AllyType.MARIAN:
+		_perform_burst()
+		return
+	
 	var should_burst := false
 	var time_remaining := lifetime - _time_alive
 	
@@ -772,6 +938,8 @@ func _perform_burst() -> void:
 			_burst_snow_white()
 		AllyType.RAPUNZEL:
 			_burst_rapunzel()
+		AllyType.MARIAN:
+			_burst_marian()
 
 func _burst_scarlet() -> void:
 	# Use the same burst effect as the player - hits all enemies on screen
@@ -808,6 +976,54 @@ func _burst_rapunzel() -> void:
 	effect.grant_invuln = false  # No invulnerability for allies
 	get_parent().add_child(effect)
 	effect.global_position = global_position
+
+func _burst_marian() -> void:
+	# Use fully upgraded MarianBeam - the big burst beam with missiles and trail
+	# First, clear any existing beam (normal or burst)
+	if _marian_active_beam != null and is_instance_valid(_marian_active_beam):
+		_marian_active_beam.queue_free()
+	_marian_active_beam = null
+	
+	var direction := _last_direction.normalized()
+	if direction.length() < 0.5:
+		direction = Vector2.RIGHT
+	
+	var MarianBeamScript = load("res://scripts/characters/effects/MarianBeam.gd")
+	if MarianBeamScript:
+		var beam = Node2D.new()
+		beam.set_script(MarianBeamScript)
+		beam.owner_node = self
+		beam.player_ref = self
+		beam.target_enemy = _target_enemy  # Track target enemy
+		
+		# Full burst beam - wider, longer, with upgrades
+		beam.duration = 4.0
+		beam.beam_width = 240.0  # Full burst width
+		beam.beam_range = 3000.0  # Full range (doubled was 1500)
+		beam.damage_per_second = 40.0  # Full damage
+		beam.missile_upgrade = true  # Fire homing missiles
+		beam.trail_upgrade = true  # Leave burning trail
+		beam.initial_direction = direction
+		beam.player_level = player_level
+		beam.beam_volume_db = -5.0  # Quieter (summons should not overpower other sounds)
+		
+		# Store using class variable - prevents normal attack from creating another
+		_marian_active_beam = beam
+		
+		get_parent().add_child(beam)
+		beam.global_position = global_position
+		
+		# Clear reference when burst beam is actually DESTROYED (not just reparented)
+		beam.tree_exited.connect(func():
+			if not is_inside_tree(): return
+			await get_tree().process_frame
+			if not is_instance_valid(beam):
+				# Only clear if we are still tracking THIS beam
+				if _marian_active_beam == beam:
+					_marian_active_beam = null
+					# Reset attack timer so normal attack can resume if ally still alive
+					_attack_timer = 0.0
+		)
 
 func _spawn_burst_nova(_color: Color, _radius: float) -> void:
 	# Burst visual is handled by screen flash if available, or just skip

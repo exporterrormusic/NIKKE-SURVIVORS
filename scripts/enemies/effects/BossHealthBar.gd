@@ -77,9 +77,14 @@ func _setup_ui() -> void:
 	_name_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.9))
 	_name_label.add_theme_constant_override("shadow_offset_x", 1)
 	_name_label.add_theme_constant_override("shadow_offset_y", 1)
-	_name_label.position = Vector2(0, -5)  # Centered in bar
-	_name_label.size = Vector2(BAR_WIDTH, BAR_HEIGHT)
-	_name_label.clip_text = true
+	
+	# Use a larger container height to properly center text without clipping
+	var label_height := 64.0
+	_name_label.size = Vector2(BAR_WIDTH, label_height)
+	# Center the large label relative to the bar height
+	_name_label.position = Vector2(0, (BAR_HEIGHT - label_height) / 2.0)
+	
+	_name_label.clip_text = false # Allow text to use full height
 	_name_label.z_index = 1  # Above the bar fill
 	_container.add_child(_name_label)
 	
@@ -171,6 +176,12 @@ func show_boss(boss: Node2D, boss_name: String = "BOSS", is_super: bool = false)
 		font_size = 22
 	
 	_name_label.add_theme_font_size_override("font_size", font_size)
+	
+	# Center the label vertically relative to the bar
+	# Using 64px height ensures no clipping and proper centering
+	# Apply -2px offset to correct visual center for CAPS text (metric center includes descenders)
+	var base_y = (BAR_HEIGHT - 64.0) / 2.0
+	_name_label.position.y = base_y - 2.0
 	
 	_current_fill = 1.0
 	_target_fill = 1.0

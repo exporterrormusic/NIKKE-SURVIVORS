@@ -16,8 +16,14 @@ class_name RapunzelBurstEffect
 var owner_node: Node2D = null
 
 # Talent bonuses
-var grant_invuln: bool = false  # Divine Protection talent
+var grant_invuln: bool = false  # Divine Protection talent (now default)
 var invuln_duration: float = 8.0
+
+# "6,000? Really?" talent - turret spawning
+var spawn_turrets: bool = false
+var turret_owner_level: int = 1
+const TURRET_COUNT := 20  # 5x4 grid across the map
+const TURRET_AMMO := 4  # 2 shots at 2 rockets each
 
 var _age: float = 0.0
 var _has_executed: bool = false
@@ -110,6 +116,10 @@ func _execute_burst() -> void:
 		# Register burst hit
 		if owner_node and owner_node.has_method("register_burst_hit"):
 			owner_node.register_burst_hit(enemy, true)  # from_burst = true
+	
+	# "6,000? Really?" talent: Spawn 20 turrets around map edges
+	if spawn_turrets:
+		_spawn_edge_turrets()
 
 func _draw() -> void:
 	if duration <= 0.0:
@@ -162,3 +172,108 @@ func _get_alpha(progress: float) -> float:
 	if progress < 0.5:
 		return 1.0
 	return lerpf(1.0, 0.0, (progress - 0.5) / 0.5)
+
+
+## "6,000? Really?" talent: Spawn 20 turrets spread across the MAP interior (not camera)
+func _spawn_edge_turrets() -> void:
+	if not owner_node or not get_tree():
+		return
+	
+	var parent_node = get_parent()
+	if not parent_node:
+		parent_node = owner_node.get_parent()
+	if not parent_node:
+		return
+	
+	# Get camera for zoom effect
+	var camera := get_viewport().get_camera_2d()
+	
+	# Use actual MAP bounds (4000x4000 centered at origin)
+	# This matches the world_size set in Level.gd
+	const MAP_SIZE := 4000.0
+	const MARGIN := 300.0  # Keep turrets away from absolute edge
+	var map_min := -MAP_SIZE / 2.0 + MARGIN
+	var map_max := MAP_SIZE / 2.0 - MARGIN
+	
+	# Zoom camera out to show more of the map
+	_zoom_camera_out(camera)
+	
+	# Distribute turrets in a grid-like pattern across the MAP
+	# 20 turrets = 5 columns x 4 rows for good coverage
+	var positions: Array[Vector2] = []
+	var cols := 5
+	var rows := 4
+	
+	for row in range(rows):
+		for col in range(cols):
+			# Calculate position with margins - spread across entire map
+			var tx := float(col) / float(cols - 1) if cols > 1 else 0.5
+			var ty := float(row) / float(rows - 1) if rows > 1 else 0.5
+			
+			var x := lerpf(map_min, map_max, tx)
+			var y := lerpf(map_min, map_max, ty)
+			positions.append(Vector2(x, y))
+	
+	# Spawn turrets at calculated positions
+	const TurretScript = preload("res://scripts/player/Turret.gd")
+	var spawned_turrets: Array = []
+	
+	for i in range(positions.size()):
+		var pos := positions[i]
+		var turret := TurretScript.new()
+		turret.ammo = TURRET_AMMO
+		turret.max_ammo = TURRET_AMMO
+		turret.spawned_by_summon = true
+		turret.spawner_node = owner_node
+		# Stagger fire times: spread across 1 second (0.05s per turret)
+		turret.fire_delay = float(i) * 0.05
+		
+		parent_node.add_child(turret)
+		turret.global_position = pos
+		spawned_turrets.append(turret)
+	
+	# Schedule camera zoom back in after turrets finish firing
+	# Turrets fire their ammo quickly, zoom back in after 4 seconds
+	var zoom_back_timer := get_tree().create_timer(4.0)
+	var camera_ref := camera
+	zoom_back_timer.timeout.connect(func():
+		_zoom_camera_in_static(camera_ref)
+	)
+
+
+func _zoom_camera_out(camera: Camera2D) -> void:
+	if not camera:
+		return
+	
+	# Use get_tree().create_tween() so tween persists after this node is freed
+	var tree := get_tree()
+	if not tree:
+		return
+	
+	# Use CombatJuice's base zoom for smooth animation
+	if CombatJuice.instance:
+		var tween := tree.create_tween()
+		tween.tween_property(CombatJuice.instance, "_base_zoom", Vector2(0.5, 0.5), 1.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	else:
+		# Fallback: direct camera zoom
+		var tween := tree.create_tween()
+		tween.tween_property(camera, "zoom", Vector2(0.5, 0.5), 1.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+
+## Static version that can be called from timer callback
+static func _zoom_camera_in_static(camera: Camera2D) -> void:
+	if not camera or not is_instance_valid(camera):
+		return
+	
+	var tree := camera.get_tree()
+	if not tree:
+		return
+	
+	# Use CombatJuice's base zoom for smooth animation
+	if CombatJuice.instance:
+		var tween := tree.create_tween()
+		tween.tween_property(CombatJuice.instance, "_base_zoom", Vector2.ONE, 2.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	else:
+		# Fallback: direct camera zoom
+		var tween := tree.create_tween()
+		tween.tween_property(camera, "zoom", Vector2.ONE, 2.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)

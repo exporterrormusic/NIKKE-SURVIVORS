@@ -81,6 +81,9 @@ func _setup_ui() -> void:
 	_timer_label = Label.new()
 	_timer_label.name = "TimerLabel"
 	_timer_label.set_anchors_preset(Control.PRESET_FULL_RECT) # Cover whole bar
+	# Shift up by 2px because mathematical center looks low for digits/caps
+	_timer_label.offset_top = -2
+	_timer_label.offset_bottom = -2
 	_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_timer_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_timer_label.add_theme_font_size_override("font_size", 20) # Slightly bigger

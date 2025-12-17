@@ -29,8 +29,13 @@ const DOT_BOSS_DAMAGE_PERCENT := 0.01
 
 const MAX_POINTS := 150
 
+var _cached_env: Node = null # Cached environment controller
+
 func _ready() -> void:
 	z_index = 8
+	
+	# Cache environment controller for performance (avoid tree lookup every _draw)
+	_cached_env = get_tree().get_first_node_in_group("environment_controller")
 	
 	# Register mask proxy
 	if GrassMaskManager.instance:
@@ -97,9 +102,8 @@ func _draw() -> void:
 	if _points.size() < 2:
 		return
 	
-	# Get environment modulate for compensation
-	var env = get_tree().get_first_node_in_group("environment_controller")
-	var modulate_color = env.current_modulate if env and "current_modulate" in env else Color.WHITE
+	# Get environment modulate for compensation (use cached env for performance)
+	var modulate_color = _cached_env.current_modulate if _cached_env and "current_modulate" in _cached_env else Color.WHITE
 	var inverse = Color(
 		1.0 / max(modulate_color.r, 0.001),
 		1.0 / max(modulate_color.g, 0.001),
@@ -171,25 +175,26 @@ class TrailMaskProxy extends Node2D:
 			top_pts.append(pos - perp * w)
 			bottom_pts.append(pos + perp * w)
 			
-		# Draw as quad strips
-		for i in range(top_pts.size() - 1):
-			var quad := PackedVector2Array()
-			quad.append(top_pts[i])
-			quad.append(top_pts[i+1])
-			quad.append(bottom_pts[i+1])
-			quad.append(bottom_pts[i])
-			draw_colored_polygon(quad, Color.WHITE)
+		# Build single polygon instead of many quads (performance fix)
+		var polygon := PackedVector2Array()
+		for pt in top_pts:
+			polygon.append(pt)
+		for i in range(bottom_pts.size() - 1, -1, -1):
+			polygon.append(bottom_pts[i])
+		draw_colored_polygon(polygon, Color.WHITE)
 
 func _draw_trail_layer(lengths: PackedFloat32Array, total_length: float, width_mult: float, color: Color) -> void:
 	if _points.size() < 2:
 		return
 	
+	# Build ONE continuous polygon strip instead of many separate quads
+	# This reduces draw calls from O(n) to O(1) per layer
 	var top_pts := PackedVector2Array()
 	var bottom_pts := PackedVector2Array()
 	
 	for i in range(_points.size()):
 		var pos := to_local(_points[i])
-		var u := lengths[i] / total_length  # 0 at back, 1 at front
+		var u := lengths[i] / total_length
 		
 		# Calculate perpendicular
 		var perp := Vector2.UP
@@ -200,18 +205,13 @@ func _draw_trail_layer(lengths: PackedFloat32Array, total_length: float, width_m
 			var dir := (_points[i] - _points[i - 1]).normalized()
 			perp = Vector2(-dir.y, dir.x)
 		
-		# Taper at back (triangle tip) and slight taper at front
+		# Taper
 		var back_taper := _smoothstep(0.0, 0.12, u)
 		var front_taper := _smoothstep(1.0, 0.95, u)
 		var taper := back_taper * front_taper
-		
-		# Get alpha for this point
 		var alpha := _get_point_alpha(i)
-		
-		# Final width
 		var w := trail_width * width_mult * taper
 		
-		# Skip if invisible
 		if alpha <= 0.0 or w < 0.5:
 			continue
 		
@@ -221,36 +221,64 @@ func _draw_trail_layer(lengths: PackedFloat32Array, total_length: float, width_m
 	if top_pts.size() < 2:
 		return
 	
-	# Build closed polygon
-	# Draw as quad strips to prevent triangulation errors
-	for i in range(top_pts.size() - 1):
-		var quad := PackedVector2Array()
-		quad.append(top_pts[i])
-		quad.append(top_pts[i+1])
-		quad.append(bottom_pts[i+1])
-		quad.append(bottom_pts[i])
-		draw_colored_polygon(quad, color)
+	# Build single closed polygon: top points forward, bottom points reversed
+	var polygon := PackedVector2Array()
+	for pt in top_pts:
+		polygon.append(pt)
+	for i in range(bottom_pts.size() - 1, -1, -1):
+		polygon.append(bottom_pts[i])
+	
+	# Single draw call for entire layer
+	draw_colored_polygon(polygon, color)
 
 func _check_enemies() -> void:
-	var tree := get_tree()
-	if not tree:
+	# Performance: Use cached enemy list instead of get_nodes_in_group
+	var enemies := TargetCache.get_enemies()
+	if enemies.is_empty() or _points.is_empty():
 		return
 	
-	var enemies := tree.get_nodes_in_group("enemies")
+	# Performance: Pre-calculate active point bounding box for early-out test
+	var active_min := Vector2(INF, INF)
+	var active_max := Vector2(-INF, -INF)
+	var active_points := PackedVector2Array()
+	
+	for i in range(_points.size()):
+		var alpha := _get_point_alpha(i)
+		if alpha > 0:
+			var pt := _points[i]
+			active_points.append(pt)
+			active_min.x = minf(active_min.x, pt.x)
+			active_min.y = minf(active_min.y, pt.y)
+			active_max.x = maxf(active_max.x, pt.x)
+			active_max.y = maxf(active_max.y, pt.y)
+	
+	if active_points.is_empty():
+		return
+	
+	# Expand bounds by trail width
+	var margin := trail_width * 2.0
+	active_min -= Vector2(margin, margin)
+	active_max += Vector2(margin, margin)
+	
+	var threshold_sq := (trail_width * 2.0) * (trail_width * 2.0)
+	
 	for enemy in enemies:
 		if not is_instance_valid(enemy) or not enemy is Node2D:
 			continue
 		
-		# Check if enemy is near any active trail point
 		var enemy_pos: Vector2 = (enemy as Node2D).global_position
-		for i in range(_points.size()):
-			var alpha := _get_point_alpha(i)
-			if alpha <= 0:
-				continue
-			var dist := enemy_pos.distance_to(_points[i])
-			if dist < trail_width * 2.0:
+		
+		# Early-out: skip if enemy is outside bounding box
+		if enemy_pos.x < active_min.x or enemy_pos.x > active_max.x:
+			continue
+		if enemy_pos.y < active_min.y or enemy_pos.y > active_max.y:
+			continue
+		
+		# Check distance to active points only
+		for pt in active_points:
+			if enemy_pos.distance_squared_to(pt) < threshold_sq:
 				_process_enemy(enemy)
-				break
+				break  # Only damage once per tick
 
 func _process_enemy(body: Node2D) -> void:
 	if not is_instance_valid(body):

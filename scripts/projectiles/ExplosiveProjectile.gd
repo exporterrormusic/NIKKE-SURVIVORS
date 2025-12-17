@@ -45,8 +45,14 @@ var killer_source_override: String = ""  # Override killer_source if set (for su
 @export var homing_enabled: bool = false
 @export var homing_strength: float = 8.0  # How fast the rocket turns toward target
 
+# Performance flag for turret rockets
+var reduced_smoke: bool = false  # When true, spawn 75% fewer smoke particles
+var lightweight_mode: bool = false  # When true, disable exhaust/trail/smoke and throttle redraws
+
 const PROJECTILE_BASE_Z_INDEX := 900
 const GroundFireScript := preload("res://scripts/effects/GroundFire.gd")
+# Cached ShopMenu reference to avoid load() in hot paths
+const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
 
 var _age := 0.0
 var _flight_time := 0.0
@@ -96,13 +102,21 @@ func _ready() -> void:
 	queue_redraw()
 
 func _process(delta: float) -> void:
+	# Apply Global Enemy Time Scale (Bullet Time) - ONLY for non-player projectiles
+	var time_scale = 1.0
+	if not (owner_node and owner_node.is_in_group("player")):
+		time_scale = GameState.enemy_time_scale
+	
+	# Scale delta
+	var dt: float = delta * time_scale
+
 	if not _motion_configured:
 		_configure_motion()
 		_motion_configured = true
 	if _exploded:
 		return
-	_age += delta
-	_flight_time += delta
+	_age += dt
+	_flight_time += dt
 	
 	# Wobble and thrust pulse animations
 	_wobble_offset = sin(_age * 25.0) * 0.03 + sin(_age * 40.0) * 0.015
@@ -124,7 +138,7 @@ func _process(delta: float) -> void:
 		if to_target != Vector2.ZERO and _velocity.length() > 0:
 			# Smoothly rotate velocity toward target
 			var current_dir := _velocity.normalized()
-			var new_dir := current_dir.lerp(to_target, homing_strength * delta).normalized()
+			var new_dir := current_dir.lerp(to_target, homing_strength * dt).normalized()
 			_velocity = new_dir * _velocity.length()
 	
 	# Calculate impact anticipation (increases as rocket approaches target)
@@ -137,9 +151,9 @@ func _process(delta: float) -> void:
 	# Apply acceleration - speed ramps up over time
 	if acceleration > 0.0 and _velocity.length() < max_speed:
 		var current_speed = _velocity.length()
-		var new_speed = min(current_speed + acceleration * delta, max_speed)
+		var new_speed = min(current_speed + acceleration * dt, max_speed)
 		_velocity = _velocity.normalized() * new_speed
-	var step := _velocity * delta
+	var step := _velocity * dt
 	var new_position := global_position + step
 	if explode_at_target and target_position != Vector2.ZERO:
 		var to_target := target_position - global_position
@@ -164,6 +178,14 @@ func _process(delta: float) -> void:
 	
 	global_position = new_position
 	var is_rocket := render_style.to_lower() == "rocket"
+	
+	# Lightweight mode: skip all expensive visual updates
+	if lightweight_mode:
+		# Only redraw every 3rd frame in lightweight mode
+		if Engine.get_process_frames() % 3 == 0:
+			queue_redraw()
+		return
+	
 	if trail_enabled:
 		_update_trail(step.length())
 		_advance_trail_ages(delta)
@@ -265,8 +287,10 @@ func _spawn_smoke_puff() -> void:
 
 func _update_smoke(delta: float) -> void:
 	_smoke_timer += delta
-	while _smoke_timer >= smoke_spawn_interval:
-		_smoke_timer -= smoke_spawn_interval
+	# reduced_smoke = spawn every 4th particle (75% reduction)
+	var effective_interval := smoke_spawn_interval * (4.0 if reduced_smoke else 1.0)
+	while _smoke_timer >= effective_interval:
+		_smoke_timer -= effective_interval
 		_spawn_smoke_puff()
 	for i in range(_smoke_puffs.size() - 1, -1, -1):
 		var puff: Dictionary = _smoke_puffs[i]
@@ -316,6 +340,19 @@ func _should_ignore_target(target: Node) -> bool:
 	# Also check by group or script name for other projectile types
 	if target.is_in_group("projectiles"):
 		return true
+	
+	if target.is_in_group("shielder_shields") or target.is_in_group("boss_shields"):
+		# Skip if Chrono-Intangibility upgrade is active AND Wells is in squad
+		var player = get_tree().get_first_node_in_group("player")
+		if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+			return true  # Ignore shield, let projectile pass through
+	# Also check parent in case we hit a collision area child of a shield
+	if target.get_parent() and (target.get_parent().is_in_group("shielder_shields") or target.get_parent().is_in_group("boss_shields")):
+		# Skip if Chrono-Intangibility upgrade is active AND Wells is in squad
+		var player = get_tree().get_first_node_in_group("player")
+		if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+			return true  # Ignore shield, let projectile pass through
+	
 	if target.get_script() and target.get_script().resource_path:
 		var script_path: String = target.get_script().resource_path
 		if script_path.find("Rocket") != -1 or script_path.find("Missile") != -1 or script_path.find("Projectile") != -1:
@@ -324,6 +361,12 @@ func _should_ignore_target(target: Node) -> bool:
 
 func _check_boulder_collision() -> bool:
 	"""Check if projectile hit a boulder."""
+	# Skip if Chrono-Intangibility upgrade is active
+	# Skip if Chrono-Intangibility upgrade is active AND Wells is in squad
+	var player = get_tree().get_first_node_in_group("player")
+	if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+		return false
+	
 	var boulders := get_tree().get_nodes_in_group("boulders")
 	for boulder in boulders:
 		if not is_instance_valid(boulder):
@@ -341,8 +384,34 @@ func _explode() -> void:
 		return
 	_exploded = true
 	_play_explosion_sound()
-	_apply_explosion_damage()
-	_spawn_explosion_effect()
+	
+	# Create damage-dealing explosion (invisible - just does the damage)
+	var explosion = ProjectileCache.create_explosion()
+	if explosion.has_method("initialize"):
+		# Use explosion_damage directly
+		var final_damage = explosion_damage if explosion_damage > 0 else damage
+		explosion.initialize(final_damage, explosion_radius)
+	
+	if is_instance_valid(owner_node):
+		explosion.owner_node = owner_node
+	explosion.killer_source_override = killer_source_override
+	
+	# Hide the sprite (we'll use procedural effect instead)
+	if explosion.has_node("Sprite2D"):
+		explosion.get_node("Sprite2D").visible = false
+	
+	if get_parent():
+		get_parent().add_child(explosion)
+		explosion.global_position = global_position
+		
+		# Create visual explosion effect (procedural - no stripes)
+		var visual = ProjectileCache.create_explosion_effect()
+		visual.radius = explosion_radius
+		get_parent().add_child(visual)
+		visual.global_position = global_position
+	else:
+		explosion.queue_free()
+	
 	_spawn_ground_fire_if_needed()
 	queue_free()
 
@@ -361,7 +430,7 @@ func _apply_explosion_damage() -> void:
 	var killer_source := "rocket"  # Rapunzel weapon type for BurstConfig (10% per hit)
 	if killer_source_override != "":
 		killer_source = killer_source_override
-	elif is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
+	elif is_instance_valid(owner_node) and (owner_node.is_in_group("nayuta_clones") or owner_node.is_in_group("summoned_allies")):
 		killer_source = "summon"
 
 	# Check for shields in range first (boss shields like ShielderShield)
@@ -399,7 +468,7 @@ func _apply_explosion_damage() -> void:
 			enemy_node.take_damage(explosion_damage, false, Vector2.ZERO, is_burst_attack, killer_source)
 			# Register burst hit with weapon type and summon flag
 			if owner_node and is_instance_valid(owner_node) and owner_node.has_method("register_burst_hit"):
-				var is_summon: bool = (owner_node is NayutaClone or owner_node is SummonedAlly)
+				var is_summon: bool = (owner_node.is_in_group("nayuta_clones") or owner_node.is_in_group("summoned_allies"))
 				owner_node.register_burst_hit(enemy_node, is_burst_attack, "rocket", is_summon)
 	
 	# Only damage clones/allies if this explosion is from an enemy projectile

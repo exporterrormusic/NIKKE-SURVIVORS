@@ -4,7 +4,7 @@
 [ext_resource type="Script" path="res://scripts/characters/effects/SnowWhiteBullet.gd" id="2"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
-size = Vector2(50, 12)
+size = Vector2(50, 24)
 
 [node name="SnowWhiteBullet" type="Area2D"]
 collision_layer = 4

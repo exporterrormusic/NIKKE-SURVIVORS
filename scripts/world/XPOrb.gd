@@ -91,10 +91,15 @@ func _physics_process(delta):
 		ProjectileCache.return_to_pool(self)
 		return
 	
+	# Check if player is still valid (prevents error when player is freed)
+	if not is_instance_valid(player) or not "xp" in player:
+		ProjectileCache.return_to_pool(self)
+		return
+	
 	_age += delta
-	# PERFORMANCE: Only update expensive visuals every 2nd frame
-	if Engine.get_process_frames() % 2 == 0:
-		_update_visuals(delta * 2.0)  # Compensate delta for skipped frame
+	# PERFORMANCE: Only update visuals every 4th frame (was 2nd)
+	if Engine.get_process_frames() % 4 == 0:
+		_update_visuals(delta * 4.0)  # Compensate delta for skipped frames
 	# _update_trail(delta) # Disabled for performance
 	
 	var progress = float(player.xp) / player.xp_to_next
@@ -143,39 +148,20 @@ func _physics_process(delta):
 		ProjectileCache.return_to_pool(self)
 
 func _update_visuals(delta: float) -> void:
+	# SIMPLIFIED for performance - just basic pulsing, no color shifts or rotations
 	var pulse := sin(_age * PULSE_SPEED) * 0.5 + 0.5
-	var fast_pulse := sin(_age * PULSE_SPEED * 2.5) * 0.3 + 0.7
 	
-	# Outer glow pulses
+	# Outer glow simple pulse only
 	if _glow_sprite:
-		var glow_scale := 1.3 + pulse * 0.4
-		_glow_sprite.scale = Vector2.ONE * glow_scale
-		_glow_sprite.modulate.a = 0.4 + pulse * 0.3
-		_glow_sprite.rotation += delta * ROTATION_SPEED * 0.5
+		_glow_sprite.scale = Vector2.ONE * (1.3 + pulse * 0.3)
+		_glow_sprite.modulate.a = 0.5 + pulse * 0.2
 	
-	# Inner glow counter-rotates and pulses faster
+	# Inner glow simple pulse
 	if _inner_glow:
-		var inner_scale := 0.5 + fast_pulse * 0.2
-		_inner_glow.scale = Vector2.ONE * inner_scale
-		_inner_glow.modulate.a = 0.7 + fast_pulse * 0.3
-		_inner_glow.rotation -= delta * ROTATION_SPEED
-		
-		# Color shift between bright white and warm white-blue
-		var color_t := sin(_age * 4.5) * 0.5 + 0.5
-		var base_white := Color(0.9, 0.95, 1.0, 1.0)
-		var warm_white := Color(0.7, 0.8, 1.0, 1.0)
-		var shifted_color := base_white.lerp(warm_white, color_t * 0.5)
-		_inner_glow.modulate = Color(shifted_color.r, shifted_color.g, shifted_color.b, 0.7 + fast_pulse * 0.3)
+		_inner_glow.scale = Vector2.ONE * (0.5 + pulse * 0.15)
 	
-	# Main sprite subtle effects
-	if _sprite:
-		_sprite.rotation += delta * ROTATION_SPEED * 0.3
-		var sprite_scale := 1.0 + fast_pulse * 0.1
-		_sprite.scale = Vector2.ONE * sprite_scale
-		
-		# Color shift
-		var color_t := sin(_age * 2.25) * 0.5 + 0.5
-		_sprite.modulate = PRIMARY_COLOR.lerp(SECONDARY_COLOR, color_t * 0.3)
+	# Main sprite - no animation for performance
+	# (Removed rotation and color shifting)
 
 # Trail Logic Removed for Performance
 func _update_trail(_delta: float) -> void:
@@ -187,6 +173,10 @@ func _spawn_trail_particle() -> void:
 # Collection burst uses ShaderCache for shared material
 
 func _spawn_collection_burst() -> void:
+	# DISABLED for performance - spawning 4 Sprite2Ds per orb caused lag with many orbs
+	pass
+
+func _spawn_collection_burst_disabled() -> void:
 	# Use shared additive material from ShaderCache
 	var additive_mat := ShaderCache.get_additive_material()
 	

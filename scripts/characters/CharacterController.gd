@@ -61,24 +61,26 @@ func apply_squad_upgrades() -> void:
 	# Reset to base stats before re-applying modifiers
 	max_ammo = base_max_ammo
 	
-	# Kilo's "Build-a-Bullet" (Ammo Boost)
-	# Requires: 1. Upgrade purchased, 2. Kilo unlocked in current squad
-	if has_upgrade("kilo", "talos_ammo"):
-		# Check if Kilo is in the squad using PlayerCore helper
-		var kilo_active = false
+	# Snow White's "Master Mechanic" (Ammo Boost) - same logic as old Kilo upgrade
+	# Requires: 1. Upgrade purchased, 2. Snow White unlocked in current squad
+	if has_upgrade("snow_white", "master_mechanic"):
+		# Check if Snow White is in the squad
+		var snow_white_active = false
 		if player and player.has_method("is_character_in_squad"):
-			kilo_active = player.is_character_in_squad("kilo")
+			snow_white_active = player.is_character_in_squad("snow_white")
 		
-		if kilo_active:
+		if snow_white_active:
 			var w_type = _get_weapon_type_name().to_lower()
 			# +100% for Rocket/Sniper/Launcher
 			if w_type in ["sniper", "rocket", "launcher"]:
 				max_ammo *= 2
-				print("[CharacterController] Applied Kilo Ammo Boost (2x) to %s. New Max: %d" % [w_type, max_ammo])
+				print("[CharacterController] Applied Snow White Ammo Boost (2x) to %s. New Max: %d" % [w_type, max_ammo])
 			# +50% for Minigun/SMG/Shotgun/Assault Rifle
 			elif w_type in ["minigun", "smg", "assault_rifle", "shotgun", "assault rifle"]:
 				max_ammo = int(max_ammo * 1.5)
-				print("[CharacterController] Applied Kilo Ammo Boost (1.5x) to %s. New Max: %d" % [w_type, max_ammo])
+				print("[CharacterController] Applied Snow White Ammo Boost (1.5x) to %s. New Max: %d" % [w_type, max_ammo])
+	
+	# Kilo's "Build-a-Bullet" (Bullet Regen) is handled per-shot in _consume_ammo_with_regen()
 				
 	# If current ammo exceeds new max, clamp it. If we just gained ammo capacity, we usually don't fill it instantly unless reloading.
 	if ammo > max_ammo:
@@ -86,6 +88,9 @@ func apply_squad_upgrades() -> void:
 	
 	# Notify UI
 	ammo_changed.emit(ammo, max_ammo)
+
+# Kilo bullet regen tracking
+var _kilo_shot_counter: int = 0
 
 ## Helper to check for shop upgrades without creating circular dependency
 func has_upgrade(char_id: String, upgrade_id: String) -> bool:
@@ -136,6 +141,15 @@ func process(delta: float) -> void:
 	# Character-specific processing
 	_on_process(delta)
 
+## Physics frame update - call from Player._physics_process
+func physics_process(delta: float) -> void:
+	# Character-specific physics processing
+	_on_physics_process(delta)
+
+## Called every physics frame - override for physics-based processing
+func _on_physics_process(_delta: float) -> void:
+	pass
+
 ## Called every frame - override for custom processing
 func _on_process(_delta: float) -> void:
 	pass
@@ -151,6 +165,19 @@ func attack(direction: Vector2) -> bool:
 	# Consume ammo if applicable
 	if max_ammo > 0 and not burst_active:
 		ammo -= 1
+		
+		# Kilo's "Build-a-Bullet": Every 2nd shot regenerates 1 ammo
+		if has_upgrade("kilo", "talos_ammo"):
+			var kilo_active = false
+			if player and player.has_method("is_character_in_squad"):
+				kilo_active = player.is_character_in_squad("kilo")
+			
+			if kilo_active:
+				_kilo_shot_counter += 1
+				if _kilo_shot_counter >= 2:
+					_kilo_shot_counter = 0
+					ammo = mini(ammo + 1, max_ammo)
+		
 		ammo_changed.emit(ammo, max_ammo)
 		
 		if ammo <= 0:
@@ -172,7 +199,7 @@ func _can_attack() -> bool:
 
 ## Perform the actual attack - MUST override
 func _perform_attack(_direction: Vector2) -> void:
-	push_error("CharacterController._perform_attack not implemented!")
+	push_error("%s._perform_attack not implemented!" % get_script().resource_path.get_file())
 
 ## Attempt to use special attack - returns true if used
 func use_special(direction: Vector2) -> bool:

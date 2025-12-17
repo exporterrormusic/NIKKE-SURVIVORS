@@ -23,8 +23,8 @@ const GLOW_RADIUS := 32.0
 # Animation parameters
 const PULSE_SPEED := 18.0           # Core flicker speed
 const PULSE_INTENSITY := 0.35       # How much the core brightness varies
-const TRAIL_SPAWN_INTERVAL := 0.02  # Seconds between trail particles
-const TRAIL_PARTICLE_COUNT := 8     # Max trail particles
+const TRAIL_SPAWN_INTERVAL := 0.05  # Reduced frequency (was 0.02)
+const TRAIL_PARTICLE_COUNT := 0     # Disabled for performance (was 8)
 const CHARGE_DURATION := 0.08       # Brief charging flash at spawn
 const SHIMMER_SPEED := 25.0         # Heat shimmer oscillation speed
 const SHIMMER_AMOUNT := 1.5         # Pixels of shimmer offset
@@ -76,8 +76,8 @@ func _ready() -> void:
 	collision_shape.rotation = _direction.angle()
 	add_child(collision_shape)
 	
-	# Cache glow texture
-	_glow_texture = _create_radial_glow_texture(64)
+	# Use cached glow texture for performance (was creating new texture per laser!)
+	_glow_texture = TextureCache.get_glow_texture_64() if TextureCache else _create_radial_glow_texture(64)
 	
 	# Create visuals
 	_create_visuals()
@@ -294,19 +294,23 @@ func _physics_process(delta: float) -> void:
 	if _is_retired:
 		return
 	
+	# Apply Bullet Time scaling to enemy projectile
+	var time_scale: float = GameState.enemy_time_scale
+	var scaled_delta: float = delta * time_scale
+	
 	# Move laser
-	var displacement := _direction * speed * delta
+	var displacement: Vector2 = _direction * speed * scaled_delta
 	global_position += displacement
 	_distance_travelled += displacement.length()
-	_age += delta
+	_age += scaled_delta
 	
 	# Check boulder collision (reparenting to EffectsLayer breaks Area2D overlap)
 	if _check_boulder_collision():
 		_retire()
 		return
 	
-	# Update trail particles
-	_update_trail(delta)
+	# Update trail particles - DISABLED for performance
+	# _update_trail(delta)
 	
 	# Pulsing/flickering effects
 	_update_pulse_effects()
@@ -539,8 +543,8 @@ func _spawn_impact_effect() -> void:
 	tween.set_parallel(false)
 	tween.tween_callback(flash.queue_free)
 	
-	# Spawn impact sparks
-	for i in range(4):
+	# Spawn impact sparks - reduced to 2 for performance (was 4)
+	for i in range(2):
 		var spark := Sprite2D.new()
 		spark.texture = _glow_texture
 		spark.modulate = Color(0.85, 0.2, 0.1, 0.9)  # Dark red sparks

@@ -38,6 +38,26 @@ var special_cooldown_level: int = 0  # Cooldown reduction
 var burst_missile_upgrade: bool = false  # Left: 4 homing missiles every 2.5s
 var burst_trail_upgrade: bool = false    # Right: burning trail
 
+# "She'll Eat Anything" upgrade state
+var _beam_buff_active: bool = false
+
+func set_beam_buff_active(active: bool) -> void:
+	"""Called by PlayerCore when beam buff is activated/deactivated."""
+	_beam_buff_active = active
+	# Update active beam if it exists
+	if _active_beam and is_instance_valid(_active_beam):
+		_active_beam.set("enhanced_mode", active)
+	# Update beam cannon if it exists
+	if _beam_cannon and is_instance_valid(_beam_cannon):
+		_beam_cannon.set("enhanced_mode", active)
+
+func get_damage_multiplier() -> float:
+	"""Return damage multiplier for beam buff."""
+	return 2.0 if _beam_buff_active else 1.0
+
+func is_beam_buff_active() -> bool:
+	return _beam_buff_active
+
 func _on_initialize() -> void:
 	# Ammo already set from CharacterRegistry by base class
 	data.special_cooldown = charm_cooldown

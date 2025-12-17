@@ -1,0 +1,12 @@
+Patch v0.1F 
+
+- "BOULDERS SUCK"- 
+
+- Bullets should now properly move through boulders when Wells' "Chrono-Intangibility" shop upgrade is bought.
+- Multiple crashes fixed.
+- Optimized Boulder rendering with shared shader/batching
+- Implemented Node Pooling for Damage Numbers and Projectiles
+- Fixed One Hit Kill cheat logic
+- Added Close button to Leaderboard Squad Stats and improved layout
+- Fixed Boss HUD and Wave Timer text alignment
+- Fixed Burst Activation bugs"

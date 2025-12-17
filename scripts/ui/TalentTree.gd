@@ -82,8 +82,8 @@ var TALENT_DATA := {
 		 "tooltip": "Full heal + 4s stun on all enemies."},
 		{"id": "burst_stun", "name": "Blinding Radiance", "desc": "Stun duration increased to 8s", "col": 0, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
 		 "tooltip": "Doubles stun from 4s to 8s."},
-		{"id": "burst_invuln", "name": "Divine Protection", "desc": "8 seconds of invincibility", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
-		 "tooltip": "Grants 8s invincibility on burst."},
+		{"id": "burst_turrets", "name": "6,000? Really?", "desc": "Spawn 20 turrets across the map", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
+		 "tooltip": "Summons 20 Snow White turrets spread across the entire map. Each has 4 ammo."},
 	],
 	3: [  # Nayuta - SMG with Clone Summoning & Galaxy Burst
 		{"id": "unlock", "name": "Unlock Nayuta", "desc": "Add Nayuta to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
@@ -138,10 +138,10 @@ var TALENT_DATA := {
 		 "tooltip": "Minigun user. 100 ammo, high fire rate. Cavalry charge and golden nova."},
 		{"id": "special", "name": "Summon Trombe", "desc": "Summon Trombe, charge forward", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
 		 "tooltip": "Summon Trombe, charge forward with V-damage. Invincible. 2.5s duration, 10s cooldown."},
-		{"id": "special_cooldown", "name": "Swift Steed", "desc": "-2s charge cooldown", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "-2s cooldown per level. At max: 4s cooldown."},
-		{"id": "special_explosion", "name": "Royal Charge", "desc": "Survivors explode after 1.5s", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "Enemies hit but not killed glow gold, explode for 2x ATK. +50% dmg, +20% range per level."},
+		{"id": "special_cooldown", "name": "Swift Steed", "desc": "-1.5s charge cooldown", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
+		 "tooltip": "-1.5s cooldown per level. Min: 5.5s cooldown."},
+		{"id": "special_explosion", "name": "Royal Charge", "desc": "Survivors explode for 1x/2x/3x ATK", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
+		 "tooltip": "Enemies hit but not killed glow gold, explode for 1x/2x/3x ATK."},
 		{"id": "burst", "name": "Last Kingdom", "desc": "BURST: Screen-wide blast", "col": 1, "row": 2, "requires": ["special"], "max": 1, "cost": 1, "burst": true,
 		 "tooltip": "Massive golden AoE blast fills the screen for massive damage."},
 		{"id": "burst_charge", "name": "One for All", "desc": "Burst generates burst gauge", "col": 0, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
@@ -196,6 +196,22 @@ var TALENT_DATA := {
 		 "tooltip": "Enemy kills during burst contribute to burst gauge."},
 		{"id": "burst_explode", "name": "You'll Die for Me", "desc": "Enemies explode on death", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
 		 "tooltip": "Enemies dying during burst explode for 4 damage. Scales with ATK."},
+	],
+	10: [ # Wells - Time Traveler Sniper
+		{"id": "unlock", "name": "Unlock Wells", "desc": "Add Wells to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
+		 "tooltip": "Time Traveler Sniper. 7 ammo, 1.5s reload. Bullet Time specialist."},
+		{"id": "special", "name": "Mnemosyne Project", "desc": "Hold E for Bullet Time", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
+		 "tooltip": "Hold E to slow time (Bullet Time). Costs Fuel. fuel recharges over time."},
+		{"id": "special_upgrade1", "name": "Secrets of the Past", "desc": "Lv1: Heal. Lv2: Speed. Lv3: Inf Ammo.", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
+		 "tooltip": "Lvl 1: Heal 25% HP/s. Lvl 2: +100% Speed. Lvl 3: Infinite Ammo."},
+		{"id": "special_upgrade2", "name": "Dust to Dust", "desc": "DOT to all enemies", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
+		 "tooltip": "Normal: 10/25/34%. Elites: 5/10/15%. Bosses: 1/2/3% HP/s."},
+		{"id": "burst", "name": "Echoes of Hope", "desc": "BURST: Summon Marian", "col": 1, "row": 2, "requires": ["special"], "max": 1, "cost": 1, "burst": true,
+		 "tooltip": "Summons Marian as an ally for 10s."},
+		{"id": "burst_upgrade1", "name": "A Great King", "desc": "Also summons Crown", "col": 0, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
+		 "tooltip": "\"Illiterate, but great.\""},
+		{"id": "burst_upgrade2", "name": "A Fellow Nerd", "desc": "Also summons Kilo", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
+		 "tooltip": "\"Smells bad, tastes worse.\""},
 	]
 }
 
@@ -209,7 +225,7 @@ var _hovered_character: int = -1  # Which character card is being hovered (-1 = 
 var _last_hovered_character: int = -1  # Last character that was hovered (for sticky display)
 
 # Player's unlocked talents
-var _unlocked_talents: Dictionary = {0: {}, 1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}}
+var _unlocked_talents: Dictionary = {0: {}, 1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}}
 var _skill_points: int = 0: set = set_skill_points
 var _talent_buttons: Array = []
 var _lines_control: Control = null
@@ -278,7 +294,7 @@ func _load_character_data() -> void:
 				BURST_PORTRAIT_PATHS.append(burst_path)
 	else:
 		# Fallback if registry not available
-		CHARACTER_NAMES = ["Scarlet", "Commander", "Rapunzel", "Kilo", "Marian", "Crown", "Snow White", "Sin", "Cecil", "Nayuta"]
+		CHARACTER_NAMES = ["Scarlet", "Commander", "Rapunzel", "Kilo", "Marian", "Crown", "Snow White", "Sin", "Cecil", "Nayuta", "Wells"]
 		PORTRAIT_PATHS = [
 			"res://assets/characters/scarlet/portrait-sq.png",
 			"res://assets/characters/commander/portrait-sq.png",
@@ -289,7 +305,8 @@ func _load_character_data() -> void:
 			"res://assets/characters/snow-white/portrait-sq.png",
 			"res://assets/characters/sin/portrait-sq.png",
 			"res://assets/characters/cecil/portrait-sq.png",
-			"res://assets/characters/nayuta/portrait-sq.png"
+			"res://assets/characters/nayuta/portrait-sq.png",
+			"res://assets/characters/wells/portrait-sq.png"
 		]
 		BURST_PORTRAIT_PATHS = [
 			"res://assets/characters/scarlet/burst.png",
@@ -301,7 +318,8 @@ func _load_character_data() -> void:
 			"res://assets/characters/snow-white/burst.png",
 			"res://assets/characters/sin/burst.png",
 			"res://assets/characters/cecil/burst.png",
-			"res://assets/characters/nayuta/burst.png"
+			"res://assets/characters/nayuta/burst.png",
+			"res://assets/characters/wells/burst.png"
 		]
 
 func _build_ui() -> void:
@@ -626,6 +644,19 @@ func _update_stats_panel(char_id: int = -1) -> void:
 	var level_damage_mult := 1.0 + (current_level - 1) * 0.25
 	var scaled_damage := int(display_damage * level_damage_mult)
 	
+	# Get shop bonuses for display (not applied, just shown)
+	var ShopMenuScript = load("res://scripts/ui/ShopMenu.gd")
+	var atk_bonus: float = 0.0
+	var hp_bonus: int = 0
+	var speed_bonus: float = 0.0
+	var crit_bonus: float = 0.0
+	
+	if ShopMenuScript and ShopMenuScript.has_method("get_upgrade_bonus"):
+		atk_bonus = ShopMenuScript.get_upgrade_bonus("atk")     # +25% per level
+		hp_bonus = int(ShopMenuScript.get_upgrade_bonus("hp"))  # +1 per level
+		speed_bonus = ShopMenuScript.get_upgrade_bonus("speed") # +5% per level
+		crit_bonus = ShopMenuScript.get_upgrade_bonus("crit")   # +2% per level
+	
 	# Apply Scarlet's Low HP Bonus if applicable
 	if display_char == 1 and _player_ref and _player_ref.has_method("get_low_hp_damage_multiplier"):
 		var low_hp_mult: float = _player_ref.get_low_hp_damage_multiplier()
@@ -633,14 +664,34 @@ func _update_stats_panel(char_id: int = -1) -> void:
 			var bonus_atk = int(scaled_damage * low_hp_mult)
 			_set_stat_value("AtkRow", "%d (+%d%%)" % [bonus_atk, int((low_hp_mult - 1.0) * 100)])
 		else:
-			_set_stat_value("AtkRow", str(scaled_damage))
+			_set_stat_value("AtkRow", _format_stat_with_bonus(scaled_damage, atk_bonus, true))
 	else:
-		_set_stat_value("AtkRow", str(scaled_damage))
-	_set_stat_value("HpRow", str(display_hp))
+		_set_stat_value("AtkRow", _format_stat_with_bonus(scaled_damage, atk_bonus, true))
+	
+	_set_stat_value("HpRow", _format_stat_with_flat_bonus(display_hp, hp_bonus))
 	_set_stat_value("BurstRow", "%.1f%%" % burst_rate if burst_rate < 1.0 else "%.0f%%" % burst_rate)
 	@warning_ignore("integer_division")
-	_set_stat_value("SpeedRow", str(display_speed / 10))  # Display as /10 for readability
-	_set_stat_value("CritRow", "%.0f%%" % (display_crit * 100.0))
+	_set_stat_value("SpeedRow", _format_stat_with_bonus(display_speed / 10, speed_bonus, true))
+	_set_stat_value("CritRow", _format_crit_with_bonus(display_crit, crit_bonus))
+
+## Format stat with percentage bonus (e.g., "10 +25%")
+func _format_stat_with_bonus(base_value: int, bonus: float, is_percent: bool) -> String:
+	if bonus > 0 and is_percent:
+		return "%d +%d%%" % [base_value, int(bonus * 100)]
+	return str(base_value)
+
+## Format stat with flat bonus (e.g., "10 +5")
+func _format_stat_with_flat_bonus(base_value: int, bonus: int) -> String:
+	if bonus > 0:
+		return "%d +%d" % [base_value, bonus]
+	return str(base_value)
+
+## Format crit with bonus (e.g., "20% +4%")
+func _format_crit_with_bonus(base_crit: float, bonus: float) -> String:
+	var base_pct := int(base_crit * 100.0)
+	if bonus > 0:
+		return "%d%% +%d%%" % [base_pct, int(bonus * 100)]
+	return "%.0f%%" % (base_crit * 100.0)
 
 func _set_char_label(char_name: String) -> void:
 	if _stats_panel == null:
@@ -685,6 +736,8 @@ func _get_weapon_type_for_index(char_index: int) -> String:
 			return "smg"
 		9:  # Sin
 			return "smg"
+		10: # Wells
+			return "sniper"
 		_:
 			return "smg"
 

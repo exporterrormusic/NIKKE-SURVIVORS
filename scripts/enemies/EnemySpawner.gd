@@ -35,11 +35,12 @@ func return_enemy(enemy: Node2D) -> void:
 	do_return.call_deferred()
 
 func _get_from_pool() -> Node2D:
-	if _enemy_pool.has("modular") and not _enemy_pool["modular"].is_empty():
-		var enemy = _enemy_pool["modular"].pop_back()
-		if is_instance_valid(enemy):
-			enemy.reset() # Important! reset state
-			return enemy
+	if _enemy_pool.has("modular"):
+		while not _enemy_pool["modular"].is_empty():
+			var enemy = _enemy_pool["modular"].pop_back()
+			if is_instance_valid(enemy):
+				enemy.reset() # Important! reset state
+				return enemy
 	return null
 
 # Effect scripts
@@ -101,6 +102,26 @@ func _setup_screen_effects() -> void:
 		_boss_health_bar = BossHPScript.new()
 		_boss_health_bar.name = "BossHealthBar"
 		add_child(_boss_health_bar)
+		
+		# Connect to global boss spawn events (e.g. Future Marian)
+		if EventBus.has_signal("boss_spawned"):
+			EventBus.boss_spawned.connect(_on_global_boss_spawned)
+
+func _on_global_boss_spawned(boss: Node) -> void:
+	if not _boss_health_bar or not is_instance_valid(boss):
+		return
+		
+	var boss_name = "BOSS"
+	if boss.has_meta("display_name"):
+		boss_name = boss.get_meta("display_name")
+	elif boss.has_method("get_boss_name"):
+		boss_name = boss.get_boss_name()
+		
+	var is_super = false
+	if boss.has_meta("is_super_boss"):
+		is_super = boss.get_meta("is_super_boss")
+		
+	_boss_health_bar.show_boss(boss, boss_name, is_super)
 
 func set_health_multiplier(mult: float) -> void:
 	_health_multiplier = mult
@@ -381,6 +402,11 @@ func _apply_tier_stats(enemy: Node2D, tier_name: String) -> void:
 	# Elite core drop chance (20%) is now baseline
 	if tier_name == "elite":
 		core_chance = EnemyTierConfigClass.GODDESS_FALL_ELITE_CORE_CHANCE
+	
+	# Cheat: Otter -> Always drop pristine core
+	if CheatManager.is_cheat_active("pristine_drops"):
+		core_chance = 1.0
+		
 	if core_chance > 0.0 and randf() < core_chance:
 		enemy.set_meta("pristine_core_drop", difficulty_mult)
 	
@@ -587,6 +613,11 @@ func get_enemy_count() -> int:
 
 ## Setup boss enrage timer - boss explodes after 60 seconds if not killed, killing the player
 func _setup_boss_enrage_timer(boss: Node2D) -> void:
+	# Check if boss already has an enrage timer (prevent duplicates)
+	if boss.get_node_or_null("EnrageTimer"):
+		print("[EnemySpawner] WARNING: Boss already has EnrageTimer, skipping duplicate")
+		return
+	
 	var timer := Timer.new()
 	timer.name = "EnrageTimer"
 	timer.one_shot = true
@@ -595,6 +626,8 @@ func _setup_boss_enrage_timer(boss: Node2D) -> void:
 	timer.timeout.connect(_on_boss_enrage_timeout.bind(boss))
 	boss.add_child(timer)
 	# Timer will auto-start when boss enters tree (no need to call start() here)
+	
+	print("[EnemySpawner] Boss enrage timer set: %.1f seconds" % timer.wait_time)
 	
 	# Add visual warning timer display
 	boss.set_meta("enrage_timer", timer)

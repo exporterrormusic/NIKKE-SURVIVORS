@@ -1,5 +1,8 @@
 extends Area2D
 
+# Cached ShopMenu reference to avoid load() in hot paths
+const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
+
 @onready var sprite = $Sprite2D
 
 var velocity = Vector2.ZERO
@@ -102,7 +105,7 @@ func _ready():
 	# Set layer to 4 (Enemy Projectiles) so Scarlet can slash them
 	collision_layer = 4 
 	add_to_group("enemy_projectiles")
-	print("[Bullet] initialized. Groups: ", get_groups())
+	# Debug print removed for performance - was causing lag with many bullets
 	
 	# Dynamic lights are VERY expensive with many bullets - disabled by default
 	if ENABLE_BULLET_LIGHTS:
@@ -138,6 +141,12 @@ func _create_light_texture() -> Texture2D:
 	return TextureCache.get_light_texture_64()
 
 func _physics_process(delta):
+	# Apply Global Enemy Time Scale (Bullet Time) - ONLY for non-player projectiles
+	var time_scale = 1.0
+	if not (owner_node and owner_node.is_in_group("player")):
+		time_scale = GameState.enemy_time_scale
+	delta *= time_scale
+
 	# Capture start position on first frame (after bullet has been positioned)
 	if not _start_position_set:
 		start_position = global_position
@@ -156,11 +165,24 @@ func _physics_process(delta):
 	
 	var result = space_state.intersect_ray(query)
 	if result:
-		# Hit something!
-		global_position = result.position
-		_on_body_entered(result.collider)
-		# _on_body_entered might free us, so return
-		return
+		# Check if this is a boulder we should phase through BEFORE setting position
+		var collider = result.collider
+		if collider is StaticBody2D and collider.is_in_group("boulders"):
+			var player_ref = get_tree().get_first_node_in_group("player")
+			if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player_ref and player_ref.has_method("is_character_in_squad") and player_ref.is_character_in_squad("wells"):
+				# Phase through boulder - continue to next_pos, don't stop at collision point
+				global_position = next_pos
+				# Skip the rest of the collision handling
+			else:
+				# Not phasing - normal collision handling
+				global_position = result.position
+				_on_body_entered(collider)
+				return
+		else:
+			# Not a boulder - normal collision handling
+			global_position = result.position
+			_on_body_entered(collider)
+			return
 	else:
 		global_position = next_pos
 	
@@ -184,6 +206,11 @@ func _physics_process(delta):
 
 func _check_boulder_collision() -> bool:
 	"""Manual boulder collision check using cached boulder list for performance."""
+	# Skip if Chrono-Intangibility upgrade is active AND Wells is in squad
+	var player = get_tree().get_first_node_in_group("player")
+	if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+		return false
+	
 	var boulders := TargetCache.get_boulders()
 	for boulder in boulders:
 		if not is_instance_valid(boulder):
@@ -214,6 +241,10 @@ func _on_body_entered(body):
 		return
 
 	# Check for Shield Hit (Area2D child of ShielderShield)
+	# Skip shields if Chrono-Intangibility upgrade is active AND Wells is in squad
+	var player = get_tree().get_first_node_in_group("player")
+	var has_chrono: bool = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells")
+	
 	var shield_root = null
 	if body is Area2D:
 		shield_root = body.get_parent()
@@ -221,6 +252,9 @@ func _on_body_entered(body):
 		shield_root = body
 		
 	if shield_root and shield_root.has_method("take_shield_damage"):
+		if has_chrono:
+			# Phase through shields - don't damage or stop
+			return
 		# Shield hit! Destroy bullet.
 		shield_root.take_shield_damage(base_damage) 
 		_despawn()
@@ -230,6 +264,14 @@ func _on_body_entered(body):
 	if not body.has_method("take_damage"):
 		# If it's a wall (StaticBody2D or TileMap), destroy the bullet
 		if body is TileMap or body is StaticBody2D:
+			# Simple and reliable boulder check - if it's in the boulders group, it's a boulder
+			var is_boulder = body.is_in_group("boulders")
+			
+			if is_boulder:
+				var player_ref = get_tree().get_first_node_in_group("player")
+				if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player_ref and player_ref.has_method("is_character_in_squad") and player_ref.is_character_in_squad("wells"):
+					return # Phase through boulder
+
 			_despawn()
 		return
 
@@ -244,7 +286,7 @@ func _on_body_entered(body):
 
 	# Roll for critical hit - base chance + shop bonus (capped at 100%)
 	var crit_chance := BASE_CRIT_CHANCE
-	var player = get_tree().get_first_node_in_group("player")
+	# Player variable reused from earlier in function
 	if player and player.has_method("get_crit_chance"):
 		crit_chance += player.get_crit_chance()
 	crit_chance = minf(crit_chance, 1.0)  # Cap at 100%
@@ -258,7 +300,7 @@ func _on_body_entered(body):
 	
 	# Determine killer source based on owner type and weapon type
 	var killer_source := weapon_type_source if weapon_type_source != "" else "player"
-	if is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
+	if is_instance_valid(owner_node) and (owner_node.is_in_group("nayuta_clones") or owner_node.is_in_group("summoned_allies")):
 		killer_source = "summon"
 	
 	body.take_damage(damage, is_crit, hit_direction, false, killer_source)

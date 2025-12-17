@@ -533,8 +533,8 @@ func _on_restore_stamina() -> void:
 		print("[DEBUG] Stamina restored")
 
 func _on_add_skill_points() -> void:
-	if _player and "skill_points" in _player:
-		_player.skill_points += 5
+	if _player and _player.has_method("add_skill_points"):
+		_player.add_skill_points(5)
 		print("[DEBUG] Added 5 skill points")
 
 # === SPAWN CALLBACKS ===

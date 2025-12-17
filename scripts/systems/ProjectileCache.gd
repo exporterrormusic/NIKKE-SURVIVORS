@@ -118,7 +118,7 @@ static func create_missile() -> Node:
 	return MissileScene.instantiate()
 
 static func create_rocket() -> Node:
-	return RocketScene.instantiate()
+	return _get_from_pool("rocket", RocketScene)
 
 static func create_explosion() -> Node:
 	# DEBUG: User reports "Purple Explosion" during Scarlet Burst.

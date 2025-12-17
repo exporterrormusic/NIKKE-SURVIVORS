@@ -836,6 +836,13 @@ func return_to_main_menu() -> void:
 	# Unpause in case game was paused
 	get_tree().paused = false
 	
+	# Reset Engine time scale in case CombatJuice or other systems modified it
+	Engine.time_scale = 1.0
+	
+	# Reset bullet time (Wells ability) in case it was active
+	if GameState:
+		GameState.enemy_time_scale = 1.0
+	
 	# Stop any game music/ambient sounds
 	if AudioDirector:
 		AudioDirector.play_ui_music() # Switch to menu music (handles fade)

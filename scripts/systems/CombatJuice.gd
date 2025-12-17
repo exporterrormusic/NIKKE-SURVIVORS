@@ -42,6 +42,10 @@ const RHYTHM_DECAY := 6.0
 # Hitstop queue (for burst effects)
 var _hitstop_remaining: float = 0.0
 
+# Safety: Maximum hitstop duration to prevent permanent freeze
+const MAX_HITSTOP_DURATION := 0.5  # Never freeze longer than 0.5 seconds
+const MIN_TIME_SCALE := 0.001  # Use near-zero instead of true zero for safety
+
 func _ready() -> void:
 	instance = self
 	process_mode = Node.PROCESS_MODE_ALWAYS  # Process even during hitstop
@@ -171,8 +175,10 @@ static func hitstop(duration: float = 0.05) -> void:
 		instance._do_hitstop(duration)
 
 func _do_hitstop(duration: float) -> void:
-	_hitstop_remaining = duration
-	Engine.time_scale = 0.0
+	# Safety: Clamp duration to prevent permanent freeze
+	_hitstop_remaining = minf(duration, MAX_HITSTOP_DURATION)
+	# Use near-zero instead of true zero to ensure _process still runs
+	Engine.time_scale = MIN_TIME_SCALE
 
 ## Trigger time dilation (slow-mo) - good for burst/multi-kills
 static func time_dilation(scale: float = 0.5, duration: float = 0.2) -> void:

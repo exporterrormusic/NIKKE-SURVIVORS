@@ -7,6 +7,8 @@ extends Node2D
 @export var heal_percent: float = 0.03
 @export var lifespan: float = 9.0
 @export var heal_radius: float = 180.0  # Bigger healing area
+var burn_enabled: bool = false
+var burn_percent: float = 0.03 # Can be overridden by controller (uses heal_percent logic)
 
 var _lifetime: float = 0.0
 var _heal_timer: float = 0.0
@@ -59,6 +61,8 @@ func _process(delta: float) -> void:
 	if _heal_timer >= heal_interval:
 		_heal_timer = 0.0
 		_try_heal_player()
+		if burn_enabled:
+			_try_burn_enemies()
 	
 	# Update sparkles
 	for i in range(_sparkles.size()):
@@ -81,6 +85,60 @@ func _try_heal_player() -> void:
 		if _player.has_method("heal"):
 			var heal_amount = int(ceil(_player.max_hp * heal_percent))
 			_player.heal(heal_amount)
+
+func _try_burn_enemies() -> void:
+	# Burn enemies within radius
+	var enemies = get_tree().get_nodes_in_group("enemies")
+	for enemy in enemies:
+		if not is_instance_valid(enemy):
+			continue
+			
+		var dist = global_position.distance_to(enemy.global_position)
+		if dist <= heal_radius:
+			if enemy.has_method("take_damage"):
+				# Calculate burn damage
+				# Use current heal_percent as base (matches "same amount it would heal")
+				var dmg_pct = heal_percent
+				
+				# Cap boss damage at 3%
+				if enemy.is_in_group("bosses") or enemy.is_in_group("guardian_bosses") or enemy.is_in_group("gbosses"):
+					dmg_pct = min(dmg_pct, 0.03)
+				
+				# Apply damage based on ENEMY max HP
+				var max_hp = enemy.get("max_hp")
+				if max_hp == null and enemy.has_method("get_max_hp"):
+					max_hp = enemy.get_max_hp()
+				
+				if max_hp:
+					# BALANCE FIX: Probabilistic damage with Bad Luck Protection
+					# 1. Calculate base fractional damage (e.g. 0.03)
+					# 2. Add accumulated "luck" multiplier from metadata
+					# 3. If roll fails, multiply luck by 5 (exponential boost to guarantee hit soon)
+					var expected_damage = float(max_hp) * dmg_pct
+					var damage = int(floor(expected_damage))
+					var remainder = expected_damage - damage
+					
+					# Retrieve luck multiplier (default 1.0)
+					var luck_mult: float = enemy.get_meta("rapunzel_burn_luck", 1.0)
+					
+					# effective_chance scales with luck
+					# For 1HP unit: 0.03 * 1 -> 0.03 * 5 -> 0.03 * 25 (0.75) -> 0.03 * 125 (Guaranteed)
+					var effective_chance = remainder * luck_mult
+					
+					if randf() < effective_chance:
+						damage += 1
+						# Reset luck on success
+						enemy.set_meta("rapunzel_burn_luck", 1.0)
+					else:
+						# Increase luck on failure (x5 exponential boost)
+						if remainder > 0:
+							enemy.set_meta("rapunzel_burn_luck", luck_mult * 5.0)
+					
+					if damage > 0:
+						enemy.take_damage(damage)
+					
+					# Spawn hit effect if possible? Can overload visuals.
+					# Just rely on damage numbers floating up (take_damage usually handles this)
 
 func _draw() -> void:
 	var pulse = 0.7 + 0.3 * sin(_lifetime * 2.5)

@@ -13,8 +13,8 @@ var charge_cooldown: float = 10.0  # Base 10s cooldown
 var charge_duration: float = 2.5  # Lasts 2.5 seconds
 var charge_speed: float = 600.0  # Fast charge speed
 var charge_damage: int = 15  # Base damage per hit
-var charge_length: float = 350.0  # How far ahead the V extends
-var charge_width: float = 250.0  # Max width at the back of the V
+var charge_length: float = 175.0  # How far ahead the V extends (reduced 50%)
+var charge_width: float = 125.0  # Max width at the back of the V (reduced 50%)
 var charge_knockback: float = 400.0  # Knockback force for survivors
 
 # Burst config
@@ -50,9 +50,22 @@ var special_explosion_level: int = 0  # Explosion damage/range upgrade, max 3
 var burst_charge_unlocked: bool = false  # Burst generates burst gauge
 var burst_beam_unlocked: bool = false  # Adds forward beam to burst
 
+# Trombe stacking upgrade state
+var _has_trombe_stacking_upgrade: bool = false
+var _trombe_stack_timers: Array = []  # Each entry is remaining time for that stack
+const TROMBE_STACK_DURATION := 12.0
+const TROMBE_STACK_MULTIPLIER := 1.35
+const TROMBE_MAX_STACKS := 3
+
 func _on_initialize() -> void:
 	# Ammo already set from CharacterRegistry by base class
 	data.special_cooldown = charge_cooldown
+	
+	# Check for Trombe stacking upgrade
+	var ShopMenuScript = load("res://scripts/ui/ShopMenu.gd")
+	if ShopMenuScript and ShopMenuScript.has_character_upgrade("crown", "trombe_stacking"):
+		_has_trombe_stacking_upgrade = true
+		print("[Crown] 'How Does This Keep Working?' upgrade active - Trombe stacks!")
 
 func _on_process(delta: float) -> void:
 	# Update charge state
@@ -68,6 +81,15 @@ func _on_process(delta: float) -> void:
 	# Update burst beam
 	if _beam_active:
 		_update_burst_beam(delta)
+	
+	# Update Trombe stacking timers (each stack decays independently)
+	if _has_trombe_stacking_upgrade and not _trombe_stack_timers.is_empty():
+		var updated_timers: Array = []
+		for timer in _trombe_stack_timers:
+			var remaining = timer - delta
+			if remaining > 0:
+				updated_timers.append(remaining)
+		_trombe_stack_timers = updated_timers
 
 func _can_attack() -> bool:
 	return not is_reloading and ammo > 0 and not _is_charging
@@ -104,11 +126,23 @@ func _perform_special(direction: Vector2) -> void:
 	_charge_direction = direction.normalized()
 	_hit_enemies.clear()
 	
+	# Add Trombe stack if upgrade owned (each use adds a stack, not refresh)
+	if _has_trombe_stacking_upgrade:
+		if _trombe_stack_timers.size() < TROMBE_MAX_STACKS:
+			_trombe_stack_timers.append(TROMBE_STACK_DURATION)
+			print("[Crown] Trombe stack added. Current stacks: %d" % _trombe_stack_timers.size())
+	
 	# Create charge visual
 	_spawn_charge_visual()
 	
-	# Calculate cooldown with upgrades
-	var cooldown_reduction := special_cooldown_level * 2.0
+	# Scale visual to match hitbox size with stacks
+	if _has_trombe_stacking_upgrade and not _trombe_stack_timers.is_empty() and _charge_visual:
+		var visual_scale: float = pow(TROMBE_STACK_MULTIPLIER, _trombe_stack_timers.size())
+		_charge_visual.scale = Vector2(visual_scale, visual_scale)
+		print("[Crown] Trombe visual scaled to %.2fx" % visual_scale)
+	
+	# Calculate cooldown with upgrades (1.5s per level)
+	var cooldown_reduction := special_cooldown_level * 1.5
 	special_timer = max(charge_cooldown - cooldown_reduction, 4.0)
 	data.special_cooldown = special_timer
 
@@ -145,6 +179,13 @@ func _damage_enemies_in_charge_zone() -> void:
 	if not tree:
 		return
 	
+	# Calculate size multiplier from Trombe stacks (1.5x per stack)
+	var size_mult := 1.0
+	if _has_trombe_stacking_upgrade and not _trombe_stack_timers.is_empty():
+		size_mult = pow(TROMBE_STACK_MULTIPLIER, _trombe_stack_timers.size())
+	var effective_length := charge_length * size_mult
+	var effective_width := charge_width * size_mult
+	
 	var enemies := TargetCache.get_enemies()
 	for enemy in enemies:
 		if not is_instance_valid(enemy) or not enemy is Node2D:
@@ -162,14 +203,14 @@ func _damage_enemies_in_charge_zone() -> void:
 		var forward_dist := to_enemy.dot(_charge_direction)
 		
 		# Must be in front of player and within charge length
-		if forward_dist < -50 or forward_dist > charge_length:
+		if forward_dist < -50 or forward_dist > effective_length:
 			continue
 		
 		# Width increases with distance from tip (V shape)
 		# At tip (forward_dist = charge_length), width is small
 		# At back (forward_dist = 0), width is charge_width
-		var t := 1.0 - clampf(forward_dist / charge_length, 0.0, 1.0)  # 0 at tip, 1 at back
-		var max_lateral := 30.0 + t * charge_width * 0.5  # Min 30 at tip, expands toward player
+		var t := 1.0 - clampf(forward_dist / effective_length, 0.0, 1.0)  # 0 at tip, 1 at back
+		var max_lateral := 30.0 * size_mult + t * effective_width * 0.5  # Scale tip width too
 		var lateral: float = abs(to_enemy.dot(_charge_direction.orthogonal()))
 		if lateral > max_lateral:
 			continue
@@ -177,11 +218,11 @@ func _damage_enemies_in_charge_zone() -> void:
 		# Hit this enemy
 		_hit_enemies.append(enemy)
 		
-		# Calculate damage with level scaling
-		var scaled_damage: int = player.calc_damage(float(charge_damage) / player.get_base_damage())
+		# Trombe damage = 2x Crown's current attack
+		var trombe_damage: int = player.calc_damage() * 2
 		
 		if enemy.has_method("take_damage"):
-			enemy.take_damage(scaled_damage, false, _charge_direction, true)
+			enemy.take_damage(trombe_damage, false, _charge_direction, true)
 		
 		# Check if enemy survived and should be marked
 		if special_explosion_level > 0 and is_instance_valid(enemy):
@@ -263,16 +304,12 @@ func _trigger_mark_explosion(position: Vector2, _source_enemy: Node) -> void:
 	if not tree:
 		return
 	
-	# Calculate damage and radius based on upgrade level
-	# Base: 2x player attack, +50% per level
-	var base_dmg := int(player.get_base_damage() * 2)
-	var damage_mult := 1.0 + (special_explosion_level - 1) * 0.5
-	var explosion_damage := int(base_dmg * damage_mult)
+	# Calculate damage based on upgrade level: 1x/2x/3x player attack
+	var damage_multiplier: int = special_explosion_level  # Level 1=1x, Level 2=2x, Level 3=3x
+	var explosion_damage: int = player.calc_damage() * damage_multiplier
 	
-	# Base radius 80, +20% per level
-	var base_radius := 80.0
-	var radius_mult := 1.0 + (special_explosion_level - 1) * 0.2
-	var explosion_radius := base_radius * radius_mult
+	# Fixed explosion radius
+	var explosion_radius := 100.0
 	
 	# Spawn visual
 	_spawn_explosion_visual(position, explosion_radius)
@@ -535,8 +572,8 @@ func _get_charge_visual_script() -> GDScript:
 	script.source_code = """
 extends Node2D
 
-var charge_length: float = 350.0
-var charge_width: float = 250.0
+var charge_length: float = 175.0
+var charge_width: float = 125.0
 var _time: float = 0.0
 var _particles: Array = []
 var _wisps: Array = []

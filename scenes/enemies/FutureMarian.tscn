@@ -1,0 +1,66 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/FutureMarian.gd" id="1_main"]
+[ext_resource type="Script" path="res://scripts/components/HealthComponent.gd" id="2_health"]
+[ext_resource type="Script" path="res://scripts/components/MovementComponent.gd" id="3_move"]
+[ext_resource type="Script" path="res://scripts/components/HitboxComponent.gd" id="4_hit"]
+[ext_resource type="Texture2D" path="res://assets/characters/marian/marian-sprite.png" id="5_sprite"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_1"]
+radius = 150.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_fill"]
+bg_color = Color(0.8, 0.15, 0.15, 1)
+
+[node name="FutureMarian" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 4
+scale = Vector2(0.2, 0.2)
+script = ExtResource("1_main")
+max_hp = 300
+
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("2_health")
+max_hp = 300
+current_hp = 300
+
+[node name="MovementComponent" type="Node" parent="."]
+script = ExtResource("3_move")
+max_speed = 45.0
+
+[node name="HitboxComponent" type="Area2D" parent="."]
+collision_layer = 4
+collision_mask = 2
+script = ExtResource("4_hit")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HitboxComponent"]
+shape = SubResource("CircleShape2D_1")
+
+[node name="BodyCollisionShape" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_1")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+
+[node name="ProgressBar" type="ProgressBar" parent="."]
+top_level = true
+offset_left = -40.0
+offset_top = -60.0
+offset_right = 40.0
+offset_bottom = -50.0
+theme_override_styles/fill = SubResource("StyleBoxFlat_fill")
+max_value = 300.0
+value = 300.0
+show_percentage = false
+
+[node name="HPLabel" type="Label" parent="."]
+top_level = true
+offset_left = -40.0
+offset_top = -62.0
+offset_right = 40.0
+offset_bottom = -48.0
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 10
+text = "300/300"
+horizontal_alignment = 1
+vertical_alignment = 1

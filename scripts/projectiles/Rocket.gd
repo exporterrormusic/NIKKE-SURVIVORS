@@ -11,6 +11,11 @@ var target_enemy = null
 var last_target_pos = Vector2.ZERO
 var time = 0.0
 
+# Dynamic damage from launcher
+var damage: int = 1
+var explosion_damage: int = 1
+var explosion_radius: float = 60.0
+
 # Smoke trail settings - rockets have more intense trails
 const SMOKE_INTERVAL := 0.025
 const SMOKE_LIFETIME := 0.5
@@ -22,9 +27,30 @@ var _trail_color := Color(0.45, 0.45, 0.5, 0.7)  # Grey smoke
 var _fire_color := Color(1.0, 0.6, 0.15, 0.9)  # Orange-yellow fire
 var _light: PointLight2D = null
 var _has_exploded := false  # Prevent multiple explosions
+var reduced_smoke := false  # For turret rockets - spawn 75% fewer particles
 
 # Performance: disable dynamic lights on rockets (expensive with many projectiles)
 const ENABLE_ROCKET_LIGHTS := false
+
+
+## Reset rocket state for pooling reuse
+func reset() -> void:
+	velocity = Vector2.ZERO
+	acceleration = 500
+	max_speed = 1200
+	owner_node = null
+	killer_source = "rocket"
+	killer_source_override = ""
+	target_enemy = null
+	last_target_pos = Vector2.ZERO
+	time = 0.0
+	_smoke_timer = 0.0
+	_smoke_particles.clear()
+	_has_exploded = false
+	reduced_smoke = false
+	visible = true
+	set_process(true)
+	set_physics_process(true)
 
 func _ready():
 	# Make rocket unshaded (glows in dark)
@@ -76,9 +102,10 @@ func _process(delta):
 	if _light and Engine.get_process_frames() % 2 == 0:
 		_light.energy = 0.8 + randf() * 0.5
 	
-	# Update smoke trail
+	# Update smoke trail - reduced_smoke = spawn every 4th particle only
 	_smoke_timer += delta
-	if _smoke_timer >= SMOKE_INTERVAL:
+	var smoke_interval := SMOKE_INTERVAL * (4.0 if reduced_smoke else 1.0)
+	if _smoke_timer >= smoke_interval:
 		_smoke_timer = 0.0
 		_spawn_smoke_particle()
 	
@@ -125,18 +152,25 @@ func _draw():
 		draw_circle(local_pos, size, smoke_col)
 
 func _physics_process(delta):
-	time += delta
+	# Apply Global Enemy Time Scale (Bullet Time) - ONLY for non-player projectiles
+	var time_scale = 1.0
+	if not (owner_node and owner_node.is_in_group("player")):
+		time_scale = GameState.enemy_time_scale
+	
+	var dt = delta * time_scale
+
+	time += dt
 	var target_pos = last_target_pos
 	if target_enemy and is_instance_valid(target_enemy):
 		target_pos = target_enemy.global_position
 		last_target_pos = target_pos
 	# Move towards target_pos
-	acceleration = min(acceleration + 6000 * delta, 8000)
+	acceleration = min(acceleration + 6000 * dt, 8000)
 	var dir = (target_pos - global_position).normalized()
-	velocity += dir * acceleration * delta
+	velocity += dir * acceleration * dt
 	if velocity.length() > max_speed:
 		velocity = velocity.normalized() * max_speed
-	position += velocity * delta
+	position += velocity * dt
 	rotation = velocity.angle()  # point towards movement direction
 	
 	# Check boulder collision - explode on impact
@@ -150,10 +184,17 @@ func _physics_process(delta):
 	if time > 3.0 or global_position.distance_to(target_pos) < 30:
 		call_deferred("explode")
 	if position.x < -100 or position.x > 2000 or position.y < -100 or position.y > 1200:
-		call_deferred("queue_free")
+		ProjectileCache.return_to_pool(self)
 
 func _check_boulder_collision() -> bool:
 	"""Check if rocket hit a boulder."""
+	# Skip if Chrono-Intangibility upgrade is active
+	# Skip if Chrono-Intangibility upgrade is active AND Wells is in squad
+	var shop = load("res://scripts/ui/ShopMenu.gd")
+	var player = get_tree().get_first_node_in_group("player")
+	if shop and shop.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+		return false
+	
 	var boulders := get_tree().get_nodes_in_group("boulders")
 	for boulder in boulders:
 		if not is_instance_valid(boulder):
@@ -189,7 +230,7 @@ func _on_body_entered(body):
 			killer_source = killer_source_override
 		elif is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
 			killer_source = "summon"
-		body.take_damage(1, false, hit_direction, false, killer_source)
+		body.take_damage(damage, false, hit_direction, false, killer_source)
 	call_deferred("explode")
 
 func explode():
@@ -199,6 +240,11 @@ func explode():
 	var explosion = ProjectileCache.create_explosion()
 	explosion.owner_node = owner_node  # Pass owner for killer_source tracking
 	explosion.killer_source_override = killer_source_override  # Pass override too
+	
+	# Pass dynamic damage to explosion
+	if explosion.has_method("initialize"):
+		explosion.initialize(explosion_damage, explosion_radius)
+	
 	get_parent().add_child(explosion)
 	explosion.global_position = global_position
-	call_deferred("queue_free")
+	ProjectileCache.return_to_pool(self)

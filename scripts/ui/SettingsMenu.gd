@@ -750,8 +750,6 @@ func _inject_squad_buttons() -> void:
 		"label": "NEXT SQUAD MEMBER", 
 		"node": str(next_btn.get_path())
 	})
-	# Register button for capture and update display
-	next_btn.pressed.connect(_begin_key_capture.bind("next_character", next_btn))
 	_control_buttons["next_character"] = next_btn
 	
 	# Add "Previous Squad Member"
@@ -761,8 +759,6 @@ func _inject_squad_buttons() -> void:
 		"label": "PREV SQUAD MEMBER", 
 		"node": str(prev_btn.get_path())
 	})
-	# Register button for capture and update display
-	prev_btn.pressed.connect(_begin_key_capture.bind("prev_character", prev_btn))
 	_control_buttons["prev_character"] = prev_btn
 	
 	# Update button labels to show current bindings (Mouse Wheel defaults)

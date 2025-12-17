@@ -115,6 +115,12 @@ func _physics_process(delta):
 
 func _check_boulder_collision() -> bool:
 	"""Manual boulder collision check since waves are in EffectsLayer (different scene tree branch)."""
+	# Skip if Chrono-Intangibility upgrade is active AND Wells is in squad
+	var shop = load("res://scripts/ui/ShopMenu.gd")
+	var player = get_tree().get_first_node_in_group("player")
+	if shop and shop.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+		return false
+	
 	var boulders := get_tree().get_nodes_in_group("boulders")
 	for boulder in boulders:
 		if not is_instance_valid(boulder):

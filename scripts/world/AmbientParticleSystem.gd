@@ -235,7 +235,9 @@ func _process(delta: float) -> void:
 	# Update particles
 	_update_particles(delta)
 	
-	queue_redraw()
+	# Only redraw if we have particles (reduces overhead in menus/empty scenes)
+	if _particles.size() > 0:
+		queue_redraw()
 
 func _spawn_particle(config: Dictionary) -> void:
 	var types: Array = config.get("types_night", config.get("types", [])) if _is_night else config.get("types", [])

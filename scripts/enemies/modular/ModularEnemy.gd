@@ -5,10 +5,18 @@ extends CharacterBody2D
 
 @export var stats: Resource
 
-# Component References
-@onready var health_component: Node = $HealthComponent
-@onready var movement_component: Node = $MovementComponent
-@onready var hitbox_component: Node = $HitboxComponent
+# Component references
+# Component references
+# Component references
+var health_component: Node
+var hitbox_component: Node
+var movement_component: Node
+var visual_component: Node
+var attack_component: Node
+var drop_component: Node
+
+# Cached ShopMenu reference to avoid load() in hot paths
+const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
 @onready var visuals: Node2D = $AnimatedSprite2D
 @onready var hp_bar: ProgressBar = $ProgressBar
 @onready var hp_label: Label = $HPLabel
@@ -54,25 +62,34 @@ func _ready() -> void:
 	_target_check_timer = randf() * TARGET_CHECK_INTERVAL
 	_shield_check_timer = randf() * SHIELD_CHECK_INTERVAL
 
+	# Initialize components safely
+	health_component = get_node_or_null("HealthComponent")
+	hitbox_component = get_node_or_null("HitboxComponent")
+	movement_component = get_node_or_null("MovementComponent")
+	visual_component = get_node_or_null("VisualComponent")
+	attack_component = get_node_or_null("AttackComponent")
+	drop_component = get_node_or_null("DropComponent")
+
 	add_to_group("enemies")
 	
 	# if stats:
 	# 	_apply_stats()
 	
-	health_component.died.connect(_on_death)
-	health_component.health_changed.connect(_on_health_changed)
-	# Fix: Connect for burst generation on hit
-	health_component.damaged.connect(_on_damaged)
+	if health_component:
+		health_component.died.connect(_on_death)
+		health_component.health_changed.connect(_on_health_changed)
+		# Fix: Connect for burst generation on hit
+		health_component.damaged.connect(_on_damaged)
 	
 	# Find player to chase
 	var player = get_tree().get_first_node_in_group("player")
-	if player:
+	if player and movement_component:
 		movement_component.set_target(player)
 		
 	# RETROACTIVE DEATH CHECK: If died during spawner init (before ready), signal was missed.
 	# We must manually trigger death sequence.
 	# NOTE: current_hp might be reset to full by Spawner, so we MUST check is_dead() flag!
-	if health_component.has_method("is_dead") and health_component.is_dead():
+	if health_component and health_component.has_method("is_dead") and health_component.is_dead():
 		_on_death()
 		return # Stop further setup
 		
@@ -85,6 +102,9 @@ func _ready() -> void:
 	if hp_bar and health_component:
 		hp_bar.max_value = health_component.max_hp
 		hp_bar.value = health_component.current_hp
+		# Hide initially - will be shown on first position sync in _process
+		# This prevents a 1-frame flash at wrong position
+		hp_bar.visible = false
 
 	# Configure visuals
 
@@ -229,6 +249,16 @@ const TARGET_CHECK_INTERVAL: float = 0.25 # 4 times per second
 var _shield_check_timer: float = 0.0
 const SHIELD_CHECK_INTERVAL: float = 0.2 # 5 times per second
 var _cached_shield: Node = null
+
+# Wells Bullet Time Visual Effects
+var _time_freeze_material: ShaderMaterial = null
+var _dot_ripple_material: ShaderMaterial = null
+var _dot_pulse_timer: float = 0.0
+var _dot_pulse_intensity: float = 0.0
+var _original_material: Material = null
+var _wells_effect_age: float = 0.0
+static var _time_freeze_shader: Shader = null
+static var _dot_ripple_shader: Shader = null
 
 func set_charmed(charm_owner: Node, charmed: bool = true, force: bool = false) -> void:
 	# Validation: Don't charm Elites/Tanks/Bosses unless forced
@@ -385,13 +415,16 @@ func _process(delta: float) -> void:
 	# PERFORMANCE: Skip expensive processing for off-screen enemies
 	# Still update timers and movement, but skip HP bar/visual sync
 	var on_screen := _is_on_screen()
+	
+	# Apply Bullet Time scaling to enemy-related timers
+	var time_scale = GameState.enemy_time_scale
 
 	if _damage_timer > 0:
-		_damage_timer -= delta
+		_damage_timer -= delta * time_scale
 	if _laser_cooldown > 0:
-		_laser_cooldown -= delta
+		_laser_cooldown -= delta * time_scale
 		
-	# Update timers
+	# Update timers (throttling timers don't need scaling - they're for optimization)
 	_target_check_timer -= delta
 	_shield_check_timer -= delta
 	
@@ -399,6 +432,31 @@ func _process(delta: float) -> void:
 	if _shield_check_timer <= 0:
 		_update_shield_status()
 		_shield_check_timer = SHIELD_CHECK_INTERVAL
+	
+	# Wells Bullet Time Visual Effect - Time Freeze Shader
+	_wells_effect_age += delta
+	if time_scale < 1.0 and visuals:
+		_ensure_time_freeze_shader()
+		if _time_freeze_material and visuals.material == _time_freeze_material:
+			_time_freeze_material.set_shader_parameter("intensity", 1.0 - time_scale)
+			_time_freeze_material.set_shader_parameter("time_offset", _wells_effect_age)
+	elif visuals and visuals.material == _time_freeze_material:
+		# Restore original material when Bullet Time ends
+		visuals.material = _original_material
+	
+	# DoT Pulse Effect Decay
+	if _dot_pulse_intensity > 0.0:
+		_dot_pulse_timer += delta
+		_dot_pulse_intensity = maxf(0.0, _dot_pulse_intensity - delta * 2.0)  # Fade over 0.5s
+		if _dot_ripple_material and visuals and visuals.material == _dot_ripple_material:
+			_dot_ripple_material.set_shader_parameter("pulse_intensity", _dot_pulse_intensity)
+			_dot_ripple_material.set_shader_parameter("pulse_time", _dot_pulse_timer)
+		if _dot_pulse_intensity <= 0.01 and visuals and visuals.material == _dot_ripple_material:
+			# Restore time freeze or original material
+			if time_scale < 1.0 and _time_freeze_material:
+				visuals.material = _time_freeze_material
+			else:
+				visuals.material = _original_material
 	
 	# Targeting Logic (Throttled)
 	if _target_check_timer <= 0:
@@ -499,7 +557,7 @@ func _process(delta: float) -> void:
 			
 	# Charging State Logic
 	if _is_charging:
-		_charge_timer -= delta
+		_charge_timer -= delta * time_scale
 		
 		# Movement paused handled by set_paused() called in _start_charging()
 		
@@ -738,6 +796,9 @@ func _on_damaged(_amount: int, source: String) -> void:
 		var player = get_tree().get_first_node_in_group("player")
 		if player and player.has_method("register_burst_hit"):
 			player.register_burst_hit(self, false, "charmed", false)
+	# Wells DoT damage - trigger red pulse effect
+	elif source == "wells_dust":
+		_trigger_dot_pulse()
 
 func _on_death(overkill: int = 0) -> void:
 	# Defer ENTIRE death sequence to avoid physics locking
@@ -785,7 +846,13 @@ func _finalize_death(overkill: int) -> void:
 			
 		if not killed_by_enrage:
 			var cores = get_meta("pristine_core_drop")
+			print("DEBUG: Boss Drop - Spawning Pristine Core Orb. Value: ", cores)
 			_spawn_pristine_core_orb(cores)
+		else:
+			print("DEBUG: Boss Drop - Skipped (Killed by Enrage)")
+	else:
+		if is_in_group("boss") or is_in_group("super_boss"):
+			print("DEBUG: Boss Died but NO 'pristine_core_drop' meta found!")
 			
 	# Combat Juice Register
 	# Combat Juice Register
@@ -801,12 +868,12 @@ func _finalize_death(overkill: int) -> void:
 			death_effect.set_overkill(is_overkill)
 		get_parent().add_child(death_effect)
 	
-	# Spawn XP orbs (Scaled by Tier)
-	var xp_orb_count := 5
-	if is_in_group("tank"): xp_orb_count = 8
-	elif is_in_group("elite"): xp_orb_count = 15
-	elif is_in_group("boss"): xp_orb_count = 25
-	elif is_in_group("super_boss"): xp_orb_count = 40
+	# Spawn XP orbs (Scaled by Tier) - REDUCED for performance
+	var xp_orb_count := 3  # Was 5
+	if is_in_group("tank"): xp_orb_count = 5    # Was 8
+	elif is_in_group("elite"): xp_orb_count = 8  # Was 15
+	elif is_in_group("boss"): xp_orb_count = 15   # Was 25
+	elif is_in_group("super_boss"): xp_orb_count = 20  # Was 40
 	
 	for i in xp_orb_count:
 		var orb = ProjectileCache.create_xp_orb()
@@ -839,8 +906,18 @@ func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector
 
 func _check_shielder_protection(damage_amount: int, source: String = "unknown") -> bool:
 	"""Check if this enemy is protected by a Shielder's shield. Returns true if damage was absorbed."""
+	# Check if Chrono-Intangibility upgrade allows bypassing shields
+	if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility"):
+		return false
+		
 	# Check protection status and get the shield instance
 	var shielding_unit = _get_protecting_shield()
+	# 2. Check for Chrono-Intangibility upgrade (Wells)
+	var player = get_tree().get_first_node_in_group("player")
+	var wells_in_squad = player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells")
+	if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and wells_in_squad:
+		return false # Bypass protection
+		
 	if shielding_unit:
 		if shielding_unit.has_method("take_shield_damage"):
 			shielding_unit.take_shield_damage(damage_amount, source)
@@ -988,9 +1065,17 @@ func reset() -> void:
 		if is_in_group(g):
 			remove_from_group(g)
 			
+	# Remove old meta flags (Critical for loot table reset)
+	if has_meta("pristine_core_drop"):
+		remove_meta("pristine_core_drop")
+	if has_meta("enemy_tier"):
+		remove_meta("enemy_tier")
+			
 	# 6. CLEANUP POOLED CHILDREN
 	# Remove attached AI and Effects from previous life
-	var nodes_to_clean = ["BossAI", "BossEffects", "EliteEffects", "TankEffects", "SuperBossEffects", "CharmEffect", "ExploderBehavior"]
+	# 6. CLEANUP POOLED CHILDREN
+	# Remove attached AI and Effects from previous life
+	var nodes_to_clean = ["BossAI", "BossEffects", "EliteEffects", "TankEffects", "SuperBossEffects", "CharmEffect", "ExploderBehavior", "ShielderShield"]
 	for node_name in nodes_to_clean:
 		var node = get_node_or_null(node_name)
 		if node:
@@ -1113,3 +1198,59 @@ func _process_shield_deployment() -> void:
 		if _generic_boss_shield and _generic_boss_shield.has_method("activate"):
 			_generic_boss_shield.activate()
 			_generic_shield_ready = false
+
+# ============= Wells Visual Effects =============
+
+func _ensure_time_freeze_shader() -> void:
+	"""Lazy-load and apply time freeze shader to visuals."""
+	if not visuals:
+		return
+	
+	# Cache shader at class level (load once)
+	if not _time_freeze_shader:
+		_time_freeze_shader = load("res://resources/shaders/time_freeze_effect.gdshader")
+	
+	if not _time_freeze_shader:
+		return
+	
+	# Create material if needed
+	if not _time_freeze_material:
+		_original_material = visuals.material
+		_time_freeze_material = ShaderMaterial.new()
+		_time_freeze_material.shader = _time_freeze_shader
+	
+	# Apply if not already applied
+	if visuals.material != _time_freeze_material and visuals.material != _dot_ripple_material:
+		_original_material = visuals.material
+		visuals.material = _time_freeze_material
+
+func _trigger_dot_pulse() -> void:
+	"""Trigger red pulse effect for DoT damage."""
+	if not visuals:
+		return
+	
+	# Cache shader at class level
+	if not _dot_ripple_shader:
+		_dot_ripple_shader = load("res://resources/shaders/dot_ripple_effect.gdshader")
+	
+	if not _dot_ripple_shader:
+		return
+	
+	# Create material if needed
+	if not _dot_ripple_material:
+		_dot_ripple_material = ShaderMaterial.new()
+		_dot_ripple_material.shader = _dot_ripple_shader
+	
+	# Apply DoT shader and set intensity
+	_dot_pulse_intensity = 1.0
+	_dot_pulse_timer += 0.0  # Don't reset timer - keep smooth animation
+	
+	# Store current material if switching from time freeze
+	if visuals.material == _time_freeze_material:
+		pass  # Will restore to time_freeze after pulse ends
+	elif visuals.material != _dot_ripple_material:
+		_original_material = visuals.material
+	
+	visuals.material = _dot_ripple_material
+	_dot_ripple_material.set_shader_parameter("pulse_intensity", _dot_pulse_intensity)
+	_dot_ripple_material.set_shader_parameter("pulse_time", _dot_pulse_timer)

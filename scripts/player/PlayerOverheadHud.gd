@@ -7,7 +7,7 @@ class_name PlayerOverheadHud
 const HEALTH_BAR_WIDTH := 112.0
 const HEALTH_BAR_HEIGHT := 12.0
 const SHIELD_BAR_HEIGHT := 8.0
-const AMMO_BAR_HEIGHT := 8.0
+const AMMO_BAR_HEIGHT := 10.0 # Increased from 8.0 to fit text
 const BURST_BAR_HEIGHT := 9.0
 const BAR_SPACING := 3.0
 const TOP_OFFSET_Y := -110.0  # Raised higher to avoid overlapping player sprite
@@ -59,12 +59,13 @@ var _max_shield: int = 0
 var _shield_visible: bool = false
 
 # Per-character reload progress tracking to prevent reset on swap
-# Supports all 10 characters: Scarlet, Commander, Rapunzel, Kilo, Marian, Crown, Snow White, Sin, Cecil, Nayuta
-var _reload_progress_per_char: Array = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+# Supports all 11 characters: Scarlet, Commander, Rapunzel, Kilo, Marian, Crown, Snow White, Sin, Cecil, Nayuta, Wells
+var _reload_progress_per_char: Array = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
 # Special ability cooldown tracking
 var _special_cooldown_progress: float = 0.0  # 0 = on cooldown, 1 = ready
 var _special_unlocked: bool = false  # Is the special ability unlocked for current character
+var _special_locked: bool = false  # Is the special ability locked (Wells: Future Marian active)
 # Height matches all 3 bars: HP(12) + spacing(3) + Ammo(8) + spacing(3) + Burst(9) = 35
 const SPECIAL_INDICATOR_SIZE := 35.0
 const SPECIAL_INDICATOR_GAP := 6.0  # Gap between bars and indicator
@@ -126,7 +127,7 @@ func _process(delta: float) -> void:
 		_reload_progress += delta / _reload_time
 		_reload_progress = minf(_reload_progress, 1.0)
 		# Store in per-character array
-		if _current_character >= 0 and _current_character < 10:
+		if _current_character >= 0 and _current_character < 11:
 			_reload_progress_per_char[_current_character] = _reload_progress
 	
 	queue_redraw()
@@ -343,6 +344,20 @@ func _draw_special_indicator() -> void:
 	var bg_color := Color(0.1, 0.1, 0.12, 0.95)
 	_draw_rounded_rect(indicator_rect.grow(2.0), SPECIAL_INDICATOR_CORNER_RADIUS + 1.0, bg_color)
 	
+	# Check if special is locked (Wells: Future Marian active)
+	if _special_locked:
+		# Draw red locked state
+		var locked_color := Color(0.6, 0.15, 0.15, 1.0)
+		_draw_rounded_rect(indicator_rect, SPECIAL_INDICATOR_CORNER_RADIUS, locked_color)
+		
+		# Border
+		var border_color := Color(0.8, 0.2, 0.2, 1.0)
+		_draw_rounded_rect_outline(indicator_rect, SPECIAL_INDICATOR_CORNER_RADIUS, border_color, BORDER_THICKNESS)
+		
+		# Draw lock icon
+		_draw_lock_icon(center)
+		return
+	
 	# Draw the base colored fill
 	var ready_color := _get_special_ready_color()
 	
@@ -384,11 +399,13 @@ func _draw_special_indicator() -> void:
 	# Draw icon in center
 	_draw_special_icon(center)
 	
-	# For Snow White (index 0), draw charge count below the indicator
+	# For Snow White (index 0), draw charge count inside the indicator (bottom)
 	if _current_character == 0 and _turret_max_charges > 0:
 		var charge_text := "%d/%d" % [_turret_charges, _turret_max_charges]
-		var text_pos := Vector2(indicator_x + SPECIAL_INDICATOR_SIZE * 0.5, TOP_OFFSET_Y + SPECIAL_INDICATOR_SIZE + 10)
-		_draw_bar_text(charge_text, text_pos, 9)
+		# Move inside the box, near the bottom but higher to avoid spill
+		var text_pos := Vector2(indicator_x + SPECIAL_INDICATOR_SIZE * 0.5, TOP_OFFSET_Y + SPECIAL_INDICATOR_SIZE - 12)
+		# Reduce font size to fit
+		_draw_bar_text(charge_text, text_pos, 8)
 
 func _draw_pie_slice_smooth(center: Vector2, clip_rect: Rect2, start_angle: float, end_angle: float, color: Color) -> void:
 	# Draw a smooth pie slice for clock-style cooldown, clipped to the indicator rect
@@ -543,6 +560,14 @@ func _get_special_ready_color() -> Color:
 			return Color(1.0, 0.85, 0.3, 1.0)
 		3:  # Kilo - Orange
 			return Color(1.0, 0.5, 0.2, 1.0)
+		10: # Wells - Fuel gauge colors (green→yellow→red)
+			# _special_cooldown_progress: 1.0 = full, 0.0 = empty
+			if _special_cooldown_progress > 0.66:
+				return Color(0.3, 0.85, 0.4, 1.0)  # Green
+			elif _special_cooldown_progress > 0.33:
+				return Color(0.95, 0.85, 0.3, 1.0)  # Yellow
+			else:
+				return Color(0.95, 0.3, 0.25, 1.0)  # Red
 		_:
 			return Color(0.7, 0.7, 0.7, 1.0)
 
@@ -573,6 +598,54 @@ func _draw_special_icon(center: Vector2) -> void:
 			_draw_drone_icon(center, icon_color)
 		9:  # Sin - Mind control/charm icon
 			_draw_mind_control_icon(center, icon_color)
+		10: # Wells - Hourglass icon
+			_draw_hourglass_icon(center, icon_color)
+
+func _draw_hourglass_icon(center: Vector2, color: Color) -> void:
+	# Hourglass shape: two triangles meeting at center
+	var size := 12.0
+	var width := 10.0
+	
+	var top_tri = PackedVector2Array([
+		center + Vector2(-width/2, -size/2),
+		center + Vector2(width/2, -size/2),
+		center
+	])
+	var bot_tri = PackedVector2Array([
+		center,
+		center + Vector2(width/2, size/2),
+		center + Vector2(-width/2, size/2)
+	])
+	
+	draw_colored_polygon(top_tri, color)
+	draw_colored_polygon(bot_tri, color)
+	
+	# Outline
+	draw_polyline(top_tri, color.lightened(0.2), 1.5)
+	draw_polyline(bot_tri, color.lightened(0.2), 1.5)
+
+func _draw_lock_icon(center: Vector2) -> void:
+	# Lock icon for locked/blocked state
+	var lock_color := Color(0.95, 0.95, 0.95, 0.95)
+	var shackle_color := Color(0.8, 0.8, 0.8, 0.95)
+	
+	# Lock body (rounded rectangle)
+	var body_w := 12.0
+	var body_h := 10.0
+	var body_rect := Rect2(
+		center + Vector2(-body_w / 2.0, -1),
+		Vector2(body_w, body_h)
+	)
+	draw_rect(body_rect, lock_color, true)
+	
+	# Keyhole (small circle and line)
+	draw_circle(center + Vector2(0, 2), 2.0, Color(0.2, 0.1, 0.1, 1.0))
+	draw_line(center + Vector2(0, 3), center + Vector2(0, 6), Color(0.2, 0.1, 0.1, 1.0), 2.0)
+	
+	# Shackle (arc on top)
+	var shackle_radius := 6.0
+	var shackle_width := 2.5
+	draw_arc(center + Vector2(0, 0), shackle_radius, PI, TAU, 12, shackle_color, shackle_width)
 
 func _draw_sword_icon(center: Vector2, color: Color) -> void:
 	# Simple sword shape - scaled for 35px indicator
@@ -999,11 +1072,18 @@ func update_scarlet_special_unlocked(unlocked: bool) -> void:
 	_scarlet_special_unlocked = unlocked
 	queue_redraw()
 
-func update_special_ability(unlocked: bool, cooldown_progress: float) -> void:
+func update_special_ability(unlocked: bool, cooldown_progress: float, locked: bool = false) -> void:
 	## Update the special ability indicator
 	## cooldown_progress: 0.0 = just used (on cooldown), 1.0 = fully ready
+	## locked: true if special is blocked (Wells: Future Marian active)
 	_special_unlocked = unlocked
 	_special_cooldown_progress = clampf(cooldown_progress, 0.0, 1.0)
+	_special_locked = locked
+	queue_redraw()
+
+func update_special_locked(locked: bool) -> void:
+	## Update only the locked state (for Wells Future Marian)
+	_special_locked = locked
 	queue_redraw()
 
 # Turret charge tracking

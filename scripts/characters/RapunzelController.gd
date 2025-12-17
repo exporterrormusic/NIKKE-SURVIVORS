@@ -10,10 +10,12 @@ var cross_cooldown: float = 5.0
 var special_power_level: int = 0  # Healing power bonus
 var special_size_level: int = 0  # Healing radius/duration bonus
 var burst_stun_level: int = 0
-var burst_invuln_unlocked: bool = false
+var burst_turrets_unlocked: bool = false  # "6,000? Really?" talent - spawns 20 turrets
 
 # Scripts for effects
+# Scripts for effects
 const RapunzelBurstEffectScript = preload("res://scripts/characters/effects/RapunzelBurstEffect.gd")
+const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
 
 func _on_initialize() -> void:
 	# Ammo already set from CharacterRegistry by base class
@@ -79,6 +81,10 @@ func _perform_special(direction: Vector2) -> void:
 	player.get_parent().add_child(cross)
 	cross.global_position = player.global_position + direction * 60
 	
+	# Check for Burning Sensation upgrade
+	if ShopMenuScript.has_character_upgrade("rapunzel", "burning_sensation"):
+		cross.burn_enabled = true
+	
 	# Start cooldown
 	cross_timer = cross_cooldown
 
@@ -89,9 +95,13 @@ func _on_burst_start() -> void:
 	# Stun: 4s base, 8s if talent unlocked
 	effect.stun_duration = 8.0 if burst_stun_level > 0 else 4.0
 	
-	# Invincibility: 8s if talent unlocked
-	effect.grant_invuln = burst_invuln_unlocked
+	# Invincibility: 8s by default (was talent-gated)
+	effect.grant_invuln = true
 	effect.invuln_duration = 8.0
+	
+	# "6,000? Really?" talent: spawn 20 turrets around map edges
+	effect.spawn_turrets = burst_turrets_unlocked
+	effect.turret_owner_level = player.level if "level" in player else 1
 	
 	player.get_parent().add_child(effect)
 	effect.global_position = player.global_position
@@ -122,8 +132,8 @@ func apply_talent(talent_id: String) -> void:
 			cross_timer = 0.0  # Refresh cooldown
 		"burst_stun":
 			burst_stun_level = mini(burst_stun_level + 1, 1)
-		"burst_invuln":
-			burst_invuln_unlocked = true
+		"burst_turrets":
+			burst_turrets_unlocked = true
 
 ## Get special cooldown progress
 func get_special_cooldown_progress() -> float:

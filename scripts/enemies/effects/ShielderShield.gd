@@ -5,6 +5,9 @@ class_name ShielderShield
 ## Absorbs damage for all enemies within its radius
 ## Uses child Area2D for bullet collision detection
 
+# Cached ShopMenu reference to avoid load() in hot collision path
+const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
+
 var owner_enemy: Node2D = null
 
 # Shield stats
@@ -94,8 +97,11 @@ func _ready() -> void:
 	_collision_area.name = "ShieldCollision"
 	# Layer 1 = World/Default (Guaranteed detection)
 	_collision_area.collision_layer = 1
-	_collision_area.collision_mask = 4  # Projectiles
+	# Mask 2 (Player Proj), 4 (Enemy Proj?), 8 (??). Broaden mask to ensure detection.
+	_collision_area.collision_mask = 2 | 4 | 8 
 	add_child(_collision_area)
+	
+	print("DEBUG: Shield Created. Layer: ", _collision_area.collision_layer, " Mask: ", _collision_area.collision_mask)
 	
 	# Add collision shape
 	var collision_shape = CollisionShape2D.new()
@@ -126,10 +132,35 @@ func _handle_projectile_hit(projectile: Node2D) -> void:
 	if projectile.is_in_group("enemy_projectiles"):
 		return
 	
+	# Check if Chrono-Intangibility upgrade allows player projectiles to pass through
+	# This must be checked before we destroy the projectile
+	if projectile.is_in_group("player_projectiles") or projectile.is_in_group("projectiles"):
+		if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility"):
+			# Player projectile phases completely through - no shield damage, no projectile destruction
+			return
+		
+	# CRITICAL FIX: Ignore enemies/bosses (Layer 2) so the shield doesn't delete its own owner!
+	if projectile.is_in_group("enemies") or projectile.is_in_group("boss"):
+		return
+	if projectile == owner_enemy:
+		return
+	
+	# CRITICAL FIX: Ignore player and summoned allies - they can overlap shields without being damaged
+	if projectile.is_in_group("player") or projectile.is_in_group("summoned_allies") or projectile.is_in_group("charmed_allies"):
+		return
+	
 	# Check if it's a projectile
 	if not projectile.is_in_group("player_projectiles") and not projectile.is_in_group("projectiles"):
 		if not ("velocity" in projectile or "damage" in projectile or "base_damage" in projectile):
 			return
+			
+	# Ignore Explosions - they handle their own damage application to us via take_shield_damage
+	# This prevents us from double-counting or deleting the explosion prematurely
+	if projectile.is_in_group("explosions"):
+		return
+	
+	print("DEBUG: Shield hit by projectile: ", projectile.name, " Group: ", projectile.get_groups())
+	print("DEBUG: Shield State - Active: ", _is_active, " Layer: ", _collision_area.collision_layer, " Pos: ", global_position)
 	
 	# Get damage
 	var damage := 1
@@ -162,7 +193,10 @@ func _handle_projectile_hit(projectile: Node2D) -> void:
 	take_shield_damage(damage, src)
 	
 	# Destroy projectile
-	if projectile.has_method("queue_free"):
+	# If projectile has explicit death logic (e.g. Rocket explosion), trigger that instead of silent delete
+	if projectile.has_method("explode"):
+		projectile.explode()
+	elif projectile.has_method("queue_free"):
 		projectile.queue_free()
 
 

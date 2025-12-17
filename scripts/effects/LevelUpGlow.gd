@@ -6,8 +6,8 @@ class_name LevelUpGlow
 
 const EFFECT_DURATION := 2.0
 const RING_EXPAND_DURATION := 0.4
-const PARTICLE_COUNT := 12 # Reduced from 24
-const RING_SEGMENTS := 32 # Reduced from 48
+const PARTICLE_COUNT := 8 # Reduced from 12
+const RING_SEGMENTS := 16 # Reduced from 32
 
 # Golden color palette
 const GOLD_CORE := Color(1.0, 0.9, 0.4, 1.0)
@@ -95,7 +95,9 @@ func _process(delta: float) -> void:
 		# Shrink slightly as they rise
 		p.size = lerpf(p.size, p.size * 0.5, life_ratio)
 	
-	queue_redraw()
+	# Throttle redraw to every other frame for performance
+	if Engine.get_process_frames() % 2 == 0:
+		queue_redraw()
 	
 	# Auto-remove when done
 	if _time >= EFFECT_DURATION:

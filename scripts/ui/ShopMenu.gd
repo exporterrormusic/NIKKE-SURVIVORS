@@ -12,6 +12,9 @@ signal back_requested
 
 const GENERAL_FILTER := "GENERAL"
 
+# Session state not reset on menu close
+static var _session_warning_shown: bool = false
+
 # Character data - loaded from CharacterRegistry (single source of truth)
 var _registry: CharacterRegistry = null
 
@@ -31,13 +34,15 @@ const GENERAL_UPGRADES := [
 const CHARACTER_UPGRADES := {
 	"snow_white": [
 		{"id": "basic_attack", "name": "Best Girl", "desc": "Attacks leave burning trails for 1.5s. Enemies take 3% HP/s burn damage for 10s. Bosses take 1% HP/s.", "max_level": 1, "base_cost": 10, "icon": "🔥"},
+		{"id": "master_mechanic", "name": "Master Mechanic", "desc": "Ammo Capacity: +100% for Rocket/Sniper, +50% for Minigun/SMG/Shotgun. Applies to Squad.", "max_level": 1, "base_cost": 10, "icon": "🔧"},
 	],
 	"scarlet": [
 		{"id": "basic_attack", "name": "Rose's Core", "desc": "Sword slashes release 5 rose petal projectiles dealing full damage.", "max_level": 1, "base_cost": 10, "icon": "🌹"},
 		{"id": "low_hp_damage", "name": "Scraping the Bottle", "desc": "Deal up to +100% damage based on missing HP (max bonus at 15% HP).", "max_level": 1, "base_cost": 20, "icon": "🩸"},
 	],
 	"rapunzel": [
-		{"id": "basic_attack", "name": "I'm a healer, but...", "desc": "All squad kills heal player for 2% max HP.", "max_level": 1, "base_cost": 10, "icon": "💖"},
+		{"id": "basic_attack", "name": "I'm a Healer, But...", "desc": "All squad kills heal player for 2% max HP.", "max_level": 1, "base_cost": 10, "icon": "💖"},
+		{"id": "burning_sensation", "name": "A Burning Sensation", "desc": "Healing Aura also burns enemies for equivalent damage (3-25% HP/s). Bosses capped at 3%.", "max_level": 1, "base_cost": 20, "icon": "🔥"},
 	],
 	"nayuta": [
 		{"id": "basic_attack", "name": "Duplicity", "desc": "10% chance to spawn a Nayuta clone when ANY squad member kills an enemy.", "max_level": 1, "base_cost": 10, "icon": "👥"},
@@ -47,12 +52,14 @@ const CHARACTER_UPGRADES := {
 	],
 	"marian": [
 		{"id": "basic_attack", "name": "Main Heroine", "desc": "Replace minigun with a continuous purple beam cannon.", "max_level": 1, "base_cost": 10, "icon": "💜"},
+		{"id": "beam_absorb", "name": "She'll Eat Anything", "desc": "Boss beams deal no damage to Marian. Instead, grants 5s of +100% damage and enhanced beam.", "max_level": 1, "base_cost": 20, "icon": "🍽️"},
 	],
 	"crown": [
 		{"id": "basic_attack", "name": "Royal Knowledge", "desc": "All squad members earn XP at 2x rate.", "max_level": 1, "base_cost": 10, "icon": "👑"},
+		{"id": "trombe_stacking", "name": "How Does This Keep Working?", "desc": "Trombe +35% size per use. Max 3 stacks, 12s each.", "max_level": 1, "base_cost": 20, "icon": "🐴"},
 	],
 	"kilo": [
-		{"id": "talos_ammo", "name": "Build-a-Bullet", "desc": "Ammo Capacity: +100% for Rocket/Sniper, +50% for Minigun/SMG/Shotgun. Applies to Squad.", "max_level": 1, "base_cost": 10, "icon": "🤖"},
+		{"id": "talos_ammo", "name": "Build-a-Bullet", "desc": "Every 2nd bullet fired regenerates 1 ammo. Applies to Squad.", "max_level": 1, "base_cost": 10, "icon": "🤖"},
 	],
 	"cecil": [
 		{"id": "basic_attack", "name": "Three Wishes...", "desc": "Gain 3 extra lives. Revive at full HP with 5s invincibility.", "max_level": 1, "base_cost": 10, "icon": "✨"},
@@ -60,6 +67,11 @@ const CHARACTER_UPGRADES := {
 	],
 	"sin": [
 		{"id": "basic_attack", "name": "Magnetic Personality", "desc": "Passive aura permanently mind-controls nearby regular enemies.", "max_level": 1, "base_cost": 10, "icon": "🔮"},
+		{"id": "wish_save", "name": "I WISH They Were Gone", "desc": "Once per match: When you would die, freeze time and destroy all non-boss enemies. Grants 3s invulnerability.", "max_level": 1, "base_cost": 20, "icon": "✨"},
+	],
+	"wells": [
+		{"id": "ally_speed", "name": "I Can't Predict the Future", "desc": "All summoned allies move 50% faster.", "max_level": 1, "base_cost": 10, "icon": "⏰"},
+		{"id": "chrono_intangibility", "name": "Chrono-\nIntangibility", "desc": "Player bullets phase through shields and boulders.", "max_level": 1, "base_cost": 20, "icon": "👻"},
 	],
 }
 
@@ -176,6 +188,8 @@ func _save_shop_data() -> void:
 	var err := config.save(SaveManagerScript.SHOP_PATH)
 	if err == OK:
 		print("[ShopMenu] Shop data saved")
+		# Invalidate upgrade cache so hot paths get fresh data
+		invalidate_upgrade_cache()
 	else:
 		push_error("[ShopMenu] Failed to save shop data: " + str(err))
 
@@ -241,30 +255,30 @@ func _build_ui() -> void:
 	currency_row.offset_right = -48
 	currency_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top_bar.add_child(currency_row) # Restored
-    # The one at 232 was my new insertion?
-    # Step 1046: I inserted `var currency_row := HBoxContainer.new()` at line 232 (in my replacement text).
-    # But I also *kept* `var currency_row := HBoxContainer.new()` at line 249 (in the "original" part that followed?).
-    # Wait, the tool output showed:
-    # +	var currency_row := HBoxContainer.new()
-    # ...
-    # +	# Currency container - positioned at right side
-    # +	var currency_row := HBoxContainer.new()
-    # It duplicated it in the *replacement content*. 
-    # Logic: I will delete the SECOND declaration.
-    
-    # Actually, looking at the file view:
-    # Line 232: var currency_row := HBoxContainer.new()
-    # Line 249: var currency_row := HBoxContainer.new()
-    # I should check which one is configured correctly.
-    # 232 is `PRESET_CENTER_RIGHT` (my new code).
-    # 249 is `PRESET_FULL_RECT` (original code).
-    # I wanted the RIGHT positioning.
-    # But `PRESET_FULL_RECT` with offset might be how it was working.
-    # User said "PRISTINE RAPTURE CORE counter is on the right side".
-    # Original code used `PRESET_FULL_RECT` with margins.
-    # My new code `PRESET_CENTER_RIGHT` might be safer.
-    # I will keep the *first* one (232) and remove the second (249).
-    # Also remove lines 234-245 (commented out junk).
+	# The one at 232 was my new insertion?
+	# Step 1046: I inserted `var currency_row := HBoxContainer.new()` at line 232 (in my replacement text).
+	# But I also *kept* `var currency_row := HBoxContainer.new()` at line 249 (in the "original" part that followed?).
+	# Wait, the tool output showed:
+	# +	var currency_row := HBoxContainer.new()
+	# ...
+	# +	# Currency container - positioned at right side
+	# +	var currency_row := HBoxContainer.new()
+	# It duplicated it in the *replacement content*. 
+	# Logic: I will delete the SECOND declaration.
+	
+	# Actually, looking at the file view:
+	# Line 232: var currency_row := HBoxContainer.new()
+	# Line 249: var currency_row := HBoxContainer.new()
+	# I should check which one is configured correctly.
+	# 232 is `PRESET_CENTER_RIGHT` (my new code).
+	# 249 is `PRESET_FULL_RECT` (original code).
+	# I wanted the RIGHT positioning.
+	# But `PRESET_FULL_RECT` with offset might be how it was working.
+	# User said "PRISTINE RAPTURE CORE counter is on the right side".
+	# Original code used `PRESET_FULL_RECT` with margins.
+	# My new code `PRESET_CENTER_RIGHT` might be safer.
+	# I will keep the *first* one (232) and remove the second (249).
+	# Also remove lines 234-245 (commented out junk).
 	
 	# Actually, simply removing 249-254 is safest.
 	# But wait, lines 256+ use `currency_row`.
@@ -704,7 +718,8 @@ func _create_upgrade_card(upgrade: Dictionary, category: String) -> Control:
 	name_label.add_theme_font_size_override("font_size", 40)  # Slightly smaller
 	name_label.add_theme_color_override("font_color", UI.ACCENT_PRIMARY)
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD  # WORD not WORD_SMART to avoid breaking at hyphens
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_child(name_label)
 	
 	# Level indicator centered
@@ -743,8 +758,9 @@ func _create_upgrade_card(upgrade: Dictionary, category: String) -> Control:
 	desc_label.add_theme_font_size_override("font_size", font_size)
 	
 	desc_label.add_theme_color_override("font_color", UI.TEXT_SECONDARY)
-	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD  # WORD not WORD_SMART to avoid breaking at hyphens
 	desc_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	desc_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	desc_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	desc_container.add_child(desc_label)
 	
@@ -1346,14 +1362,51 @@ static func is_character_unlocked(char_id: String) -> bool:
 
 
 ## Check if a character-specific upgrade is purchased
+## Uses cached values to avoid file I/O on every call (critical for hot paths like bullet collision)
+static var _upgrade_cache: Dictionary = {}
+static var _upgrade_cache_loaded: bool = false
+
 static func has_character_upgrade(char_id: String, upgrade_id: String) -> bool:
+	var full_id := char_id + "_" + upgrade_id
+	
+	# Return cached value if available
+	if _upgrade_cache.has(full_id):
+		return _upgrade_cache[full_id]
+	
+	# Load cache if not loaded yet
+	if not _upgrade_cache_loaded:
+		_load_upgrade_cache()
+	
+	# Return cached value (may have been loaded above)
+	if _upgrade_cache.has(full_id):
+		return _upgrade_cache[full_id]
+	
+	# Upgrade not found = not purchased
+	return false
+
+static func _load_upgrade_cache() -> void:
+	_upgrade_cache_loaded = true
+	_upgrade_cache.clear()
+	
 	var config := ConfigFile.new()
 	if config.load(SaveManagerScript.SHOP_PATH) != OK:
-		return false
+		return
 	
-	var full_id := char_id + "_" + upgrade_id
-	var level: int = config.get_value("upgrades", full_id, 0)
-	return level > 0
+	# Cache all upgrade values
+	if config.has_section("upgrades"):
+		for key in config.get_section_keys("upgrades"):
+			var value = config.get_value("upgrades", key, 0)
+			if value is int or value is float:
+				_upgrade_cache[key] = int(value) > 0
+			else:
+				# Log warning but don't crash, assume not purchased (false)
+				# push_warning("[ShopMenu] Invalid upgrade value for key '%s': %s" % [key, str(value)])
+				_upgrade_cache[key] = false
+
+## Invalidate the upgrade cache (call when upgrades are purchased)
+static func invalidate_upgrade_cache() -> void:
+	_upgrade_cache_loaded = false
+	_upgrade_cache.clear()
 
 
 # === UPGRADE CARD (Inner class) - Interactive card with hover/flash effects ===
@@ -1850,11 +1903,22 @@ class _BackButtonContainer extends Button:
 
 func _create_warning_popup() -> void:
 	_warning_popup = ConfirmationDialog.new()
-	_warning_popup.title = "Important Info"
+	_warning_popup.title = "Support Unit Info"
 	_warning_popup.initial_position = Window.WINDOW_INITIAL_POSITION_CENTER_MAIN_WINDOW_SCREEN
-	_warning_popup.dialog_text = "When a unit is selected as a support, they must be unlocked in the skill tree during a match to activate their shop upgrade.\n\ne.g. Rapunzel's heal won't trigger unless she has been unlocked in the skill tree menu (TAB)."
-	_warning_popup.ok_button_text = "Understood"
-	_warning_popup.get_label().horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_warning_popup.dialog_text = "Support units require skill tree unlock during matches to activate shop upgrades."
+	_warning_popup.ok_button_text = "Got it"
+	_warning_popup.min_size = Vector2(400, 150)
+	_warning_popup.max_size = Vector2(500, 200)
+	
+	# Style the label
+	var label := _warning_popup.get_label()
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	if UI.FONT_MEDIUM:
+		label.add_theme_font_override("font", UI.FONT_MEDIUM)
+	label.add_theme_font_size_override("font_size", 16)
+	label.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
+	
 	_warning_popup.confirmed.connect(_on_warning_confirmed)
 	add_child(_warning_popup)
 
@@ -1865,8 +1929,21 @@ func _request_purchase_with_warning(upgrade_id: String, cost: int, card: _Upgrad
 	else:
 		_pending_purchase_callback = _on_upgrade_purchased.bind(upgrade_id, cost)
 	
+	# Check if this is a general upgrade (no warning needed)
+	if upgrade_id.begins_with("general"):
+		if _pending_purchase_callback.is_valid():
+			_pending_purchase_callback.call()
+		return
+		
+	# Check if warning already shown this session
+	if _session_warning_shown:
+		if _pending_purchase_callback.is_valid():
+			_pending_purchase_callback.call()
+		return
+	
 	# Show warning
 	_warning_popup.popup_centered()
+	_session_warning_shown = true
 
 func _on_warning_confirmed() -> void:
 	# Execute the pending purchase

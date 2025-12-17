@@ -17,6 +17,10 @@ var target_node: Node = null
 
 # Damage config
 var base_damage: int = 10  # Default explosion damage
+var damage: int = 10 # Direct hit damage
+var explosion_damage: int = 10 # AOE damage
+var explosion_radius: float = 120.0 # AOE radius
+var killer_source_override: String = "" #For summoned units
 var ground_fire_enabled: bool = false
 var ground_fire_duration: float = 3.0
 var ground_fire_damage: int = 3
@@ -116,6 +120,12 @@ func _draw():
 		draw_circle(local_pos, size, smoke_col)
 
 func _physics_process(delta):
+	# Apply Global Enemy Time Scale (Bullet Time) - ONLY for non-player projectiles
+	var time_scale = 1.0
+	if not (owner_node and owner_node.is_in_group("player")):
+		time_scale = GameState.enemy_time_scale
+	delta *= time_scale
+
 	# Update target_pos if we have a valid target_node (for homing)
 	if target_node and is_instance_valid(target_node) and target_node is Node2D:
 		target_pos = target_node.global_position
@@ -144,6 +154,13 @@ func _physics_process(delta):
 
 func _check_boulder_collision() -> bool:
 	"""Check if missile hit a boulder."""
+	# Skip if Chrono-Intangibility upgrade is active
+	var shop = load("res://scripts/ui/ShopMenu.gd")
+	# Skip if Chrono-Intangibility upgrade is active AND Wells is in squad
+	var player = get_tree().get_first_node_in_group("player")
+	if shop and shop.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+		return false
+	
 	var boulders := get_tree().get_nodes_in_group("boulders")
 	for boulder in boulders:
 		if not is_instance_valid(boulder):
@@ -158,31 +175,17 @@ func explode():
 	# Play explosion sound
 	_play_explosion_sound()
 	
-	# Damage enemies in area (only enemies, not friendly units like player, allies, or clones)
-	var enemies = TargetCache.get_enemies()
-	const BASE_EXPLOSION_RADIUS := 100.0
-	for enemy in enemies:
-		if not is_instance_valid(enemy):
-			continue
-		if not (enemy is Node2D):
-			continue
-		# Account for enemy scale - larger enemies (bosses/elites) have bigger hitboxes
-		# Base enemy size ~30 units, scale affects effective hitbox radius
-		var enemy_scale: float = enemy.scale.x if enemy.scale.x > 1.0 else 1.0
-		var enemy_hitbox_bonus: float = 30.0 * (enemy_scale - 1.0)  # Extra radius for scaled enemies
-		var effective_radius: float = BASE_EXPLOSION_RADIUS + enemy_hitbox_bonus
-		if global_position.distance_to(enemy.global_position) < effective_radius:
-			# Pass hit direction (from explosion center to enemy)
-			var hit_direction = (enemy.global_position - global_position).normalized()
-			if enemy.has_method("take_damage"):
-				# Determine killer source based on owner type
-				var killer_source := "turret"  # Snow White turret missiles for BurstConfig (3% per hit)
-				if is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
-					killer_source = "summon"
-				enemy.take_damage(base_damage, false, hit_direction, false, killer_source)
-	# create explosion
+	# Create explosion and let it handle damage (including shields)
 	var explosion = ProjectileCache.create_explosion()
 	explosion.owner_node = owner_node  # Pass owner for killer_source tracking
+	explosion.killer_source_override = killer_source_override # Pass override info if needed
+	
+	# Pass dynamic damage to explosion
+	# Use explosion_damage if set, otherwise fallback to base_damage
+	var final_damage = explosion_damage if explosion_damage > 0 else base_damage
+	if explosion.has_method("initialize"):
+		explosion.initialize(final_damage, explosion_radius)
+		
 	get_parent().add_child(explosion)
 	explosion.global_position = global_position
 	

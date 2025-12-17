@@ -51,7 +51,9 @@ func _process(delta: float) -> void:
 		_charm_timer = 0.0
 		_charm_nearby_enemies()
 	
-	queue_redraw()
+	# PERFORMANCE: Only redraw every 3rd frame
+	if Engine.get_process_frames() % 3 == 0:
+		queue_redraw()
 
 func _charm_nearby_enemies() -> void:
 	var tree := get_tree()

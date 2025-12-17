@@ -205,7 +205,7 @@ func _check_fan_hit() -> void:
 		# Check Blockers (Line of Sight)
 		if _has_line_of_sight(global_position, p_pos):
 			if _player.has_method("take_damage"):
-				_player.take_damage(damage_per_tick)
+				_player.take_damage(damage_per_tick, false, Vector2.ZERO, false, "boss_beam")
 	
 	# Check Allies
 	for ally in get_tree().get_nodes_in_group("charmed_allies"):
@@ -252,6 +252,9 @@ func _get_oil_manager() -> Node2D:
 	# Check if scene already has one
 	# We can name it uniquely
 	var parent = get_tree().current_scene
+	if not parent:
+		push_warning("[BossBeam] Cannot create oil manager - no current scene")
+		return null
 	var node = parent.get_node_or_null("BossOilManager")
 	if node:
 		_oil_manager_ref = node
@@ -260,11 +263,16 @@ func _get_oil_manager() -> Node2D:
 	# Create new
 	if OilBurnZone:
 		var m = OilBurnZone.new() # It's now the manager script
-		m.name = "BossOilManager"
-		m.global_position = Vector2.ZERO
-		parent.add_child(m)
-		_oil_manager_ref = m
-		return m
+		if m:
+			m.name = "BossOilManager"
+			m.global_position = Vector2.ZERO
+			parent.add_child(m)
+			_oil_manager_ref = m
+			return m
+		else:
+			push_error("[BossBeam] Failed to create OilBurnZone instance")
+	else:
+		push_error("[BossBeam] OilBurnZone script not loaded")
 	return null
 
 func _create_oil(pos: Vector2, rot: float) -> void:

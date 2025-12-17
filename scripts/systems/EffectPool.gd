@@ -40,7 +40,11 @@ func _get_smg_bullet_scene() -> PackedScene:
 
 
 static func get_instance() -> EffectPool:
-	if _instance == null:
+	# If we are quitting, don't create new instance
+	if Engine.get_main_loop() and Engine.get_main_loop().root == null:
+		return null
+		
+	if not is_instance_valid(_instance):
 		_instance = EffectPool.new()
 		_instance.name = "EffectPool"
 		# Add to tree at root level so it persists

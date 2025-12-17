@@ -58,6 +58,13 @@ func _process(delta: float) -> void:
 		queue_free()
 		return
 	
+	# Fix: Check for enemy death (prevents red circle from lingering after kill)
+	var hc = owner_enemy.get("health_component")
+	if is_instance_valid(hc) and hc.has_method("is_dead") and hc.is_dead():
+		if _state != State.EXPLODING:
+			queue_free()
+			return
+
 	global_position = owner_enemy.global_position
 	
 	var player = get_tree().get_first_node_in_group("player")

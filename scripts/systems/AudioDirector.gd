@@ -94,6 +94,44 @@ func initialize() -> void:
 		_music_player.bus = MUSIC_BUS
 		_music_player.process_mode = Node.PROCESS_MODE_ALWAYS
 		add_child(_music_player)
+	
+	# Preload weapon sounds to prevent frame freezes during gameplay
+	_preload_weapon_sounds()
+
+## Preload all weapon fire/reload sounds at startup to avoid frame freezes
+func _preload_weapon_sounds() -> void:
+	print("[AudioDirector] Preloading weapon sounds...")
+	var start_time := Time.get_ticks_msec()
+	var count := 0
+	
+	# Weapon directories and their expected sound patterns
+	var weapon_patterns := {
+		"SMG": ["fire1_SMG", "fire2_SMG", "fire3_SMG", "fire4_SMG", "reload_SMG"],
+		"sniper": ["fire_sniper", "reload_sniper"],
+		"shotgun": ["fire_shotgun", "reload_shotgun"],
+		"rocket": ["fire_rocket", "rocket_explosion", "rocket_fly"],
+		"AR": ["fire_AR", "fire1_AR", "fire2_AR", "reload_AR"],
+		"minigun": ["fire_minigun", "fire1_minigun", "reload_minigun"],
+		"sword": ["sword_swing", "sword_swing1", "sword_swing2"],
+	}
+	
+	var base_path := "res://assets/sounds/sfx/weapons"
+	var extensions := [".mp3", ".ogg", ".wav"]
+	
+	for weapon_dir in weapon_patterns:
+		var patterns: Array = weapon_patterns[weapon_dir]
+		for pattern in patterns:
+			for ext in extensions:
+				var full_path := "%s/%s/%s%s" % [base_path, weapon_dir, pattern, ext]
+				if ResourceLoader.exists(full_path):
+					# Load and cache the stream
+					var stream := _load_stream(full_path)
+					if stream:
+						count += 1
+					break  # Found this pattern, move to next
+	
+	var elapsed := Time.get_ticks_msec() - start_time
+	print("[AudioDirector] Preloaded %d weapon sounds in %d ms" % [count, elapsed])
 
 func play_random_battle_track(fade_time: float = 0.5) -> void:
 	# Use ResourceManifest for export-safe file listing

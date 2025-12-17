@@ -3,6 +3,10 @@ class_name BulletServer
 
 # Singleton access
 static var _instance: BulletServer = null
+static var _creating_instance: bool = false  # Prevent race condition
+
+# Cached ShopMenu reference to avoid load() in hot collision path
+const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
 
 # Bullet settings
 const MAX_BULLETS = 2000
@@ -40,11 +44,19 @@ class SimpleBullet:
 		RenderingServer.canvas_item_set_visible(visual_rid, false)
 
 static func get_instance() -> BulletServer:
-	if not is_instance_valid(_instance):
-		_instance = BulletServer.new()
-		_instance.name = "BulletServer"
-		if Engine.get_main_loop() and Engine.get_main_loop().root:
-			Engine.get_main_loop().root.call_deferred("add_child", _instance)
+	# Return existing valid instance
+	if is_instance_valid(_instance):
+		return _instance
+	# Prevent race condition - another call is already creating instance
+	if _creating_instance:
+		return null  # Caller should handle null gracefully
+	# Create new instance with lock
+	_creating_instance = true
+	_instance = BulletServer.new()
+	_instance.name = "BulletServer"
+	if Engine.get_main_loop() and Engine.get_main_loop().root:
+		Engine.get_main_loop().root.call_deferred("add_child", _instance)
+	_creating_instance = false
 	return _instance
 
 func _ready() -> void:
@@ -65,6 +77,9 @@ func _ready() -> void:
 		_pool.append(SimpleBullet.new(_parent_canvas_item))
 
 func spawn_smg_bullet(pos: Vector2, vel: Vector2, damage: int, owner_node: Node) -> void:
+	spawn_colored_bullet(pos, vel, damage, owner_node, BULLET_COLOR)
+
+func spawn_colored_bullet(pos: Vector2, vel: Vector2, damage: int, owner_node: Node, color: Color) -> void:
 	if not _smg_texture: return
 	
 	var bullet: SimpleBullet
@@ -90,8 +105,8 @@ func spawn_smg_bullet(pos: Vector2, vel: Vector2, damage: int, owner_node: Node)
 	if _glow_material_rid.is_valid():
 		RenderingServer.canvas_item_set_material(bullet.visual_rid, _glow_material_rid)
 	
-	# Apply Color
-	RenderingServer.canvas_item_set_modulate(bullet.visual_rid, BULLET_COLOR)
+	# Apply Custom Color
+	RenderingServer.canvas_item_set_modulate(bullet.visual_rid, color)
 	
 	# Apply Transform with Scale
 	var xform = Transform2D(vel.angle(), pos)
@@ -110,6 +125,9 @@ func _physics_process(delta: float) -> void:
 	if _bullets.is_empty():
 		return
 		
+	# Apply Global Enemy Time Scale (Bullet Time)
+	# Done inside loop per bullet
+		
 	var space_state = get_world_2d().direct_space_state
 	var i = _bullets.size() - 1
 	
@@ -124,7 +142,11 @@ func _physics_process(delta: float) -> void:
 		var b = _bullets[i]
 		
 		# Move
-		var move_vec = b.velocity * delta
+		var time_scale = 1.0
+		if not (b.owner and b.owner.is_in_group("player")):
+			time_scale = GameState.enemy_time_scale
+			
+		var move_vec = b.velocity * (delta * time_scale)
 		var next_pos = b.position + move_vec
 		
 		# Raycast for collision - reuse query object
@@ -139,9 +161,13 @@ func _physics_process(delta: float) -> void:
 		
 		if result:
 			# Hit something
-			b.position = result.position
 			if _handle_collision(b, result.collider):
+				# Collision handled and bullet should be destroyed or stopped
+				b.position = result.position
 				destroyed = true
+			else:
+				# Collision ignored (pierced or non-blocking) - continue movement
+				b.position = next_pos
 		else:
 			b.position = next_pos
 			
@@ -189,18 +215,51 @@ func _handle_collision(b: SimpleBullet, collider: Object) -> bool:
 		shield_root = collider
 		
 	if shield_root and shield_root.has_method("take_shield_damage"):
+		# Check if Chrono-Intangibility upgrade allows phasing through shields
+		# Must check if PlayerCore has Wells in squad
+		var player = get_tree().get_first_node_in_group("player")
+		if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+			# Bullet phases through shield - don't damage or destroy
+			return false
+		
 		shield_root.take_shield_damage(b.damage)
 		return true # Destroy bullet on shield hit
 	
 	# Determine if protected by shield
 	if collider.has_method("is_protected_by_shield") and collider.is_protected_by_shield():
-		# Absorbed by shield elsewhere, just destroy bullet
-		return true
+		# Check if Chrono-Intangibility allows phasing through protected enemies
+		var player = get_tree().get_first_node_in_group("player")
+		if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+			# Bullet phases through - continue to damage enemy normally below
+			pass
+		else:
+			# Absorbed by shield elsewhere, just destroy bullet
+			return true
 
 	# Check for damageable
 	if not collider.has_method("take_damage"):
-		# Wall/Obstacle -> Destroy
+		# Wall/Obstacle -> Destroy (unless it's a boulder and we can phase through)
 		if collider is TileMap or collider is StaticBody2D:
+			# Check if this is a boulder and we have Chrono-Intangibility
+			var is_boulder = false
+			var boulders = get_tree().get_nodes_in_group("boulders")
+			for boulder in boulders:
+				if is_instance_valid(boulder) and (boulder == collider or boulder.is_ancestor_of(collider)):
+					is_boulder = true
+					break
+				# Spatial backup check
+				if is_instance_valid(boulder):
+					var b_rad = 150.0
+					if "boulder_size" in boulder: b_rad = boulder.boulder_size * 0.5
+					if b.position.distance_squared_to(boulder.global_position) < (b_rad * 1.2) ** 2:
+						is_boulder = true
+						break
+			
+			if is_boulder:
+				var player = get_tree().get_first_node_in_group("player")
+				if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+					return false # Phase through boulder
+			
 			return true
 		return false # Pass through non-blocking
 		

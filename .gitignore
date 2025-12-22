@@ -1,6 +1,9 @@
 # Godot 4+ specific ignores
 .godot/
 
+# Export builds
+_EXPORT_/
+
 # Reference project (not part of this game)
 NIKKE-GODOT - Copy/
 /android/

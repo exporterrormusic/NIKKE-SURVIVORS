@@ -104,7 +104,7 @@ func _setup_patch_notes() -> void:
 	
 	# Try to load patch notes
 	var patch_text := ""
-	if FileAccess.file_exists(patch_path):
+	if ResourceLoader.exists(patch_path):
 		var file := FileAccess.open(patch_path, FileAccess.READ)
 		if file:
 			patch_text = file.get_as_text()

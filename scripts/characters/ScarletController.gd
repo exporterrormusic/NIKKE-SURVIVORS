@@ -13,14 +13,14 @@ var special_reloading: bool = false
 var special_reload_timer: float = 0.0
 var special_reload_time: float = 4.0
 
-var damage_accumulator: float = 0.0  # Tracks fractional self-damage
+var damage_accumulator: float = 0.0 # Tracks fractional self-damage
 
 # Shop upgrade state
 var _has_roses_core_upgrade: bool = false
 var _has_low_hp_upgrade: bool = false
 
 # Talent states
-var special_cd_level: int = 0  # Quick Dash: reduces cooldown
+var special_cd_level: int = 0 # Quick Dash: reduces cooldown
 var special_heal_level: int = 0
 var burst_execute_unlocked: bool = false
 var burst_vuln_unlocked: bool = false
@@ -48,7 +48,7 @@ func _on_process(delta: float) -> void:
 			special_ammo = special_max_ammo
 
 func _can_attack() -> bool:
-	return true  # Scarlet can always attack (melee)
+	return true # Scarlet can always attack (melee)
 
 func _perform_attack(direction: Vector2) -> void:
 	# Fire sword slash (melee attack attached to player)
@@ -58,8 +58,8 @@ func _perform_attack(direction: Vector2) -> void:
 	# Use character's base damage with level scaling
 	var damage: int = int(float(player.calc_damage()) * get_low_hp_damage_multiplier())
 	slash.base_damage = damage
-	player.add_child(slash)  # Attach to player, not parent
-	slash.position = Vector2.ZERO  # Centered on player
+	player.add_child(slash) # Attach to player, not parent
+	slash.position = Vector2.ZERO # Centered on player
 	
 	# Rose's Core upgrade: shoot 5 rose petals from slash tip
 	if _has_roses_core_upgrade:
@@ -73,9 +73,9 @@ func _perform_attack(direction: Vector2) -> void:
 
 func _spawn_rose_petals(direction: Vector2, damage: int) -> void:
 	const PETAL_COUNT := 5
-	const SPREAD_ANGLE := PI / 3  # 60 degrees spread total for wider coverage
-	const PETAL_SPEED := 1200.0  # Faster to fly further
-	const SLASH_TIP_OFFSET := 280.0  # Match slash radius
+	const SPREAD_ANGLE := PI / 3 # 60 degrees spread total for wider coverage
+	const PETAL_SPEED := 1200.0 # Faster to fly further
+	const SLASH_TIP_OFFSET := 280.0 # Match slash radius
 	
 	var base_angle: float = direction.angle()
 	var start_angle: float = base_angle - SPREAD_ANGLE / 2
@@ -93,7 +93,7 @@ func _spawn_rose_petals(direction: Vector2, damage: int) -> void:
 		petal.velocity = petal_dir * PETAL_SPEED
 		petal.rotation = angle
 		petal.owner_node = player
-		petal.base_damage = maxi(1, int(damage * 0.5))  # Rose petals do half slash damage
+		petal.base_damage = maxi(1, int(damage * 0.5)) # Rose petals do half slash damage
 
 func _can_use_special() -> bool:
 	return special_ammo > 0 and not special_reloading
@@ -189,10 +189,6 @@ func _apply_self_damage() -> void:
 		if actual_damage > 0:
 			player._update_health_display(-actual_damage, true)
 
-func _play_sound(weapon_type: String) -> void:
-	if player.audio_director:
-		player.audio_director.play_weapon_fire_sound(weapon_type)
-
 ## Get weapon type name for audio
 func _get_weapon_type_name() -> String:
 	return "sword"
@@ -202,21 +198,21 @@ func apply_talent(talent_id: String) -> void:
 	match talent_id:
 		"special":
 			special_unlocked = true
-			special_ammo = special_max_ammo  # Refill ammo
-			special_reloading = false  # Refresh cooldown
+			special_ammo = special_max_ammo # Refill ammo
+			special_reloading = false # Refresh cooldown
 			special_reload_timer = 0.0
 		"special_cd":
 			special_cd_level = mini(special_cd_level + 1, 3)
 			# Reduce cooldown by 1s per level (base 4s, min 1s)
 			special_reload_time = maxf(4.0 - special_cd_level, 1.0)
-			special_reloading = false  # Refresh cooldown
+			special_reloading = false # Refresh cooldown
 			special_reload_timer = 0.0
-			special_ammo = special_max_ammo  # Refill ammo
+			special_ammo = special_max_ammo # Refill ammo
 		"special_heal":
 			special_heal_level = mini(special_heal_level + 1, 3)
-			special_reloading = false  # Refresh cooldown
+			special_reloading = false # Refresh cooldown
 			special_reload_timer = 0.0
-			special_ammo = special_max_ammo  # Refill ammo
+			special_ammo = special_max_ammo # Refill ammo
 		"burst_execute":
 			burst_execute_unlocked = true
 		"burst_vuln":

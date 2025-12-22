@@ -128,6 +128,8 @@ const DIFF_EXTREME := Color(1.0, 0.2, 0.2, 1.0)         # Red for extreme
 # MODIFIER/STAGE COLORS
 # =============================================================================
 const MOD_STANDARD := Color(0.3, 0.7, 0.4, 1.0)         # Green for standard mode
+const MOD_HUNT := Color(0.2, 0.8, 0.9, 1.0)             # Cyan for hunt mode
+const MOD_DEFENSE := Color(0.9, 0.4, 0.2, 1.0)          # Orange for defense mode
 const MOD_ELITE := Color(0.9, 0.6, 0.2, 1.0)            # Gold for elite hunt
 const MOD_ENDLESS := Color(0.6, 0.4, 0.9, 1.0)          # Purple for endless
 const MOD_GODDESS := Color(1.0, 0.3, 0.3, 1.0)          # Red for Goddess Fall
@@ -580,6 +582,31 @@ static func create_primary_button_style_hover() -> StyleBoxFlat:
 	style.shadow_color = Color(1.0, 1.0, 1.0, 0.4)
 	style.shadow_size = 10
 	return style
+
+
+static func create_button_style_focus() -> StyleBoxFlat:
+	# Explicit focus style - Solid White to match "Hover" aesthetic
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(1.0, 1.0, 1.0, 1.0) # 100% White BG (Solid)
+	style.draw_center = true
+	style.border_color = Color(1.0, 1.0, 1.0, 1.0) # Bright White border
+	style.set_border_width_all(4)
+	style.set_corner_radius_all(CORNER_MEDIUM)
+	
+	# Glow effect
+	style.shadow_color = Color(1.0, 1.0, 1.0, 0.6)
+	style.shadow_size = 12
+	return style
+
+
+static func apply_focus_style_recursively(node: Node) -> void:
+	if node is Button:
+		node.add_theme_stylebox_override("focus", create_button_style_focus())
+		# Ensure text remains readable on white background
+		node.add_theme_color_override("font_color_focus", TEXT_DARK)
+	
+	for child in node.get_children():
+		apply_focus_style_recursively(child)
 
 
 static func create_danger_button_style() -> StyleBoxFlat:

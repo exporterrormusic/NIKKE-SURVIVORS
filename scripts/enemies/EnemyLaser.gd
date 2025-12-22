@@ -5,29 +5,29 @@ extends Area2D
 
 # Configuration
 @export var speed := 500.0
-@export var damage := 1
+@export var damage := 10
 @export var max_range := 600.0
 @export var lifetime := 1.5
 
 # Visual parameters - DARK RED (compensates for daylight brightness)
-const LASER_COLOR := Color(0.85, 0.0, 0.05, 1.0)  # Dark blood red
-const LASER_COLOR_HOT := Color(0.9, 0.0, 0.0, 1.0)  # Dark crimson
-const GLOW_COLOR := Color(0.8, 0.0, 0.0, 0.85)   # Dark red glow
-const CORE_COLOR := Color(0.9, 0.15, 0.15, 1.0)   # Darker pinkish core
-const CORE_COLOR_PULSE := Color(0.85, 0.1, 0.1, 1.0)  # Dark pulsing core
-const TRAIL_COLOR := Color(0.8, 0.0, 0.0, 0.8)   # Dark red trail
+const LASER_COLOR := Color(0.85, 0.0, 0.05, 1.0) # Dark blood red
+const LASER_COLOR_HOT := Color(0.9, 0.0, 0.0, 1.0) # Dark crimson
+const GLOW_COLOR := Color(0.8, 0.0, 0.0, 0.85) # Dark red glow
+const CORE_COLOR := Color(0.9, 0.15, 0.15, 1.0) # Darker pinkish core
+const CORE_COLOR_PULSE := Color(0.85, 0.1, 0.1, 1.0) # Dark pulsing core
+const TRAIL_COLOR := Color(0.8, 0.0, 0.0, 0.8) # Dark red trail
 const BEAM_LENGTH := 50.0
 const BEAM_WIDTH := 8.0
 const GLOW_RADIUS := 32.0
 
 # Animation parameters
-const PULSE_SPEED := 18.0           # Core flicker speed
-const PULSE_INTENSITY := 0.35       # How much the core brightness varies
-const TRAIL_SPAWN_INTERVAL := 0.05  # Reduced frequency (was 0.02)
-const TRAIL_PARTICLE_COUNT := 0     # Disabled for performance (was 8)
-const CHARGE_DURATION := 0.08       # Brief charging flash at spawn
-const SHIMMER_SPEED := 25.0         # Heat shimmer oscillation speed
-const SHIMMER_AMOUNT := 1.5         # Pixels of shimmer offset
+const PULSE_SPEED := 18.0 # Core flicker speed
+const PULSE_INTENSITY := 0.35 # How much the core brightness varies
+const TRAIL_SPAWN_INTERVAL := 0.05 # Reduced frequency (was 0.02)
+const TRAIL_PARTICLE_COUNT := 0 # Disabled for performance (was 8)
+const CHARGE_DURATION := 0.08 # Brief charging flash at spawn
+const SHIMMER_SPEED := 25.0 # Heat shimmer oscillation speed
+const SHIMMER_AMOUNT := 1.5 # Pixels of shimmer offset
 
 var _direction: Vector2 = Vector2.RIGHT
 var _age := 0.0
@@ -61,8 +61,8 @@ func _ready() -> void:
 	_rng.randomize()
 	
 	# Setup collision
-	collision_layer = 4   # Enemy projectile layer (Was 8, standardizing to 4 for Scarlet Slash detection)
-	collision_mask = 1 | 2 | 8   # Hit player (1), enemies for charmed (2), ally layer (8)
+	collision_layer = 4 # Enemy projectile layer (Was 8, standardizing to 4 for Scarlet Slash detection)
+	collision_mask = 1 | 2 | 8 # Hit player (1), enemies for charmed (2), ally layer (8)
 	monitoring = true
 	monitorable = true # Must be monitorable for Scarlet's Slash Area to detect it!
 	add_to_group("enemy_projectiles")
@@ -120,7 +120,7 @@ func _create_visuals() -> void:
 	var ambient_glow := Sprite2D.new()
 	ambient_glow.texture = _glow_texture
 	ambient_glow.centered = true
-	ambient_glow.modulate = Color(0.8, 0.0, 0.0, 0.4)  # Dark red ambient
+	ambient_glow.modulate = Color(0.8, 0.0, 0.0, 0.4) # Dark red ambient
 	ambient_glow.scale = Vector2(2.0, 1.2)
 	ambient_glow.position = Vector2(BEAM_LENGTH * 0.5, 0)
 	var ambient_mat := CanvasItemMaterial.new()
@@ -134,7 +134,7 @@ func _create_visuals() -> void:
 	var ambient_glow2 := Sprite2D.new()
 	ambient_glow2.texture = _glow_texture
 	ambient_glow2.centered = true
-	ambient_glow2.modulate = Color(0.75, 0.0, 0.0, 0.3)  # Darker red
+	ambient_glow2.modulate = Color(0.75, 0.0, 0.0, 0.3) # Darker red
 	ambient_glow2.scale = Vector2(2.5, 1.5)
 	ambient_glow2.position = Vector2(BEAM_LENGTH * 0.5, 0)
 	var ambient_mat2 := CanvasItemMaterial.new()
@@ -160,7 +160,7 @@ func _create_visuals() -> void:
 	_glow_sprite = Sprite2D.new()
 	_glow_sprite.texture = _glow_texture
 	_glow_sprite.centered = true
-	_glow_sprite.modulate = Color(0.85, 0.0, 0.0, 0.9)  # Dark red glow
+	_glow_sprite.modulate = Color(0.85, 0.0, 0.0, 0.9) # Dark red glow
 	_glow_sprite.scale = Vector2(1.4, 0.8)
 	_glow_sprite.position = Vector2(BEAM_LENGTH * 0.5, 0)
 	var glow_material := CanvasItemMaterial.new()
@@ -197,7 +197,7 @@ func _create_visuals() -> void:
 	_tip_glow = Sprite2D.new()
 	_tip_glow.texture = _glow_texture
 	_tip_glow.centered = true
-	_tip_glow.modulate = Color(0.9, 0.05, 0.05, 1.0)  # Dark red tip
+	_tip_glow.modulate = Color(0.9, 0.05, 0.05, 1.0) # Dark red tip
 	_tip_glow.scale = Vector2(0.6, 0.6)
 	var tip_material := CanvasItemMaterial.new()
 	tip_material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
@@ -211,7 +211,7 @@ func _create_visuals() -> void:
 	var tip_glow2 := Sprite2D.new()
 	tip_glow2.texture = _glow_texture
 	tip_glow2.centered = true
-	tip_glow2.modulate = Color(0.8, 0.0, 0.0, 0.7)  # Dark red tip
+	tip_glow2.modulate = Color(0.8, 0.0, 0.0, 0.7) # Dark red tip
 	tip_glow2.scale = Vector2(0.9, 0.9)
 	var tip_mat2 := CanvasItemMaterial.new()
 	tip_mat2.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
@@ -232,14 +232,14 @@ func _update_beam_polygon() -> void:
 	var tip := BEAM_LENGTH * 0.85
 	
 	_beam_polygon.polygon = PackedVector2Array([
-		Vector2(-2, 0),                         # Slight back extension
-		Vector2(neck, half_width),              # Upper neck
-		Vector2(mid, half_width * 0.9),         # Upper mid (slight bulge)
-		Vector2(tip, half_width * 0.5),         # Upper tip approach
-		Vector2(BEAM_LENGTH + 2, 0),            # Tip (front point, extended)
-		Vector2(tip, -half_width * 0.5),        # Lower tip approach
-		Vector2(mid, -half_width * 0.9),        # Lower mid
-		Vector2(neck, -half_width)              # Lower neck
+		Vector2(-2, 0), # Slight back extension
+		Vector2(neck, half_width), # Upper neck
+		Vector2(mid, half_width * 0.9), # Upper mid (slight bulge)
+		Vector2(tip, half_width * 0.5), # Upper tip approach
+		Vector2(BEAM_LENGTH + 2, 0), # Tip (front point, extended)
+		Vector2(tip, -half_width * 0.5), # Lower tip approach
+		Vector2(mid, -half_width * 0.9), # Lower mid
+		Vector2(neck, -half_width) # Lower neck
 	])
 
 func _update_outer_glow_polygon() -> void:
@@ -273,7 +273,7 @@ func _spawn_charge_effect() -> void:
 	_charge_flash = Sprite2D.new()
 	_charge_flash.texture = _glow_texture
 	_charge_flash.centered = true
-	_charge_flash.modulate = Color(0.9, 0.3, 0.25, 1.0)  # Dark reddish charge
+	_charge_flash.modulate = Color(0.9, 0.3, 0.25, 1.0) # Dark reddish charge
 	_charge_flash.scale = Vector2(0.3, 0.3)
 	var flash_mat := CanvasItemMaterial.new()
 	flash_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
@@ -295,7 +295,8 @@ func _physics_process(delta: float) -> void:
 		return
 	
 	# Apply Bullet Time scaling to enemy projectile
-	var time_scale: float = GameState.enemy_time_scale
+	var game_manager = get_node_or_null("/root/GameManager")
+	var time_scale: float = game_manager.enemy_time_scale if game_manager else 1.0
 	var scaled_delta: float = delta * time_scale
 	
 	# Move laser
@@ -400,7 +401,7 @@ func _update_trail(delta: float) -> void:
 		var particle: Dictionary = _trail_particles[i]
 		particle["age"] += delta
 		particle["alpha"] = clampf(1.0 - (particle["age"] / particle["lifetime"]), 0.0, 1.0)
-		particle["scale"] *= 0.96  # Shrink over time
+		particle["scale"] *= 0.96 # Shrink over time
 		
 		if particle["age"] >= particle["lifetime"]:
 			if particle["node"] and is_instance_valid(particle["node"]):
@@ -481,9 +482,9 @@ func _apply_damage_to(target: Node) -> void:
 	if from_charmed:
 		# Charmed enemy laser: hit non-charmed enemies, skip player and charmed allies
 		if target.is_in_group("charmed_allies"):
-			return  # Don't hit other charmed allies
+			return # Don't hit other charmed allies
 		if target.is_in_group("player") or target.name == "Player":
-			return  # Don't hit the player
+			return # Don't hit the player
 		# Hit regular enemies - pass "charmed_enemy" as killer source (no burst/shield charge)
 		if target.is_in_group("enemies") and target.has_method("take_damage"):
 			target.take_damage(damage, false, Vector2.ZERO, false, "charmed_enemy")
@@ -525,7 +526,7 @@ func _spawn_impact_effect() -> void:
 	# Main impact flash
 	var flash := Sprite2D.new()
 	flash.texture = _glow_texture
-	flash.modulate = Color(0.9, 0.15, 0.1, 1.0)  # Dark red impact
+	flash.modulate = Color(0.9, 0.15, 0.1, 1.0) # Dark red impact
 	flash.scale = Vector2(0.4, 0.4)
 	var flash_material := CanvasItemMaterial.new()
 	flash_material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
@@ -547,7 +548,7 @@ func _spawn_impact_effect() -> void:
 	for i in range(2):
 		var spark := Sprite2D.new()
 		spark.texture = _glow_texture
-		spark.modulate = Color(0.85, 0.2, 0.1, 0.9)  # Dark red sparks
+		spark.modulate = Color(0.85, 0.2, 0.1, 0.9) # Dark red sparks
 		spark.scale = Vector2(0.12, 0.12)
 		var spark_mat := CanvasItemMaterial.new()
 		spark_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD

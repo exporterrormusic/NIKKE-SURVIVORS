@@ -22,7 +22,7 @@ var _is_spinning: bool = false
 
 # "Main Heroine" upgrade - replaces minigun with beam cannon
 var _has_beam_cannon_upgrade: bool = false
-var _beam_cannon: Node2D = null  # Persistent beam cannon instance
+var _beam_cannon: Node2D = null # Persistent beam cannon instance
 
 # Special config (Charm - like Sin)
 var charm_radius: float = 150.0
@@ -33,10 +33,10 @@ var beam_duration: float = 5.0
 var _active_beam: Node2D = null
 
 # Talent states
-var special_size_level: int = 0  # AoE size upgrades
-var special_cooldown_level: int = 0  # Cooldown reduction
-var burst_missile_upgrade: bool = false  # Left: 4 homing missiles every 2.5s
-var burst_trail_upgrade: bool = false    # Right: burning trail
+var special_size_level: int = 0 # AoE size upgrades
+var special_cooldown_level: int = 0 # Cooldown reduction
+var burst_missile_upgrade: bool = false # Left: 4 homing missiles every 2.5s
+var burst_trail_upgrade: bool = false # Right: burning trail
 
 # "She'll Eat Anything" upgrade state
 var _beam_buff_active: bool = false
@@ -50,6 +50,9 @@ func set_beam_buff_active(active: bool) -> void:
 	# Update beam cannon if it exists
 	if _beam_cannon and is_instance_valid(_beam_cannon):
 		_beam_cannon.set("enhanced_mode", active)
+		# Update damage to reflect new multiplier state (will include 2x if active)
+		if player and is_instance_valid(player):
+			_beam_cannon.set("_damage", player.calc_damage())
 
 func get_damage_multiplier() -> float:
 	"""Return damage multiplier for beam buff."""
@@ -62,10 +65,13 @@ func _on_initialize() -> void:
 	# Ammo already set from CharacterRegistry by base class
 	data.special_cooldown = charm_cooldown
 	
-	# Check for "Main Heroine" upgrade
+	# Check for "Main Heroine" upgrade - replaces minigun with beam cannon
 	_has_beam_cannon_upgrade = has_upgrade("marian", "basic_attack")
 	if _has_beam_cannon_upgrade:
 		print("[MarianController] 'Main Heroine' upgrade active - beam cannon enabled")
+
+func get_is_automatic() -> bool:
+	return true
 
 func _on_cleanup() -> void:
 	# Remove charm indicator when switching away from Marian
@@ -119,7 +125,7 @@ func _create_charm_indicator() -> void:
 	parent.add_child(_charm_indicator)
 	_charm_indicator.set("player", player)
 	_charm_indicator.set("radius", _get_current_charm_radius())
-	_charm_indicator.set("indicator_color", Color(0.7, 0.5, 1.0, 0.65))  # Light purple, slightly more opaque
+	_charm_indicator.set("indicator_color", Color(0.7, 0.5, 1.0, 0.65)) # Light purple, slightly more opaque
 
 func _get_indicator_script() -> GDScript:
 	var script := GDScript.new()
@@ -400,7 +406,7 @@ func _spawn_charm_aoe_visual(center: Vector2, radius: float) -> void:
 	var visual := Node2D.new()
 	visual.set_script(_get_charm_aoe_script())
 	visual.set("radius", radius)
-	visual.set("color", Color(0.3, 0.5, 1.0, 0.6))  # Blue for Marian
+	visual.set("color", Color(0.3, 0.5, 1.0, 0.6)) # Blue for Marian
 	player.get_parent().add_child(visual)
 	visual.global_position = center
 
@@ -440,13 +446,19 @@ func _on_burst_start() -> void:
 	_active_beam = MarianBeamScript.new()
 	_active_beam.duration = beam_duration
 	_active_beam.owner_node = player
-	_active_beam.player_ref = player  # Pass player reference for tracking
+	_active_beam.player_ref = player # Pass player reference for tracking
 	_active_beam.player_level = player.level if "level" in player else 1
 	_active_beam.missile_upgrade = burst_missile_upgrade
 	_active_beam.trail_upgrade = burst_trail_upgrade
 	
-	# Calculate initial direction toward mouse and set it BEFORE adding to scene
-	var aim_dir := (player.get_global_mouse_position() - player.global_position).normalized()
+	# Calculate initial direction using player's aim direction (supports controller + mouse)
+	var aim_dir := Vector2.RIGHT
+	if "aim_direction" in player:
+		aim_dir = player.aim_direction
+	else:
+		# Fallback to mouse if property missing (shouldn't happen with PlayerCore)
+		aim_dir = (player.get_global_mouse_position() - player.global_position).normalized()
+	
 	_active_beam.initial_direction = aim_dir
 	
 	player.get_parent().add_child(_active_beam)
@@ -470,12 +482,8 @@ func _on_burst_end() -> void:
 
 func _on_burst_process(_delta: float) -> void:
 	# Update beam position to follow player
-	if _active_beam and is_instance_valid(_active_beam):
-		_active_beam.global_position = player.global_position
-
-func _play_sound(weapon_type: String) -> void:
-	if player.audio_director:
-		player.audio_director.play_weapon_fire_sound(weapon_type)
+	# Delegate to beam script itself which handles offset
+	pass
 
 func get_attack_cooldown() -> float:
 	# Minigun spins up - faster when spinning
@@ -501,10 +509,10 @@ func apply_talent(talent_id: String) -> void:
 			# Trail upgrade - leave burning trail
 			burst_trail_upgrade = true
 		"burst_duration":
-			beam_duration += 1.0  # +1 second per upgrade
+			beam_duration += 1.0 # +1 second per upgrade
 
 func is_invincible() -> bool:
-	return burst_active  # Invincible during beam
+	return burst_active # Invincible during beam
 
 ## Override start_reload to skip default reload sound when beam cannon is active
 ## The beam cannon handles its own reload sound (beam_reload.wav)

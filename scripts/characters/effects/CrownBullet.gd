@@ -5,7 +5,7 @@ class_name CrownBullet
 
 var velocity: Vector2 = Vector2.ZERO
 var owner_node: Node = null
-var killer_source: String = "minigun"  # For ShielderShield collision detection
+var killer_source: String = "minigun" # For ShielderShield collision detection
 var base_damage: int = 2
 var lifespan: float = 3.0
 var _age: float = 0.0
@@ -21,8 +21,8 @@ const CRIT_MULTIPLIER := 2.0
 
 func _ready() -> void:
 	# Set up collision
-	collision_layer = 4  # Projectile layer
-	collision_mask = 6   # Enemy layer (2) + Hitbox layer (4)
+	collision_layer = 4 # Projectile layer
+	collision_mask = 6 # Enemy layer (2) + Hitbox layer (4)
 	
 	# Connect hit detection
 	body_entered.connect(_on_body_entered)
@@ -147,7 +147,7 @@ func _calculate_damage() -> int:
 
 func _draw() -> void:
 	# Draw the golden sphere with layered glow
-	var size := 28.0  # Size to match other bullets
+	var size := 28.0 # Size to match other bullets
 	draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
 
 	# Apply ambient/vignette compensation so the drawn circles remain bright at night
@@ -194,7 +194,7 @@ func _hit_target(target: Node) -> void:
 	if not target.is_in_group("enemies"):
 		return
 	
-	# Skip charmed enemies
+	# Skip charmed enemies (Sin's mind control)
 	if target.is_in_group("charmed_allies"):
 		return
 	
@@ -203,7 +203,7 @@ func _hit_target(target: Node) -> void:
 	var player = get_tree().get_first_node_in_group("player")
 	if player and player.has_method("get_crit_chance"):
 		crit_chance += player.get_crit_chance()
-	crit_chance = minf(crit_chance, 1.0)  # Cap at 100%
+	crit_chance = minf(crit_chance, 1.0) # Cap at 100%
 	var is_crit := randf() < crit_chance
 	var damage := base_damage
 	if is_crit:

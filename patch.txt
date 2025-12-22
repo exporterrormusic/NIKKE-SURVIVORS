@@ -1,12 +1,8 @@
-Patch v0.1F 
-
-- "BOULDERS SUCK"- 
-
-- Bullets should now properly move through boulders when Wells' "Chrono-Intangibility" shop upgrade is bought.
-- Multiple crashes fixed.
-- Optimized Boulder rendering with shared shader/batching
-- Implemented Node Pooling for Damage Numbers and Projectiles
-- Fixed One Hit Kill cheat logic
-- Added Close button to Leaderboard Squad Stats and improved layout
-- Fixed Boss HUD and Wave Timer text alignment
-- Fixed Burst Activation bugs"
+Patch v0.1G  -  "FINAL STRETCH"
+- More crash fixes involving N01 shader issues.
+- Remove ELITE mode.  Was pointless given scaling option.
+- Balance changes.  Now all non-boss enemies have a 1% chance to drop and PRISTINE RAPTURE CORE.
+- Completing a wave also rewards a core.
+- Cores now drop in the world and need to be picked up.
+- Fixed music player showing wrong names.
+- Can now use music controls during the pause menu

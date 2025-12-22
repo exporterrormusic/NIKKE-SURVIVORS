@@ -118,17 +118,18 @@ static func get_unshaded_shader() -> Shader:
 # UNIVERSAL SPRITE SHADER (for enemies)
 # =============================================================================
 static var _universal_shader: Shader = null
+const UNIVERSAL_SPRITE_SHADER = preload("res://resources/shaders/universal_sprite_shader.gdshader")
 
 
 static func get_universal_shader() -> Shader:
 	## Returns the cached universal sprite shader resource.
 	## Only loads from disk once on first call.
 	if _universal_shader == null:
-		_universal_shader = load("res://resources/shaders/universal_sprite_shader.gdshader")
+		_universal_shader = UNIVERSAL_SPRITE_SHADER
 	return _universal_shader
 
 
-static func create_enemy_glow_material(glow_color: Color, enhance_core: bool, scale_factor: float, enable_outline: bool = true) -> ShaderMaterial:
+static func create_enemy_glow_material(glow_color: Color, enhance_core: bool, scale_factor: float, enable_outline: bool = false) -> ShaderMaterial:
 	## Creates a new material for enemy glow effects using the cached shader.
 	## Use this instead of manually loading the shader in EnemySpawner.
 	var mat := ShaderMaterial.new()

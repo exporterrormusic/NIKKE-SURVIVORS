@@ -10,6 +10,15 @@ static var _glow_texture_32: Texture2D = null
 static var _glow_texture_64: Texture2D = null
 static var _shadow_ellipse_texture: Texture2D = null
 
+## Clean up cached textures to prevent RID leaks on exit
+static func cleanup() -> void:
+	_light_texture_64 = null
+	_light_texture_32 = null
+	_glow_texture_32 = null
+	_glow_texture_64 = null
+	_shadow_ellipse_texture = null
+	print("[TextureCache] Cleanup complete")
+
 static func get_light_texture_64() -> Texture2D:
 	if _light_texture_64 == null:
 		_light_texture_64 = _create_radial_gradient(64)

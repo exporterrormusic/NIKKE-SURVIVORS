@@ -7,10 +7,10 @@ var cross_timer: float = 0.0
 var cross_cooldown: float = 5.0
 
 # Talent states
-var special_power_level: int = 0  # Healing power bonus
-var special_size_level: int = 0  # Healing radius/duration bonus
+var special_power_level: int = 0 # Healing power bonus
+var special_size_level: int = 0 # Healing radius/duration bonus
 var burst_stun_level: int = 0
-var burst_turrets_unlocked: bool = false  # "6,000? Really?" talent - spawns 20 turrets
+var burst_turrets_unlocked: bool = false # "6,000? Really?" talent - spawns 20 turrets
 
 # Scripts for effects
 # Scripts for effects
@@ -46,7 +46,7 @@ func _perform_attack(direction: Vector2) -> void:
 	var base_dmg: int = player.calc_damage()
 	missile.damage = base_dmg
 	missile.explosion_damage = base_dmg
-	missile.ground_fire_damage = maxi(int(base_dmg / 3.0), 1)  # Ground fire does 1/3 of missile damage
+	missile.ground_fire_damage = maxi(int(base_dmg / 3.0), 1) # Ground fire does 1/3 of missile damage
 	missile.ground_fire_radius = 120.0
 	
 	_play_sound("rocket")
@@ -76,7 +76,7 @@ func _perform_special(direction: Vector2) -> void:
 	var size_multipliers := [1.0, 1.5, 2.5, 4.0]
 	var size_mult: float = size_multipliers[mini(special_size_level, 3)]
 	cross.heal_radius = 180.0 * size_mult
-	cross.lifespan = 9.0  # Fixed duration, not affected by size talent
+	cross.lifespan = 9.0 # Fixed duration, not affected by size talent
 	
 	player.get_parent().add_child(cross)
 	cross.global_position = player.global_position + direction * 60
@@ -110,10 +110,6 @@ func _on_burst_start() -> void:
 	burst_active = false
 	burst_ended.emit()
 
-func _play_sound(weapon_type: String) -> void:
-	if player.audio_director:
-		player.audio_director.play_weapon_fire_sound(weapon_type)
-
 ## Get weapon type name for audio
 func _get_weapon_type_name() -> String:
 	return "rocket"
@@ -123,13 +119,13 @@ func apply_talent(talent_id: String) -> void:
 	match talent_id:
 		"special":
 			special_unlocked = true
-			cross_timer = 0.0  # Refresh cooldown
+			cross_timer = 0.0 # Refresh cooldown
 		"special_power":
 			special_power_level = mini(special_power_level + 1, 3)
-			cross_timer = 0.0  # Refresh cooldown
+			cross_timer = 0.0 # Refresh cooldown
 		"special_size":
 			special_size_level = mini(special_size_level + 1, 3)
-			cross_timer = 0.0  # Refresh cooldown
+			cross_timer = 0.0 # Refresh cooldown
 		"burst_stun":
 			burst_stun_level = mini(burst_stun_level + 1, 1)
 		"burst_turrets":

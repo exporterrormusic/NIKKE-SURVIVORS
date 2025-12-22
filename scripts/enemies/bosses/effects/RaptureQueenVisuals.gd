@@ -28,6 +28,10 @@ var _original_material: Material = null
 # Sub-components
 const HairScript = preload("res://scripts/enemies/bosses/effects/RaptureQueenHair.gd")
 const ArmScript = preload("res://scripts/enemies/bosses/effects/RaptureQueenArm.gd")
+const BossFaceTexture = preload("res://assets/enemies/bosses/n01.png")
+const UniversalSpriteShader = preload("res://resources/shaders/universal_sprite_shader.gdshader")
+const RaptureQueenLiquidShader = preload("res://resources/shaders/bosses/rapture_queen_liquid.gdshader")
+const RaptureQueenTeleportShader = preload("res://resources/shaders/bosses/rapture_queen_teleport_dissolve.gdshader")
 var _hair: Node2D
 var _face_sprite: Sprite2D
 
@@ -35,11 +39,8 @@ func _ready() -> void:
 	z_index = 0 # Ensure base layer is 0 so children sort correctly relative to it
 	_parent = get_parent()
 	
-	# Load texture manually and check
-	if ResourceLoader.exists("res://assets/enemies/bosses/n01.png"):
-		face_texture = load("res://assets/enemies/bosses/n01.png")
-	else:
-		print_rich("[color=red]ERROR: n01.png NOT FOUND at res://assets/enemies/bosses/n01.png[/color]")
+	# Use preloaded texture (guaranteed to be in export)
+	face_texture = BossFaceTexture
 	
 	# 2. Add Face Sprite (Base Layer, Shader)
 	_face_sprite = Sprite2D.new()
@@ -55,7 +56,7 @@ func _ready() -> void:
 		_face_sprite.scale = Vector2(scale_fac, scale_fac)
 		
 		# Apply Universal Shader for Outline
-		var shader = load("res://resources/shaders/universal_sprite_shader.gdshader")
+		var shader = UniversalSpriteShader
 		if shader:
 			var mat = ShaderMaterial.new()
 			mat.shader = shader
@@ -109,8 +110,8 @@ func _ready() -> void:
 	_setup_liquid_shader()
 
 func _setup_liquid_shader() -> void:
-	# ... (existing shader setup code matches context, no changes needed inside)
-	var shader = load("res://resources/shaders/bosses/rapture_queen_liquid.gdshader")
+	# Use preloaded shader constant
+	var shader = RaptureQueenLiquidShader
 	if shader:
 		var mat = ShaderMaterial.new()
 		mat.shader = shader
@@ -133,8 +134,8 @@ func _setup_liquid_shader() -> void:
 		# self.material = mat
 
 func _setup_dissolve_shader() -> void:
-	# Create dissolve shader material for teleport effect
-	var shader = load("res://resources/shaders/bosses/rapture_queen_teleport_dissolve.gdshader")
+	# Create dissolve shader material for teleport effect (preloaded)
+	var shader = RaptureQueenTeleportShader
 	if shader and _face_sprite:
 		_dissolve_material = ShaderMaterial.new()
 		_dissolve_material.shader = shader

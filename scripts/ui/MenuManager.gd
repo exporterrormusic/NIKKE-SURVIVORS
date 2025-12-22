@@ -28,16 +28,16 @@ var CharacterSelectScene: PackedScene = null
 var AchievementsScene: PackedScene = null
 var LeaderboardScene: PackedScene = null
 var ShopScene: PackedScene = null
-var _debug_menu_script: Script = null  # Loaded lazily
+var _debug_menu_script: Script = null # Loaded lazily
 
 # Scene paths for lazy loading
 const SCENE_PATHS := {
-	"main_menu": "res://scenes/ui/MainMenu.tscn",
-	"settings": "res://scenes/ui/SettingsMenu.tscn",
-	"character_select": "res://scenes/ui/CharacterSelectMenu.tscn",
-	"achievements": "res://scenes/ui/AchievementsMenu.tscn",
-	"leaderboard": "res://scenes/ui/LeaderboardMenu.tscn",
-	"shop": "res://scenes/ui/ShopMenu.tscn",
+	"main_menu": ScenePaths.MAIN_MENU,
+	"settings": ScenePaths.SETTINGS,
+	"character_select": ScenePaths.CHARACTER_SELECT,
+	"achievements": ScenePaths.ACHIEVEMENTS,
+	"leaderboard": ScenePaths.LEADERBOARD,
+	"shop": ScenePaths.SHOP,
 }
 
 # Current menu stack (for back navigation)
@@ -53,33 +53,33 @@ var _debug_menu: CanvasLayer = null
 # Music player
 # Music player handled by AudioDirector now
 # var _music_player: AudioStreamPlayer = null
-const MENU_MUSIC_PATH := "res://assets/sounds/music/menu/main-menu.mp3"
+const MENU_MUSIC_PATH := ScenePaths.MUSIC_MAIN_MENU
 
 # Intro screen
 var _intro_screen: Control = null
 var _intro_shown: bool = false
 var _intro_start_time: int = 0
 var _intro_canvas_layer: CanvasLayer = null
-var _loading_main_menu: bool = false  # Prevents re-entry during async load
-var _resources_ready: bool = false  # True when all resources are loaded
-var _continue_label: Label = null  # Reference to "Click to continue" label
-var _preinstantiated_main_menu: Control = null  # Pre-instantiated main menu (hidden until ready)
-var _preinstantiation_scheduled: bool = false  # Prevent multiple deferred calls
-var _loading_delay_timer: Timer = null  # Timer to delay heavy loading until after first frames render
-const INTRO_MIN_DISPLAY_TIME_MS := 3000  # Minimum 3 seconds before user can dismiss intro
+var _loading_main_menu: bool = false # Prevents re-entry during async load
+var _resources_ready: bool = false # True when all resources are loaded
+var _continue_label: Label = null # Reference to "Click to continue" label
+var _preinstantiated_main_menu: Control = null # Pre-instantiated main menu (hidden until ready)
+var _preinstantiation_scheduled: bool = false # Prevent multiple deferred calls
+var _loading_delay_timer: Timer = null # Timer to delay heavy loading until after first frames render
+const INTRO_MIN_DISPLAY_TIME_MS := 3000 # Minimum 3 seconds before user can dismiss intro
 
 # Walking character animation (process-based, not tween-based)
 var _loading_character: AnimatedSprite2D = null
-var _placeholder_node: Control = null  # Simple placeholder while sprite loads
-var _walk_speed: float = 150.0  # Pixels per second
+var _placeholder_node: Control = null # Simple placeholder while sprite loads
+var _walk_speed: float = 150.0 # Pixels per second
 var _walk_end_x: float = 0.0
 var _bob_time: float = 0.0
 var _bob_base_y: float = 0.0
 const LOADING_CHARACTER_SPRITES := [
-	"res://assets/characters/kilo/kilo-sprite.png",
-	"res://assets/characters/marian/marian-sprite.png",
-	"res://assets/characters/nayuta/nayuta-sprite.png",
-	"res://assets/characters/scarlet/scarlet-sprite.png",
+	ScenePaths.CHAR_SPRITE_KILO,
+	ScenePaths.CHAR_SPRITE_MARIAN,
+	ScenePaths.CHAR_SPRITE_NAYUTA,
+	ScenePaths.CHAR_SPRITE_SCARLET,
 ]
 var _selected_sprite_path: String = ""
 
@@ -95,28 +95,51 @@ func _ready() -> void:
 	# before we start the heavy loading work
 	_loading_delay_timer = Timer.new()
 	_loading_delay_timer.one_shot = true
-	_loading_delay_timer.wait_time = 0.5  # 500ms delay to let animation run
+	_loading_delay_timer.wait_time = 0.1
 	_loading_delay_timer.timeout.connect(_on_loading_delay_timeout)
 	add_child(_loading_delay_timer)
 	_loading_delay_timer.start()
 	
-	# Initialize DebugLog if needed (removed for production/cleanup)
-	# var debug_log_script = load("res://scripts/systems/DebugLog.gd")
-	# if debug_log_script:
-	# 	var debug_log_node = debug_log_script.new()
-	# 	debug_log_node.name = "DebugLog"
-	# 	add_child(debug_log_node)
+	# Setup input handling
+	# Input.joy_connection_changed.connect(_on_joy_connection_changed) # Removed controller support
+	# _setup_controller_map()
 	
-	# RESTORED: Start loading resources in background
+	# Start loading resources in background
 	call_deferred("_start_background_loading")
+
+
+	pass # Controller logic removed
 
 
 func _on_loading_delay_timeout() -> void:
 	# Timer fired - now we can allow resource checking and pre-instantiation
 	print("[MenuManager] Loading delay complete - animation should be visible now")
 	_loading_delay_timer.queue_free()
-	_loading_delay_timer = null  # Setting to null allows _check_resources_loaded to proceed
+	_loading_delay_timer = null # Setting to null allows _check_resources_loaded to proceed
 
+
+func _input(event: InputEvent) -> void:
+	# Handle Intro Input first
+	_handle_intro_input(event)
+	if _intro_screen and is_instance_valid(_intro_screen):
+		return
+
+	# Input Switching Logic:
+	# If user uses controller but focus is lost (e.g. used mouse), restore focus immediately.
+	# if event is InputEventJoypadButton or event is InputEventJoypadMotion:
+		# Ignore small motion
+		# if event is InputEventJoypadMotion and abs(event.axis_value) < 0.5:
+		# 	return
+			
+		if get_viewport().gui_get_focus_owner() == null:
+			if _current_menu and is_instance_valid(_current_menu):
+				if _current_menu.has_method("_grab_initial_focus"):
+					_current_menu._grab_initial_focus()
+				else:
+					# Fallback: try to find any focusable
+					var btn := _find_first_focusable(_current_menu)
+					if btn:
+						btn.grab_focus()
 
 var _last_frame_time: int = 0
 var _first_frame_rendered: bool = false
@@ -134,7 +157,7 @@ func _process(delta: float) -> void:
 	var now := Time.get_ticks_msec()
 	if _last_frame_time > 0:
 		var frame_delta := now - _last_frame_time
-		if frame_delta > 100:  # More than 100ms between frames = freeze
+		if frame_delta > 100: # More than 100ms between frames = freeze
 			print("[MenuManager] FRAME FREEZE: %dms gap detected" % frame_delta)
 	_last_frame_time = now
 	
@@ -147,7 +170,7 @@ func _process(delta: float) -> void:
 		_loading_character.position.x += _walk_speed * delta
 		
 		# Bobbing motion
-		_bob_time += delta * 8.0  # Bob frequency
+		_bob_time += delta * 8.0 # Bob frequency
 		_loading_character.position.y = _bob_base_y + sin(_bob_time) * 3.0
 		
 		# Reset when off screen
@@ -168,6 +191,8 @@ func _process(delta: float) -> void:
 	# Check if resources are ready (only while intro is showing)
 	if _intro_screen and is_instance_valid(_intro_screen) and not _resources_ready:
 		_check_resources_loaded()
+	
+	# Cooldown for stick navigation removed
 
 
 func _start_background_loading() -> void:
@@ -180,11 +205,10 @@ func _start_background_loading() -> void:
 	ResourceLoader.load_threaded_request(_selected_sprite_path)
 	
 	# Pre-request shader for venetian blinds overlay
-	ResourceLoader.load_threaded_request("res://resources/shaders/hexagon_grid_overlay.gdshader")
+	ResourceLoader.load_threaded_request(ScenePaths.SHADER_HEX_GRID)
 	
 	# Pre-request all background textures for the venetian blinds
 	# This prevents the main menu instantiation from blocking on texture loads
-	var bg_dir := "res://assets/backgrounds/"
 	var bg_files := [
 		"ark.jpg", "battlefield1.jpg", "bunker-interior.jpg", "eden.jpg",
 		"forest.jpg", "hg.jpg", "kingdom.jpg", "mushroom.jpg",
@@ -192,7 +216,7 @@ func _start_background_loading() -> void:
 		"snow-night.jpg", "space.jpg"
 	]
 	for file in bg_files:
-		ResourceLoader.load_threaded_request(bg_dir + file)
+		ResourceLoader.load_threaded_request(ScenePaths.BG_BASE + file)
 	
 	# Create menu container
 	var menu_layer := CanvasLayer.new()
@@ -388,14 +412,13 @@ func _show_intro_screen() -> void:
 func _check_resources_loaded() -> void:
 	# Check if all resources are fully loaded
 	# Only then do we pre-instantiate the main menu and allow clicking
-	
 	# Already done or already scheduled?
 	if _resources_ready or _preinstantiation_scheduled:
 		return
 	
 	# Wait for timer to allow animation to render first
 	if _loading_delay_timer != null:
-		return  # Still waiting for delay
+		return # Still waiting for delay
 	
 	# Check main menu scene
 	var scene_status := ResourceLoader.load_threaded_get_status(SCENE_PATHS.main_menu)
@@ -432,7 +455,7 @@ func _check_resources_loaded() -> void:
 func _do_preinstantiate_main_menu() -> void:
 	# Actually perform the pre-instantiation (called deferred)
 	if _preinstantiated_main_menu != null:
-		return  # Already done
+		return # Already done
 	
 	print("[MenuManager] Pre-instantiating main menu...")
 	
@@ -454,7 +477,7 @@ func _do_preinstantiate_main_menu() -> void:
 	
 	if _preinstantiated_main_menu == null:
 		push_error("[MenuManager] Failed to pre-instantiate main menu")
-		_preinstantiation_scheduled = false  # Allow retry
+		_preinstantiation_scheduled = false # Allow retry
 		return
 	
 	# Now we're truly ready!
@@ -488,32 +511,52 @@ func _on_intro_input(event: InputEvent) -> void:
 		_dismiss_intro()
 
 
-func _input(event: InputEvent) -> void:
-	# Handle intro screen dismissal with any key
+func _handle_intro_input(event: InputEvent) -> void:
+	# Handle intro screen dismissal with any key/button
 	if _intro_screen and is_instance_valid(_intro_screen):
-		# Only process key and mouse button events (not motion)
-		if event is InputEventMouseButton or event is InputEventKey:
+		# Check if this is a dismissal-eligible input type
+		var is_key: bool = event is InputEventKey
+		var is_mouse: bool = event is InputEventMouseButton
+		var is_joypad: bool = event is InputEventJoypadButton
+		
+		if is_key or is_mouse: # Removed is_joypad
 			get_viewport().set_input_as_handled()
 			
 			if not _resources_ready:
-				return  # Don't allow input until resources are loaded
+				return # Don't allow input until resources are loaded
 			
-			# Check minimum display time (2 seconds to read disclaimer)
-			var elapsed := Time.get_ticks_msec() - _intro_start_time
+			# Check minimum display time (3 seconds to read disclaimer)
+			var elapsed: int = Time.get_ticks_msec() - _intro_start_time
 			if elapsed < INTRO_MIN_DISPLAY_TIME_MS:
 				return
 			
-			# Dismiss on key press or mouse click
-			if (event is InputEventKey and event.pressed) or (event is InputEventMouseButton and event.pressed):
+			# Dismiss on key press, mouse click, or controller button press
+			var is_pressed: bool = false
+			if is_key:
+				is_pressed = (event as InputEventKey).pressed
+			elif is_mouse:
+				is_pressed = (event as InputEventMouseButton).pressed
+			# elif is_joypad:
+			# 	is_pressed = (event as InputEventJoypadButton).pressed
+			
+			if is_pressed:
 				print("[MenuManager] Input accepted - dismissing intro")
 				_dismiss_intro()
+		return # Don't process controller nav while intro showing
+	
+	# Analog stick navigation removed
+	pass
+
+## Simulate a ui_* action press for analog stick navigation
+func _simulate_ui_action(action: String) -> void:
+	pass
 
 
 func _dismiss_intro() -> void:
 	if not _intro_screen or not is_instance_valid(_intro_screen):
 		return
 	if _loading_main_menu:
-		return  # Already loading, don't re-trigger
+		return # Already loading, don't re-trigger
 	
 	_intro_shown = true
 	_loading_main_menu = true
@@ -547,10 +590,10 @@ func _finish_intro_transition() -> void:
 	
 	# Use the pre-instantiated main menu (already added to container, just hidden)
 	var main_menu := _preinstantiated_main_menu
-	_preinstantiated_main_menu = null  # Clear reference since it's now the active menu
+	_preinstantiated_main_menu = null # Clear reference since it's now the active menu
 	
 	if main_menu:
-		main_menu.visible = true  # Just show it - no instantiation needed!
+		main_menu.visible = true # Just show it - no instantiation needed!
 		_current_menu = main_menu
 		_menu_stack.clear()
 		_menu_stack.push_back(main_menu)
@@ -676,8 +719,8 @@ func show_character_select() -> void:
 		menu.back_requested.connect(_on_back_requested)
 	
 	# Load saved selection if available
-	if GameState:
-		var saved_selection := GameState.get_shop_character_order()
+	if GameManager:
+		var saved_selection := GameManager.get_shop_character_order()
 		if saved_selection.size() == 3 and menu.has_method("set_initial_selection"):
 			menu.set_initial_selection(saved_selection)
 
@@ -790,14 +833,14 @@ func _on_back_requested() -> void:
 func _on_game_start_requested(squad: Array[int], stage_id: String) -> void:
 	print("[MenuManager] _on_game_start_requested called with squad: ", squad, " stage: ", stage_id)
 	
-	# Save selection to GameState
-	if GameState:
-		GameState.set_selected_characters(squad)
+	# Save selection to GameManager
+	if GameManager:
+		GameManager.set_selected_characters(squad)
 		# Set the main character (first in squad) as the player character
 		if squad.size() > 0:
-			GameState.set_player_character(squad[0])
+			GameManager.set_player_character(squad[0])
 		# Store stage_id for Level to use
-		GameState.current_stage_id = stage_id
+		GameManager.current_stage_id = stage_id
 	
 	# Stop menu music
 	stop_menu_music()
@@ -840,8 +883,8 @@ func return_to_main_menu() -> void:
 	Engine.time_scale = 1.0
 	
 	# Reset bullet time (Wells ability) in case it was active
-	if GameState:
-		GameState.enemy_time_scale = 1.0
+	if GameManager:
+		GameManager.enemy_time_scale = 1.0
 	
 	# Stop any game music/ambient sounds
 	if AudioDirector:
@@ -849,8 +892,8 @@ func return_to_main_menu() -> void:
 		AudioDirector.stop_ambient(0.3)
 	
 	# Clear any She Descends mode state
-	if GameState:
-		GameState.she_descends_mode = false
+	if GameManager:
+		GameManager.she_descends_mode = false
 	
 	# Clear menu stack
 	_clear_stack()
@@ -867,7 +910,7 @@ func register_root_main_menu(menu: Control) -> void:
 	
 	# Ensure stack is clear (we are at root)
 	_clear_stack()
-	_current_menu = menu 
+	_current_menu = menu
 	
 	# Connect signals
 	if menu.has_signal("play_selected") and not menu.play_selected.is_connected(_on_play_selected):
@@ -883,3 +926,61 @@ func register_root_main_menu(menu: Control) -> void:
 	if menu.has_signal("shop_selected") and not menu.shop_selected.is_connected(_on_shop_selected):
 		menu.shop_selected.connect(_on_shop_selected)
 
+
+## Navigate focus to adjacent control in given direction
+func _navigate_focus(direction: Vector2) -> void:
+	var focused := get_viewport().gui_get_focus_owner()
+	if not focused:
+		# Find first focusable button in current menu
+		if _current_menu and is_instance_valid(_current_menu):
+			var first_button := _find_first_focusable(_current_menu)
+			if first_button:
+				first_button.grab_focus()
+		return
+	
+	# Try to find valid neighbor in direction
+	var neighbor: Control = null
+	if direction == Vector2.UP:
+		neighbor = focused.get_node_or_null(focused.focus_neighbor_top) if focused.focus_neighbor_top else focused.find_valid_focus_neighbor(SIDE_TOP)
+	elif direction == Vector2.DOWN:
+		neighbor = focused.get_node_or_null(focused.focus_neighbor_bottom) if focused.focus_neighbor_bottom else focused.find_valid_focus_neighbor(SIDE_BOTTOM)
+	elif direction == Vector2.LEFT:
+		neighbor = focused.get_node_or_null(focused.focus_neighbor_left) if focused.focus_neighbor_left else focused.find_valid_focus_neighbor(SIDE_LEFT)
+	elif direction == Vector2.RIGHT:
+		neighbor = focused.get_node_or_null(focused.focus_neighbor_right) if focused.focus_neighbor_right else focused.find_valid_focus_neighbor(SIDE_RIGHT)
+	
+	if neighbor and neighbor.visible:
+		neighbor.grab_focus()
+
+
+## Activate (click) the currently focused control
+func _activate_focused() -> void:
+	var focused := get_viewport().gui_get_focus_owner()
+	if focused:
+		if focused is Button:
+			focused.emit_signal("pressed")
+		elif focused.has_method("_gui_input"):
+			var click := InputEventMouseButton.new()
+			click.button_index = MOUSE_BUTTON_LEFT
+			click.pressed = true
+			focused._gui_input(click)
+
+
+## Handle controller back button
+func _handle_controller_back() -> void:
+	# Check if Settings is open and trigger back
+	if _current_menu and _current_menu.has_signal("back_requested"):
+		_current_menu.emit_signal("back_requested")
+	elif _menu_stack.size() > 0:
+		_menu_stack.pop_back()
+
+
+## Find first focusable control in a container
+func _find_first_focusable(node: Node) -> Control:
+	if node is Button and node.visible and node.focus_mode != Control.FOCUS_NONE:
+		return node
+	for child in node.get_children():
+		var found := _find_first_focusable(child)
+		if found:
+			return found
+	return null

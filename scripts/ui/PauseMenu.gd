@@ -10,7 +10,7 @@ signal character_select_requested
 signal quit_requested
 
 # Menu modes
-enum MenuMode { PAUSE, DEFEAT, VICTORY }
+enum MenuMode {PAUSE, DEFEAT, VICTORY}
 
 const UIThemeScript = preload("res://scripts/ui/UITheme.gd")
 const UISounds = preload("res://scripts/ui/UISoundManager.gd")
@@ -22,7 +22,7 @@ var _panel: Panel = null
 var _button_container: VBoxContainer = null
 var _title_label: Label = null
 var _buttons: Dictionary = {}
-var _stats_panel: Node = null  # StatsPanel instance
+var _stats_panel: Node = null # StatsPanel instance
 
 func _ready() -> void:
 	layer = 125 # Higher than Queen Explosion (120)
@@ -245,6 +245,12 @@ func _rebuild_buttons() -> void:
 		_button_container.add_child(quit_btn)
 		_buttons["quit"] = quit_btn
 
+func _grab_initial_focus() -> void:
+	if _button_container and _button_container.get_child_count() > 0:
+		var btn = _button_container.get_child(0)
+		if btn is Control:
+			btn.grab_focus()
+
 func _on_cheats_pressed() -> void:
 	var CheatsMenuScript = load("res://scripts/ui/CheatsMenu.gd")
 	if CheatsMenuScript:
@@ -277,9 +283,11 @@ func show_pause() -> void:
 	visible = true
 	get_tree().paused = true
 	
-	# Ensure main panel is visible (in case it was hidden by cheats)
 	if _panel: _panel.visible = true
 	if _stats_panel: _stats_panel.visible = true
+	
+	# Auto-focus first button
+	call_deferred("_grab_initial_focus")
 
 func show_defeat() -> void:
 	_menu_mode = MenuMode.DEFEAT
@@ -287,6 +295,9 @@ func show_defeat() -> void:
 	_refresh_stats_panel()
 	visible = true
 	get_tree().paused = true
+	
+	# Auto-focus first button
+	call_deferred("_grab_initial_focus")
 
 func show_victory() -> void:
 	_menu_mode = MenuMode.VICTORY
@@ -294,6 +305,9 @@ func show_victory() -> void:
 	_refresh_stats_panel()
 	visible = true
 	get_tree().paused = true
+	
+	# Auto-focus first button
+	call_deferred("_grab_initial_focus")
 
 func _refresh_stats_panel() -> void:
 	if _stats_panel and _stats_panel.has_method("set_live_stats"):
@@ -302,6 +316,10 @@ func _refresh_stats_panel() -> void:
 func hide_menu() -> void:
 	visible = false
 	get_tree().paused = false
+	
+	# Fix: Reset enemy time scale in case it got stuck (e.g. paused during hitstop)
+	if GameManager:
+		GameManager.enemy_time_scale = 1.0
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not visible:

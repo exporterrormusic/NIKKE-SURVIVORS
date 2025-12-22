@@ -12,3 +12,6 @@ NIKKE-GODOT - Copy/
 
 # Exported executables
 *.exe
+
+# Export PCK files (too large for GitHub)
+*.pck

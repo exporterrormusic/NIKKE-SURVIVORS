@@ -3,10 +3,11 @@ class_name BulletServer
 
 # Singleton access
 static var _instance: BulletServer = null
-static var _creating_instance: bool = false  # Prevent race condition
+static var _creating_instance: bool = false # Prevent race condition
 
 # Cached ShopMenu reference to avoid load() in hot collision path
 const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
+const SMG_BULLET_TEXTURE = preload("res://assets/projectiles/smg_bullet.png")
 
 # Bullet settings
 const MAX_BULLETS = 2000
@@ -37,11 +38,18 @@ class SimpleBullet:
 	var owner: Node
 	var visual_rid: RID
 	var hit_uids: Dictionary = {} # Use instance ID to track hits
+	var source_id: String = "smg" # Source weapon type for burst/XP tracking
 	
 	func _init(canvas_parent: RID):
 		visual_rid = RenderingServer.canvas_item_create()
 		RenderingServer.canvas_item_set_parent(visual_rid, canvas_parent)
 		RenderingServer.canvas_item_set_visible(visual_rid, false)
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_PREDELETE:
+			if visual_rid.is_valid():
+				RenderingServer.free_rid(visual_rid)
+
 
 static func get_instance() -> BulletServer:
 	# Return existing valid instance
@@ -49,7 +57,7 @@ static func get_instance() -> BulletServer:
 		return _instance
 	# Prevent race condition - another call is already creating instance
 	if _creating_instance:
-		return null  # Caller should handle null gracefully
+		return null # Caller should handle null gracefully
 	# Create new instance with lock
 	_creating_instance = true
 	_instance = BulletServer.new()
@@ -61,7 +69,7 @@ static func get_instance() -> BulletServer:
 
 func _ready() -> void:
 	# Load assets
-	_smg_texture = load("res://assets/projectiles/smg_bullet.png")
+	_smg_texture = SMG_BULLET_TEXTURE
 	if _smg_texture:
 		_smg_texture_rid = _smg_texture.get_rid()
 		_smg_texture_size = _smg_texture.get_size()
@@ -76,10 +84,26 @@ func _ready() -> void:
 	for i in range(200):
 		_pool.append(SimpleBullet.new(_parent_canvas_item))
 
-func spawn_smg_bullet(pos: Vector2, vel: Vector2, damage: int, owner_node: Node) -> void:
-	spawn_colored_bullet(pos, vel, damage, owner_node, BULLET_COLOR)
+func _exit_tree() -> void:
+	# Clean up RIDs to prevent leaks
+	for b in _bullets:
+		if b.visual_rid.is_valid():
+			RenderingServer.free_rid(b.visual_rid)
+	_bullets.clear()
+	
+	for b in _pool:
+		if b.visual_rid.is_valid():
+			RenderingServer.free_rid(b.visual_rid)
+	_pool.clear()
+	
+	if _instance == self:
+		_instance = null
+	print("[BulletServer] Cleanup complete")
 
-func spawn_colored_bullet(pos: Vector2, vel: Vector2, damage: int, owner_node: Node, color: Color) -> void:
+func spawn_smg_bullet(pos: Vector2, vel: Vector2, damage: int, owner_node: Node) -> void:
+	spawn_colored_bullet(pos, vel, damage, owner_node, BULLET_COLOR, "smg")
+
+func spawn_colored_bullet(pos: Vector2, vel: Vector2, damage: int, owner_node: Node, color: Color, source_id: String = "smg") -> void:
 	if not _smg_texture: return
 	
 	var bullet: SimpleBullet
@@ -96,12 +120,14 @@ func spawn_colored_bullet(pos: Vector2, vel: Vector2, damage: int, owner_node: N
 	bullet.damage = damage
 	bullet.owner = owner_node
 	bullet.lifetime = 0.0
+
 	bullet.max_range = 750.0
 	bullet.hit_uids.clear()
+	bullet.source_id = source_id
 	
 	# Setup visual
 	RenderingServer.canvas_item_clear(bullet.visual_rid)
-	RenderingServer.canvas_item_add_texture_rect(bullet.visual_rid, Rect2(-_smg_texture_size/2, _smg_texture_size), _smg_texture_rid)
+	RenderingServer.canvas_item_add_texture_rect(bullet.visual_rid, Rect2(-_smg_texture_size / 2, _smg_texture_size), _smg_texture_rid)
 	if _glow_material_rid.is_valid():
 		RenderingServer.canvas_item_set_material(bullet.visual_rid, _glow_material_rid)
 	
@@ -143,8 +169,9 @@ func _physics_process(delta: float) -> void:
 		
 		# Move
 		var time_scale = 1.0
+		var game_manager = get_node_or_null("/root/GameManager")
 		if not (b.owner and b.owner.is_in_group("player")):
-			time_scale = GameState.enemy_time_scale
+			time_scale = game_manager.enemy_time_scale if game_manager else 1.0
 			
 		var move_vec = b.velocity * (delta * time_scale)
 		var next_pos = b.position + move_vec
@@ -153,7 +180,7 @@ func _physics_process(delta: float) -> void:
 		_query.from = b.position
 		_query.to = next_pos
 		_query.exclude.clear()
-		if is_instance_valid(b.owner):
+		if is_instance_valid(b.owner) and b.owner is CollisionObject2D:
 			_query.exclude.append(b.owner.get_rid())
 		
 		var result = space_state.intersect_ray(_query)
@@ -274,8 +301,9 @@ func _handle_collision(b: SimpleBullet, collider: Object) -> bool:
 	var final_damage = b.damage * 2 if is_crit else b.damage
 	
 	var hit_dir = b.velocity.normalized()
+
 	# Apply with weapon type source for Goddess Fall tracking
-	collider.take_damage(final_damage, is_crit, hit_dir, false, "smg")
+	collider.take_damage(final_damage, is_crit, hit_dir, false, b.source_id)
 	
 	b.hit_uids[id] = true
 	

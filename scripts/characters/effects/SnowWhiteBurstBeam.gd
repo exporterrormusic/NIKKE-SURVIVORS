@@ -28,9 +28,9 @@ var player_level: int = 1
 
 # Talent bonuses
 # Talent bonuses
-var burn_level: int = 0  # 0=none, 1-3=talent level for frostburn
-var gauge_on_kill: bool = false  # Soul Harvest talent
-var _enemies_killed: int = 0  # Track kills for gauge generation
+var burn_level: int = 0 # 0=none, 1-3=talent level for frostburn
+var gauge_on_kill: bool = false # Soul Harvest talent
+var _enemies_killed: int = 0 # Track kills for gauge generation
 
 # Source identification for Shield/Burst logic
 var source: String = "SnowWhiteBurst"
@@ -110,6 +110,10 @@ func _apply_cone_damage() -> void:
 			continue
 		if not node is Node2D:
 			continue
+			
+		# Skip charmed allies (Sin's mind control)
+		if node.is_in_group("charmed_allies"):
+			continue
 		
 		var enemy := node as Node2D
 		var to_enemy := enemy.global_position - global_position
@@ -137,7 +141,7 @@ func _apply_cone_damage() -> void:
 			print("[SnowWhiteBeam] Ray hit: ", collider.name, " parent: ", collider.get_parent().name)
 			
 			# Identify shield root
-			var shield_root = collider.get_parent() 
+			var shield_root = collider.get_parent()
 			
 			# Deal damage to shield (ONE TIME per burst)
 			if shield_root.has_method("take_shield_damage"):
@@ -159,7 +163,7 @@ func _apply_cone_damage() -> void:
 			enemy_hp_before = enemy.hp
 		
 		if enemy.has_method("take_damage"):
-			enemy.take_damage(scaled_damage, false, hit_direction, true, "SnowWhiteBurst")  # from_burst = true
+			enemy.take_damage(scaled_damage, false, hit_direction, true, "SnowWhiteBurst") # from_burst = true
 		elif enemy.has_method("apply_damage_with_source"):
 			enemy.apply_damage_with_source(scaled_damage, "SnowWhiteBurst")
 		elif enemy.has_method("apply_damage"):
@@ -178,16 +182,24 @@ func _apply_cone_damage() -> void:
 	
 	# Grant burst gauge for kills if Soul Harvest is unlocked
 	if gauge_on_kill and _enemies_killed > 0 and owner_node:
-		# Each kill adds to burst gauge (10 per kill)
-		if "burst_current" in owner_node:
-			owner_node.burst_current = mini(owner_node.burst_current + _enemies_killed * 10, owner_node.burst_max)
-			# Update HUD immediately
-			var player_hud = owner_node.get_node_or_null("../CanvasLayer/PlayerHudCluster")
-			if player_hud and player_hud.has_method("update_burst"):
-				player_hud.update_burst(owner_node.burst_current, owner_node.burst_max, true)
-			var overhead_hud = owner_node.get_node_or_null("PlayerOverheadHud")
-			if overhead_hud and overhead_hud.has_method("update_burst"):
-				overhead_hud.update_burst(owner_node.burst_current, owner_node.burst_max)
+		# Each kill adds to burst gauge (3 per kill - 30% of normal)
+		var refund_amount := _enemies_killed * 3.0
+		# Use proper burst system add method to keep values in sync
+		if owner_node.has_method("add_burst"):
+			owner_node.add_burst(refund_amount)
+		elif "_burst_system" in owner_node and owner_node._burst_system and owner_node._burst_system.has_method("gain_burst"):
+			owner_node._burst_system.gain_burst(refund_amount)
+		else:
+			# Fallback: direct assignment (legacy, may cause desync)
+			if "burst_current" in owner_node:
+				owner_node.burst_current = mini(owner_node.burst_current + refund_amount, owner_node.burst_max)
+				# Update HUD immediately
+				var player_hud = owner_node.get_node_or_null("../CanvasLayer/PlayerHudCluster")
+				if player_hud and player_hud.has_method("update_burst"):
+					player_hud.update_burst(owner_node.burst_current, owner_node.burst_max, true)
+				var overhead_hud = owner_node.get_node_or_null("PlayerOverheadHud")
+				if overhead_hud and overhead_hud.has_method("update_burst"):
+					overhead_hud.update_burst(owner_node.burst_current, owner_node.burst_max)
 
 func _apply_frostburn(enemy: Node2D) -> void:
 	"""Apply frostburn DOT based on talent level."""
@@ -195,8 +207,8 @@ func _apply_frostburn(enemy: Node2D) -> void:
 		return
 	
 	# Burn rates: 34% max HP/s for normal, 3% for bosses (User Requested)
-	var burn_rates := [0.0, 0.34]  # Per second - index 0 unused, index 1 is the unlocked value
-	var boss_rates := [0.0, 0.03]  # Reduced for boss only
+	var burn_rates := [0.0, 0.34] # Per second - index 0 unused, index 1 is the unlocked value
+	var boss_rates := [0.0, 0.03] # Reduced for boss only
 	
 	# Logic: Only "boss" gets the deep reduction. Elites take full damage?
 	# User requested "Change Snow White's Frostburn to 3% max HP per second for bosses."
@@ -205,10 +217,10 @@ func _apply_frostburn(enemy: Node2D) -> void:
 	# It's safer to assume Consistency: Bosses = 3%, Everyone else = 34%.
 	
 	var is_boss: bool = enemy.has_meta("enemy_tier") and enemy.get_meta("enemy_tier") == "boss"
-	var level_idx := mini(burn_level, 1)  # Cap at 1 for array access
+	var level_idx := mini(burn_level, 1) # Cap at 1 for array access
 	var burn_rate: float = boss_rates[level_idx] if is_boss else burn_rates[level_idx]
 	var burn_duration := 3.0
-	var damage_per_tick := int(enemy.max_hp * burn_rate)  # Per second
+	var damage_per_tick := int(enemy.max_hp * burn_rate) # Per second
 	
 	# Create burn effect node
 	var burn := Node.new()
@@ -294,10 +306,10 @@ func _draw_beam_layers(alpha_multiplier: float) -> void:
 	
 	# Draw layers from outer to inner
 	var layer_settings := [
-		{ "color": outer_color, "scale": 1.0 },
-		{ "color": mid_color, "scale": 0.88 },
-		{ "color": inner_color, "scale": 0.76 },
-		{ "color": core_color, "scale": 0.62 }
+		{"color": outer_color, "scale": 1.0},
+		{"color": mid_color, "scale": 0.88},
+		{"color": inner_color, "scale": 0.76},
+		{"color": core_color, "scale": 0.62}
 	]
 	
 	for settings in layer_settings:

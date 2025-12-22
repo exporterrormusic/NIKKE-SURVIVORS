@@ -5,7 +5,7 @@ class_name DebugMenu
 ## Provides toggles and buttons for testing/debugging
 ## Organized with tabs for better navigation
 
-const SaveManagerScript = preload("res://scripts/systems/SaveManager.gd")
+# Removed SaveManagerScript preload - now using global SaveManager autoload
 # UITheme loaded lazily in _setup_ui to avoid blocking startup
 var UI = null
 
@@ -40,7 +40,7 @@ var _level: Node = null
 var _enemy_spawner: Node = null
 
 func _ready() -> void:
-	layer = 100  # On top of everything
+	layer = 100 # On top of everything
 	_setup_ui()
 	hide()
 
@@ -444,10 +444,8 @@ func _on_toggle_invincibility(btn: Button) -> void:
 	_invincibility_enabled = not _invincibility_enabled
 	_update_toggle_button(btn, _invincibility_enabled)
 	
-	if _player and _player.has_method("set_invincible"):
-		_player.set_invincible(_invincibility_enabled)
-	elif _player:
-		_player.set_meta("debug_invincible", _invincibility_enabled)
+	# Use CheatManager for consistent invincibility check
+	CheatManager.set_cheat_active("invincible", _invincibility_enabled)
 	
 	print("[DEBUG] Invincibility: ", _invincibility_enabled)
 
@@ -470,8 +468,8 @@ func _on_toggle_one_hit_kill(btn: Button) -> void:
 	_one_hit_kill_enabled = not _one_hit_kill_enabled
 	_update_toggle_button(btn, _one_hit_kill_enabled)
 	
-	if _player:
-		_player.set_meta("debug_one_hit_kill", _one_hit_kill_enabled)
+	# Use CheatManager for consistent one-hit-kill check
+	CheatManager.set_cheat_active("one_hit_kill", _one_hit_kill_enabled)
 	
 	print("[DEBUG] One-Hit Kill: ", _one_hit_kill_enabled)
 
@@ -561,8 +559,11 @@ func _on_spawn_elite() -> void:
 
 func _on_spawn_boss() -> void:
 	if _enemy_spawner and _enemy_spawner.has_method("spawn_enemy"):
-		_enemy_spawner.spawn_enemy("boss", "ring")
-		print("[DEBUG] Spawned Boss")
+		var enemy = _enemy_spawner.spawn_enemy("boss", "ring")
+		# Force guaranteed core drop for debug-spawned bosses
+		if enemy and is_instance_valid(enemy):
+			enemy.set_meta("pristine_core_drop", 1)
+		print("[DEBUG] Spawned Boss (forced core drop)")
 
 func _on_spawn_basic_wave() -> void:
 	if _enemy_spawner and _enemy_spawner.has_method("spawn_enemy"):
@@ -628,17 +629,17 @@ func _on_skip_wave() -> void:
 # === PROGRESS CALLBACKS ===
 
 func _on_unlock_all_stages() -> void:
-	if not GameState:
-		print("[DEBUG] GameState not available")
+	if not GameManager:
+		print("[DEBUG] GameManager not available")
 		return
 	
 	var StageRegistryScript = load("res://scripts/systems/StageRegistry.gd")
 	if StageRegistryScript and "STAGES" in StageRegistryScript:
 		for stage in StageRegistryScript.STAGES:
 			var stage_id: String = stage["id"]
-			if stage_id not in GameState.stages_cleared:
-				GameState.stages_cleared.append(stage_id)
-		GameState._save_stage_progress()
+			if stage_id not in GameManager.stages_cleared:
+				GameManager.stages_cleared.append(stage_id)
+		GameManager.save_game()
 		print("[DEBUG] All stages unlocked!")
 
 func _on_unlock_all_characters() -> void:
@@ -670,9 +671,9 @@ func _on_unlock_all_characters() -> void:
 	
 	var config := ConfigFile.new()
 	# Load existing data first to preserve upgrades
-	config.load(SaveManagerScript.SHOP_PATH)
+	config.load(SaveManager.SHOP_PATH)
 	config.set_value("characters", "unlocked", extra_unlocked)
-	var err := config.save(SaveManagerScript.SHOP_PATH)
+	var err := config.save(SaveManager.SHOP_PATH)
 	
 	if err == OK:
 		print("[DEBUG] All characters unlocked! (%d total, %d non-default saved)" % [all_ids.size(), extra_unlocked.size()])
@@ -719,13 +720,13 @@ func _on_complete_achievements() -> void:
 	
 	# Also unlock general achievements
 	var general_achievements := [
-		"first_blood",        # First Blood
-		"kill_50000",         # Massacre
-		"boss_slayer",        # Boss Slayer
-		"no_damage",          # Untouchable
-		"all_maps",           # World Traveler
-		"abandoned_wishes",   # Abandoned Wishes
-		"she_descends"        # She Descends
+		"first_blood", # First Blood
+		"kill_50000", # Massacre
+		"boss_slayer", # Boss Slayer
+		"no_damage", # Untouchable
+		"all_maps", # World Traveler
+		"abandoned_wishes", # Abandoned Wishes
+		"she_descends" # She Descends
 	]
 	
 	for ach_id in general_achievements:
@@ -743,19 +744,19 @@ func _on_complete_achievements() -> void:
 	print("[DEBUG] Completed %d achievements (including general)!" % count)
 
 func _on_add_pristine_core() -> void:
-	if GameState and GameState.has_method("add_pristine_cores"):
-		GameState.add_pristine_cores(1)
-		print("[DEBUG] Added 1 Pristine Core. Total: %d" % GameState.get_pristine_cores())
+	if GameManager and GameManager.has_method("add_pristine_cores"):
+		GameManager.add_pristine_cores(1)
+		print("[DEBUG] Added 1 Pristine Core. Total: %d" % GameManager.get_pristine_cores())
 
 func _on_add_pristine_cores_10() -> void:
-	if GameState and GameState.has_method("add_pristine_cores"):
-		GameState.add_pristine_cores(10)
-		print("[DEBUG] Added 10 Pristine Cores. Total: %d" % GameState.get_pristine_cores())
+	if GameManager and GameManager.has_method("add_pristine_cores"):
+		GameManager.add_pristine_cores(10)
+		print("[DEBUG] Added 10 Pristine Cores. Total: %d" % GameManager.get_pristine_cores())
 
 func _on_add_pristine_cores_100() -> void:
-	if GameState and GameState.has_method("add_pristine_cores"):
-		GameState.add_pristine_cores(100)
-		print("[DEBUG] Added 100 Pristine Cores. Total: %d" % GameState.get_pristine_cores())
+	if GameManager and GameManager.has_method("add_pristine_cores"):
+		GameManager.add_pristine_cores(100)
+		print("[DEBUG] Added 100 Pristine Cores. Total: %d" % GameManager.get_pristine_cores())
 
 # === DATA CALLBACKS ===
 
@@ -765,8 +766,8 @@ func _on_open_save_folder() -> void:
 	print("[DEBUG] Opened save folder: %s" % save_path)
 
 func _on_reset_shop() -> void:
-	if GameState:
-		GameState.set_pristine_cores(0)
+	if GameManager:
+		GameManager.set_pristine_cores(0)
 	
 	var config := ConfigFile.new()
 	config.set_value("currency", "pristine_cores", 0)
@@ -774,13 +775,13 @@ func _on_reset_shop() -> void:
 	if CharacterRegistryScript and "DEFAULT_UNLOCKED" in CharacterRegistryScript:
 		config.set_value("characters", "unlocked", CharacterRegistryScript.DEFAULT_UNLOCKED.duplicate())
 	config.set_value("upgrades", "data", {})
-	config.save(SaveManagerScript.SHOP_PATH)
+	config.save(SaveManager.SHOP_PATH)
 	
 	print("[DEBUG] Shop data reset!")
 
 func _on_reset_leaderboards() -> void:
-	if GameState:
-		GameState.reset_leaderboard()
+	if GameManager:
+		GameManager.reset_leaderboard()
 		print("[DEBUG] Requested leaderboard reset")
 
 func _on_reset_achievements() -> void:
@@ -794,13 +795,13 @@ func _on_reset_achievements() -> void:
 			achievement_manager._save()
 	
 	# Also delete the file
-	if FileAccess.file_exists(SaveManagerScript.ACHIEVEMENTS_PATH):
-		DirAccess.remove_absolute(SaveManagerScript.ACHIEVEMENTS_PATH)
+	if FileAccess.file_exists(SaveManager.ACHIEVEMENTS_PATH):
+		DirAccess.remove_absolute(SaveManager.ACHIEVEMENTS_PATH)
 	
 	print("[DEBUG] Achievements reset!")
 
 func _on_reset_all_data() -> void:
-	var results := SaveManagerScript.delete_all_saves()
+	var results: Dictionary = SaveManager.delete_all_saves()
 	
 	for path in results:
 		if results[path]:
@@ -808,9 +809,9 @@ func _on_reset_all_data() -> void:
 		else:
 			print("[DEBUG] Failed to delete: %s" % path)
 	
-	if GameState:
-		GameState.set_pristine_cores(0)
-		GameState.stages_cleared.clear()
+	if GameManager:
+		GameManager.set_pristine_cores(0)
+		GameManager.stages_cleared.clear()
 	
 	var achievement_manager := get_node_or_null("/root/AchievementManager")
 	if achievement_manager:

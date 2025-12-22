@@ -16,18 +16,24 @@ var _enemy_container: Node2D = null
 var _combat_juice: Node = null
 var _score_ui: Control = null
 var _core_counter: CanvasLayer = null
+var _damage_layer: CanvasLayer = null
+var _minimap: Control = null
 
 func _ready():
 	_rng.randomize()
-	set_process_input(true)  # Ensure we receive input events
+	set_process_input(true) # Ensure we receive input events
 	
 	# Reset run stats for new game
-	if GameState:
-		GameState.reset_run_stats()
+	if GameManager:
+		GameManager.reset_run_stats()
 	
 	# Reset achievement session tracking
 	if has_node("/root/AchievementManager"):
 		get_node("/root/AchievementManager").reset_session()
+	
+	# Connect to enemy killed signal for player upgrades (Rapunzel healing, Nayuta clones, etc.)
+	if EventBus:
+		EventBus.enemy_killed.connect(_on_enemy_died)
 	
 	# Setup achievement notification UI
 	_setup_achievement_notification()
@@ -43,7 +49,7 @@ func _ready():
 	_enemy_container.name = "Enemies"
 	add_child(_enemy_container)
 	
-	# Setup wave system (must be before environment so spawn rules are ready)
+	# Setup wave system
 	_setup_wave_system()
 	
 	# Connect map selector signal (legacy, can be removed if MapSelector is no longer used)
@@ -70,8 +76,30 @@ func _ready():
 	# Setup main HUD (Health, etc) and Music Player
 	_setup_hud()
 	
+	# Setup Damage Layer (Layer 20, follows viewport)
+	# This ensures damage numbers are above world (night tint) but below UI, and track correctly
+	_damage_layer = CanvasLayer.new()
+	_damage_layer.name = "DamageLayer"
+	_damage_layer.layer = 20
+	_damage_layer.follow_viewport_enabled = true
+	add_child(_damage_layer)
+	
+	# Register damage layer with EffectPool
+	if EffectPool.get_instance():
+		EffectPool.get_instance().set_damage_layer(_damage_layer)
+		
 	# Warm up projectile cache (prevents shader stutter)
 	ProjectileCache.warm_up_cache(self)
+
+func _exit_tree() -> void:
+	# Clean up all static caches to prevent RID leaks
+	ProjectileCache.clear_all_pools()
+	TargetCache.cleanup()
+	UISoundManager.cleanup()
+	TextureCache.cleanup()
+	CharacterInfoPanel.cleanup()
+	VenetianBlindsBackground.clear_cache()
+	print("[Level] Cleanup complete")
 
 func _setup_hud() -> void:
 	if not player:
@@ -81,7 +109,7 @@ func _setup_hud() -> void:
 	var music_player_scene = load("res://scenes/ui/MusicPlayerUI.tscn")
 	if music_player_scene:
 		var mp_layer = CanvasLayer.new()
-		mp_layer.layer = 15 # Layer 15 (above HUD 10, below Pause 100)
+		mp_layer.layer = 126 # Layer 126 (above Pause 125)
 		mp_layer.name = "MusicPlayerLayer"
 		add_child(mp_layer)
 		
@@ -93,20 +121,20 @@ func _setup_hud() -> void:
 	
 	# Set world bounds BEFORE initializing environment so grass field uses correct size
 	var world_size = 4000.0
-	environment.set_world_bounds(Rect2(-world_size/2, -world_size/2, world_size, world_size))
+	environment.set_world_bounds(Rect2(-world_size / 2, -world_size / 2, world_size, world_size))
 	
 	# Initialize environment from stage (or random fallback)
 	# Initialize environment from stage (or random fallback)
 	_initialize_stage_environment()
 	
 	# She Descends easter egg mode: spawn N01 immediately
-	if GameState and (GameState.she_descends_mode or GameState.goddess_fall_mode):
+	if GameManager and (GameManager.she_descends_mode or GameManager.goddess_fall_mode):
 		_start_she_descends_mode()
-		return  # Skip normal run start
+		return # Skip normal run start
 	
 	# Notify run started
-	if GameState and EventBus:
-		EventBus.run_started.emit(GameState.current_stage_id)
+	if GameManager and EventBus:
+		EventBus.run_started.emit(GameManager.current_stage_id)
 		
 	# Start background music based on character
 	# Start background music based on initial character
@@ -115,7 +143,7 @@ func _setup_hud() -> void:
 # Removed _on_character_switched to prevent music changing during gameplay
 
 func _play_character_bgm(forced_index: int = -1) -> void:
-	if not GameState or not AudioDirector:
+	if not GameManager or not AudioDirector:
 		return
 		
 	# Determine which character to play music for
@@ -124,7 +152,7 @@ func _play_character_bgm(forced_index: int = -1) -> void:
 		main_char_idx = forced_index
 	else:
 		# Default to main selected character
-		var char_indices = GameState.selected_character_indices
+		var char_indices = GameManager.selected_character_indices
 		if not char_indices.is_empty():
 			main_char_idx = char_indices[0]
 	
@@ -170,7 +198,7 @@ func _input(event: InputEvent) -> void:
 	if _pause_menu and _pause_menu.visible:
 		return
 	
-	if event.is_action_pressed("ui_cancel"):  # ESC key
+	if event.is_action_pressed("ui_cancel"): # ESC key
 		_toggle_pause_menu()
 		get_viewport().set_input_as_handled()
 
@@ -214,12 +242,12 @@ func _on_settings_requested() -> void:
 	var settings_scene = load("res://scenes/ui/SettingsMenu.tscn")
 	if settings_scene:
 		var canvas_layer := CanvasLayer.new()
-		canvas_layer.layer = 101  # Above pause menu (layer 100)
+		canvas_layer.layer = 101 # Above pause menu (layer 100)
 		canvas_layer.name = "SettingsLayer"
 		add_child(canvas_layer)
 		
 		var settings = settings_scene.instantiate()
-		settings.process_mode = Node.PROCESS_MODE_ALWAYS  # Work while paused
+		settings.process_mode = Node.PROCESS_MODE_ALWAYS # Work while paused
 		canvas_layer.add_child(settings)
 		
 		# Connect back signal to close settings
@@ -239,12 +267,12 @@ func _on_character_select_requested() -> void:
 		CombatJuice.reset()
 	
 	# Reset bullet time (Wells ability) in case it was active
-	if GameState:
-		GameState.enemy_time_scale = 1.0
+	if GameManager:
+		GameManager.enemy_time_scale = 1.0
 	
 	# Record the run result before leaving (save score even if player didn't die)
-	if GameState:
-		GameState.record_run_result("")
+	if GameManager:
+		GameManager.record_run_result("")
 	
 	# Stop battle music and ambient sounds
 	if AudioDirector:
@@ -262,12 +290,12 @@ func _on_quit_requested() -> void:
 		CombatJuice.reset()
 	
 	# Reset bullet time (Wells ability) in case it was active
-	if GameState:
-		GameState.enemy_time_scale = 1.0
+	if GameManager:
+		GameManager.enemy_time_scale = 1.0
 	
 	# Record the run result before quitting (save score even if player didn't die)
-	if GameState:
-		GameState.record_run_result("")
+	if GameManager:
+		GameManager.record_run_result("")
 	
 	# Stop battle music and ambient sounds
 	if AudioDirector:
@@ -335,18 +363,18 @@ func _initialize_stage_environment() -> void:
 		return
 	
 	# Get stage from registry using current_stage_id
-	var stage_id: String = GameState.current_stage_id if GameState else "stage_1"
+	var stage_id: String = GameManager.current_stage_id if GameManager else "stage_1"
 	var StageRegistryClass := load("res://scripts/systems/StageRegistry.gd")
 	var stage: Dictionary = StageRegistryClass.get_stage(stage_id) if StageRegistryClass else {}
 	
 	var biome: StringName
 	var time: StringName
 	
-	# Use GameState.selected_biome and selected_time (set by map selector in StageSelector)
+	# Use GameManager.selected_biome and selected_time (set by map selector in StageSelector)
 	# These override the stage's default biome/time
-	if GameState.selected_biome != "" and GameState.selected_time != "":
-		biome = StringName(GameState.selected_biome)
-		time = StringName(GameState.selected_time)
+	if GameManager.selected_biome != "" and GameManager.selected_time != "":
+		biome = StringName(GameManager.selected_biome)
+		time = StringName(GameManager.selected_time)
 		print("[Level] Using selected map: biome=", biome, " time=", time)
 	elif not stage.is_empty():
 		biome = StringName(stage.biome)
@@ -363,6 +391,27 @@ func _initialize_stage_environment() -> void:
 	# Apply spawn rules from stage to spawner and wave director
 	if not stage.is_empty():
 		var spawn_rules: Dictionary = stage.get("spawn_rules", {})
+		
+		# Check for HUNT mode - this takes precedence
+		if spawn_rules.get("hunt_mode", false):
+			print("[Level] HUNT mode detected - setting up hunt system...")
+			_setup_hunt_mode()
+			# Initialize environment AFTER hunt setup for larger map
+			environment.initialize_environment(0, biome, time)
+			call_deferred("_cleanup_edge_boulders")
+			_update_ambient_systems(biome, time)
+			return # Skip wave system setup
+		
+		# Check for DEFENSE mode
+		if spawn_rules.get("defense_mode", false):
+			print("[Level] DEFENSE mode detected - setting up defense system...")
+			_setup_defense_mode()
+			environment.initialize_environment(0, biome, time)
+			call_deferred("_cleanup_edge_boulders")
+			_update_ambient_systems(biome, time)
+			return # Skip wave system setup
+		
+		# Standard mode - set up wave system and apply modifiers
 		if _enemy_spawner and spawn_rules.get("elite_only", false):
 			_enemy_spawner.set_elite_only_mode(true)
 			print("[Level] Elite-only mode enabled")
@@ -532,6 +581,112 @@ func _on_time_selected(time_id: StringName) -> void:
 # WAVE SYSTEM
 # ============================================================================
 
+var _hunt_director: Node = null
+var _defense_director: Node = null
+
+func _setup_defense_mode() -> void:
+	# DEFENSE mode: Square map, defend ARK at top from enemies spawning left/right/bottom
+	print("[Level] Setting up DEFENSE mode...")
+	
+	# Use square map (like standard mode)
+	var world_size := 4000.0
+	environment.set_world_bounds(Rect2(-world_size / 2, -world_size / 2, world_size, world_size))
+	
+	# Player spawns at center of map
+	if player:
+		player.global_position = Vector2(0, 0)
+		print("[Level] Player positioned at center")
+	
+	# Create enemy spawner with defense bounds
+	_enemy_spawner = Node2D.new()
+	_enemy_spawner.set_script(load("res://scripts/enemies/EnemySpawner.gd"))
+	_enemy_spawner.name = "EnemySpawner"
+	_enemy_spawner.add_to_group("enemy_spawners")
+	add_child(_enemy_spawner)
+	_enemy_spawner.initialize(player, _enemy_container)
+	_enemy_spawner.set_map_bounds(Rect2(-world_size / 2, -world_size / 2, world_size, world_size))
+	
+	# Create DefenseDirector
+	_defense_director = Node.new()
+	_defense_director.set_script(load("res://scripts/world/DefenseDirector.gd"))
+	_defense_director.name = "DefenseDirector"
+	add_child(_defense_director)
+	
+	# Connect DefenseDirector signals
+	if _defense_director.has_signal("base_destroyed"):
+		_defense_director.base_destroyed.connect(_on_base_destroyed)
+	if _defense_director.has_signal("defense_complete"):
+		_defense_director.defense_complete.connect(_on_defense_complete)
+	
+	# Start defense mode
+	_defense_director.start()
+	
+	# Setup score UI and minimap
+	_setup_score_ui()
+	_setup_minimap()
+	_setup_core_counter()
+	
+	print("[Level] DEFENSE mode started - Protect your base!")
+
+func _on_base_destroyed() -> void:
+	print("[Level] Base destroyed! Game over!")
+
+func _on_defense_complete(waves_survived: int) -> void:
+	print("[Level] Defense complete! Survived %d waves" % waves_survived)
+
+func _setup_hunt_mode() -> void:
+	# HUNT mode: Large map with INTEL objectives
+	print("[Level] Setting up HUNT mode...")
+	
+	# Create a larger map for Hunt mode
+	var world_size := 16000.0 # 16x larger than standard
+	environment.set_world_bounds(Rect2(-world_size / 2, -world_size / 2, world_size, world_size))
+	
+	# Create enemy spawner with larger bounds
+	_enemy_spawner = Node2D.new()
+	_enemy_spawner.set_script(load("res://scripts/enemies/EnemySpawner.gd"))
+	_enemy_spawner.name = "EnemySpawner"
+	_enemy_spawner.add_to_group("enemy_spawners")
+	add_child(_enemy_spawner)
+	_enemy_spawner.initialize(player, _enemy_container)
+	_enemy_spawner.set_map_bounds(Rect2(-world_size / 2, -world_size / 2, world_size, world_size))
+	
+	# Create HuntDirector instead of WaveDirector
+	_hunt_director = Node.new()
+	_hunt_director.set_script(load("res://scripts/world/HuntDirector.gd"))
+	_hunt_director.name = "HuntDirector"
+	add_child(_hunt_director)
+	
+	# Connect HuntDirector signals
+	if _hunt_director.has_signal("intel_collected"):
+		_hunt_director.intel_collected.connect(_on_intel_collected)
+	if _hunt_director.has_signal("all_intel_collected"):
+		_hunt_director.all_intel_collected.connect(_on_all_intel_collected)
+	if _hunt_director.has_signal("hunt_complete"):
+		_hunt_director.hunt_complete.connect(_on_hunt_complete)
+	
+	# Setup UI components FIRST (before starting hunt director!)
+	_setup_score_ui()
+	_setup_minimap()
+	_setup_core_counter()
+	
+	# NOW start the hunt (after minimap exists!)
+	_hunt_director.start()
+	
+	print("[Level] HUNT mode started - Find all INTEL boxes!")
+
+func _on_intel_collected(intel_index: int, total: int) -> void:
+	print("[Level] INTEL collected: %d/%d" % [intel_index + 1, total])
+
+func _on_all_intel_collected() -> void:
+	print("[Level] All INTEL collected! N01 has spawned...")
+
+func _on_hunt_complete(survived: bool, time_taken: float) -> void:
+	print("[Level] Hunt complete! Survived: %s, Time: %.1f seconds" % [survived, time_taken])
+	if survived:
+		# Victory - could trigger end screen here
+		print("[Level] HUNT mode victory!")
+
 func _setup_wave_system() -> void:
 	# Create wave director
 	_wave_director = Node.new()
@@ -548,42 +703,59 @@ func _setup_wave_system() -> void:
 	
 	# Set map bounds for spawning
 	var world_size := 4000.0
-	_enemy_spawner.set_map_bounds(Rect2(-world_size/2, -world_size/2, world_size, world_size))
+	_enemy_spawner.set_map_bounds(Rect2(-world_size / 2, -world_size / 2, world_size, world_size))
 	
 	# Create wave UI
 	_wave_ui = CanvasLayer.new()
 	_wave_ui.set_script(load("res://scripts/world/WaveUI.gd"))
 	_wave_ui.name = "WaveUI"
 	_wave_ui.layer = 10
-	_wave_ui.add_to_group("wave_ui")  # For Future Marian warning access
+	_wave_ui.add_to_group("wave_ui") # For Future Marian warning access
 	add_child(_wave_ui)
 	
 	# Connect signals
 	_wave_director.enemy_spawn_requested.connect(_on_enemy_spawn_requested)
-	_wave_director.event_started.connect(_on_event_started)
-	_wave_director.event_ended.connect(_on_event_ended)
-	_wave_director.boss_incoming.connect(_on_boss_incoming)
-	_wave_director.run_complete.connect(_on_run_complete)
-	_wave_director.time_updated.connect(_on_time_updated)
+	_wave_director.time_updated.connect(_wave_ui.update_time)
+
+	_wave_director.wave_changed.connect(_wave_ui.update_wave)
 	_wave_director.wave_changed.connect(_on_wave_changed)
 	
-
-	if _wave_director.has_signal("rapture_event_started"):
-		_wave_director.rapture_event_started.connect(_on_rapture_event_started)
+	if _wave_director.has_signal("wave_reward_earned"):
+		_wave_director.wave_reward_earned.connect(_on_wave_reward_earned)
 	
-	_enemy_spawner.enemy_died.connect(_on_enemy_died)
-	if _enemy_spawner.has_signal("rapture_queen_spawned"):
-		_enemy_spawner.rapture_queen_spawned.connect(_on_rapture_queen_spawned)
-	
-	# Start the wave system
 	_wave_director.start()
-	print("[Level] Wave system started - 5 minute run!")
 	
-	# Setup score UI in top-right corner
+	# Setup score UI and minimap
 	_setup_score_ui()
-	
-	# Setup core counter in bottom-right corner
+	_setup_minimap()
 	_setup_core_counter()
+	
+	print("[Level] Wave system setup complete")
+
+func _on_wave_reward_earned(count: int) -> void:
+	if not player:
+		return
+		
+	var OrbScript = load("res://scripts/world/PristineCoreOrb.gd")
+	if not OrbScript:
+		return
+		
+	# Spawn orbs
+	for i in range(count):
+		# Create orb instance from script
+		var orb = OrbScript.new()
+		orb.cores_value = 1
+		
+		# Position near player (splashed outwards)
+		# User requested at least 1/4 screen away (~450px) to prevent instant pickup
+		var angle = randf() * TAU
+		var dist = randf_range(450.0, 600.0)
+		var offset = Vector2(cos(angle), sin(angle)) * dist
+		orb.global_position = player.global_position + offset
+		
+		add_child(orb)
+		
+	print("[Level] Spawned %d Pristine Core(s) as reward" % count)
 
 func _setup_score_ui() -> void:
 	var ScoreUIScript = load("res://scripts/ui/ScoreUI.gd")
@@ -598,6 +770,26 @@ func _setup_score_ui() -> void:
 		_score_ui.name = "ScoreUI"
 		canvas.add_child(_score_ui)
 		print("[Level] Score UI initialized")
+
+func _setup_minimap() -> void:
+	var MiniMapScript = load("res://scripts/ui/MiniMap.gd")
+	if MiniMapScript:
+		var canvas := CanvasLayer.new()
+		canvas.name = "MiniMapLayer"
+		canvas.layer = 10
+		add_child(canvas)
+		
+		_minimap = Control.new()
+		_minimap.set_script(MiniMapScript)
+		_minimap.name = "MiniMap"
+		_minimap.add_to_group("minimap")
+		canvas.add_child(_minimap)
+		
+		# Set player reference
+		if player and _minimap.has_method("set_player"):
+			_minimap.set_player(player)
+		
+		print("[Level] MiniMap initialized")
 
 func _setup_core_counter() -> void:
 	# Create core counter in bottom-right corner
@@ -632,7 +824,7 @@ func _update_core_counter() -> void:
 	# Find the styled container and update its label
 	var styled := counter.get_node_or_null("StyledContainer")
 	if styled and styled.has_method("update_count"):
-		styled.update_count(GameState.get_pristine_cores())
+		styled.update_count(GameManager.get_pristine_cores())
 
 # Inner class for drawing the Pristine Core icon
 class _PristineCoreIcon extends Control:
@@ -678,7 +870,7 @@ func _process(delta: float) -> void:
 		_wave_director.set_enemy_count(_enemy_container.get_child_count())
 	
 	# Handle Goddess Fall Timer (WaveDirector is deleted in this mode)
-	if GameState and (GameState.goddess_fall_mode or GameState.she_descends_mode) and _wave_director == null:
+	if GameManager and (GameManager.goddess_fall_mode or GameManager.she_descends_mode) and _wave_director == null:
 		_goddess_elapsed += delta
 		if _wave_ui:
 			_wave_ui.update_time(_goddess_elapsed, 175.0)
@@ -717,7 +909,7 @@ func _on_event_started(event_type: String, event_data: Dictionary) -> void:
 		_wave_ui.show_event(event_type, event_data, elapsed)
 
 func _on_event_ended(_event_type: String) -> void:
-	pass  # Could add cleanup logic here
+	pass # Could add cleanup logic here
 
 func _on_boss_incoming(_boss_type: String, time_until: float) -> void:
 	if _wave_ui:
@@ -725,7 +917,7 @@ func _on_boss_incoming(_boss_type: String, time_until: float) -> void:
 
 func _on_boss_died(is_super_boss: bool = false) -> void:
 	# Don't award core if boss died from enrage (player loses)
-	if GameState and GameState.has_meta("killed_by_enrage") and GameState.get_meta("killed_by_enrage"):
+	if GameManager and GameManager.has_meta("killed_by_enrage") and GameManager.get_meta("killed_by_enrage"):
 		print("[Level] Boss died from enrage - no core awarded")
 	else:
 		# Award Pristine Rapture Core for killing a boss - spawn visual orb
@@ -759,8 +951,8 @@ func _on_run_complete(survived: bool, final_time: float) -> void:
 	if survived:
 		print("[Level] RUN COMPLETE! Survived %d:%02d" % [mins, secs])
 		# Mark stage as cleared
-		if GameState:
-			GameState.mark_stage_cleared(GameState.current_stage_id)
+		if GameManager:
+			GameManager.mark_stage_cleared(GameManager.current_stage_id)
 			# Core is awarded via orb when boss dies, no need to add here
 			
 			# Track win achievement for all characters in squad
@@ -769,7 +961,7 @@ func _on_run_complete(survived: bool, final_time: float) -> void:
 			
 			# Notify event bus
 			if EventBus:
-				EventBus.run_completed.emit(true, GameState.current_stage_id, final_time)
+				EventBus.run_completed.emit(true, GameManager.current_stage_id, final_time)
 		
 		# Show victory screen
 		var pause_menu = get_node_or_null("PauseMenu")
@@ -812,7 +1004,6 @@ func _on_rapture_event_started() -> void:
 
 func _on_rapture_queen_defeated() -> void:
 	# Called when Queen node is freed (tree_exiting)
-	
 	# Reset Camera Zoom via CombatJuice
 	if CombatJuice.instance:
 		var tween = create_tween()
@@ -881,7 +1072,7 @@ func _start_she_descends_mode() -> void:
 		_wave_director = null
 	
 	# Force UI into Goddess Mode (Override)
-	# This ensures HUD says ENDGAME even if GameState flags are flaky
+	# This ensures HUD says ENDGAME even if GameManager flags are flaky
 	if _wave_ui and _wave_ui.has_method("set_goddess_mode"):
 		_wave_ui.set_goddess_mode(true)
 	
@@ -910,7 +1101,7 @@ func _animate_queen_descent(queen: Node2D) -> void:
 	# Get player position for target
 	var target_pos := Vector2.ZERO
 	if player and is_instance_valid(player):
-		target_pos = player.global_position + Vector2(0, -400)  # Above player
+		target_pos = player.global_position + Vector2(0, -400) # Above player
 	
 	# Start N01 way above the screen
 	var start_pos := target_pos + Vector2(0, -1200)
@@ -953,15 +1144,15 @@ func _on_she_descends_queen_defeated() -> void:
 		tween.tween_property(CombatJuice.instance, "_base_zoom", Vector2.ONE, 2.0)
 	
 	# Reset the mode flag
-	if GameState:
-		GameState.she_descends_mode = false
+	if GameManager:
+		GameManager.she_descends_mode = false
 	
 	# Show victory screen after brief delay
 	await get_tree().create_timer(2.0).timeout
 	if _wave_director == null and player and is_instance_valid(player) and player.hp > 0:
 		# Player won this special mode
-		if GameState:
-			GameState.record_run_result("")
+		if GameManager:
+			GameManager.record_run_result("")
 		# Trigger victory/end (show defeat menu which can show victory state)
 		show_defeat_menu()
 
@@ -1019,17 +1210,16 @@ func _get_current_biome() -> StringName:
 
 func _on_wave_changed(wave_number: int) -> void:
 	# print("[Level] Wave changed to: ", wave_number)
-	
-	# Update GameState with current wave for leaderboard
-	if GameState:
-		GameState.set_current_wave(wave_number)
+	# Update GameManager with current wave for leaderboard
+	if GameManager:
+		GameManager.set_current_wave(wave_number)
 		
 	# Unlock "ABANDONED WISHES" Achievement at Wave 10
 	if wave_number == 10:
 		if AchievementManager:
 			AchievementManager._unlock_achievement(
-				AchievementManager.get_achievement_id(AchievementManager.AchievementType.ABANDONED_WISHES, ""), 
-				"", 
+				AchievementManager.get_achievement_id(AchievementManager.AchievementType.ABANDONED_WISHES, ""),
+				"",
 				AchievementManager.AchievementType.ABANDONED_WISHES
 			)
 			# Refresh playlist to include new track immediately
@@ -1048,16 +1238,11 @@ func _on_wave_changed(wave_number: int) -> void:
 		if wave_display:
 			wave_display.text = "WAVE %d" % wave_number
 
-func _on_enemy_died(enemy: Node2D) -> void:
+func _on_enemy_died(enemy: Node2D, killer_source: String = "player") -> void:
 	# Handle charmed enemy deaths specially for Sin's Captivating talent
 	if enemy.is_in_group("charmed_allies"):
 		_on_charmed_enemy_died(enemy)
 		return
-	
-	# Get killer source from enemy if available
-	var killer_source: String = "player"
-	if "_killer_source" in enemy:
-		killer_source = enemy._killer_source
 	
 	# Notify player for kill-based upgrades (Rapunzel healing, etc.)
 	if player and player.has_method("on_enemy_killed"):
@@ -1089,7 +1274,7 @@ func _on_charmed_enemy_died(enemy: Node2D) -> void:
 
 func _spawn_charmed_death_explosion(death_pos: Vector2) -> void:
 	"""Spawn a rocket-sized explosion when a charmed enemy dies (Captivating Lv2+)."""
-	const EXPLOSION_RADIUS := 120.0  # Rocket-sized
+	const EXPLOSION_RADIUS := 120.0 # Rocket-sized
 	
 	if not player:
 		return
@@ -1121,7 +1306,7 @@ func _spawn_charmed_death_explosion(death_pos: Vector2) -> void:
 	var visual := Node2D.new()
 	visual.set_script(_create_explosion_visual_script())
 	visual.set("radius", EXPLOSION_RADIUS)
-	visual.set("color", Color(1.0, 0.3, 0.6, 0.8))  # Pink/magenta for Sin's charm
+	visual.set("color", Color(1.0, 0.3, 0.6, 0.8)) # Pink/magenta for Sin's charm
 	add_child(visual)
 	visual.global_position = death_pos
 
@@ -1172,7 +1357,7 @@ func random_edge_position(player_pos: Vector2):
 	if camera:
 		viewport_size *= camera.zoom
 	
-	var margin = 200.0  # Extra distance outside viewport
+	var margin = 200.0 # Extra distance outside viewport
 	var spawn_distance = viewport_size.length() / 2.0 + margin
 	
 	var angle = randf() * TAU
@@ -1225,13 +1410,13 @@ func _track_win_achievement() -> void:
 	
 	var achievement_manager = get_node("/root/AchievementManager")
 	
-	# Get squad character IDs from GameState
+	# Get squad character IDs from GameManager
 	var char_ids: Array = []
-	if GameState:
+	if GameManager:
 		var registry = CharacterRegistry.get_instance()
 		if registry:
 			var all_ids: Array = registry.get_all_character_ids()
-			for idx in GameState.selected_character_indices:
+			for idx in GameManager.selected_character_indices:
 				if idx >= 0 and idx < all_ids.size():
 					char_ids.append(all_ids[idx])
 	
@@ -1250,7 +1435,7 @@ class _PristineCoreContainer extends Control:
 	
 	var _count_label: Label = null
 	var _glow_time: float = 0.0
-	var _flash_time: float = 0.0  # Time remaining for collection flash
+	var _flash_time: float = 0.0 # Time remaining for collection flash
 	
 	func _init() -> void:
 		custom_minimum_size = Vector2(CONTAINER_WIDTH, CONTAINER_HEIGHT)
@@ -1269,7 +1454,7 @@ class _PristineCoreContainer extends Control:
 			_count_label.text = str(value)
 	
 	func flash_collected() -> void:
-		_flash_time = 0.5  # Flash for 0.5 seconds
+		_flash_time = 0.5 # Flash for 0.5 seconds
 	
 	func _build_container() -> void:
 		# Main content HBox
@@ -1290,7 +1475,7 @@ class _PristineCoreContainer extends Control:
 		
 		# Count label
 		_count_label = Label.new()
-		_count_label.text = str(GameState.get_pristine_cores()) if GameState else "0"
+		_count_label.text = str(GameManager.get_pristine_cores()) if GameManager else "0"
 		_count_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_count_label.add_theme_font_size_override("font_size", 28)
@@ -1307,7 +1492,7 @@ class _PristineCoreContainer extends Control:
 		# Calculate flash intensity
 		var flash_intensity: float = 0.0
 		if _flash_time > 0:
-			flash_intensity = _flash_time / 0.5  # 0 to 1 based on remaining time
+			flash_intensity = _flash_time / 0.5 # 0 to 1 based on remaining time
 		
 		# Pulsing glow effect (enhanced during flash)
 		var base_pulse: float = 0.4 + 0.15 * sin(_glow_time * 2.5)

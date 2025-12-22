@@ -1,6 +1,11 @@
 extends "res://scripts/characters/CharacterController.gd"
 class_name CrownController
-## Crown - Minigun with Cavalry Charge special and Golden Nova burst
+## Crown - Minigun
+# Special: Royal Guard (Shield wall)
+# Burst: Naked King (Huge buff)
+
+func get_is_automatic() -> bool:
+	return true
 ## Special: Summon ethereal horse for invincible charge with V-shaped damage
 ## Burst: Massive golden AoE blast, upgradeable with forward beam
 
@@ -9,20 +14,20 @@ var bullet_speed: float = 1100.0
 var bullets_per_burst: int = 1
 
 # Special config (Cavalry Charge)
-var charge_cooldown: float = 10.0  # Base 10s cooldown
-var charge_duration: float = 2.5  # Lasts 2.5 seconds
-var charge_speed: float = 600.0  # Fast charge speed
-var charge_damage: int = 15  # Base damage per hit
-var charge_length: float = 175.0  # How far ahead the V extends (reduced 50%)
-var charge_width: float = 125.0  # Max width at the back of the V (reduced 50%)
-var charge_knockback: float = 400.0  # Knockback force for survivors
+var charge_cooldown: float = 10.0 # Base 10s cooldown
+var charge_duration: float = 2.5 # Lasts 2.5 seconds
+var charge_speed: float = 600.0 # Fast charge speed
+var charge_damage: int = 15 # Base damage per hit
+var charge_length: float = 175.0 # How far ahead the V extends (reduced 50%)
+var charge_width: float = 125.0 # Max width at the back of the V (reduced 50%)
+var charge_knockback: float = 400.0 # Knockback force for survivors
 
 # Burst config
-const BURST_DAMAGE := 50  # Massive damage
-const BURST_DURATION := 1.0  # Visual duration
-const BEAM_DURATION := 3.0  # Forward beam lasts 3 seconds
-const BEAM_DAMAGE := 25  # Beam damage per tick
-const BEAM_TICK_RATE := 0.1  # Damage every 0.1s
+const BURST_DAMAGE := 50 # Massive damage
+const BURST_DURATION := 1.0 # Visual duration
+const BEAM_DURATION := 3.0 # Forward beam lasts 3 seconds
+const BEAM_DAMAGE := 25 # Beam damage per tick
+const BEAM_TICK_RATE := 0.1 # Damage every 0.1s
 const BEAM_WIDTH := 120.0
 
 # Charge state
@@ -30,11 +35,11 @@ var _is_charging: bool = false
 var _charge_timer: float = 0.0
 var _charge_direction: Vector2 = Vector2.RIGHT
 var _charge_visual: Node2D = null
-var _hit_enemies: Array = []  # Track enemies hit during charge
+var _hit_enemies: Array = [] # Track enemies hit during charge
 var _post_charge_invincibility_timer: float = 0.0 # Safety buffer after charge ends
 
 # Marked enemies (for explosion upgrade)
-var _marked_enemies: Array = []  # [{enemy_ref, mark_time, effect_ref}]
+var _marked_enemies: Array = [] # [{enemy_ref, mark_time, effect_ref}]
 const MARK_EXPLOSION_DELAY := 1.5
 
 # Burst beam state
@@ -45,14 +50,14 @@ var _beam_direction: Vector2 = Vector2.RIGHT
 var _beam_visual: Node2D = null
 
 # Talent states
-var special_cooldown_level: int = 0  # -2s per level, max 3
-var special_explosion_level: int = 0  # Explosion damage/range upgrade, max 3
-var burst_charge_unlocked: bool = false  # Burst generates burst gauge
-var burst_beam_unlocked: bool = false  # Adds forward beam to burst
+var special_cooldown_level: int = 0 # -2s per level, max 3
+var special_explosion_level: int = 0 # Explosion damage/range upgrade, max 3
+var burst_charge_unlocked: bool = false # Burst generates burst gauge
+var burst_beam_unlocked: bool = false # Adds forward beam to burst
 
 # Trombe stacking upgrade state
 var _has_trombe_stacking_upgrade: bool = false
-var _trombe_stack_timers: Array = []  # Each entry is remaining time for that stack
+var _trombe_stack_timers: Array = [] # Each entry is remaining time for that stack
 const TROMBE_STACK_DURATION := 12.0
 const TROMBE_STACK_MULTIPLIER := 1.35
 const TROMBE_MAX_STACKS := 3
@@ -194,6 +199,10 @@ func _damage_enemies_in_charge_zone() -> void:
 		# Skip already hit enemies
 		if enemy in _hit_enemies:
 			continue
+			
+		# Skip charmed allies (Sin's mind control)
+		if enemy.is_in_group("charmed_allies"):
+			continue
 		
 		var enemy_node := enemy as Node2D
 		var to_enemy := enemy_node.global_position - player.global_position
@@ -209,8 +218,8 @@ func _damage_enemies_in_charge_zone() -> void:
 		# Width increases with distance from tip (V shape)
 		# At tip (forward_dist = charge_length), width is small
 		# At back (forward_dist = 0), width is charge_width
-		var t := 1.0 - clampf(forward_dist / effective_length, 0.0, 1.0)  # 0 at tip, 1 at back
-		var max_lateral := 30.0 * size_mult + t * effective_width * 0.5  # Scale tip width too
+		var t := 1.0 - clampf(forward_dist / effective_length, 0.0, 1.0) # 0 at tip, 1 at back
+		var max_lateral := 30.0 * size_mult + t * effective_width * 0.5 # Scale tip width too
 		var lateral: float = abs(to_enemy.dot(_charge_direction.orthogonal()))
 		if lateral > max_lateral:
 			continue
@@ -305,7 +314,7 @@ func _trigger_mark_explosion(position: Vector2, _source_enemy: Node) -> void:
 		return
 	
 	# Calculate damage based on upgrade level: 1x/2x/3x player attack
-	var damage_multiplier: int = special_explosion_level  # Level 1=1x, Level 2=2x, Level 3=3x
+	var damage_multiplier: int = special_explosion_level # Level 1=1x, Level 2=2x, Level 3=3x
 	var explosion_damage: int = player.calc_damage() * damage_multiplier
 	
 	# Fixed explosion radius
@@ -413,6 +422,10 @@ func _spawn_burst_nova() -> void:
 		var enemy_node := enemy as Node2D
 		if not view_rect.has_point(enemy_node.global_position):
 			continue
+			
+		# Skip charmed allies (Sin's mind control)
+		if enemy.is_in_group("charmed_allies"):
+			continue
 		
 		if enemy.has_method("take_damage"):
 			var hit_dir := (enemy_node.global_position - player.global_position).normalized()
@@ -440,7 +453,7 @@ func _start_burst_beam() -> void:
 	_beam_visual = Node2D.new()
 	_beam_visual.set_script(_get_beam_visual_script())
 	_beam_visual.set("beam_width", BEAM_WIDTH)
-	_beam_visual.set("beam_length", 2000.0)  # Long beam
+	_beam_visual.set("beam_length", 2000.0) # Long beam
 	# Add beam visual to world and mark its CanvasItems to the effects layer
 	player.get_parent().add_child(_beam_visual)
 	_beam_visual.global_position = player.global_position
@@ -459,8 +472,8 @@ func _update_burst_beam(delta: float) -> void:
 	var to_mouse := mouse_pos - player.global_position
 	if to_mouse.length() > 10.0:
 		var target_direction := to_mouse.normalized()
-		# Smoothly rotate beam toward mouse
-		_beam_direction = _beam_direction.lerp(target_direction, 4.0 * delta).normalized()
+		# Smoothly rotate beam toward mouse (Increased speed for responsiveness)
+		_beam_direction = _beam_direction.lerp(target_direction, 25.0 * delta).normalized()
 	
 	# Update visual position and rotation (follows player and mouse)
 	if _beam_visual and is_instance_valid(_beam_visual):
@@ -481,6 +494,10 @@ func _damage_enemies_in_beam() -> void:
 	var enemies := TargetCache.get_enemies()
 	for enemy in enemies:
 		if not is_instance_valid(enemy) or not enemy is Node2D:
+			continue
+			
+		# Skip charmed allies (Sin's mind control)
+		if enemy.is_in_group("charmed_allies"):
 			continue
 		
 		var enemy_node := enemy as Node2D
@@ -535,16 +552,6 @@ func _on_cleanup() -> void:
 			if effect and is_instance_valid(effect):
 				effect.queue_free()
 	_marked_enemies.clear()
-
-func _play_sound(weapon_type: String) -> void:
-	if player.audio_director:
-		player.audio_director.play_weapon_fire_sound(weapon_type)
-
-func get_attack_cooldown() -> float:
-	return data.attack_cooldown
-
-func _get_weapon_type_name() -> String:
-	return "minigun"
 
 ## Apply talent upgrade
 func apply_talent(talent_id: String) -> void:

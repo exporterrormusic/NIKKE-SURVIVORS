@@ -5,6 +5,14 @@ class_name CharacterInfoPanel
 const UI := preload("res://scripts/ui/UITheme.gd")
 const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
 
+# PERFORMANCE: Cache SpriteFrames per character to avoid recreation on each hover
+static var _sprite_frames_cache: Dictionary = {}
+
+## Clean up cached sprite frames to prevent RID leaks on exit
+static func cleanup() -> void:
+	_sprite_frames_cache.clear()
+	print("[CharacterInfoPanel] Cleanup complete")
+
 var _char_data: Resource = null
 
 var _sprite_viewport: SubViewport
@@ -420,6 +428,19 @@ func _configure_animated_sprite(char_data: Resource) -> void:
 	if not _animated_sprite or not char_data:
 		return
 	
+	var char_id: String = char_data.id if char_data.id else ""
+	
+	# PERFORMANCE: Check cache first
+	if _sprite_frames_cache.has(char_id):
+		var cached: Dictionary = _sprite_frames_cache[char_id]
+		_animated_sprite.sprite_frames = cached["frames"]
+		_animated_sprite.scale = cached["scale"]
+		_animated_sprite.visible = true
+		_animated_sprite.animation = "right"
+		if not _animated_sprite.is_playing():
+			_animated_sprite.play("right")
+		return
+	
 	var sprite_sheet: Texture2D = char_data.get_sprite()
 	if not sprite_sheet:
 		_animated_sprite.visible = false
@@ -461,6 +482,9 @@ func _configure_animated_sprite(char_data: Resource) -> void:
 		atlas.atlas = sprite_sheet
 		atlas.region = Rect2(col * frame_width, 2 * frame_height, frame_width, frame_height)
 		frames.add_frame("right", atlas)
+	
+	# Cache for reuse
+	_sprite_frames_cache[char_id] = {"frames": frames, "scale": Vector2(scale_factor, scale_factor)}
 	
 	_animated_sprite.sprite_frames = frames
 	_animated_sprite.scale = Vector2(scale_factor, scale_factor)

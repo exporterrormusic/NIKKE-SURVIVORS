@@ -1,6 +1,11 @@
 extends "res://scripts/characters/CharacterController.gd"
 class_name CommanderController
-## Legendary Commander - Assault Rifle with Time Freeze and Ally Summoning
+## Legendary Commander - Assault Rifle
+# Special: Order - Buffs squad
+# Burst: Air Support
+
+func get_is_automatic() -> bool:
+	return true
 ## Special: Freeze all enemies with clock effect (like his burst in the main game)
 ## Burst: Summon AI-controlled allies (Scarlet, Snow White, or Rapunzel)
 
@@ -12,18 +17,18 @@ const SummonedAllyScript = preload("res://scripts/player/SummonedAlly.gd")
 var bullet_speed: float = 900.0
 
 # Special config (Time Freeze)
-var freeze_duration: float = 3.0  # How long enemies are frozen
-var freeze_cooldown: float = 12.0  # Cooldown between freezes
+var freeze_duration: float = 3.0 # How long enemies are frozen
+var freeze_cooldown: float = 12.0 # Cooldown between freezes
 var _freeze_active: bool = false
 var _freeze_end_time: float = 0.0
 var _frozen_enemies: Array = []
 
 # Burst config (Summon Allies)
-var summon_duration: float = 10.0  # How long summoned allies last
+var summon_duration: float = 10.0 # How long summoned allies last
 var _active_allies: Array = []
 
 # Talent states
-var summon_count: int = 1  # Base: 1, Left upgrade: 2, Both upgrades: 3
+var summon_count: int = 1 # Base: 1, Left upgrade: 2, Both upgrades: 3
 var left_upgrade_unlocked: bool = false
 var right_upgrade_unlocked: bool = false
 
@@ -98,7 +103,7 @@ func _start_freeze() -> void:
 			var viewport_size := viewport.get_visible_rect().size
 			var cam_pos := camera.global_position
 			var half_size := viewport_size / (2.0 * camera.zoom)
-			view_rect = Rect2(cam_pos - half_size * 1.2, half_size * 2.4)  # Slightly larger to catch edge enemies
+			view_rect = Rect2(cam_pos - half_size * 1.2, half_size * 2.4) # Slightly larger to catch edge enemies
 		else:
 			view_rect = Rect2(player.global_position - Vector2(1000, 600), Vector2(2000, 1200))
 	else:
@@ -290,10 +295,6 @@ func _on_cleanup() -> void:
 	# Only clean up dead ally references
 	_cleanup_allies()
 
-func _play_sound(weapon_type: String) -> void:
-	if player.audio_director:
-		player.audio_director.play_weapon_fire_sound(weapon_type)
-
 func _play_ally_burst_sound(ally_type: int) -> void:
 	# Map ally type to character ID
 	var char_id: String
@@ -331,15 +332,11 @@ func _play_ally_burst_sound(ally_type: int) -> void:
 		audio_player.name = "AllyBurstVoice_%d" % Time.get_ticks_msec()
 		audio_player.stream = sound
 		audio_player.volume_db = 8.0
-		audio_player.bus = "SFX"  # Use SFX bus for voice lines
+		audio_player.bus = "SFX" # Use SFX bus for voice lines
 		audio_player.process_mode = Node.PROCESS_MODE_ALWAYS
 		root.add_child(audio_player)
 		audio_player.play()
 		audio_player.finished.connect(audio_player.queue_free)
-
-## Get attack cooldown
-func get_attack_cooldown() -> float:
-	return data.attack_cooldown
 
 ## Apply talent upgrade
 func apply_talent(talent_id: String) -> void:
@@ -348,9 +345,9 @@ func apply_talent(talent_id: String) -> void:
 			special_unlocked = true
 			reset_special_cooldown()
 		"special_duration":
-			freeze_duration += 1.0  # +1 second per upgrade
+			freeze_duration += 1.0 # +1 second per upgrade
 		"special_cooldown":
-			freeze_cooldown = maxf(6.0, freeze_cooldown - 2.0)  # -2s per upgrade, min 6s
+			freeze_cooldown = maxf(6.0, freeze_cooldown - 2.0) # -2s per upgrade, min 6s
 			data.special_cooldown = freeze_cooldown
 			reset_special_cooldown()
 		"burst_left":
@@ -362,11 +359,7 @@ func apply_talent(talent_id: String) -> void:
 			right_upgrade_unlocked = true
 			summon_count = 2 if not left_upgrade_unlocked else 3
 		"burst_duration":
-			summon_duration += 3.0  # +3 seconds per upgrade
-
-## Check if invincible
-func is_invincible() -> bool:
-	return false
+			summon_duration += 3.0 # +3 seconds per upgrade
 
 ## Get weapon type name for audio
 func _get_weapon_type_name() -> String:

@@ -16,8 +16,8 @@ var turret_cooldown: float = 10.0
 var _has_best_girl_upgrade: bool = false
 
 # Talent states
-var special_count_level: int = 0  # +2 max charges per level
-var special_capacity_level: int = 0  # +2 turret ammo per level
+var special_count_level: int = 0 # +2 max charges per level
+var special_capacity_level: int = 0 # +2 turret ammo per level
 var burst_burn_level: int = 0
 var burst_gauge_unlocked: bool = false
 
@@ -36,7 +36,7 @@ func _on_process(delta: float) -> void:
 	if turret_recharging:
 		turret_timer -= delta
 		if turret_timer <= 0:
-			turret_charges = turret_max_charges  # Refill all charges at once
+			turret_charges = turret_max_charges # Refill all charges at once
 			turret_recharging = false
 
 func _perform_attack(direction: Vector2) -> void:
@@ -153,27 +153,23 @@ func _find_turret_position() -> Vector2:
 	
 	return base_pos + Vector2(check_radius, 0)
 
-func _play_sound(weapon_type: String) -> void:
-	if player.audio_director:
-		player.audio_director.play_weapon_fire_sound(weapon_type)
-
 ## Apply talent upgrade
 func apply_talent(talent_id: String) -> void:
 	match talent_id:
 		"special":
 			special_unlocked = true
-			turret_charges = turret_max_charges  # Refresh charges
+			turret_charges = turret_max_charges # Refresh charges
 			turret_timer = 0.0
 			turret_recharging = false
 		"special_count":
 			special_count_level = mini(special_count_level + 1, 3)
 			turret_max_charges = 1 + special_count_level * 2
-			turret_charges = turret_max_charges  # Refresh charges
+			turret_charges = turret_max_charges # Refresh charges
 			turret_timer = 0.0
 			turret_recharging = false
 		"special_capacity":
 			special_capacity_level = mini(special_capacity_level + 1, 3)
-			turret_charges = turret_max_charges  # Refresh charges
+			turret_charges = turret_max_charges # Refresh charges
 			turret_timer = 0.0
 			turret_recharging = false
 		"burst_burn":

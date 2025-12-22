@@ -40,9 +40,14 @@ color = Color(0, 0, 0, 0.18)
 
 [node name="UiRoot" type="Control" parent="."]
 unique_name_in_owner = true
-anchors_preset = 0
+layout_mode = 1
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_top = 1.0
+offset_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 
 [node name="MenuBar" type="Panel" parent="UiRoot"]
 unique_name_in_owner = true
@@ -380,7 +385,7 @@ offset_bottom = -2.0
 grow_horizontal = 0
 grow_vertical = 0
 theme_override_font_sizes/font_size = 20
-text = "v0.1E"
+text = "v0.1F"
 horizontal_alignment = 1
 
 [node name="ComingSoonDialog" type="AcceptDialog" parent="."]

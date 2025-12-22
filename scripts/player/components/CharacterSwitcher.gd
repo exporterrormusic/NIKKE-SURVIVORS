@@ -118,7 +118,7 @@ func switch(direction: int) -> void:
 	
 	_trigger_swap_effect()
 	character_switched.emit(current_slot, get_current_registry_index())
-	# Also emit to EventBus for global listeners (like RunStatsTracker)
+	# Also emit to EventBus for global listeners (like GameManager)
 	if EventBus:
 		EventBus.character_switched.emit(current_slot, get_current_registry_index())
 

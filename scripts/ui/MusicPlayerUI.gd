@@ -2,6 +2,7 @@ extends PanelContainer
 
 # Static flag for other scripts to check if mouse is over the music player
 static var is_hovered: bool = false
+static var _instance: Control = null  # Track the active instance for rect checking
 
 # Use safe lookups for all nodes to prevent instantiation errors
 @onready var song_label: Label = find_child("SongLabel", true, false)
@@ -11,6 +12,9 @@ static var is_hovered: bool = false
 @onready var next_btn: Button = find_child("NextButton", true, false)
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	_instance = self  # Register this instance for static checks
+	
 	# Track mouse hover to block game input
 	mouse_entered.connect(_on_mouse_entered)
 	mouse_exited.connect(_on_mouse_exited)
@@ -30,11 +34,27 @@ func _ready() -> void:
 	if prev_btn:
 		prev_btn.pressed.connect(_on_prev)
 
+func _exit_tree() -> void:
+	if _instance == self:
+		_instance = null
+
 func _on_mouse_entered() -> void:
 	is_hovered = true
 
 func _on_mouse_exited() -> void:
 	is_hovered = false
+
+# Static function to check if mouse is over this UI element (more reliable than signal-based hover)
+static func is_mouse_over() -> bool:
+	if is_hovered:
+		return true
+	# Also check directly using mouse position and rect as a fallback
+	if _instance and is_instance_valid(_instance):
+		var mouse_pos: Vector2 = _instance.get_global_mouse_position()
+		var rect: Rect2 = _instance.get_global_rect()
+		if rect.has_point(mouse_pos):
+			return true
+	return false
 
 # Consume all mouse input on this panel to prevent attacks from triggering
 func _gui_input(event: InputEvent) -> void:

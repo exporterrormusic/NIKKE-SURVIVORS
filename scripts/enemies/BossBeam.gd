@@ -8,20 +8,20 @@ class_name BossBeam
 signal beam_finished
 
 # Beam settings
-const BEAM_MAX_LENGTH := 5000.0 
-const BEAM_ANGLE_DEG := 70.0 
-const RAY_COUNT := 20 
-const BASE_DAMAGE_PER_TICK := 1
+const BEAM_MAX_LENGTH := 5000.0
+const BEAM_ANGLE_DEG := 70.0
+const RAY_COUNT := 20
+const BASE_DAMAGE_PER_TICK := 5
 const DAMAGE_INTERVAL := 0.2
 const OIL_SPAWN_INTERVAL := 0.1 # Slower spawn for polygons
-const OIL_SPACING := 30.0 
+const OIL_SPACING := 30.0
 const OIL_PER_TICK := 1
 
 # Damage (can be scaled by Goddess Fall)
 var damage_per_tick: int = BASE_DAMAGE_PER_TICK
 
 # State
-enum BeamState { CHARGING, FIRING, FADING, DONE }
+enum BeamState {CHARGING, FIRING, FADING, DONE}
 var _state := BeamState.CHARGING
 var _boss: Node2D = null
 var _player: Node2D = null
@@ -74,7 +74,7 @@ func initialize(boss: Node2D, player: Node2D, charge_time: float, fire_time: flo
 			_locked_direction = (_player.global_position - _boss.global_position).normalized()
 
 func _ready() -> void:
-	z_index = 100 
+	z_index = 100
 	var mat := CanvasItemMaterial.new()
 	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_MIX # Solid mixing, not additive
 	mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED # Still ignores lighting
@@ -182,7 +182,7 @@ func _update_fan_geometry() -> void:
 			if proj > 0 and proj < dist + b_rad:
 				var perp = (to_b - dir * proj).length()
 				if perp < b_rad:
-					var hit_d = proj - sqrt(max(0, b_rad*b_rad - perp*perp))
+					var hit_d = proj - sqrt(max(0, b_rad * b_rad - perp * perp))
 					if hit_d > 0 and hit_d < dist:
 						dist = hit_d
 		
@@ -276,12 +276,12 @@ func _get_oil_manager() -> Node2D:
 	return null
 
 func _create_oil(pos: Vector2, rot: float) -> void:
-	pass # Deprecated 
+	pass # Deprecated
 
 func _has_line_of_sight(from: Vector2, to: Vector2) -> bool:
 	var space = get_world_2d().direct_space_state
 	var query = PhysicsRayQueryParameters2D.create(from, to)
-	query.collision_mask = 4 
+	query.collision_mask = 4
 	var result = space.intersect_ray(query)
 	return result.is_empty()
 

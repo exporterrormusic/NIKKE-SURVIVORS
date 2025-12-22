@@ -19,6 +19,14 @@ func _ready() -> void:
 	# Auto-find health component if not assigned
 	if not health_component:
 		health_component = get_parent().get_node_or_null("HealthComponent")
+		
+		# EXPORT FIX: If still null, try finding by type/group (desperate search)
+		if not health_component:
+			for child in get_parent().get_children():
+				if child.name.contains("Health") or child.has_signal("health_changed"):
+					health_component = child
+					break
+
 
 # The method projectiles call (polymorphic compatibility with existing system)
 func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector2.ZERO, is_burst: bool = false, source: String = "unknown") -> void:
@@ -55,19 +63,39 @@ func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector
 			var reduction = float(parent.get_meta("super_boss_damage_reduction"))
 			final_damage = int(final_damage * (1.0 - reduction))
 			
+	if not health_component:
+		# EXPORT FIX: Emergency lookup
+		health_component = get_parent().get_node_or_null("HealthComponent")
+		
 	if health_component:
 		health_component.damage(final_damage, source)
+	else:
+		# print("ERROR: HitboxComponent on " + get_parent().name + " has NO HealthComponent! Damage ignored.")
+		pass
+
 	
-	# Add burst charge to player (unless this hit is from a burst attack)
-	if team == "enemy" and not is_burst and is_inside_tree():
+	# Add burst charge to player
+	if team == "enemy" and is_inside_tree():
 		var tree = get_tree()
 		if tree:
 			var player = tree.get_first_node_in_group("player")
 			if player and player.has_method("add_burst_charge"):
-				# Skip burst sources
-				if not BurstConfig.is_burst_source(source):
-					var burst_rate := BurstConfig.get_rate(source)
-					player.add_burst_charge(burst_rate)
+				# Determine rate based on source
+				var burst_rate := BurstConfig.get_rate(source)
+				
+				# Normal hits (not from burst) generate full amount
+				if not is_burst:
+					# Skip specific burst sources if they somehow weren't flagged as is_burst
+					if not BurstConfig.is_burst_source(source):
+						player.add_burst_charge(burst_rate)
+				
+				# Burst hits usually generate 0, UNLESS player has a modifier active (e.g. Sin talent)
+				elif player.get("burst_gen_on_burst_hit_modifier") > 0.0:
+					# Apply modifier (e.g. 0.3 for 30%)
+					# Apply modifier (e.g. 0.3 for 30%)
+					var mod: float = player.get("burst_gen_on_burst_hit_modifier")
+					var modified_rate: float = burst_rate * mod
+					player.add_burst_charge(modified_rate)
 	
 	# Emit damage_dealt to EventBus for stats tracking
 	if EventBus and team == "enemy":
@@ -76,3 +104,15 @@ func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector
 		EventBus.damage_dealt.emit(get_parent(), damage_info)
 	
 	# Optional: Knockback logic via MovementComponent could go here or signal up
+
+func reset() -> void:
+	"""Reset state for object pooling."""
+	monitorable = true
+	monitoring = true
+	
+	# Reset collision layers to defaults if they were messed up
+	# Enemy tier: Layer 4 (Enemy Hbox), Mask 2 (Projectiles)
+	if team == "enemy":
+		collision_layer = 4
+		collision_mask = 2
+

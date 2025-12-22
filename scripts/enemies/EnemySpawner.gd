@@ -35,12 +35,14 @@ func return_enemy(enemy: Node2D) -> void:
 	do_return.call_deferred()
 
 func _get_from_pool() -> Node2D:
-	if _enemy_pool.has("modular"):
-		while not _enemy_pool["modular"].is_empty():
-			var enemy = _enemy_pool["modular"].pop_back()
-			if is_instance_valid(enemy):
-				enemy.reset() # Important! reset state
-				return enemy
+	if _enemy_pool.has("modular") and not _enemy_pool["modular"].is_empty():
+		var enemy = _enemy_pool["modular"].pop_back()
+		if is_instance_valid(enemy):
+			# Start hidden to prevent 1-frame flash at old position
+			enemy.visible = false
+			if enemy.has_method("reset"):
+				enemy.reset()
+			return enemy
 	return null
 
 # Effect scripts
@@ -49,8 +51,8 @@ const EliteEffectsScript = preload("res://scripts/enemies/effects/EliteEffects.g
 const BossEffectsScript = preload("res://scripts/enemies/effects/BossEffects.gd")
 
 # Spawn settings
-@export var spawn_radius: float = 800.0  # Distance from player to spawn
-@export var spawn_variance: float = 100.0  # Random offset
+@export var spawn_radius: float = 800.0 # Distance from player to spawn
+@export var spawn_variance: float = 100.0 # Random offset
 
 # Map bounds (will be set from Level)
 var _map_bounds: Rect2 = Rect2(-2000, -2000, 4000, 4000)
@@ -58,9 +60,9 @@ var _map_bounds: Rect2 = Rect2(-2000, -2000, 4000, 4000)
 var _player: Node2D = null
 var _enemy_container: Node2D = null
 var _rng := RandomNumberGenerator.new()
-var _horde_angle: float = 0.0  # Direction for horde spawns
+var _horde_angle: float = 0.0 # Direction for horde spawns
 var _current_night_boost: float = 0.0
-var _elite_only_mode: bool = false  # Stage 2: All spawns upgraded (basic→elite, elite→boss)
+var _elite_only_mode: bool = false # Stage 2: All spawns upgraded (basic→elite, elite→boss)
 
 # Screen effects (tank vignette, boss darken)
 var _screen_effects: CanvasLayer = null
@@ -86,7 +88,9 @@ func _ready() -> void:
 ## Calculate ATK multiplier based on difficulty
 ## At difficulty 1 = 1.0x, at difficulty 2 = 1.25x, at difficulty 3 = 1.5x, etc.
 func _get_atk_multiplier() -> float:
-	return 1.0 + 0.25 * (GameState.difficulty_multiplier - 1)
+	var game_manager = get_node_or_null("/root/GameManager")
+	var diff_mult = game_manager.difficulty_multiplier if game_manager else 1.0
+	return 1.0 + 0.25 * (diff_mult - 1)
 
 func _setup_screen_effects() -> void:
 	# Create screen effects overlay for tank vignette and boss darken
@@ -147,11 +151,12 @@ func spawn_enemy(enemy_type: String, pattern: String) -> Node2D:
 	# Position based on pattern
 	var spawn_pos := _get_spawn_position(pattern)
 	enemy.global_position = spawn_pos
+	enemy.visible = true # Ensure pooled enemies are visible
 	
 	# Parenting Check (Pooling Safety)
 	if enemy.get_parent() == _enemy_container:
 		# Already in container, just ensure it's not queued for deletion?
-		pass 
+		pass
 	else:
 		if enemy.get_parent():
 			enemy.reparent(_enemy_container)
@@ -164,6 +169,36 @@ func spawn_enemy(enemy_type: String, pattern: String) -> Node2D:
 	
 	emit_signal("enemy_spawned", enemy)
 	
+	return enemy
+
+## Spawn an enemy at a specific world position (for HUNT mode)
+func spawn_at_position(enemy_type: String, world_position: Vector2) -> Node2D:
+	if not _enemy_container:
+		return null
+	
+	var enemy := _create_enemy(enemy_type, false)
+	if not enemy:
+		return null
+	
+	enemy.global_position = world_position
+	
+	# Reveal enemy now that position is set (prevents flash)
+	enemy.visible = true
+	
+	# Parenting
+	if enemy.get_parent() == _enemy_container:
+		pass
+	else:
+		if enemy.get_parent():
+			enemy.reparent(_enemy_container)
+		else:
+			_enemy_container.add_child(enemy)
+	
+	# Signal Check
+	if not enemy.tree_exiting.is_connected(_on_enemy_tree_exiting):
+		enemy.tree_exiting.connect(_on_enemy_tree_exiting.bind(enemy))
+	
+	emit_signal("enemy_spawned", enemy)
 	return enemy
 
 func _on_enemy_tree_exiting(enemy: Node2D) -> void:
@@ -248,7 +283,7 @@ func _create_enemy(enemy_type: String, is_elite: bool = false) -> Node2D:
 		
 		"boss":
 			_apply_boss_stats(enemy)
-			force_elite = false  # Don't double-apply elite
+			force_elite = false # Don't double-apply elite
 		
 		"super_boss":
 			_apply_super_boss_stats(enemy)
@@ -285,7 +320,7 @@ func _apply_shielder_stats(enemy: Node2D) -> void:
 	if enemy.has_node("ProgressBar"):
 		var hp_bar = enemy.get_node("ProgressBar")
 		var style = StyleBoxFlat.new()
-		style.bg_color = Color(0.3, 0.6, 1.0)  # Blue
+		style.bg_color = Color(0.3, 0.6, 1.0) # Blue
 		hp_bar.add_theme_stylebox_override("fill", style)
 
 func _apply_exploder_stats(enemy: Node2D) -> void:
@@ -295,16 +330,16 @@ func _apply_exploder_stats(enemy: Node2D) -> void:
 	var behavior = ExploderBehavior.new()
 	behavior.name = "ExploderBehavior"
 	enemy.add_child(behavior)
-	behavior.initialize(enemy, int(enemy.max_hp * 2.0))  # Damage = 2x Max HP
+	behavior.initialize(enemy, int(enemy.max_hp * 2.0)) # Damage = 2x Max HP
 	
 	# Apply red HP bar color
 	if enemy.has_node("ProgressBar"):
 		var hp_bar = enemy.get_node("ProgressBar")
 		var style = StyleBoxFlat.new()
-		style.bg_color = Color(1.0, 0.2, 0.2)  # Red
+		style.bg_color = Color(1.0, 0.2, 0.2) # Red
 		hp_bar.add_theme_stylebox_override("fill", style)
 
-func _apply_outline_glow(enemy: Node2D, glow_color: Color, enhance_core: bool = false, enable_outline: bool = true) -> void:
+func _apply_outline_glow(enemy: Node2D, glow_color: Color, enhance_core: bool = false, enable_outline: bool = false) -> void:
 	# Apply universal shader to sprite
 	var sprite = null
 	
@@ -338,7 +373,8 @@ func _apply_outline_glow(enemy: Node2D, glow_color: Color, enhance_core: bool = 
 ## Replaces duplicate code in _apply_basic_stats, _apply_tank_stats, etc.
 func _apply_tier_stats(enemy: Node2D, tier_name: String) -> void:
 	var tier: Dictionary = EnemyTierConfigClass.get_tier(tier_name)
-	var difficulty_mult: int = GameState.difficulty_multiplier
+	var game_manager = get_node_or_null("/root/GameManager")
+	var difficulty_mult: float = game_manager.difficulty_multiplier if game_manager else 1.0
 	var atk_mult: float = _get_atk_multiplier()
 	
 	# Apply scale
@@ -361,14 +397,14 @@ func _apply_tier_stats(enemy: Node2D, tier_name: String) -> void:
 	enemy.hp = enemy.max_hp
 
 	# FORCE HP OVERRIDE for N01 in Goddess Fall mode
-	if tier_name == "super_boss" and GameState.goddess_fall_mode:
+	if tier_name == "super_boss" and game_manager and game_manager.goddess_fall_mode:
 		enemy.max_hp = 9999
 		enemy.hp = 9999
 	
 	# Apply speed
 	var speed_mult: float = tier.speed_mult
 	# Only apply Goddess Fall speed modifier in that mode
-	if GameState.goddess_fall_mode:
+	if game_manager and game_manager.goddess_fall_mode:
 		speed_mult *= EnemyTierConfigClass.GODDESS_FALL_SPEED_MULT
 	enemy.speed = int(enemy.speed * speed_mult)
 	
@@ -510,7 +546,7 @@ func _get_spawn_position(pattern: String) -> Vector2:
 	
 	# Calculate minimum distance to be off-screen (half diagonal + buffer)
 	var half_screen := viewport_size / (2.0 * zoom)
-	var min_offscreen_dist := half_screen.length() + 100.0  # 100px buffer
+	var min_offscreen_dist := half_screen.length() + 100.0 # 100px buffer
 	
 	# Use the larger of spawn_radius or minimum off-screen distance
 	var actual_radius := maxf(spawn_radius, min_offscreen_dist)
@@ -526,7 +562,7 @@ func _get_spawn_position(pattern: String) -> Vector2:
 		
 		"horde":
 			# All from one direction (with slight spread)
-			var spread := _rng.randf_range(-0.4, 0.4)  # ~45 degree spread
+			var spread := _rng.randf_range(-0.4, 0.4) # ~45 degree spread
 			var distance := actual_radius + _rng.randf_range(0, spawn_variance)
 			spawn_pos = player_pos + Vector2.from_angle(_horde_angle + spread) * distance
 		
@@ -622,7 +658,7 @@ func _setup_boss_enrage_timer(boss: Node2D) -> void:
 	timer.name = "EnrageTimer"
 	timer.one_shot = true
 	timer.wait_time = 60.0
-	timer.autostart = true  # Use autostart so timer starts when added to tree
+	timer.autostart = true # Use autostart so timer starts when added to tree
 	timer.timeout.connect(_on_boss_enrage_timeout.bind(boss))
 	boss.add_child(timer)
 	# Timer will auto-start when boss enters tree (no need to call start() here)
@@ -640,8 +676,9 @@ func _on_boss_enrage_timeout(boss: Node2D) -> void:
 	var is_super_boss := boss.is_in_group("super_boss")
 	
 	# Mark that player is being killed by enrage (no core drop)
-	if GameState:
-		GameState.set_meta("killed_by_enrage", true)
+	var game_manager = get_node_or_null("/root/GameManager")
+	if game_manager:
+		game_manager.set_meta("killed_by_enrage", true)
 	
 	# Create screen-wide explosion effect
 	_create_enrage_explosion(boss.global_position, is_super_boss)
@@ -777,9 +814,13 @@ func spawn_rapture_queen() -> Node2D:
 	queen.global_position = spawn_pos
 	
 	# FORCE HP OVERRIDE for Goddess Fall (Critical Fix)
-	if GameState.goddess_fall_mode:
+	var game_manager = get_node_or_null("/root/GameManager")
+	if game_manager and game_manager.goddess_fall_mode:
 		queen.max_hp = 9999
 		queen.hp = 9999
+	
+	# Set boss-tier damage (super_boss = 8.0 multiplier)
+	queen.base_damage = int(8 * _get_atk_multiplier())
 	
 	# Apply Boss Glow (Crucial for visibility in Night mode)
 	# Using Purple/Pink glow for Rapture Queen
@@ -795,7 +836,7 @@ func spawn_rapture_queen() -> Node2D:
 		
 	# Setup Boss Bar
 	if _boss_health_bar and _boss_health_bar.has_method("show_boss"):
-		_boss_health_bar.show_boss(queen, "RAPTURE QUEEN N01", true)  # Red bar for super boss
+		_boss_health_bar.show_boss(queen, "RAPTURE QUEEN N01", true) # Red bar for super boss
 		
 	# Emit signal so Level can trigger weather
 	emit_signal("rapture_queen_spawned")

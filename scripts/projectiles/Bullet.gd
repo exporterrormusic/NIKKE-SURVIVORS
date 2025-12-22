@@ -9,10 +9,10 @@ var velocity = Vector2.ZERO
 var lifetime: float = 0.0
 var owner_node: Node = null
 var start_position: Vector2 = Vector2.ZERO
-var _start_position_set: bool = false  # Track if start position has been captured
+var _start_position_set: bool = false # Track if start position has been captured
 
 # Object pooling support
-var pool_id: String = ""  # Empty = not pooled, otherwise identifies the pool
+var pool_id: String = "" # Empty = not pooled, otherwise identifies the pool
 
 # If true, bullet will pierce every damageable target it hits (doesn't queue_free on hit)
 @export var pierce_all: bool = false
@@ -23,8 +23,8 @@ var pool_id: String = ""  # Empty = not pooled, otherwise identifies the pool
 @export var max_range: float = 0.0
 
 # Critical hit settings
-const BASE_CRIT_CHANCE := 0.15  # 15% base chance to crit
-const CRIT_MULTIPLIER := 2.0  # 2x damage on crit
+const BASE_CRIT_CHANCE := 0.15 # 15% base chance to crit
+const CRIT_MULTIPLIER := 2.0 # 2x damage on crit
 var base_damage := 3
 
 # Weapon type source for Goddess Fall XP/Burst tracking
@@ -38,11 +38,11 @@ var killer_source: String:
 var _hit_nodes: Array = []
 
 # Default max ranges by weapon type
-const RANGE_SNIPER := 0.0  # Unlimited (despawns off-screen via lifetime)
-const RANGE_ASSAULT := 1100.0  # Slightly past camera edge
-const RANGE_SMG := 750.0  # 2/3 screen width
-const RANGE_SHOTGUN := 750.0  # 2/3 screen width
-const RANGE_MINIGUN := 1100.0  # Like assault rifle
+const RANGE_SNIPER := 0.0 # Unlimited (despawns off-screen via lifetime)
+const RANGE_ASSAULT := 1100.0 # Slightly past camera edge
+const RANGE_SMG := 750.0 # 2/3 screen width
+const RANGE_SHOTGUN := 750.0 # 2/3 screen width
+const RANGE_MINIGUN := 1100.0 # Like assault rifle
 
 # Performance: disable dynamic lights on bullets (they're expensive!)
 const ENABLE_BULLET_LIGHTS := false
@@ -101,9 +101,9 @@ func _ready():
 	# DEBUG: FORCE COLLISION MASK
 	# Layer 1(1) = World, Layer 2(2) = Player/Enemies(Old), Layer 3(4) = Hitbox/Enemies
 	# Set mask to 1 | 2 | 4 = 7
-	collision_mask = 7
+	collision_mask = 15
 	# Set layer to 4 (Enemy Projectiles) so Scarlet can slash them
-	collision_layer = 4 
+	collision_layer = 4
 	add_to_group("enemy_projectiles")
 	# Debug print removed for performance - was causing lag with many bullets
 	
@@ -111,7 +111,7 @@ func _ready():
 	if ENABLE_BULLET_LIGHTS:
 		var light = PointLight2D.new()
 		light.name = "BulletLight"
-		light.color = Color(1.0, 0.95, 0.7)  # Warm bullet glow
+		light.color = Color(1.0, 0.95, 0.7) # Warm bullet glow
 		light.energy = 0.4
 		light.texture = _create_light_texture()
 		light.texture_scale = 0.15
@@ -123,7 +123,7 @@ func _auto_detect_range() -> void:
 	var bullet_name := name.to_lower()
 	
 	if "sniper" in bullet_name or "snow" in bullet_name:
-		max_range = RANGE_SNIPER  # Sniper has no limit
+		max_range = RANGE_SNIPER # Sniper has no limit
 	elif "smg" in bullet_name:
 		max_range = RANGE_SMG
 	elif "shotgun" in bullet_name or "pellet" in bullet_name or "kilo" in bullet_name:
@@ -143,8 +143,9 @@ func _create_light_texture() -> Texture2D:
 func _physics_process(delta):
 	# Apply Global Enemy Time Scale (Bullet Time) - ONLY for non-player projectiles
 	var time_scale = 1.0
+	var game_manager = get_node_or_null("/root/GameManager")
 	if not (owner_node and owner_node.is_in_group("player")):
-		time_scale = GameState.enemy_time_scale
+		time_scale = game_manager.enemy_time_scale if game_manager else 1.0
 	delta *= time_scale
 
 	# Capture start position on first frame (after bullet has been positioned)
@@ -222,7 +223,6 @@ func _check_boulder_collision() -> bool:
 	return false
 
 
-
 func _on_body_entered(body):
 	# Handle both Body (CharacterBody2D) and Area (HitboxComponent) collisions
 	var target = body
@@ -256,7 +256,7 @@ func _on_body_entered(body):
 			# Phase through shields - don't damage or stop
 			return
 		# Shield hit! Destroy bullet.
-		shield_root.take_shield_damage(base_damage) 
+		shield_root.take_shield_damage(base_damage)
 		_despawn()
 		return
 
@@ -289,7 +289,7 @@ func _on_body_entered(body):
 	# Player variable reused from earlier in function
 	if player and player.has_method("get_crit_chance"):
 		crit_chance += player.get_crit_chance()
-	crit_chance = minf(crit_chance, 1.0)  # Cap at 100%
+	crit_chance = minf(crit_chance, 1.0) # Cap at 100%
 	var is_crit := randf() < crit_chance
 	var damage := base_damage
 	if is_crit:

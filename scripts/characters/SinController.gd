@@ -22,28 +22,34 @@ var bullet_speed: float = 900.0
 var bullets_per_shot: int = 1
 
 # Special config (Charm)
-var charm_radius: float = 150.0  # Base AoE radius
-var charm_cooldown: float = 10.0  # Base cooldown
+var charm_radius: float = 150.0 # Base AoE radius
+var charm_cooldown: float = 10.0 # Base cooldown
 
 # Burst config
-const SIN_DOT_INTERVAL := 1.0  # Damage every 1 second
-const SIN_DOT_TICKS := 4  # 4 ticks total (4 seconds)
-const SIN_HEAL_FRACTION := 0.05  # 5% max HP per enemy damaged per tick
+const SIN_DOT_INTERVAL := 1.0 # Damage every 1 second
+const SIN_DOT_TICKS := 4 # 4 ticks total (4 seconds)
+const SIN_DOT_DAMAGE_PCT := 0.4 # 40% Max HP total damage over duration (10% per tick)
+const SIN_HEAL_FRACTION := 0.05 # Sin - SMG (High fire rate, low damage)
+# Special: Captivating (Charm enemy)
+# Burst: Words of Power (Global stun/damage)
+
+func get_is_automatic() -> bool:
+	return true
 
 # Burst state
-var _burst_targets: Array = []  # Array of {enemy_ref, effect_ref}
-var _burst_next_tick_time: float = 0.0  # When next DOT tick occurs
-var _burst_ticks_remaining: int = 0  # How many ticks left
+var _burst_targets: Array = [] # Array of {enemy_ref, effect_ref}
+var _burst_next_tick_time: float = 0.0 # When next DOT tick occurs
+var _burst_ticks_remaining: int = 0 # How many ticks left
 
 # Explosion on death during burst
 var burst_explosion_damage: int = 4
 const BURST_EXPLOSION_RADIUS := 100.0
 
 # Talent states
-var special_size_level: int = 0  # AoE size: 50/100/200%
-var captivating_level: int = 0  # Lv1: heal on charm death, Lv2: explode on charm death, Lv3: charm tanks
-var burst_charge_on_kill: bool = false  # Killing during burst charges burst
-var burst_explode_on_death: bool = false  # Enemies explode on death during burst
+var special_size_level: int = 0 # AoE size: 50/100/200%
+var captivating_level: int = 0 # Lv1: heal on charm death, Lv2: explode on charm death, Lv3: charm tanks
+var burst_charge_on_kill: bool = false # Killing during burst charges burst
+var burst_explode_on_death: bool = false # Enemies explode on death during burst
 
 func _on_initialize() -> void:
 	# Ammo already set from CharacterRegistry by base class
@@ -70,7 +76,7 @@ func _create_magnetic_aura() -> void:
 	_magnetic_aura = SinMagneticAuraScript.new()
 	_magnetic_aura.name = "SinMagneticAura"
 	parent.add_child(_magnetic_aura)
-	_magnetic_aura.initialize(player, self)  # Pass controller for talent checks
+	_magnetic_aura.initialize(player, self) # Pass controller for talent checks
 
 func _create_charm_indicator() -> void:
 	if _charm_indicator and is_instance_valid(_charm_indicator):
@@ -136,10 +142,9 @@ func _can_attack() -> bool:
 
 func _perform_attack(direction: Vector2) -> void:
 	# Fire dual SMG bullets in akimbo style
-	
 	# Calculate perpendicular offset for dual guns
 	var perp := Vector2(-direction.y, direction.x).normalized()
-	var gun_offset := 18.0  # Horizontal spacing between the two guns
+	var gun_offset := 18.0 # Horizontal spacing between the two guns
 	
 	# Each SMG bullet does 1 base damage (2 total per shot)
 	var bullet_damage: int = maxi(player.calc_damage(1.0 / player.get_base_damage()), 1)
@@ -195,7 +200,7 @@ func _perform_special(_direction: Vector2) -> void:
 	
 	# Start cooldown
 	special_timer = charm_cooldown
-	data.special_cooldown = special_timer  # Update for UI
+	data.special_cooldown = special_timer # Update for UI
 
 func _is_elite_or_boss(enemy: Node) -> bool:
 	if enemy.has_meta("enemy_tier"):
@@ -229,7 +234,7 @@ func _charm_enemy(enemy: Node) -> void:
 	
 	# Modify enemy behavior - make it attack other enemies
 	if enemy.has_method("set_charmed"):
-		enemy.set_charmed(player, true, is_tank)  # force=true for tanks
+		enemy.set_charmed(player, true, is_tank) # force=true for tanks
 	else:
 		# Add purple visual effect as fallback
 		var effect = SinCharmEffectScript.new()
@@ -241,7 +246,7 @@ func _spawn_charm_aoe_visual(center: Vector2, radius: float) -> void:
 	var visual := Node2D.new()
 	visual.set_script(_get_charm_aoe_script())
 	visual.set("radius", radius)
-	visual.set("color", Color(0.7, 0.2, 0.9, 0.6))  # Purple
+	visual.set("color", Color(0.7, 0.2, 0.9, 0.6)) # Purple
 	player.get_parent().add_child(visual)
 	visual.global_position = center
 
@@ -304,7 +309,7 @@ func _on_burst_start() -> void:
 		view_rect = Rect2(Vector2.ZERO, Vector2(1920, 1080))
 	
 	var now := Time.get_ticks_msec() * 0.001
-	_burst_next_tick_time = now + SIN_DOT_INTERVAL  # First tick after 1 second
+	_burst_next_tick_time = now + SIN_DOT_INTERVAL # First tick after 1 second
 	_burst_ticks_remaining = SIN_DOT_TICKS
 	
 	var enemies := TargetCache.get_enemies()
@@ -380,8 +385,6 @@ func _update_burst_dot(_delta: float) -> void:
 	_burst_next_tick_time = now + SIN_DOT_INTERVAL
 	_burst_ticks_remaining -= 1
 	
-	# Calculate damage (10x Sin's current ATK)
-	var damage: int = player.calc_damage() * 10
 	var heal_per_enemy := int(round(float(player.max_hp) * SIN_HEAL_FRACTION))
 	var enemies_damaged := 0
 	
@@ -393,30 +396,43 @@ func _update_burst_dot(_delta: float) -> void:
 		
 		var enemy_ref: WeakRef = entry.get("enemy_ref")
 		var enemy: Node = enemy_ref.get_ref() if enemy_ref else null
+		var effect_ref: WeakRef = entry.get("effect_ref")
+		var effect: Node2D = effect_ref.get_ref() if effect_ref else null
 		
 		if enemy == null or not is_instance_valid(enemy):
 			# Enemy already dead, skip
+			if is_instance_valid(effect):
+				effect.queue_free()
 			continue
 		
-		# Deal damage
+		# Calculate damage for this tick (30% per second / ticks)
+		var damage_pct = SIN_DOT_DAMAGE_PCT / SIN_DOT_TICKS
+		var damage = maxi(1, int(enemy.max_hp * damage_pct))
+		
 		if enemy.has_method("take_damage"):
-			enemy.take_damage(damage, false, Vector2.ZERO, not burst_charge_on_kill, "SinBurst")
+			# Determine burst charge behavior
+			if burst_charge_on_kill:
+				# Set player modifier to 30% for this frame/call
+				player.burst_gen_on_burst_hit_modifier = 0.3
+			else:
+				player.burst_gen_on_burst_hit_modifier = 0.0
+				
+			# Deal damage as BURST (is_burst = true)
+			enemy.take_damage(damage, false, Vector2.ZERO, true, "SinBurst")
 			enemies_damaged += 1
 			
-			if burst_charge_on_kill and player.has_method("register_burst_hit"):
-				player.register_burst_hit(enemy, false)
+			# Reset modifier for safety (though it defaults to 0 usually)
+			player.burst_gen_on_burst_hit_modifier = 0.0
 		
 		# Check if enemy died from this damage
 		if not is_instance_valid(enemy) or (enemy.has_method("is_dead") and enemy.is_dead()):
 			# Enemy died from this tick - handle explosion
-			var effect_ref: WeakRef = entry.get("effect_ref")
-			if effect_ref:
-				var effect: Node = effect_ref.get_ref()
-				if effect and is_instance_valid(effect):
-					var death_pos: Vector2 = effect.global_position
-					effect.queue_free()
-					if burst_explode_on_death:
-						_spawn_burst_explosion(death_pos)
+			var effect_node: Node2D = effect_ref.get_ref()
+			if effect_node and is_instance_valid(effect_node):
+				var death_pos: Vector2 = effect_node.global_position
+				effect_node.queue_free()
+				if burst_explode_on_death:
+					_spawn_burst_explosion(death_pos)
 		else:
 			# Enemy still alive, keep tracking
 			updated.append(entry)
@@ -484,7 +500,7 @@ func _spawn_burst_explosion(position: Vector2) -> void:
 		
 		if enemy.has_method("take_damage"):
 			var hit_dir := ((enemy as Node2D).global_position - position).normalized()
-			enemy.take_damage(damage, false, hit_dir, true, "SinBurst")  # true = from burst
+			enemy.take_damage(damage, false, hit_dir, true, "SinBurst") # true = from burst
 	
 	# Visual explosion
 	var visual := Node2D.new()
@@ -529,14 +545,6 @@ func _draw() -> void:
 	script.reload()
 	return script
 
-func _play_sound(weapon_type: String) -> void:
-	if player.audio_director:
-		player.audio_director.play_weapon_fire_sound(weapon_type)
-
-## Get attack cooldown for SMG rapid fire
-func get_attack_cooldown() -> float:
-	return data.attack_cooldown  # 0.08s for rapid SMG fire
-
 ## Apply talent upgrade
 func apply_talent(talent_id: String) -> void:
 	match talent_id:
@@ -553,10 +561,6 @@ func apply_talent(talent_id: String) -> void:
 			burst_charge_on_kill = true
 		"burst_explode":
 			burst_explode_on_death = true
-
-## Check if invincible (Sin doesn't have invincibility)
-func is_invincible() -> bool:
-	return false
 
 ## Get weapon type name for audio
 func _get_weapon_type_name() -> String:

@@ -30,19 +30,22 @@ var _audio_player: AudioStreamPlayer = null
 var _enemies_to_destroy: Array = []
 var _destruction_index: int = 0
 var _image_shown: bool = false
-var _tinted_enemies: Dictionary = {}  # enemy -> original modulate
+var _tinted_enemies: Dictionary = {} # enemy -> original modulate
 
 # Resources
 var _wish_images: Array = []
+const WISH_IMAGE_1 = preload("res://assets/characters/sin/wish-1.png")
+const WISH_IMAGE_2 = preload("res://assets/characters/sin/wish-2.png")
+const WISH_AUDIO = preload("res://assets/characters/sin/wish.mp3")
 
 func _ready() -> void:
 	z_index = 500
-	process_mode = Node.PROCESS_MODE_ALWAYS  # Run while paused
+	process_mode = Node.PROCESS_MODE_ALWAYS # Run while paused
 	
 	# Load wish images
 	_wish_images = [
-		load("res://assets/characters/sin/wish-1.png"),
-		load("res://assets/characters/sin/wish-2.png")
+		WISH_IMAGE_1,
+		WISH_IMAGE_2
 	]
 	
 	# Assign to effects layer like Scarlet does
@@ -134,8 +137,8 @@ func _setup_purple_filter() -> void:
 	var center = viewport_cam.global_position
 	
 	_filter_rect = ColorRect.new()
-	_filter_rect.color = Color.WHITE  # Default to White (Original behavior)
-	_filter_rect.size = viewport_size * 2.0  # Oversize to cover rotation/movement
+	_filter_rect.color = Color.WHITE # Default to White (Original behavior)
+	_filter_rect.size = viewport_size * 2.0 # Oversize to cover rotation/movement
 	_filter_rect.position = center - _filter_rect.size / 2.0
 	
 	# Filter Z = 50 (Absolute)
@@ -161,7 +164,7 @@ func _play_wish_audio() -> void:
 	_audio_player.bus = "SFX"
 	_audio_player.process_mode = Node.PROCESS_MODE_ALWAYS
 	
-	var audio = load("res://assets/characters/sin/wish.mp3")
+	var audio = WISH_AUDIO
 	if audio:
 		_audio_player.stream = audio
 		add_child(_audio_player)
@@ -192,6 +195,10 @@ func _collect_enemies_to_destroy() -> void:
 		
 		# Skip bosses
 		if _is_boss_enemy(enemy):
+			continue
+			
+		# Skip charmed allies (Sin's mind control)
+		if enemy.is_in_group("charmed_allies"):
 			continue
 		
 		_enemies_to_destroy.append(enemy)
@@ -258,16 +265,16 @@ func _show_wish_image() -> void:
 	var viewport_size = get_viewport_rect().size
 	var tex_size = texture.get_size()
 	var scale_factor = max(viewport_size.x / tex_size.x, viewport_size.y / tex_size.y)
-	var final_scale = Vector2(scale_factor, scale_factor) * 1.1  # Slight overscale
+	var final_scale = Vector2(scale_factor, scale_factor) * 1.1 # Slight overscale
 	
 	# Single image at 90% opacity, normal blend mode
 	_image_sprite = Sprite2D.new()
 	_image_sprite.texture = texture
 	_image_sprite.centered = true
-	_image_sprite.modulate.a = 0.0  # Start invisible, will animate
+	_image_sprite.modulate.a = 0.0 # Start invisible, will animate
 	_image_sprite.scale = final_scale
 	_image_sprite.position = viewport_size / 2.0
-	_image_sprite.set_meta("target_alpha", 0.9)  # 90% opacity target
+	_image_sprite.set_meta("target_alpha", 0.9) # 90% opacity target
 	canvas.add_child(_image_sprite)
 
 func _destroy_enemies_gradually() -> void:

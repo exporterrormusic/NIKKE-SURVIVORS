@@ -17,6 +17,7 @@ var drop_component: Node
 
 # Cached ShopMenu reference to avoid load() in hot paths
 const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
+const RaptureBasicSprite = preload("res://assets/enemies/rapture-basic/sprite.png")
 @onready var visuals: Node2D = $AnimatedSprite2D
 @onready var hp_bar: ProgressBar = $ProgressBar
 @onready var hp_label: Label = $HPLabel
@@ -26,23 +27,34 @@ var shield_label: Label = null
 
 var _generic_boss_shield: Node2D = null
 var _generic_shield_ready: bool = false
+var _generation_id: int = 0 # pooling safety
+
+# PERFORMANCE: Static cached reference to GameManager (avoids per-frame node lookup)
+static var _cached_game_manager: Node = null
+static var _gm_cache_checked: bool = false
+
+static func _get_game_manager() -> Node:
+	if not _gm_cache_checked:
+		_cached_game_manager = Engine.get_main_loop().root.get_node_or_null("/root/GameManager")
+		_gm_cache_checked = true
+	return _cached_game_manager
 
 
 # Compatibility variables (so existing systems can read them)
 var hp: int:
-	get: 
+	get:
 		var hc = health_component if health_component else $HealthComponent
 		return hc.current_hp
-	set(value): 
+	set(value):
 		var hc = health_component if health_component else $HealthComponent
 		hc.current_hp = value
 		if hp_bar: hp_bar.value = value
 		if hp_label: hp_label.text = str(value) + "/" + str(hc.max_hp)
 var max_hp: int:
-	get: 
+	get:
 		var hc = health_component if health_component else $HealthComponent
 		return hc.max_hp
-	set(value): 
+	set(value):
 		var hc = health_component if health_component else $HealthComponent
 		hc.set_max_hp(value)
 		if hp_bar: hp_bar.max_value = value
@@ -50,10 +62,10 @@ var max_hp: int:
 		if hp_label: hp_label.text = str(hc.current_hp) + "/" + str(value)
 
 var speed: float:
-	get: 
+	get:
 		var mc = movement_component if movement_component else $MovementComponent
 		return mc.max_speed
-	set(value): 
+	set(value):
 		var mc = movement_component if movement_component else $MovementComponent
 		mc.max_speed = value
 
@@ -86,12 +98,12 @@ func _ready() -> void:
 	if player and movement_component:
 		movement_component.set_target(player)
 		
-	# RETROACTIVE DEATH CHECK: If died during spawner init (before ready), signal was missed.
-	# We must manually trigger death sequence.
-	# NOTE: current_hp might be reset to full by Spawner, so we MUST check is_dead() flag!
-	if health_component and health_component.has_method("is_dead") and health_component.is_dead():
-		_on_death()
-		return # Stop further setup
+	# RETROACTIVE DEATH CHECK REMOVED
+	# Was causing issues where fresh spawns thought they were dead.
+	# EnemySpawner logic should ensure we handle "dying during spawn" cases explicitly if they occur.
+	# if health_component and health_component.has_method("is_dead") and health_component.is_dead():
+	# 	_on_death()
+	# 	return # Stop further setup
 		
 		
 	# Force initial label update
@@ -105,12 +117,27 @@ func _ready() -> void:
 		# Hide initially - will be shown on first position sync in _process
 		# This prevents a 1-frame flash at wrong position
 		hp_bar.visible = false
-
+	
 	# Configure visuals
-
 	if visuals.has_method("configure"):
-		var tex = load("res://assets/enemies/rapture-basic/sprite.png")
-		visuals.configure(tex, 3, 4, 6.0, 0.15)
+		var tex = RaptureBasicSprite
+		
+		# Fallback verify texture load (Export fix)
+		if tex == null:
+			print("WARNING: RaptureBasicSprite preload failed. Attempting dynamic load.")
+			if ResourceLoader.exists("res://assets/enemies/rapture-basic/sprite.png"):
+				tex = load("res://assets/enemies/rapture-basic/sprite.png")
+			else:
+				print("ERROR: Sprite texture missing at res://assets/enemies/rapture-basic/sprite.png")
+				
+		if tex:
+			visuals.configure(tex, 3, 4, 6.0, 0.15)
+		else:
+			# Even if texture fails, FORCE VISIBLE so we can see the debug placeholder (or at least know it exists)
+			print("ERROR: Visuals configuration failed - No Texture. Forcing visible anyway.")
+			visuals.visible = true
+			if visuals.has_method("play"): visuals.play("down")
+
 	
 	# Create shadow
 	_create_shadow()
@@ -123,7 +150,7 @@ func _ready() -> void:
 	# Hide initially - will be shown after first position sync to prevent flicker at origin
 	hp_bar.visible = false
 	hp_label.visible = false
-	hp_bar.z_index = 50  # Below HUD layer (HUD is typically 100+)
+	hp_bar.z_index = 50 # Below HUD layer (HUD is typically 100+)
 	
 	# Make HP bar and label immune to lighting (no reparenting needed)
 	_make_unshaded(hp_bar)
@@ -133,7 +160,6 @@ func _ready() -> void:
 	_ensure_shield_bar_exists()
 
 
-	
 	# Super Boss Shield System
 	# NOTE: Moved to setup_super_boss_shield() - called by EnemySpawner after groups are assigned
 	# if is_in_group("super_boss") and not is_in_group("ignore_generic_shield"):
@@ -195,10 +221,19 @@ func _on_health_changed(current: int, _max: int) -> void:
 	if hp_bar:
 		hp_bar.value = current
 	if hp_label:
-		# Format as "Current/Max"
+		# Format: "100/100" (Clean)
 		hp_label.text = str(current) + "/" + str(_max)
-
-
+		
+		# Ensure centering is enforced on text change
+		if hp_label.horizontal_alignment != HORIZONTAL_ALIGNMENT_CENTER:
+			hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			hp_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		
+		# VISUAL FEEDBACK: Flash Red
+		if visuals:
+			visuals.modulate = Color(3.0, 0.5, 0.5) # Bright Red
+			var tw = create_tween()
+			tw.tween_property(visuals, "modulate", Color.WHITE, 0.2)
 
 
 var base_damage: int = 1
@@ -327,7 +362,7 @@ func _find_new_target() -> void:
 		movement_component.set_target(nearest)
 
 func _find_best_target() -> void:
-	# Find the closest valid target (Player, Charmed Ally, or Clone)
+	# Find the closest valid target (Player, Charmed Ally, Clone, or Base in Defense mode)
 	var nearest: Node2D = null
 	var min_dist := INF
 	
@@ -358,9 +393,45 @@ func _find_best_target() -> void:
 		if dist < min_dist:
 			min_dist = dist
 			nearest = clone
+	
+	# 4. DEFENSE MODE: If player is too far (outside camera view ~600 units), target base instead
+	if has_meta("defense_mode") and get_meta("defense_mode"):
+		var player_in_sight := false
+		if player and is_instance_valid(player):
+			var player_dist := global_position.distance_to(player.global_position)
+			player_in_sight = player_dist < 600.0 # Roughly camera view range
+		
+		if not player_in_sight:
+			# Target the base instead
+			var base_pos: Vector2 = get_meta("defense_base_position") if has_meta("defense_base_position") else Vector2(-3200, 0)
+			var dummy_target := _get_or_create_defense_target(base_pos)
+			if dummy_target:
+				_current_target = dummy_target
+				movement_component.set_target(dummy_target)
+				return
 			
 	_current_target = nearest
 	movement_component.set_target(nearest if nearest else player)
+
+var _defense_target_marker: Node2D = null
+
+func _get_or_create_defense_target(base_pos: Vector2) -> Node2D:
+	# Create a simple marker node for enemies to target (the base position)
+	if _defense_target_marker and is_instance_valid(_defense_target_marker):
+		_defense_target_marker.global_position = base_pos
+		return _defense_target_marker
+	
+	# Try to find the actual base entity first
+	var base = get_tree().get_first_node_in_group("defense_base")
+	if base and is_instance_valid(base):
+		return base
+	
+	# Fallback: create marker at base position
+	_defense_target_marker = Node2D.new()
+	_defense_target_marker.global_position = base_pos
+	_defense_target_marker.name = "DefenseTargetMarker"
+	get_tree().current_scene.add_child(_defense_target_marker)
+	return _defense_target_marker
 
 var _is_stunned: bool = false
 
@@ -387,7 +458,7 @@ func is_stunned() -> bool:
 # Screen bounds cache for off-screen culling
 var _screen_bounds: Rect2 = Rect2()
 var _last_bounds_frame: int = -1
-const BOUNDS_UPDATE_INTERVAL := 30  # Update bounds every 30 frames
+const BOUNDS_UPDATE_INTERVAL := 30 # Update bounds every 30 frames
 
 func _is_on_screen() -> bool:
 	# Update cached screen bounds periodically
@@ -397,13 +468,13 @@ func _is_on_screen() -> bool:
 		var viewport := get_viewport()
 		if viewport:
 			var camera := viewport.get_camera_2d()
-			if camera:
+			if camera and camera.zoom.length_squared() > 0.001:
 				var vp_size := viewport.get_visible_rect().size
 				var half_size := vp_size / (2.0 * camera.zoom)
 				# Add 200px margin so enemies just off-screen still process
 				_screen_bounds = Rect2(camera.global_position - half_size - Vector2(200, 200), half_size * 2 + Vector2(400, 400))
 			else:
-				_screen_bounds = Rect2(-1000, -1000, 3920, 3160)  # Large fallback
+				_screen_bounds = Rect2(-3000, -3000, 6000, 6000) # Large fallback (Was -1000/3920 - Increased for safety)
 	
 	return _screen_bounds.has_point(global_position)
 
@@ -417,7 +488,9 @@ func _process(delta: float) -> void:
 	var on_screen := _is_on_screen()
 	
 	# Apply Bullet Time scaling to enemy-related timers
-	var time_scale = GameState.enemy_time_scale
+	# PERFORMANCE: Use cached GameManager instead of per-frame lookup
+	var gm = _get_game_manager()
+	var time_scale = gm.enemy_time_scale if gm else 1.0
 
 	if _damage_timer > 0:
 		_damage_timer -= delta * time_scale
@@ -447,7 +520,7 @@ func _process(delta: float) -> void:
 	# DoT Pulse Effect Decay
 	if _dot_pulse_intensity > 0.0:
 		_dot_pulse_timer += delta
-		_dot_pulse_intensity = maxf(0.0, _dot_pulse_intensity - delta * 2.0)  # Fade over 0.5s
+		_dot_pulse_intensity = maxf(0.0, _dot_pulse_intensity - delta * 2.0) # Fade over 0.5s
 		if _dot_ripple_material and visuals and visuals.material == _dot_ripple_material:
 			_dot_ripple_material.set_shader_parameter("pulse_intensity", _dot_pulse_intensity)
 			_dot_ripple_material.set_shader_parameter("pulse_time", _dot_pulse_timer)
@@ -486,59 +559,54 @@ func _process(delta: float) -> void:
 		_process_shield_deployment()
 	
 	if visuals and visuals.has_method("update_state"):
-
 		visuals.update_state(movement_component.velocity, movement_component.velocity)
 		
 	# Dynamic Text Scaling: Keep text physically large but rendered sharply
 	# PERFORMANCE: Skip HP label updates for off-screen enemies
+	# FIX 2: Removed position sync - now handled in _physics_process with HP bar
 	if hp_label and hp_bar and on_screen:
-		# Early exit if not visible or bars are hidden
+		# Auto-show HP bar if hidden (e.g. from spawn/reset)
 		if not hp_bar.visible:
-			pass  # Skip all HP label processing
-		else:
-			# Optimization: Only recalculate if scale changed significantly
-			var p_scale_x = abs(scale.x)
-			if abs(p_scale_x - _prev_scale_x) > 0.01:
-				_prev_scale_x = p_scale_x
-				
-				if p_scale_x > 0.001:
-					# Reset pivot to default to simplified position math
-					hp_label.pivot_offset = Vector2.ZERO
-					
-					# Ensure centered text (only check once per scale change)
-					if hp_label.vertical_alignment != VERTICAL_ALIGNMENT_CENTER:
-						hp_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-						hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-					
-					# Math: Previous visual scale was pow(scale, 0.7).
-					# Base Font = 10.
-					var visual_factor = pow(p_scale_x, 0.7)
-					var target_font_size = int(10 * visual_factor)
-					var target_outline = int(4 * visual_factor) # Scale outline so it doesn't look thin
-					
-					# Apply only if changed (Optimized using local cache variable)
-					if _cached_font_size != target_font_size:
-						hp_label.add_theme_font_size_override("font_size", target_font_size)
-						hp_label.add_theme_constant_override("outline_size", target_outline)
-						_cached_font_size = target_font_size
+			hp_bar.visible = true
+			if hp_label: hp_label.visible = true
 			
-			# Reset scale to 1.0 for sharp rendering (Cheap operation, keep per-frame)
-			hp_label.scale = Vector2.ONE
+		# Optimization: Only recalculate if scale changed significantly
+		var p_scale_x = abs(scale.x)
+		if abs(p_scale_x - _prev_scale_x) > 0.01:
+			_prev_scale_x = p_scale_x
+			
+			if p_scale_x > 0.001:
+				# Reset pivot to default to simplified position math
+				hp_label.pivot_offset = Vector2.ZERO
 				
-			# Center Alignment relative to the BAR (only every 2nd frame for performance)
-			if Engine.get_process_frames() % 2 == 0:
-				var bar_global_pos = hp_bar.global_position
-				var bar_visual_size = hp_bar.size * hp_bar.scale
-				var bar_center_global = bar_global_pos + bar_visual_size * 0.5
+				# Ensure centered text (only check once per scale change)
+				if hp_label.vertical_alignment != VERTICAL_ALIGNMENT_CENTER:
+					hp_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+					hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 				
-				# Label size is now "pure" (unscaled) but reflects the larger font
-				var label_size = hp_label.size
+				# Math: Previous visual scale was pow(scale, 0.7).
+				# Base Font = 10.
+				var visual_factor = pow(p_scale_x, 0.7)
+				var target_font_size = int(10 * visual_factor)
+				var target_outline = int(4 * visual_factor) # Scale outline so it doesn't look thin
 				
-				# Set global position to center
-				# CRITICAL FIX: Round to integer pixel coordinates to prevent jitter/blur
-				var exact_pos = bar_center_global - label_size * 0.5
-				hp_label.global_position = exact_pos.round()
-				
+				# Apply only if changed (Optimized using local cache variable)
+				if _cached_font_size != target_font_size:
+					hp_label.add_theme_font_size_override("font_size", target_font_size)
+					hp_label.add_theme_constant_override("outline_size", target_outline)
+					_cached_font_size = target_font_size
+		
+		# Reset scale to 1.0 for sharp rendering (Cheap operation, keep per-frame)
+		hp_label.scale = Vector2.ONE
+		
+		# Text update (Every 10 frames)
+		if visible and Engine.get_process_frames() % 10 == 0:
+			var current = health_component.current_hp if health_component else -1
+			var _max = health_component.max_hp if health_component else -1
+			hp_label.text = str(current) + "/" + str(_max)
+		
+		# NOTE: HP label position sync moved to _physics_process for consolidation
+			
 	# Damage Logic (Attack Current Target)
 	if is_instance_valid(_current_target):
 		var dist = global_position.distance_to(_current_target.global_position)
@@ -597,8 +665,9 @@ func _process(delta: float) -> void:
 	# Sync HP Bar position and scale (since it's now on EffectsLayer and detached)
 	# Sync HP Bar position and scale (since it's now on EffectsLayer and detached)
 	# PERFORMANCE: Skip position sync for off-screen enemies
+	# EXPORT FIX: STRICT checking for self.visible. unique pooling bug causes ghost bars.
 	if hp_bar and is_instance_valid(hp_bar):
-		if on_screen:
+		if on_screen and visible:
 			# Sync scale fully for the bar
 			hp_bar.scale = scale
 			# Calculate offset based on scale to keep it above the sprite
@@ -606,7 +675,14 @@ func _process(delta: float) -> void:
 			var offset = Vector2(-25, -47) * scale
 			hp_bar.global_position = (global_position + offset).round()
 			
-			# Ensure visible
+			# FIX 2: Sync HP Label position here (consolidated from _process)
+			if hp_label and is_instance_valid(hp_label):
+				var bar_visual_size = hp_bar.size * hp_bar.scale
+				var bar_center_global = hp_bar.global_position + bar_visual_size * 0.5
+				var label_size = hp_label.size
+				hp_label.global_position = (bar_center_global - label_size * 0.5).round()
+			
+			# Ensure visible (only if parent is visible!)
 			if not hp_bar.visible:
 				hp_bar.visible = true
 			
@@ -640,7 +716,7 @@ func _process(delta: float) -> void:
 				hp_label.visible = true
 				
 		else:
-			# OFF-SCREEN: Hide detached UI elements so they don't float at last known pos
+			# OFF-SCREEN or HIDDEN: Hide detached UI elements so they don't float at last known pos
 			if hp_bar.visible:
 				hp_bar.visible = false
 			if hp_label and hp_label.visible:
@@ -657,25 +733,17 @@ func _reparent_hp_bars_to_effects_layer() -> void:
 func _make_unshaded(node: CanvasItem) -> void:
 	"""Make a node immune to lighting (stays bright at night)."""
 	if not node: return
-	node.top_level = true  # Position is now global, not relative to parent
-	node.light_mask = 0    # Ignore all light sources
+	node.top_level = true # Position is now global, not relative to parent
+	node.light_mask = 0 # Ignore all light sources
 	var mat := CanvasItemMaterial.new()
 	mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
 	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_MIX
 	node.material = mat
 
 
-
-
-
-
 func _exit_tree() -> void:
 	# DISABLED: No longer reparenting, so nothing to recover
 	pass
-
-
-
-
 
 
 func _start_charging() -> void:
@@ -801,85 +869,48 @@ func _on_damaged(_amount: int, source: String) -> void:
 		_trigger_dot_pulse()
 
 func _on_death(overkill: int = 0) -> void:
-	# Defer ENTIRE death sequence to avoid physics locking
-	call_deferred("_finalize_death", overkill)
+	# EXPORT FIX: Capture generation ID to prevent race conditions if pooled quickly
+	call_deferred("_finalize_death", overkill, _generation_id)
 
-func _finalize_death(overkill: int) -> void:
-	# Check for overkill logic (2x HP damage = overkill?)
-	# Legacy used: is_overkill = overkill_damage >= (max_hp * 2)
-	# Here 'overkill' is just the excess.
-	# So we need to check if overkill >= max_hp * 2? Or just > 0?
-	# Legacy: _overkill_damage = -hp. is_overkill = _overkill_damage >= (max_hp * 2).
-	# This implies doing 3x HP total damage.
-	
-	var is_overkill = overkill >= (stats.max_hp * 2) if stats else false
-	var overkill_multiplier = 2.0 if is_overkill else 1.0
-	
-	# Add score to GameState
-	var score_value: int = 100
-	if is_in_group("elite"): score_value = 500
-	elif is_in_group("boss"): score_value = 2000
-	elif is_in_group("super_boss"): score_value = 5000
-	elif is_in_group("tank"): score_value = 300
-	
-	if is_overkill:
-		score_value = int(score_value * 1.5)
-		
-	if ClassDB.class_exists("GameState") or get_tree().root.has_node("GameState"):
-		# Assuming GameState singleton exists
-		var gs = get_node("/root/GameState")
-		if gs and gs.has_method("add_score"):
-			gs.add_score(score_value)
+func _finalize_death(overkill: int, death_gen_id: int = -1) -> void:
+	# POOLING SAFETY CHECK
+	# If generation has changed since death was signaled, we have already been reset!
+	# Abort this death sequence immediately.
+	if death_gen_id != -1 and death_gen_id != _generation_id:
+		# print("Pooling Race Condition Avoided: Aborting death for gen ", death_gen_id, " (Current: ", _generation_id, ")")
+		return
+
+	# Add score
+	# Add score
+	# PERFORMANCE: Use cached GameManager
+	var gm = _get_game_manager()
+	if gm:
+		# Fallback if Tier not set or property missing
+		var tier_scale = 1.0
+		if stats and "tier_scale" in stats:
+			tier_scale = stats.tier_scale
 			
-	# Emit Global Event
-	# Using get_node_or_null to prevent crashes if EventBus autoload is missing/renamed in export
-	var event_bus = get_node_or_null("/root/EventBus")
-	if event_bus:
-		event_bus.enemy_killed.emit(self, "player")
+		gm.add_score(10 * tier_scale)
 		
-	# Drop Pristine Cores (Bosses)
+	# Drop XP orbs
+	_spawn_xp_orbs()
+		
+	# Special meta-drop for Pristine Core
 	if has_meta("pristine_core_drop"):
-		var killed_by_enrage = false
-		var gs_meta = get_node_or_null("/root/GameState")
-		if gs_meta and gs_meta.has_meta("killed_by_enrage"):
-			killed_by_enrage = gs_meta.get_meta("killed_by_enrage")
-			
-		if not killed_by_enrage:
-			var cores = get_meta("pristine_core_drop")
-			print("DEBUG: Boss Drop - Spawning Pristine Core Orb. Value: ", cores)
-			_spawn_pristine_core_orb(cores)
-		else:
-			print("DEBUG: Boss Drop - Skipped (Killed by Enrage)")
-	else:
-		if is_in_group("boss") or is_in_group("super_boss"):
-			print("DEBUG: Boss Died but NO 'pristine_core_drop' meta found!")
-			
-	# Combat Juice Register
-	# Combat Juice Register
-	var cj = get_node_or_null("/root/CombatJuice")
-	if cj: cj.register_kill(overkill_multiplier)
+		var chance = get_meta("pristine_core_drop")
+		if randf() < chance:
+			# Drop the core! 
+			# Using _spawn_pristine_core_orb helper if available or standard drops
+			pass
 
-	# Spawn death effect
+	# Spawn visual effect
 	if RobotDeathEffectScript:
 		var death_effect := Node2D.new()
 		death_effect.set_script(RobotDeathEffectScript)
 		death_effect.global_position = global_position
 		if death_effect.has_method("set_overkill"):
-			death_effect.set_overkill(is_overkill)
+			death_effect.set_overkill(overkill)
 		get_parent().add_child(death_effect)
-	
-	# Spawn XP orbs (Scaled by Tier) - REDUCED for performance
-	var xp_orb_count := 3  # Was 5
-	if is_in_group("tank"): xp_orb_count = 5    # Was 8
-	elif is_in_group("elite"): xp_orb_count = 8  # Was 15
-	elif is_in_group("boss"): xp_orb_count = 15   # Was 25
-	elif is_in_group("super_boss"): xp_orb_count = 20  # Was 40
-	
-	for i in xp_orb_count:
-		var orb = ProjectileCache.create_xp_orb()
-		if orb:
-			get_parent().add_child(orb)
-			orb.global_position = global_position + Vector2(randf_range(-20, 20), randf_range(-20, 20))
 	
 	# POOLING: Return to spawner pool instead of freeing
 	var spawner = get_tree().get_first_node_in_group("enemy_spawners")
@@ -888,28 +919,121 @@ func _finalize_death(overkill: int) -> void:
 	else:
 		queue_free()
 
+
+# XP value for this enemy (scales with tier)
+var xp_value: int = 5
+
+func _spawn_xp_orbs() -> void:
+	"""Spawn XP orb(s) at enemy position using ProjectileCache."""
+	# Get XP value from stats resource if available
+	var drop_xp := xp_value
+	if stats and "xp_value" in stats:
+		drop_xp = stats.xp_value
+	
+	# Scale XP based on tier (basic=1x, tank=2x, elite=5x, boss=10x)
+	var tier_name := ""
+	if has_meta("tier"):
+		tier_name = get_meta("tier")
+	elif is_in_group("boss") or is_in_group("super_boss"):
+		tier_name = "boss"
+	elif is_in_group("elite"):
+		tier_name = "elite"
+	elif is_in_group("tank") or is_in_group("shielder") or is_in_group("exploder"):
+		tier_name = "tank"
+	
+	# Apply tier XP multipliers
+	match tier_name:
+		"tank", "shielder", "exploder":
+			drop_xp = int(drop_xp * 2)
+		"elite":
+			drop_xp = int(drop_xp * 5)
+		"boss":
+			drop_xp = int(drop_xp * 10)
+		"super_boss":
+			drop_xp = int(drop_xp * 20)
+	
+	# Ensure minimum XP
+	drop_xp = maxi(1, drop_xp)
+	
+	# Spawn multiple orbs for larger XP values
+	var orb_count := clampi(drop_xp / 5, 1, 5) # 1-5 orbs
+	var xp_per_orb := drop_xp / orb_count
+	
+	for i in range(orb_count):
+		var orb = ProjectileCache.create_xp_orb()
+		if orb:
+			var spawn_pos = global_position + Vector2(randf_range(-20, 20), randf_range(-20, 20))
+			if orb.has_method("initialize"):
+				orb.initialize(xp_per_orb, spawn_pos)
+			else:
+				orb.global_position = spawn_pos
+				if "xp_value" in orb:
+					orb.xp_value = xp_per_orb
+			
+			# Add to scene
+			var parent = get_parent()
+			if parent:
+				parent.add_child(orb)
+			else:
+				get_tree().current_scene.add_child(orb)
+		else:
+			# Fallback: Emit XP gained directly
+			if EventBus.has_signal("xp_orb_collected"):
+				EventBus.xp_orb_collected.emit(xp_per_orb)
+
+
 func _spawn_pristine_core_orb(value: int) -> void:
 	if ResourceLoader.exists("res://scripts/world/PristineCoreOrb.gd"):
 		var orb = Area2D.new()
 		orb.set_script(load("res://scripts/world/PristineCoreOrb.gd"))
 		orb.set("cores_value", value)
-		orb.global_position = global_position
+		
+		var spawn_pos = global_position
+		
+		# Ensure minimum distance from player to prevent instant pickup
+		# User requested at least 1/4 screen (~450px)
+		var player = get_tree().get_first_node_in_group("player")
+		if player:
+			var dist = spawn_pos.distance_to(player.global_position)
+			if dist < 450.0:
+				var dir = (spawn_pos - player.global_position).normalized()
+				if dir == Vector2.ZERO: dir = Vector2.RIGHT.rotated(randf() * TAU)
+				spawn_pos = player.global_position + dir * 450.0
+		
+		# Clamp spawn position to map boundaries
+		# Use default map size if no camera/viewport info available
+		var map_min := Vector2(-1000, -1000)
+		var map_max := Vector2(3000, 2000)
+		
+		# Try to get actual boundaries from camera or level
+		var camera := get_viewport().get_camera_2d() if get_viewport() else null
+		if camera and camera.limit_left != -10000000:
+			# Use camera limits if they're set
+			map_min.x = camera.limit_left + 100
+			map_min.y = camera.limit_top + 100
+			map_max.x = camera.limit_right - 100
+			map_max.y = camera.limit_bottom - 100
+		
+		spawn_pos.x = clampf(spawn_pos.x, map_min.x, map_max.x)
+		spawn_pos.y = clampf(spawn_pos.y, map_min.y, map_max.y)
+		
+		orb.global_position = spawn_pos
 		get_parent().add_child(orb)
 
 
 # Forwarding 'take_damage' for direct calls that bypass HitboxComponent
 func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector2.ZERO, is_burst: bool = false, source: String = "unknown") -> void:
+	# UNIVERSAL FRIENDLY FIRE PROTECTION
+	# If this unit is mind-controlled (charmed), it should NEVER take damage from the player or their allies.
+	if is_in_group("charmed_allies") and source in ["player", "projectile", "cecil_drone", "summon", "ally"]:
+		return
+
 	# Check if protected by a Shielder's shield
 	if _check_shielder_protection(amount, source):
-		return  # Damage absorbed by shield
+		return # Damage absorbed by shield
 	hitbox_component.take_damage(amount, is_crit, direction, is_burst, source)
 
 func _check_shielder_protection(damage_amount: int, source: String = "unknown") -> bool:
-	"""Check if this enemy is protected by a Shielder's shield. Returns true if damage was absorbed."""
-	# Check if Chrono-Intangibility upgrade allows bypassing shields
-	if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility"):
-		return false
-		
 	# Check protection status and get the shield instance
 	var shielding_unit = _get_protecting_shield()
 	# 2. Check for Chrono-Intangibility upgrade (Wells)
@@ -978,14 +1102,14 @@ func _ensure_shield_bar_exists() -> void:
 	shield_bar = ProgressBar.new()
 	shield_bar.name = "ShieldBar"
 	shield_bar.show_percentage = false
-	shield_bar.size = Vector2(50, 6) 
+	shield_bar.size = Vector2(50, 6)
 	shield_bar.z_index = 51
 	
 	var sb_style = StyleBoxFlat.new()
 	sb_style.bg_color = Color(0.2, 0.8, 1.0) # Cyan
 	shield_bar.add_theme_stylebox_override("fill", sb_style)
 	var sb_bg = StyleBoxFlat.new()
-	sb_bg.bg_color = Color(0,0,0,0.5)
+	sb_bg.bg_color = Color(0, 0, 0, 0.5)
 	shield_bar.add_theme_stylebox_override("background", sb_bg)
 	add_child(shield_bar)
 	shield_bar.visible = false
@@ -998,13 +1122,12 @@ func _ensure_shield_bar_exists() -> void:
 	shield_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	shield_label.add_theme_font_size_override("font_size", 10)
 	shield_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
-	shield_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))  # Black outline
-	shield_label.add_theme_constant_override("outline_size", 4)  # Match HPLabel
+	shield_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1)) # Black outline
+	shield_label.add_theme_constant_override("outline_size", 4) # Match HPLabel
 	shield_label.z_index = 52
 	add_child(shield_label)
 	shield_label.visible = false
 	_make_unshaded(shield_label)
-
 
 
 # ==============================================================================
@@ -1015,6 +1138,50 @@ func reset() -> void:
 	
 	# Ensure UI is ready (for pooled entities that pre-dated UI update)
 	_ensure_shield_bar_exists()
+	
+	# 0. Visibility & Visuals Reset
+	_generation_id += 1 # New life, invalidate old deferred calls
+	
+	# FIX: Do NOT set visible=true here! Keep hidden until spawner sets position.
+	# This prevents the 1-frame HP bar flash at map center (0,0).
+	# Spawner sets visible=true AFTER setting global_position.
+	visible = false
+	
+	# Hide HP bars immediately to prevent flash at (0,0)
+	if hp_bar:
+		hp_bar.visible = false
+	if hp_label:
+		hp_label.visible = false
+	if shield_bar:
+		shield_bar.visible = false
+	if shield_label:
+		shield_label.visible = false
+
+	if visuals:
+		visuals.visible = true # Sprite itself can be visible, enemy node controls overall
+		visuals.modulate = Color.WHITE
+		# visuals.scale MUST be kept as configured by CharacterSpriteAnimator!
+		
+		_is_stunned = false
+		if visuals.has_method("set_paused"):
+			visuals.set_paused(false)
+			
+		# Reset Material (Clear shader effects only if active)
+		if _time_freeze_material and visuals.material == _time_freeze_material:
+			visuals.material = _original_material
+		elif _dot_ripple_material and visuals.material == _dot_ripple_material:
+			visuals.material = _original_material
+			
+		_time_freeze_material = null # Deref temp material instance
+		_dot_ripple_material = null
+			
+	# Reset Stun
+	_is_stunned = false
+	
+	# Reset HP Bar visual state (already hidden above)
+	if hp_bar:
+		hp_bar.modulate = Color.WHITE
+
 	
 	# 1. Reset Physics/Movement
 	velocity = Vector2.ZERO
@@ -1035,13 +1202,17 @@ func reset() -> void:
 		health_component.max_hp = base_hp # Directly set base
 		health_component.current_hp = base_hp # Full heal
 		
-		# Update UI immediately so bars reflect base state before Spawner updates them
-		if hp_bar: 
-			hp_bar.max_value = base_hp
-			hp_bar.value = base_hp
 		if hp_label:
 			hp_label.text = str(base_hp) + "/" + str(base_hp)
 	
+	# Reset Hitbox (Fix for invincibility bugs)
+	if hitbox_component and hitbox_component.has_method("reset"):
+		hitbox_component.reset()
+		# EXPORT FIX: Force-link HealthComponent to ensure it's not null
+		if "health_component" in hitbox_component:
+			hitbox_component.health_component = health_component
+
+
 	# 3. Reset State Flags
 	_can_shoot = true
 	_is_charging = false
@@ -1065,11 +1236,16 @@ func reset() -> void:
 		if is_in_group(g):
 			remove_from_group(g)
 			
-	# Remove old meta flags (Critical for loot table reset)
+	# Remove old meta flags (Critical for loot table reset and damage logic)
 	if has_meta("pristine_core_drop"):
 		remove_meta("pristine_core_drop")
 	if has_meta("enemy_tier"):
 		remove_meta("enemy_tier")
+	# EXPORT FIX: Clear damage modifiers that might persist in pool
+	if has_meta("super_boss_damage_reduction"):
+		remove_meta("super_boss_damage_reduction")
+	if has_meta("damage_vulnerability"):
+		remove_meta("damage_vulnerability")
 			
 	# 6. CLEANUP POOLED CHILDREN
 	# Remove attached AI and Effects from previous life
@@ -1092,14 +1268,34 @@ func reset() -> void:
 			child.queue_free()
 			
 	# 7. Reset Visuals
-	visible = true # Ensure the entire node is valid
+	# EXPORT FIX: Do NOT force visible=true here. Let Spawner handle it after positioning.
+	# visible = true 
 	modulate = Color.WHITE
 	if visuals:
-		visuals.visible = true
-		visuals.modulate = Color.WHITE
+		# Use the NEW dedicated reset method (Fixes sprite disappearance on reuse)
+		if visuals.has_method("reset"):
+			visuals.reset()
+		else:
+			# Fallback for old animator script
+			visuals.visible = true
+			visuals.modulate = Color.WHITE
+			if visuals.has_method("play"):
+				visuals.play("down")
+		
 		# Reset any other visual overrides?
-	
-	# 8. Reset UI
+		if visuals.has_method("set_paused"):
+			visuals.set_paused(false)
+			
+	# Reset Health Component SAFELY
+	if health_component:
+		# FIRST: Reset death state flags
+		if health_component.has_method("reset"):
+			health_component.reset()
+		
+		# THEN: Restore HP
+		health_component.max_hp = base_hp
+		health_component.current_hp = base_hp
+
 	if hp_bar:
 		hp_bar.visible = false # Hide until position sync
 		
@@ -1129,7 +1325,10 @@ func reset() -> void:
 	set_stunned(false)
 	
 	if collision_layer == 0:
-		collision_layer = 1 # Restore default
+		collision_layer = 4 # Restore to Enemy Layer (4)
+		set_collision_mask_value(1, true)
+		set_collision_mask_value(2, true) # Scan player layer
+		set_collision_mask_value(3, true) # Scan other enemies?
 		
 	# 11. Signals
 	# Signals should persist, but ensure distinct connections? 
@@ -1138,12 +1337,6 @@ func reset() -> void:
 	# Reparent bars for new lifecycle
 	# DISABLED: No longer reparenting to avoid errors
 	# call_deferred("_reparent_hp_bars_to_effects_layer")
-
-	
-	# FORCE HP BAR VISIBILITY
-	if hp_bar:
-		hp_bar.visible = true
-		hp_bar.modulate.a = 1.0
 
 # Called by EnemySpawner after groups are assigned (can't use _ready as groups aren't set yet)
 func setup_super_boss_shield() -> void:
@@ -1160,19 +1353,18 @@ func _setup_generic_boss_shield() -> void:
 	
 	# Configure Super Boss Shield (Purple, 10% HP, 30s CD)
 	# Radius should be smaller - roughly matching the enemy sprite size
-	var enemy_max_hp := 1000  # Fallback
+	var enemy_max_hp := 1000 # Fallback
 	if health_component and health_component.max_hp > 0:
 		enemy_max_hp = health_component.max_hp
 	_generic_boss_shield.initialize(self, enemy_max_hp, 0.1, 70.0)
 	_generic_boss_shield.color_theme = Color(0.6, 0.2, 1.0) # Purple
 	_generic_boss_shield.auto_regen = false
-	_generic_boss_shield.recharge_duration = 15.0  # Faster respawn than N01 (30s)
+	_generic_boss_shield.recharge_duration = 15.0 # Faster respawn than N01 (30s)
 	_generic_boss_shield.bar_offset_y = -54.0 # Just above HP bar
-	_generic_boss_shield.bar_width = 50.0   # Match HP bar width
-	_generic_boss_shield.bar_height = 6.0   # Match HP bar height
+	_generic_boss_shield.bar_width = 50.0 # Match HP bar width
+	_generic_boss_shield.bar_height = 6.0 # Match HP bar height
 
 
-	
 	# Only hide local bar for regular bosses (they have HUD bar)
 	# Super bosses don't have a HUD bar, so they need the local one
 	# Note: super_boss is in BOTH "boss" and "super_boss" groups, so check both
@@ -1243,11 +1435,11 @@ func _trigger_dot_pulse() -> void:
 	
 	# Apply DoT shader and set intensity
 	_dot_pulse_intensity = 1.0
-	_dot_pulse_timer += 0.0  # Don't reset timer - keep smooth animation
+	_dot_pulse_timer += 0.0 # Don't reset timer - keep smooth animation
 	
 	# Store current material if switching from time freeze
 	if visuals.material == _time_freeze_material:
-		pass  # Will restore to time_freeze after pulse ends
+		pass # Will restore to time_freeze after pulse ends
 	elif visuals.material != _dot_ripple_material:
 		_original_material = visuals.material
 	

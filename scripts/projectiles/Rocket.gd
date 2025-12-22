@@ -1,12 +1,15 @@
 extends Area2D
 
+# Cached ShopMenu reference
+const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
+
 var velocity = Vector2.ZERO
 var acceleration = 500
 var max_speed = 1200
 var player
-var owner_node: Node = null  # Track who fired this rocket
-var killer_source: String = "rocket"  # For ShielderShield collision detection
-var killer_source_override: String = ""  # Override killer_source if set (for summon-spawned turrets)
+var owner_node: Node = null # Track who fired this rocket
+var killer_source: String = "rocket" # For ShielderShield collision detection
+var killer_source_override: String = "" # Override killer_source if set (for summon-spawned turrets)
 var target_enemy = null
 var last_target_pos = Vector2.ZERO
 var time = 0.0
@@ -23,14 +26,16 @@ const SMOKE_START_SIZE := 5.0
 const SMOKE_END_SIZE := 18.0
 var _smoke_timer := 0.0
 var _smoke_particles: Array = []
-var _trail_color := Color(0.45, 0.45, 0.5, 0.7)  # Grey smoke
-var _fire_color := Color(1.0, 0.6, 0.15, 0.9)  # Orange-yellow fire
+var _trail_color := Color(0.45, 0.45, 0.5, 0.7) # Grey smoke
+var _fire_color := Color(1.0, 0.6, 0.15, 0.9) # Orange-yellow fire
 var _light: PointLight2D = null
-var _has_exploded := false  # Prevent multiple explosions
-var reduced_smoke := false  # For turret rockets - spawn 75% fewer particles
+var _has_exploded := false # Prevent multiple explosions
+var reduced_smoke := false # For turret rockets - spawn 75% fewer particles
 
 # Performance: disable dynamic lights on rockets (expensive with many projectiles)
 const ENABLE_ROCKET_LIGHTS := false
+var is_intangible: bool = false
+var _intangibility_checked: bool = false
 
 
 ## Reset rocket state for pooling reuse
@@ -45,12 +50,34 @@ func reset() -> void:
 	last_target_pos = Vector2.ZERO
 	time = 0.0
 	_smoke_timer = 0.0
-	_smoke_particles.clear()
-	_has_exploded = false
 	reduced_smoke = false
+	_intangibility_checked = false
+	is_intangible = false
+		
 	visible = true
 	set_process(true)
 	set_physics_process(true)
+	set_deferred("monitoring", true)
+	collision_mask = 15 # Layers 1,2,3,4 (includes enemy hitbox layer 4)
+	monitorable = false
+
+func _check_intangibility() -> void:
+	# Check for Intangibility Upgrade (Once per spawn, deferred via physics checks)
+	var p = get_tree().get_first_node_in_group("player")
+	var has_upgrade = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility")
+	var in_squad = false
+	if p and p.has_method("is_character_in_squad"):
+		in_squad = p.is_character_in_squad("wells") or p.is_character_in_squad("Wells")
+	
+	# DIAGNOSTIC: Always print to help debug
+	print("[Rocket] Intangibility Check: has_upgrade=", has_upgrade, " in_squad=", in_squad, " player=", p)
+	
+	if has_upgrade and in_squad:
+		print("[Rocket] Intangibility ACTIVE - will phase through boulders")
+		is_intangible = true
+	else:
+		print("[Rocket] Intangibility INACTIVE - will hit boulders")
+		is_intangible = false
 
 func _ready():
 	# Make rocket unshaded (glows in dark)
@@ -58,6 +85,12 @@ func _ready():
 	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
 	material = mat
+	
+	# Layer 1(1) = World, Layer 2(2) = Player, Layer 3(4) = Enemies
+	# Rocket should hit World + Enemies (1 | 4 = 5) and maybe Player/OldEnemies (2)?
+	# Let's set mask to 5 (World + Enemies) to be safe, or 7 to include layer 2.
+	# Given ModularEnemy might be on 4, we need 4.
+	collision_mask = 15 # Layers 1,2,3,4 (includes enemy hitbox layer 4)
 	
 	add_to_group("projectiles")
 	connect("body_entered", Callable(self, "_on_body_entered"))
@@ -79,14 +112,14 @@ func _ready():
 		target_enemy = closest_enemy
 		last_target_pos = closest_enemy.global_position
 	else:
-		last_target_pos = player.global_position  # fallback
+		last_target_pos = player.global_position # fallback
 	set_process(true)
 	
 	# Dynamic lights are expensive - disabled by default
 	if ENABLE_ROCKET_LIGHTS:
 		_light = PointLight2D.new()
 		_light.name = "RocketLight"
-		_light.color = Color(1.0, 0.5, 0.15)  # Orange-red glow
+		_light.color = Color(1.0, 0.5, 0.15) # Orange-red glow
 		_light.energy = 1.0
 		_light.texture = _create_light_texture()
 		_light.texture_scale = 0.35
@@ -154,10 +187,16 @@ func _draw():
 func _physics_process(delta):
 	# Apply Global Enemy Time Scale (Bullet Time) - ONLY for non-player projectiles
 	var time_scale = 1.0
+	var game_manager = get_node_or_null("/root/GameManager")
 	if not (owner_node and owner_node.is_in_group("player")):
-		time_scale = GameState.enemy_time_scale
+		time_scale = game_manager.enemy_time_scale if game_manager else 1.0
 	
 	var dt = delta * time_scale
+	
+	# Lazy init intangibility to ensure Player group is populated
+	if not _intangibility_checked:
+		_check_intangibility()
+		_intangibility_checked = true
 
 	time += dt
 	var target_pos = last_target_pos
@@ -171,7 +210,7 @@ func _physics_process(delta):
 	if velocity.length() > max_speed:
 		velocity = velocity.normalized() * max_speed
 	position += velocity * dt
-	rotation = velocity.angle()  # point towards movement direction
+	rotation = velocity.angle() # point towards movement direction
 	
 	# Check boulder collision - explode on impact
 	if _check_boulder_collision():
@@ -189,10 +228,7 @@ func _physics_process(delta):
 func _check_boulder_collision() -> bool:
 	"""Check if rocket hit a boulder."""
 	# Skip if Chrono-Intangibility upgrade is active
-	# Skip if Chrono-Intangibility upgrade is active AND Wells is in squad
-	var shop = load("res://scripts/ui/ShopMenu.gd")
-	var player = get_tree().get_first_node_in_group("player")
-	if shop and shop.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+	if is_intangible:
 		return false
 	
 	var boulders := get_tree().get_nodes_in_group("boulders")
@@ -200,7 +236,7 @@ func _check_boulder_collision() -> bool:
 		if not is_instance_valid(boulder):
 			continue
 		var boulder_pos: Vector2 = boulder.global_position
-		var boulder_radius: float = 150.0  # Default
+		var boulder_radius: float = 150.0 # Default
 		if boulder.get("boulder_size") != null:
 			boulder_radius = boulder.boulder_size * 0.5
 		var dist: float = global_position.distance_to(boulder_pos)
@@ -222,15 +258,8 @@ func _on_body_entered(body):
 	# Only damage enemies - skip friendly units (allies, clones, turrets, etc.)
 	if not body.is_in_group("enemies"):
 		return
-	if body.has_method("take_damage"):
-		var hit_direction = velocity.normalized()
-		# Determine killer source - use override if set, otherwise check owner type
-		var killer_source := "rocket"  # Rapunzel weapon type for BurstConfig (10% per hit)
-		if killer_source_override != "":
-			killer_source = killer_source_override
-		elif is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
-			killer_source = "summon"
-		body.take_damage(damage, false, hit_direction, false, killer_source)
+	# IMPACT DAMAGE REMOVED: Rely on Explosion for damage to avoid double-hits/text.
+	# The explosion spawns immediately and will hit this body.
 	call_deferred("explode")
 
 func explode():
@@ -238,8 +267,8 @@ func explode():
 		return
 	_has_exploded = true
 	var explosion = ProjectileCache.create_explosion()
-	explosion.owner_node = owner_node  # Pass owner for killer_source tracking
-	explosion.killer_source_override = killer_source_override  # Pass override too
+	explosion.owner_node = owner_node # Pass owner for killer_source tracking
+	explosion.killer_source_override = killer_source_override # Pass override too
 	
 	# Pass dynamic damage to explosion
 	if explosion.has_method("initialize"):

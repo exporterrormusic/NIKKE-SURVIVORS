@@ -10,7 +10,7 @@ signal back_requested
 var _selected_stage_id: String = "stage_1"
 var _stage_cards: Array[Control] = []
 var _selected_map_index: int = 0
-var _updating_selection: bool = false  # Prevent recursive toggled signals
+var _updating_selection: bool = false # Prevent recursive toggled signals
 
 # Map definitions - biome/time combinations with display names
 const MAPS := [
@@ -48,24 +48,48 @@ var _she_descends_tween_pulse: Tween = null
 func _ready() -> void:
 	# Reset goddess/she_descends mode flags to ensure clean state for new game selection
 	# This fixes bug where mode persists after returning to menu from a goddess fall game
-	GameState.goddess_fall_mode = false
-	GameState.she_descends_mode = false
+	GameManager.goddess_fall_mode = false
+	GameManager.she_descends_mode = false
+	
+	# Randomize initial map environment
+	_randomize_map_selection()
+	
+	# Connect visibility_changed to re-randomize each time screen is shown
+	visibility_changed.connect(_on_visibility_changed)
 	
 	_build_ui()
 	_select_first_unlocked()
 	_start_pulse_animation()
+	
+	# Auto-focus start button for controller users
+	call_deferred("_grab_initial_focus")
 
-func _unhandled_input(event: InputEvent) -> void:
+func _on_visibility_changed() -> void:
+	# Re-randomize map each time the stage selector becomes visible
+	if visible:
+		_randomize_map_selection()
+		_update_selection()
+
+func _randomize_map_selection() -> void:
+	if not MAPS.is_empty():
+		_selected_map_index = randi() % MAPS.size()
+
+func _input(event: InputEvent) -> void:
+	if not is_visible_in_tree():
+		return
+		
 	if event.is_action_pressed("ui_cancel"):
 		UISounds.play_back()
 		_reset_she_descends_tracking() # Ensure reset happens before leaving
+		if MenuManager:
+			MenuManager.start_menu_music()
 		back_requested.emit()
 		get_viewport().set_input_as_handled()
 
 func _select_first_unlocked() -> void:
 	# Select the first unlocked stage
 	for stage in StageRegistry.STAGES:
-		if GameState.is_stage_unlocked(stage.id):
+		if GameManager.is_stage_unlocked(stage.id):
 			_selected_stage_id = stage.id
 			break
 	_update_selection()
@@ -281,7 +305,7 @@ func _build_ui() -> void:
 	_difficulty_slider = HSlider.new()
 	_difficulty_slider.min_value = 1
 	_difficulty_slider.max_value = 100
-	_difficulty_slider.value = GameState.difficulty_multiplier
+	_difficulty_slider.value = GameManager.difficulty_multiplier
 	_difficulty_slider.step = 1
 	_difficulty_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_difficulty_slider.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -292,9 +316,9 @@ func _build_ui() -> void:
 	
 	# Right side: Value display
 	_difficulty_label = Label.new()
-	_difficulty_label.text = "x%d" % GameState.difficulty_multiplier
+	_difficulty_label.text = "x%d" % GameManager.difficulty_multiplier
 	_difficulty_label.add_theme_font_size_override("font_size", 20)
-	_difficulty_label.add_theme_color_override("font_color", _get_difficulty_color(GameState.difficulty_multiplier))
+	_difficulty_label.add_theme_color_override("font_color", _get_difficulty_color(GameManager.difficulty_multiplier))
 	_difficulty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_difficulty_label.custom_minimum_size.x = 50
 	diff_hbox.add_child(_difficulty_label)
@@ -312,6 +336,8 @@ func _build_ui() -> void:
 	back_btn.pressed.connect(func():
 		UISounds.play_back()
 		_reset_she_descends_tracking()
+		if MenuManager:
+			MenuManager.start_menu_music()
 		back_requested.emit()
 	)
 	btn_row.add_child(back_btn)
@@ -382,12 +408,11 @@ func _build_ui() -> void:
 	_elite_core_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	scale_vbox.add_child(_elite_core_label)
 	
-	_update_scaling_labels(GameState.difficulty_multiplier)
+	_update_scaling_labels(GameManager.difficulty_multiplier)
 
 func _create_goddess_fall_card(parent: Control) -> void:
 	# Goddess Fall - Hardcore/Easter Egg Mode Button
 	# Simple styled button with Skull icon and Centered Text
-	
 	_goddess_fall_btn = Button.new()
 	_goddess_fall_btn.custom_minimum_size = Vector2(280, 140) # Slightly taller for centered layout
 	_goddess_fall_btn.toggle_mode = true
@@ -448,7 +473,7 @@ func _rebuild_goddess_fall_button() -> void:
 
 
 func _on_difficulty_changed(value: float) -> void:
-	GameState.difficulty_multiplier = int(value)
+	GameManager.difficulty_multiplier = int(value)
 	_difficulty_label.text = "x%d" % int(value)
 	_difficulty_label.add_theme_color_override("font_color", _get_difficulty_color(int(value)))
 	_update_scaling_labels(int(value))
@@ -483,13 +508,13 @@ func _on_goddess_fall_toggled(pressed: bool) -> void:
 		# Direct deactivation - Explicitly clear flags
 		clear_goddess_flags()
 	
-	GameState.goddess_fall_mode = pressed
-	_update_scaling_labels(GameState.difficulty_multiplier)
+	GameManager.goddess_fall_mode = pressed
+	_update_scaling_labels(GameManager.difficulty_multiplier)
 
 func _activate_she_descends_mode() -> void:
 	_she_descends_activated = true
-	GameState.she_descends_mode = true
-	GameState.goddess_fall_mode = true  # Force it on
+	GameManager.she_descends_mode = true
+	GameManager.goddess_fall_mode = true # Force it on
 	_goddess_fall_btn.button_pressed = true
 	# _goddess_fall_btn.disabled = true  <-- Removed so it can be un-toggled
 	
@@ -521,7 +546,7 @@ func _update_she_descends_button_visuals() -> void:
 	# Just use a ColorRect to darken the existing button background
 	var bg = ColorRect.new()
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.color = Color(0.05, 0.0, 0.0, 0.95)  # Very dark red/black
+	bg.color = Color(0.05, 0.0, 0.0, 0.95) # Very dark red/black
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_goddess_fall_btn.add_child(bg)
 	
@@ -555,13 +580,13 @@ func _update_she_descends_button_visuals() -> void:
 	text_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	text_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	text_label.add_theme_font_size_override("font_size", 64) # Massive text
-	text_label.add_theme_color_override("font_color", Color(0.7, 0.0, 0.1, 1.0))  # Blood red
+	text_label.add_theme_color_override("font_color", Color(0.7, 0.0, 0.1, 1.0)) # Blood red
 	text_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.9))
 	text_label.add_theme_constant_override("shadow_offset_x", 4)
 	text_label.add_theme_constant_override("shadow_offset_y", 4)
 	text_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# Pivot offset approx center for tweening
-	text_label.pivot_offset = Vector2(250, 40) 
+	text_label.pivot_offset = Vector2(250, 40)
 	_she_descends_text_label = text_label
 	hbox.add_child(text_label)
 	
@@ -585,8 +610,8 @@ func _update_she_descends_button_visuals() -> void:
 func _apply_she_descends_start_style() -> void:
 	# Make Mission Start button red/danger themed
 	var danger_normal := StyleBoxFlat.new()
-	danger_normal.bg_color = Color(0.4, 0.0, 0.05, 1.0)  # Dark red
-	danger_normal.border_color = Color(0.8, 0.1, 0.1, 1.0)  # Bright red border
+	danger_normal.bg_color = Color(0.4, 0.0, 0.05, 1.0) # Dark red
+	danger_normal.border_color = Color(0.8, 0.1, 0.1, 1.0) # Bright red border
 	danger_normal.set_border_width_all(4)
 	danger_normal.set_corner_radius_all(12)
 	danger_normal.shadow_color = Color(0.6, 0.0, 0.0, 0.5)
@@ -608,7 +633,7 @@ func reset_state() -> void:
 
 func _reset_she_descends_tracking() -> void:
 	# Called when leaving the selector - reset VISUALS only
-	# GameState flags should only be reset by explicit actions (toggle off, back button)
+	# GameManager flags should only be reset by explicit actions (toggle off, back button)
 	_goddess_toggle_count = 0
 	
 	_she_descends_activated = false
@@ -639,8 +664,8 @@ func _reset_she_descends_tracking() -> void:
 
 func clear_goddess_flags() -> void:
 	# Helper to explicitly clear game state (e.g. from back button)
-	GameState.she_descends_mode = false
-	GameState.goddess_fall_mode = false
+	GameManager.she_descends_mode = false
+	GameManager.goddess_fall_mode = false
 	
 	# Stop timer music if playing
 	if AudioDirector:
@@ -673,12 +698,11 @@ func _get_difficulty_color(value: int) -> Color:
 # Modifier button definitions with icons and colors
 const MODIFIER_STYLES := {
 	"stage_1": {"icon": "⚔", "color": UITheme.MOD_STANDARD, "title": "STANDARD"},
-	"stage_2": {"icon": "👑", "color": UITheme.MOD_ELITE, "title": "ELITE HUNT"},
 	"stage_3": {"icon": "∞", "color": UITheme.MOD_ENDLESS, "title": "ENDLESS"},
 }
 
 func _create_modifier_button(stage: Dictionary) -> Button:
-	var is_unlocked: bool = GameState.is_stage_unlocked(stage.id)
+	var is_unlocked: bool = GameManager.is_stage_unlocked(stage.id)
 	var style_info: Dictionary = MODIFIER_STYLES.get(stage.id, {"icon": "?", "color": Color.WHITE, "title": "???"})
 	
 	var btn := Button.new()
@@ -770,9 +794,6 @@ func _create_danger_divider() -> Control:
 	return container
 
 
-
-
-
 func _apply_goddess_fall_style(btn: Button, _accent_color: Color) -> void:
 	# Red danger background with glow effect like the divider
 	var normal := StyleBoxFlat.new()
@@ -829,6 +850,7 @@ func _apply_modifier_card_style(btn: Button, accent_color: Color, is_unlocked: b
 	hover.set_border_width_all(2)
 	hover.set_corner_radius_all(10)
 	btn.add_theme_stylebox_override("hover", hover)
+	btn.add_theme_stylebox_override("focus", hover) # Focus matches hover
 	
 	# Pressed/toggled-on state - glowing effect
 	var pressed := StyleBoxFlat.new()
@@ -892,9 +914,9 @@ func _update_preview() -> void:
 	_stage_name_lbl.text = current_map.name
 	_modifier_lbl.text = current_map.subtitle
 	
-	# Update GameState immediately so the correct map is used
-	GameState.selected_biome = current_map.biome
-	GameState.selected_time = current_map.time
+	# Update GameManager immediately so the correct map is used
+	GameManager.selected_biome = current_map.biome
+	GameManager.selected_time = current_map.time
 	
 	# Load map preview
 	var preview_path: String = current_map.preview
@@ -928,6 +950,7 @@ func _apply_arrow_button_style(btn: Button) -> void:
 	hover.set_border_width_all(2)
 	hover.set_corner_radius_all(6)
 	btn.add_theme_stylebox_override("hover", hover)
+	btn.add_theme_stylebox_override("focus", hover)
 	
 	var pressed := StyleBoxFlat.new()
 	pressed.bg_color = UITheme.MAP_BTN_PRESSED_BG
@@ -989,6 +1012,7 @@ func _apply_start_button_style() -> void:
 	hover.set_corner_radius_all(12)
 	hover.shadow_size = 12
 	_start_btn.add_theme_stylebox_override("hover", hover)
+	_start_btn.add_theme_stylebox_override("focus", hover)
 	
 	_start_btn.add_theme_color_override("font_color", Color.WHITE)
 
@@ -999,6 +1023,15 @@ func _apply_back_button_style(btn: Button) -> void:
 	normal.set_border_width_all(2)
 	normal.set_corner_radius_all(8)
 	btn.add_theme_stylebox_override("normal", normal)
+	
+	var hover := StyleBoxFlat.new()
+	hover.bg_color = UITheme.BACK_BTN_BG.lightened(0.1) # Lighten for hover
+	hover.border_color = UITheme.BACK_BTN_BORDER
+	hover.set_border_width_all(2)
+	hover.set_corner_radius_all(8)
+	btn.add_theme_stylebox_override("hover", hover)
+	btn.add_theme_stylebox_override("focus", hover)
+	
 	btn.add_theme_color_override("font_color", UITheme.BACK_BTN_TEXT)
 
 func _apply_goddess_button_style(btn: Button) -> void:
@@ -1016,6 +1049,7 @@ func _apply_goddess_button_style(btn: Button) -> void:
 	hover.set_border_width_all(2)
 	hover.set_corner_radius_all(8)
 	btn.add_theme_stylebox_override("hover", hover)
+	btn.add_theme_stylebox_override("focus", hover)
 	
 	# Pressed/toggled-on state - bright red glow
 	var pressed := StyleBoxFlat.new()
@@ -1028,7 +1062,7 @@ func _apply_goddess_button_style(btn: Button) -> void:
 	btn.add_theme_stylebox_override("pressed", pressed)
 	
 	# Build the button content with icon + text
-	btn.text = ""  # Clear text, we'll use a custom layout
+	btn.text = "" # Clear text, we'll use a custom layout
 	
 	var content := VBoxContainer.new()
 	content.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1071,10 +1105,11 @@ func _start_pulse_animation() -> void:
 
 func _on_start_pressed() -> void:
 	UISounds.play_confirm()
-	# GameState.selected_biome and selected_time are already set by _update_preview
+	# GameManager.selected_biome and selected_time are already set by _update_preview
 	stage_confirmed.emit(_selected_stage_id)
 
 
-
-
-
+## Auto-focus start button for controller users
+func _grab_initial_focus() -> void:
+	if _start_btn:
+		_start_btn.grab_focus()

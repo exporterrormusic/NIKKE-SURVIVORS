@@ -1,4 +1,5 @@
 shader_type canvas_item;
+render_mode unshaded;
 
 // Night glow shader for sprites
 // Adds a subtle luminous glow and brightness boost to sprites at night
@@ -11,7 +12,7 @@ uniform float enabled_float : hint_range(0.0, 1.0) = 0.0;  // Use float instead 
 void fragment() {
 	vec4 original = texture(TEXTURE, UV);
 	
-	// If not enabled, just output original
+	// If not enabled, just output original (but respect Modulate)
 	float enable_factor = step(0.5, enabled_float) * glow_intensity;
 	
 	// Sample pixels in 4 directions to detect edges for glow
@@ -32,11 +33,12 @@ void fragment() {
 	
 	// Glow only appears on transparent pixels near opaque ones
 	float glow_alpha = outline * (1.0 - original.a) * enable_factor;
-	vec4 glow = vec4(glow_color.rgb, glow_alpha);
+	vec4 glow = vec4(glow_color.rgb * COLOR.rgb, glow_alpha * COLOR.a);
 	
 	// Boost sprite brightness slightly
-	vec3 boosted = original.rgb * (1.0 + enable_factor * 0.4);
-	vec4 boosted_sprite = vec4(boosted, original.a);
+	// Multiply by COLOR to respect Modulate (Vertex Color)
+	vec3 boosted = original.rgb * (1.0 + enable_factor * 0.4) * COLOR.rgb;
+	vec4 boosted_sprite = vec4(boosted, original.a * COLOR.a);
 	
 	// Composite: glow behind, boosted sprite on top
 	COLOR = mix(glow, boosted_sprite, original.a);

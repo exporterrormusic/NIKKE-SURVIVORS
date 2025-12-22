@@ -7,19 +7,19 @@ const KiloPelletScript = preload("res://scripts/characters/effects/KiloPellet.gd
 
 # Shotgun config
 var pellet_count: int = 5
-var pellet_spread: float = 15.0  # degrees
+var pellet_spread: float = 15.0 # degrees
 
 # Burst state
 var burst_invincible: bool = false
 var _burst_fire_timer: float = 0.0
-var _burst_wave_count: int = 0  # Tracks wave number during burst for zigzag pattern
-const BURST_FIRE_INTERVAL := 0.2  # Auto-fire rate during burst (faster for more connected lines)
+var _burst_wave_count: int = 0 # Tracks wave number during burst for zigzag pattern
+const BURST_FIRE_INTERVAL := 0.2 # Auto-fire rate during burst (faster for more connected lines)
 
 # Talent states
-var special_burn_level: int = 0  # Searing Beams: burn damage
-var special_size_level: int = 0  # Amplified Blast: size/damage bonus
-var burst_duration_unlocked: bool = false  # Extended Assault: 10s duration
-var burst_invuln_unlocked: bool = false  # T.A.L.O.S. Shield: invincibility
+var special_burn_level: int = 0 # Searing Beams: burn damage
+var special_size_level: int = 0 # Amplified Blast: size/damage bonus
+var burst_duration_unlocked: bool = false # Extended Assault: 10s duration
+var burst_invuln_unlocked: bool = false # T.A.L.O.S. Shield: invincibility
 
 func _on_initialize() -> void:
 	# Ammo already set from CharacterRegistry by base class
@@ -63,11 +63,11 @@ func _fire_shotgun(direction: Vector2, is_special: bool, is_burst_shot: bool = f
 	# Calculate damage multiplier
 	var damage_mult: float = 1.0
 	if burst_active:
-		damage_mult = 2.0  # Explicit "Attack x 2" multiplier
+		damage_mult = 2.0 # Explicit "Attack x 2" multiplier
 	
 	# Special attack bonuses (size_level affects damage in pellet)
 	if is_special and special_size_level > 0:
-		var damage_bonuses := [1.0, 1.3, 1.6, 2.0]  # +30/60/100% damage
+		var damage_bonuses := [1.0, 1.3, 1.6, 2.0] # +30/60/100% damage
 		damage_mult *= damage_bonuses[mini(special_size_level, 3)]
 	
 	# Fire pellets in spread pattern
@@ -96,7 +96,7 @@ func _fire_shotgun(direction: Vector2, is_special: bool, is_burst_shot: bool = f
 		pellet.base_damage = player.calc_damage(damage_mult)
 		pellet.pierce_all = false
 		pellet.is_special = is_special
-		pellet.is_burst = is_burst_shot  # Burst pellets get persistent lines
+		pellet.is_burst = is_burst_shot # Burst pellets get persistent lines
 		pellet.burn_level = special_burn_level if is_special else 0
 		pellet.size_level = special_size_level if (is_special or is_burst_shot) else 0
 
@@ -316,10 +316,6 @@ func is_invincible() -> bool:
 func _get_weapon_type_name() -> String:
 	return "shotgun"
 
-func _play_sound(weapon_type: String) -> void:
-	if player.audio_director:
-		player.audio_director.play_weapon_fire_sound(weapon_type)
-
 ## Apply talent upgrade
 func apply_talent(talent_id: String) -> void:
 	match talent_id:
@@ -339,5 +335,5 @@ func apply_talent(talent_id: String) -> void:
 ## Get attack cooldown (faster during burst - automatic fire)
 func get_attack_cooldown() -> float:
 	if burst_active:
-		return BURST_FIRE_INTERVAL  # Automatic fire at 0.3s intervals
+		return BURST_FIRE_INTERVAL # Automatic fire at 0.3s intervals
 	return data.attack_cooldown

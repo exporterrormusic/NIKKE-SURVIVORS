@@ -6,33 +6,33 @@ class_name BossMissile
 ## Launch animation: shoots out from boss, arcs up, then curves toward target
 
 # Missile settings
-const INITIAL_SPEED := 80.0      # Faster start (was 50)
-const MAX_SPEED := 700.0         # Faster max speed (was 500)
-const ACCELERATION := 280.0      # Faster acceleration (was 180)
-const LIFETIME := 6.0            # Shorter lifetime (was 8)
-const AOE_RADIUS := 120.0        # Explosion radius (slightly smaller)
-const AOE_DAMAGE := 2            # Damage dealt by explosion
-const MISSILE_SCALE := 0.65      # Slightly smaller than player missiles
-const TARGET_OFFSET_RANGE := 200.0  # Distance from player center to target (increased for spread)
-const INDICATOR_RADIUS := 80.0   # Visual radius of ground indicator
-const SPREAD_ARC := PI * 1.2     # Total arc width for spreading missiles (about 216 degrees)
+const INITIAL_SPEED := 80.0 # Faster start (was 50)
+const MAX_SPEED := 700.0 # Faster max speed (was 500)
+const ACCELERATION := 280.0 # Faster acceleration (was 180)
+const LIFETIME := 6.0 # Shorter lifetime (was 8)
+const AOE_RADIUS := 120.0 # Explosion radius (slightly smaller)
+const AOE_DAMAGE := 2 # Damage dealt by explosion
+const MISSILE_SCALE := 0.65 # Slightly smaller than player missiles
+const TARGET_OFFSET_RANGE := 200.0 # Distance from player center to target (increased for spread)
+const INDICATOR_RADIUS := 80.0 # Visual radius of ground indicator
+const SPREAD_ARC := PI * 1.2 # Total arc width for spreading missiles (about 216 degrees)
 
 # Launch phase settings (submarine-style launch)
-const BASE_LAUNCH_PHASE_DURATION := 0.4   # Time spent in initial launch phase
-const LAUNCH_SPEED := 350.0               # Speed during launch phase
-const LAUNCH_ARC_HEIGHT := 80.0           # How high the arc goes
-const BASE_TURN_PHASE_DURATION := 0.35    # Time spent turning toward target
+const BASE_LAUNCH_PHASE_DURATION := 0.4 # Time spent in initial launch phase
+const LAUNCH_SPEED := 350.0 # Speed during launch phase
+const LAUNCH_ARC_HEIGHT := 80.0 # How high the arc goes
+const BASE_TURN_PHASE_DURATION := 0.35 # Time spent turning toward target
 
 # Actual phase durations (reduced by 30% in Goddess Fall)
 var _launch_phase_duration := BASE_LAUNCH_PHASE_DURATION
 var _turn_phase_duration := BASE_TURN_PHASE_DURATION
 
 # Launch phase state
-enum MissilePhase { LAUNCH, TURN, CRUISE }
+enum MissilePhase {LAUNCH, TURN, CRUISE}
 var _phase: int = MissilePhase.LAUNCH
 var _phase_timer: float = 0.0
-var _launch_direction := Vector2.UP  # Initial launch direction (away from boss)
-var _boss_position := Vector2.ZERO   # Where the boss was when missile spawned
+var _launch_direction := Vector2.UP # Initial launch direction (away from boss)
+var _boss_position := Vector2.ZERO # Where the boss was when missile spawned
 
 # State
 var _player: Node2D = null
@@ -40,10 +40,10 @@ var _velocity := Vector2.ZERO
 var _current_speed := INITIAL_SPEED
 var _direction := Vector2.RIGHT
 var _lifetime_timer := LIFETIME
-var _target_position := Vector2.ZERO  # Fixed target position
+var _target_position := Vector2.ZERO # Fixed target position
 var _launch_delay := 0.0
 var _launched := false
-var _ground_indicator: Node2D = null  # Visual indicator for impact zone
+var _ground_indicator: Node2D = null # Visual indicator for impact zone
 
 # Rocket visual settings (matching ExplosiveProjectile style)
 var _body_length := 74.0 * MISSILE_SCALE
@@ -54,17 +54,17 @@ var _exhaust_length := 42.0 * MISSILE_SCALE
 var _trail_points: Array = []
 var _trail_ages: Array = []
 const TRAIL_WIDTH := 16.0 * MISSILE_SCALE
-const TRAIL_MAX_POINTS := 4  # Reduced from 6
-const TRAIL_SPACING := 50.0 * MISSILE_SCALE  # Increased spacing
+const TRAIL_MAX_POINTS := 4 # Reduced from 6
+const TRAIL_SPACING := 50.0 * MISSILE_SCALE # Increased spacing
 
 # Smoke settings (reduced for performance)
 var _smoke_puffs: Array = []
 var _smoke_timer := 0.0
-const SMOKE_SPAWN_INTERVAL := 0.18  # Reduced spawn rate
+const SMOKE_SPAWN_INTERVAL := 0.18 # Reduced spawn rate
 const SMOKE_INITIAL_RADIUS := 8.0 * MISSILE_SCALE
 const SMOKE_GROWTH_RATE := 22.0
-const SMOKE_FADE_SPEED := 0.9  # Faster fade
-const MAX_SMOKE_PUFFS := 4  # Reduced from 8
+const SMOKE_FADE_SPEED := 0.9 # Faster fade
+const MAX_SMOKE_PUFFS := 4 # Reduced from 8
 
 # Animation state
 var _exhaust_time := 0.0
@@ -111,7 +111,7 @@ func initialize(player: Node2D, delay: float = 0.0, spread_index: int = 0, total
 		
 		# Launch direction is AWAY from player (opposite of target direction)
 		# Add some upward bias and random spread for variety
-		var launch_angle := base_angle + PI + randf_range(-0.4, 0.4)  # Opposite + random
+		var launch_angle := base_angle + PI + randf_range(-0.4, 0.4) # Opposite + random
 		_launch_direction = Vector2.from_angle(launch_angle)
 		
 		# Calculate spread angle for this missile
@@ -119,7 +119,7 @@ func initialize(player: Node2D, delay: float = 0.0, spread_index: int = 0, total
 		var spread_offset := 0.0
 		if total_missiles > 1:
 			# Spread from -SPREAD_ARC/2 to +SPREAD_ARC/2
-			var t := float(spread_index) / float(total_missiles - 1)  # 0 to 1
+			var t := float(spread_index) / float(total_missiles - 1) # 0 to 1
 			spread_offset = (t - 0.5) * SPREAD_ARC
 			# Add small random jitter
 			spread_offset += randf_range(-0.15, 0.15)
@@ -140,7 +140,7 @@ func initialize(player: Node2D, delay: float = 0.0, spread_index: int = 0, total
 	if _direction == Vector2.ZERO:
 		_direction = Vector2.RIGHT
 	if _launch_direction == Vector2.ZERO:
-		_launch_direction = -_direction  # Default: opposite of target
+		_launch_direction = - _direction # Default: opposite of target
 
 func _create_ground_indicator() -> void:
 	_ground_indicator = Node2D.new()
@@ -160,8 +160,8 @@ func _ready() -> void:
 	material = mat
 	
 	# PHYSICS SETUP for Scarlet Slash detection
-	collision_layer = 4 # Layer 3 (Enemy Projectiles)
-	collision_mask = 0  # We handle player calc manually
+	collision_layer = 15 # Layer 3 (Enemy Projectiles)
+	collision_mask = 0 # We handle player calc manually
 	add_to_group("enemy_projectiles")
 	
 	# Add collision shape
@@ -245,7 +245,7 @@ func _process(delta: float) -> void:
 		MissilePhase.LAUNCH:
 			# Shoot out away from boss with slight arc
 			var launch_progress: float = _phase_timer / _launch_phase_duration
-			_current_speed = LAUNCH_SPEED * (1.0 + launch_progress * 0.5)  # Accelerate slightly
+			_current_speed = LAUNCH_SPEED * (1.0 + launch_progress * 0.5) # Accelerate slightly
 			
 			# Add slight upward arc (perpendicular to launch direction)
 			var arc_offset := sin(launch_progress * PI) * LAUNCH_ARC_HEIGHT * delta
@@ -261,7 +261,7 @@ func _process(delta: float) -> void:
 		MissilePhase.TURN:
 			# Smoothly turn from launch direction toward target
 			var turn_progress: float = _phase_timer / _turn_phase_duration
-			turn_progress = _ease_out_cubic(turn_progress)  # Smooth easing
+			turn_progress = _ease_out_cubic(turn_progress) # Smooth easing
 			
 			# Recalculate target direction (in case player moved slightly)
 			var target_dir := (_target_position - global_position).normalized()
@@ -436,7 +436,7 @@ func _draw_rocket_exhaust(dir: Vector2, perp: Vector2) -> void:
 	var outer_tip := tail - dir * outer_length
 	var outer_left := tail + perp * outer_width
 	var outer_right := tail - perp * outer_width
-	var outer_color := Color(0.6, 0.0, 0.0, 0.9)  # Deep dark red for outer
+	var outer_color := Color(0.6, 0.0, 0.0, 0.9) # Deep dark red for outer
 	draw_polygon(
 		PackedVector2Array([outer_tip, outer_right, tail, outer_left]),
 		PackedColorArray([outer_color, outer_color, outer_color, outer_color])
@@ -447,7 +447,7 @@ func _draw_rocket_exhaust(dir: Vector2, perp: Vector2) -> void:
 	var inner_tip := tail - dir * inner_length
 	var inner_left := tail + perp * inner_width
 	var inner_right := tail - perp * inner_width
-	var inner_color := Color(0.8, 0.1, 0.0, 0.95)  # Dark red for inner
+	var inner_color := Color(0.8, 0.1, 0.0, 0.95) # Dark red for inner
 	draw_polygon(
 		PackedVector2Array([inner_tip, inner_right, tail, inner_left]),
 		PackedColorArray([inner_color, inner_color, inner_color, inner_color])
@@ -458,7 +458,7 @@ func _draw_rocket_exhaust(dir: Vector2, perp: Vector2) -> void:
 	var core_tip := tail - dir * core_length
 	var core_left := tail + perp * core_width
 	var core_right := tail - perp * core_width
-	var core_color := Color(0.4, 0.0, 0.0, 1.0)  # Very dark core
+	var core_color := Color(0.4, 0.0, 0.0, 1.0) # Very dark core
 	draw_polygon(
 		PackedVector2Array([core_tip, core_right, tail, core_left]),
 		PackedColorArray([core_color, core_color, core_color, core_color])
@@ -498,7 +498,7 @@ func _draw_rocket_body(dir: Vector2, perp: Vector2) -> void:
 	var nose_tip := dir * (half_length + nose_length)
 	var nose_base_left := dir * half_length + perp * segment_half_width
 	var nose_base_right := dir * half_length - perp * segment_half_width
-	var nose_color := Color(0.85, 0.3, 0.2, 1.0)  # Brighter red nose
+	var nose_color := Color(0.85, 0.3, 0.2, 1.0) # Brighter red nose
 	draw_polygon(
 		PackedVector2Array([nose_tip, nose_base_right, nose_base_left]),
 		PackedColorArray([nose_color, nose_color, nose_color])
@@ -512,7 +512,7 @@ func _draw_rocket_body(dir: Vector2, perp: Vector2) -> void:
 		var fin_outer: Vector2 = fin_base + perp * (segment_half_width + fin_width) * side
 		var fin_tip: Vector2 = fin_base - dir * fin_length + perp * segment_half_width * side * 0.5
 		var fin_inner: Vector2 = fin_base + perp * segment_half_width * side
-		var fin_color := Color(0.5, 0.18, 0.15, 1.0)  # Dark red fins
+		var fin_color := Color(0.5, 0.18, 0.15, 1.0) # Dark red fins
 		draw_polygon(
 			PackedVector2Array([fin_outer, fin_tip, fin_inner]),
 			PackedColorArray([fin_color, fin_color, fin_color])

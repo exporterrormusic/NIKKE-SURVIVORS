@@ -17,8 +17,8 @@ var teleport_target: Vector2 = Vector2.ZERO
 var should_teleport: bool = false
 
 # Talent bonuses
-var execute_talent: bool = false  # Instantly kill non-elite/boss enemies
-var vuln_talent: bool = false  # Apply 50% damage taken debuff
+var execute_talent: bool = false # Instantly kill non-elite/boss enemies
+var vuln_talent: bool = false # Apply 50% damage taken debuff
 
 var _age: float = 0.0
 var _killed_positions: Array[Vector2] = []
@@ -100,7 +100,7 @@ func _start_sequence() -> void:
 	# Sort targets by HP descending (Kill highest HP first? Or last? User said "ends on one she was able to kill")
 	# "Desc order of current health" -> High HP first. Low HP last.
 	# "Ideally ends on one she was able to kill" -> Low HP at end? Yes.
-	targets.sort_custom(func(a, b): 
+	targets.sort_custom(func(a, b):
 		var hp_a = a.hp if "hp" in a else 0
 		var hp_b = b.hp if "hp" in b else 0
 		return hp_a > hp_b
@@ -144,7 +144,7 @@ func _start_sequence() -> void:
 		# Hyper Dash
 		_is_dashing = true
 		var dash_tween = create_tween()
-		dash_tween.tween_property(owner_node, "global_position", target_pos, dash_time)\
+		dash_tween.tween_property(owner_node, "global_position", target_pos, dash_time) \
 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		await dash_tween.finished
 		_is_dashing = false
@@ -157,7 +157,7 @@ func _start_sequence() -> void:
 				_owner_sprite.flip_h = _owner_orig_flip_h
 		
 		# Teleport tracking
-		teleport_target = target_pos 
+		teleport_target = target_pos
 		
 		# Visual Slash & Sound
 		if owner_node.has_method("_get_weapon_type_name") and owner_node.audio_director:
@@ -376,7 +376,7 @@ func _spawn_ghost() -> void:
 	
 	# Z-Index: Between Filter (50) and Scarlet (200)
 	ghost.z_as_relative = false
-	ghost.z_index = 100 
+	ghost.z_index = 100
 	
 	# CRITICAL: Always process so it fades/frees while game is paused
 	ghost.process_mode = Node.PROCESS_MODE_ALWAYS
@@ -425,6 +425,9 @@ func _collect_targets() -> Array[Node2D]:
 		
 		# Skip non-visual nodes or dying enemies
 		if node.is_in_group("dying"): continue
+		
+		# Skip charmed allies (Sin's mind control)
+		if node.is_in_group("charmed_allies"): continue
 			
 		var enemy := node as Node2D
 		if filter_by_view and not view_rect.has_point(enemy.global_position):
@@ -508,7 +511,7 @@ func _execute_pending_kills() -> void:
 	if execute_talent and execution_kill_count_total > 0 and owner_node:
 		var heal_amount := int(owner_node.max_hp * 0.15 * execution_kill_count_total)
 		if heal_amount > 0 and owner_node.has_method("heal"):
-			owner_node.heal(heal_amount)  # Proper heal method triggers floating number and updates display
+			owner_node.heal(heal_amount) # Proper heal method triggers floating number and updates display
 
 func _apply_vulnerability(enemy: Node2D) -> void:
 	"""Apply 50% increased damage taken debuff to enemy with purple cracked visual."""
@@ -516,7 +519,7 @@ func _apply_vulnerability(enemy: Node2D) -> void:
 		return
 	
 	# Set a meta flag that Enemy.gd can check
-	enemy.set_meta("damage_vulnerability", 1.5)  # 50% more damage = 1.5x multiplier
+	enemy.set_meta("damage_vulnerability", 1.5) # 50% more damage = 1.5x multiplier
 	
 	# Apply visual shader effect
 	# Robust sprite finding (Handles nested Visuals/Sprite2D structures)
@@ -643,7 +646,7 @@ func _apply_vulnerability(enemy: Node2D) -> void:
 			# Create shader material
 			var mat = ShaderMaterial.new()
 			mat.shader = overlay_shader_res
-			mat.set_shader_parameter("intensity", 0.9) 
+			mat.set_shader_parameter("intensity", 0.9)
 			mat.set_shader_parameter("pulse_speed", 2.5)
 			# REDUCED density for bigger, sparser cracks (0.5 = zoomed in)
 			mat.set_shader_parameter("crack_density", 0.5)
@@ -689,7 +692,6 @@ func _apply_vulnerability(enemy: Node2D) -> void:
 	
 	enemy.add_child(debuff_timer)
 	
-
 
 func _get_camera_view_rect() -> Rect2:
 	var viewport := get_viewport()

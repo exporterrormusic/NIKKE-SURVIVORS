@@ -333,7 +333,10 @@ func _apply_damage() -> void:
 	# 2. Damage the closest shield
 	if closest_shield_node:
 		if closest_shield_node.has_method("take_shield_damage"):
-			closest_shield_node.take_shield_damage(_damage, "beam")
+			var shield_damage := _damage
+			if enhanced_mode:
+				shield_damage *= 2
+			closest_shield_node.take_shield_damage(shield_damage, "beam")
 			# Also register burst hit for the shield
 			if player and player.has_method("register_burst_hit"):
 				player.register_burst_hit(closest_shield_node, false, "beam", false)
@@ -378,7 +381,13 @@ func _apply_damage() -> void:
 		
 		# Hit!
 		# DebugLog.log("[MarianBeam] HIT enemy %s at dist %.1f" % [enemy.name, to_enemy_local.x])
-		enemy.take_damage(_damage, false, Vector2.RIGHT.rotated(rotation), false, "projectile")
+		
+		# Apply enhanced mode damage multiplier (She'll Eat Anything upgrade)
+		var final_damage := _damage
+		if enhanced_mode:
+			final_damage *= 2
+			
+		enemy.take_damage(final_damage, false, Vector2.RIGHT.rotated(rotation), false, "projectile")
 		_hit_enemies_this_tick.append(enemy)
 		
 		# Register burst hit on the player with beam weapon type (0.25% per tick)

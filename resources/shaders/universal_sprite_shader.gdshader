@@ -5,6 +5,9 @@ uniform float night_boost : hint_range(0.0, 1.0) = 0.0;
 uniform vec4 night_glow_color : source_color = vec4(0.2, 0.4, 1.0, 1.0); // Stronger Blue
 uniform float night_glow_intensity : hint_range(0.0, 5.0) = 1.5; // High intensity
 
+// Day brightness compensation (since unshaded doesn't receive scene lighting)
+uniform float day_brightness : hint_range(0.8, 1.5) = 1.0;
+
 uniform bool enable_outline = false;
 uniform vec4 outline_color : source_color = vec4(1.0, 0.0, 0.0, 1.0);
 uniform float outline_width : hint_range(0.0, 10.0) = 0.0;
@@ -18,7 +21,10 @@ uniform vec4 sprite_tint : source_color = vec4(1.0, 1.0, 1.0, 1.0); // Explicit 
 
 void fragment() {
 	vec4 tex = texture(TEXTURE, UV);
-	vec3 body_rgb = tex.rgb * sprite_tint.rgb; // Apply explicit tint
+	// apply Vertex Color (Modulate) with day brightness compensation
+	float brightness = mix(day_brightness, 1.0, night_boost); // Use day_brightness during day, fade to 1.0 at night
+	vec3 body_rgb = tex.rgb * sprite_tint.rgb * COLOR.rgb * brightness;
+	float input_alpha = COLOR.a; // Use vertex alpha for final opacity
 	
 	// 1. Red Core (unchanged)
 	if (tex.a > 0.1 && enhance_red_core && tex.r > 0.6 && tex.g < 0.4 && tex.b < 0.4) {
@@ -132,52 +138,36 @@ void fragment() {
 	vec4 final_col = vec4(0.0);
 	float body_alpha = tex.a;
 	
-	// Mix Glow and Body
-	// "Glow should go both ways" -> Bleed into sprite
-	// We use the glow calculation (from the blurring step) to infer if we are "near edge" even inside the sprite.
-	// But the blur calculation above usually runs only if tex.a < 0.99.
-	// We need to allow it to run for inner pixels OR do a simpler composition trick.
-	// Since enabling blur for all pixels is expensive, we'll try a composition trick:
-	// Simply ADD the glow on top of the body, but masked by body alpha?
-	// No, that only affects the opaque part.
-	
-	// BETTER APPROACH:
-	// Use standard Porter-Duff "Over" but with a twist to tint the body edge.
-	
-	// Background (Glow)
-	vec3 bg_rgb = glow_result.rgb;
-	float bg_a = glow_result.a;
-	
-	// Foreground (Body) applied over Background
-	// Result = FG + BG * (1 - FG_A)
-	// BUT we want the BG (Glow) to bleed INTO the FG.
-	// We can do this by adding a fraction of BG to FG before composition?
-	// Or Screen blending?
-	
-	// Let's try "Screen" blending for the glow onto the body to start
-	// body_tinted = body + glow * (1 - body) ? No.
-	
-	// Simple additive bleed for "Inner Glow":
-	// Since we don't have a dedicated inner distance field, we'll just soft-add the glow behind.
-	// If the glow is wide/soft enough, it will look like backlighting.
-	
-	// Standard Composite (Glow Behind Body)
-	vec3 out_rgb = mix(bg_rgb, body_rgb, body_alpha);
-	float out_a = max(body_alpha, bg_a);
-	
-	// "Glow goes both ways" Hack:
-	// Add a little bit of the glow color to the body color solely based on glow strength
-	// This makes the body feel "lit" by the glow
-	if (body_alpha > 0.0 && bg_a > 0.0) {
-		out_rgb = mix(out_rgb, bg_rgb, 0.2 * bg_a); // Tint body with 20% of glow color
+	// Fast path: If no glow is active (daytime, no outline), output sprite directly
+	if (glow_result.a < 0.001) {
+		// Pure pass-through - no darkening from glow compositing
+		final_col = vec4(body_rgb, body_alpha);
+	} else {
+		// Glow is active - composite glow with body
+		vec3 bg_rgb = glow_result.rgb;
+		float bg_a = glow_result.a;
+		
+		// Standard Composite (Glow Behind Body)
+		vec3 out_rgb = mix(bg_rgb, body_rgb, body_alpha);
+		float out_a = max(body_alpha, bg_a);
+		
+		// "Glow goes both ways" Hack:
+		// Add a little bit of the glow color to the body color solely based on glow strength
+		// This makes the body feel "lit" by the glow
+		if (body_alpha > 0.0 && bg_a > 0.0) {
+			out_rgb = mix(out_rgb, bg_rgb, 0.2 * bg_a); // Tint body with 20% of glow color
+		}
+		
+		final_col = vec4(out_rgb, out_a);
 	}
-	
-	final_col = vec4(out_rgb, out_a);
 	
 	// Hit Flash (Whiteout)
 	if (hit_flash > 0.0) {
 		final_col.rgb = mix(final_col.rgb, vec3(1.0), hit_flash);
 	}
+	
+	// Apply final modulation alpha
+	final_col.a *= input_alpha;
 	
 	COLOR = final_col;
 }

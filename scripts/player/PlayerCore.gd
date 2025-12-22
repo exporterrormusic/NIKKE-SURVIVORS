@@ -8,6 +8,7 @@ const CharacterRegistryScript = preload("res://scripts/characters/CharacterRegis
 const PlayerOverheadHudScript = preload("res://scripts/player/PlayerOverheadHud.gd")
 const CharacterSwapEffectScript = preload("res://scripts/effects/CharacterSwapEffect.gd")
 const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
+const MusicPlayerUIScript = preload("res://scripts/ui/MusicPlayerUI.gd")
 
 # Movement settings
 @export var speed: float = 400.0
@@ -17,14 +18,18 @@ const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
 @export var friction: float = 5000.0
 @export var momentum_duration: float = 0.1
 
-# Stamina settings
-@export var stamina: float = 100.0
-@export var max_stamina: float = 100.0
-@export var stamina_regen: float = 30.0
-@export var dash_stamina_cost: float = 20.0
+# Stamina settings (Delegated to PlayerMovement)
+var stamina: float:
+	get: return _movement.stamina if _movement else 0.0
+	set(value): if _movement: _movement.stamina = value
+
+var max_stamina: float:
+	get: return _movement.max_stamina if _movement else 100.0
+	set(value): if _movement: _movement.max_stamina = value
+
+# Combat settings
 @export var attack_stamina_cost: float = 10.0
-@export var running_stamina_drain: float = 20.0
-@export var running_speed_multiplier: float = 1.5
+
 
 # Combat settings
 @export var attack_cooldown: float = 0.3
@@ -45,12 +50,13 @@ const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
 var audio_director = null
 
 # Character management
-var _registry: RefCounted = null  # CharacterRegistry
-var _controllers: Array = []  # CharacterController instances
-var _current_controller: RefCounted = null  # Current CharacterController
-var _selected_char_indices: Array[int] = []  # Selected characters from GameState
-var current_character: int = 0  # Slot index (0=Main, 1=Support1, 2=Support2)
-var unlocked_characters: Array[int] = [0]  # Start with Main character unlocked
+var _registry: RefCounted = null # CharacterRegistry
+var _controllers: Array = [] # CharacterController instances
+var _current_controller: RefCounted = null # Current CharacterController
+var _selected_char_indices: Array[int] = [] # Selected characters from GameManager
+var current_character: int = 0 # Slot index (0=Main, 1=Support1, 2=Support2)
+var swappable_slots: Array[int] = [0] # Slots activated in Talent Tree (0=Main ALWAYS active)
+var owned_characters: Array[int] = [] # Registry IDs unlocked in shop/save
 
 # Burst sounds
 var _burst_sounds: Array = []
@@ -60,6 +66,8 @@ var _level_up_sfx: AudioStream = null
 
 # Player state
 var burst_current: float = 0.0
+# Modifier for burst generation from burst hits (default 0.0 = no gen)
+var burst_gen_on_burst_hit_modifier: float = 0.0
 
 # Health properties (delegate to _health module)
 var hp: int = 10:
@@ -81,9 +89,9 @@ func add_invincibility(duration: float) -> void:
 # Progression system (delegated)
 var _progression: PlayerProgression = null
 # Legacy accessors (for compatibility)
-var xp: int = 0:get = get_xp, set = set_xp
-var level: int = 1:get = get_level
-var xp_to_next: int = 100:get = get_xp_to_next
+var xp: int = 0: get = get_xp, set = set_xp
+var level: int = 1: get = get_level
+var xp_to_next: int = 100: get = get_xp_to_next
 
 # Player subsystems (delegated)
 var _health: PlayerHealth = null
@@ -92,67 +100,65 @@ var _weapons: PlayerWeapons = null
 
 # New modular components (Phase 2 refactor)
 var _burst_system: BurstSystem = null
-var _char_upgrades: CharacterUpgrades = null
+
 var _char_switcher: CharacterSwitcher = null
 var _talent_ui: TalentUIManager = null
 
-# Movement state
-var dashing: bool = false
-var dash_direction: Vector2 = Vector2.ZERO
-var dash_timer: float = 0.0
-var momentum_timer: float = 0.0
-var previous_dash_direction: Vector2 = Vector2.ZERO
-var running: bool = false
-var wants_running: bool = false
-var _dash_press_timer: float = 0.0
+# Movement state (delegated to PlayerMovement)
+var dashing: bool:
+	get: return _movement.dashing if _movement else false
 
 # Combat state
 var attack_timer: float = 0.0
 var shop_open: bool = false
 
+# Controller/aim state
+var _using_controller: bool = false
+var aim_direction: Vector2 = Vector2.RIGHT
+
+const AIM_ASSIST_ANGLE := 15.0 # degrees - subtle cone
+const AIM_ASSIST_RANGE := 350.0 # pixels
+const AIM_ASSIST_STRENGTH := 0.4 # how strongly to pull toward target
+
 # Visual effects
 var _swap_effect: Node2D = null
 var _skill_points_notify: Control = null
 
+# Character-specific shop upgrades manager
+var _upgrade_manager: PlayerUpgradeManager = null
+
 # Shop upgrade bonuses (cached at start)
-var _shop_atk_bonus: float = 0.0  # Multiplier (e.g., 0.25 = +25%)
-var _shop_crit_bonus: float = 0.0  # Flat chance (e.g., 0.10 = +10%)
-var _shop_xp_bonus: float = 0.0  # Multiplier (e.g., 0.25 = +25%)
+var _shop_atk_bonus: float = 0.0
+var _shop_crit_bonus: float = 0.0
+var _shop_xp_bonus: float = 0.0
 
-# Character-specific shop upgrades (for squad-wide effects)
-var _has_rapunzel_healer_upgrade: bool = false  # "I'm a healer, but..." - heal 2% on kill
-var _has_commander_burst_upgrade: bool = false  # "Obviously Anderson" - 2x burst generation
-var _has_crown_xp_upgrade: bool = false  # "Royal Knowledge" - 2x XP
-var _has_cecil_lives_upgrade: bool = false  # "Three Wishes..." - 3 extra lives
-var _cecil_lives_remaining: int = 0  # Remaining extra lives
-var _cecil_revive_invincible_timer: float = 0.0  # 5s invincibility after revive
-# Eden Shield (Generic/Cecil)
-var _has_eden_shield_upgrade: bool = false
-var _eden_shield_max: int = 0
-var _eden_shield_current: int = 0
-var _eden_shield_visual: Node2D = null  # Visual shield effect
-var _has_nayuta_duplicity_upgrade: bool = false  # "Duplicity" - 10% clone spawn on kills
+# Local state for visual/physics effects (Logic delegated, but state held here for now)
+var _cecil_revive_invincible_timer: float:
+	get: return _health._cecil_revive_invincible_timer if _health else 0.0
+	set(v): if _health: _health._cecil_revive_invincible_timer = v
 
-# Marian "She'll Eat Anything" upgrade state
-var _has_marian_beam_absorb: bool = false
-var _marian_beam_buff_active: bool = false
-var _marian_beam_buff_timer: float = 0.0
-const MARIAN_BEAM_BUFF_DURATION: float = 5.0
+var _eden_shield_max: int:
+	get: return _health.shield_max if _health else 0
+	set(v): if _health: _health.shield_max = v
+
+var _eden_shield_current: int:
+	get: return _health.shield_current if _health else 0
+	set(v): if _health: _health.shield_current = v
+
+var _eden_shield_visual: Node2D = null
 var _marian_beam_buff_visual: Node2D = null
 
-# Sin "I WISH They Were Gone" upgrade state
-var _has_sin_wish_upgrade: bool = false
-var _sin_wish_used_this_match: bool = false
+# Flag to prevent deferred HUD updates after initialization
+var _hud_initialized: bool = false
 
 func _ready() -> void:
 	add_to_group("player")
 	
-	# Set collision layer/mask to prevent squad trapping
-	# Layer 2: Player/Allies
-	# Mask: World (1), Enemies (3/4), Boulders (3/4), Items (5)
-	# Explicitly exclude Layer 2 so squad members don't collide with each other
-	collision_layer = 2
-	set_collision_mask_value(2, false) # Don't collide with other players/allies
+	# Set collision layer/mask to prevent friendly fire
+	# Layer 1: Player projectile avoidance
+	# Layer 2: Player body (for item pickup detection like Pristine Cores)
+	collision_layer = 1 | 2 # Set both layer 1 and 2
+	set_collision_mask_value(1, false) # Don't collide with other players/allies on layer 1
 	
 	_create_shadow()
 	
@@ -176,38 +182,10 @@ func _ready() -> void:
 	# Apply universal shader for night glow and effects
 	_apply_universal_shader()
 	
-	# Initialize progression module
-	_progression = PlayerProgression.new()
-	add_child(_progression)
-	_progression.configure(1, 0, 100)  # level, xp, xp_to_next
-	_progression.level_up.connect(_on_progression_level_up)
-	
-	# Initialize health module
-	_health = PlayerHealth.new()
-	add_child(_health)
-	_health.initialize(hp, max_hp)
-	_health.damage_taken.connect(_on_health_damage_taken)
-	_health.death.connect(_on_health_death)
-	
-	# Initialize movement module
-	_movement = PlayerMovement.new()
-	add_child(_movement)
-	_movement.speed = speed
-	_movement.dash_speed = dash_speed
-	_movement.dash_duration = dash_duration
-	_movement.dash_started.connect(_on_dash_started)
-	_movement.dash_ended.connect(_on_dash_ended)
-	
-	# Initialize weapons module
-	_weapons = PlayerWeapons.new()
-	add_child(_weapons)
-	_weapons.attack_cooldown = attack_cooldown
-	
-	# Initialize new modular components
-	_init_modular_components()
+	# Initialize components
+	_setup_components()
 	
 	_apply_shop_upgrades()
-	_init_audio()
 	_init_character_system()
 	_init_ui()
 	update_sprite()
@@ -215,10 +193,49 @@ func _ready() -> void:
 	_level_up_sfx = load("res://assets/sounds/sfx/ui/level.wav")
 	# Connect to environment for sprite darkening during night
 	_setup_environment_modulate()
+	
+	print("[PlayerCore] Debug InputMap 'move_up': ", InputMap.action_get_events("move_up"))
 
-func _init_modular_components() -> void:
-	"""Initialize the new modular component system."""
-	# BurstSystem - manages burst gauge
+	
+	print("[PlayerCore] Debug InputMap 'move_up': ", InputMap.action_get_events("move_up"))
+
+
+func _setup_components() -> void:
+	"""Initialize all child components and systems."""
+	# 1. Core Systems
+	_progression = PlayerProgression.new()
+	add_child(_progression)
+	_progression.configure(1, 0, 100)
+	_progression.level_up.connect(_on_progression_level_up)
+	
+	_health = PlayerHealth.new()
+	_health.name = "PlayerHealth"
+	add_child(_health)
+	_health.health_changed.connect(_on_health_changed)
+	_health.damage_taken.connect(_on_health_damage_taken_visuals)
+	_health.damage_blocked_by_shield.connect(_on_health_shield_blocked_visuals)
+	_health.sin_wish_triggered.connect(_on_health_sin_wish_triggered)
+	_health.cecil_revive_triggered.connect(_on_health_cecil_revive_triggered)
+	_health.marian_beam_absorbed.connect(_on_health_marian_beam_absorbed)
+	_health.shield_changed.connect(func(_c, _m): _update_shield_display())
+	_health.death.connect(_on_health_death_final)
+	_health.initialize(hp, max_hp)
+	
+	_movement = PlayerMovement.new()
+	add_child(_movement)
+	_movement.speed = speed
+	_movement.dash_speed = dash_speed
+	_movement.dash_duration = dash_duration
+	_movement.dash_started.connect(_on_dash_started)
+	_movement.dash_ended.connect(_on_dash_ended)
+	if _movement.has_signal("stamina_changed"):
+		_movement.stamina_changed.connect(_on_stamina_changed)
+	
+	_weapons = PlayerWeapons.new()
+	add_child(_weapons)
+	_weapons.attack_cooldown = attack_cooldown
+	
+	# 2. Modular Systems
 	_burst_system = BurstSystem.new()
 	_burst_system.name = "BurstSystem"
 	_burst_system.burst_max = burst_max
@@ -227,15 +244,11 @@ func _init_modular_components() -> void:
 	_burst_system.initialize(self)
 	_burst_system.burst_changed.connect(_on_burst_changed)
 	
-	# CharacterUpgrades - manages character-specific shop upgrades
-	_char_upgrades = CharacterUpgrades.new()
-	_char_upgrades.name = "CharacterUpgrades"
-	add_child(_char_upgrades)
-	_char_upgrades.initialize(self)
-	_char_upgrades.shield_changed.connect(_on_shield_changed)
-	_char_upgrades.revive_triggered.connect(_on_revive_triggered)
-	
-	# TalentUIManager - manages talent tree and skill point notifications
+	_upgrade_manager = PlayerUpgradeManager.new(self)
+	_upgrade_manager.name = "PlayerUpgradeManager"
+	add_child(_upgrade_manager)
+	print("[PlayerCore] PlayerUpgradeManager initialized")
+
 	_talent_ui = TalentUIManager.new()
 	_talent_ui.name = "TalentUIManager"
 	add_child(_talent_ui)
@@ -244,7 +257,19 @@ func _init_modular_components() -> void:
 	_talent_ui.talent_tree_opened.connect(func(): shop_open = true)
 	_talent_ui.talent_tree_closed.connect(func(): shop_open = false)
 	
-	print("[PlayerCore] Modular components initialized")
+	# 3. Audio & Effects
+	var AudioDirectorScript = load("res://scripts/systems/AudioDirector.gd")
+	audio_director = AudioDirectorScript.new()
+	audio_director.name = "AudioDirector"
+	add_child(audio_director)
+	
+	var MovementEffectsScript = load("res://scripts/player/PlayerMovementEffects.gd")
+	var movement_effects = Node2D.new()
+	movement_effects.set_script(MovementEffectsScript)
+	movement_effects.name = "MovementEffects"
+	add_child(movement_effects)
+	
+	print("[PlayerCore] Components setup complete")
 
 
 func _on_burst_changed(current: float, maximum: float) -> void:
@@ -307,31 +332,20 @@ func _apply_shop_upgrades() -> void:
 			_shop_xp_bonus * 100
 		])
 
-func _init_audio() -> void:
-	var AudioDirectorScript = load("res://scripts/systems/AudioDirector.gd")
-	audio_director = AudioDirectorScript.new()
-	audio_director.name = "AudioDirector"
-	add_child(audio_director)
-	
-	var MovementEffectsScript = load("res://scripts/player/PlayerMovementEffects.gd")
-	var movement_effects = Node2D.new()
-	movement_effects.set_script(MovementEffectsScript)
-	movement_effects.name = "MovementEffects"
-	add_child(movement_effects)
-	
+
 	# audio_director.play_random_battle_track() # Disabling to prevent conflict with Level BGM
 
 func _init_character_system() -> void:
 	_registry = CharacterRegistryScript.get_instance()
 	
-	# Load selected characters from GameState
-	var game_state = get_node_or_null("/root/GameState")
-	if game_state:
-		_selected_char_indices = game_state.selected_character_indices.duplicate()
+	# Load selected characters from GameManager
+	var game_manager = get_node_or_null("/root/GameManager")
+	if game_manager:
+		_selected_char_indices = game_manager.selected_character_indices.duplicate()
 		print("[PlayerCore] Loaded selected characters: ", _selected_char_indices)
 	else:
 		# Fallback defaults
-		_selected_char_indices = [0, 1, 4]  # Scarlet, Commander, Marian
+		_selected_char_indices = [0, 1, 4] # Scarlet, Commander, Marian
 		print("[PlayerCore] Using fallback characters: ", _selected_char_indices)
 	
 	# Create controllers only for selected characters
@@ -349,7 +363,31 @@ func _init_character_system() -> void:
 	
 	# Start with Main character (slot 0)
 	current_character = 0
-	unlocked_characters = [0]
+	# Load registry indices of characters unlocked in the shop/skill tree permanently
+	if _upgrade_manager:
+		owned_characters = _upgrade_manager.load_unlocked_characters_indices()
+		# Fallback if load failed or empty (should always have Scarlet at index 0)
+		if owned_characters.is_empty():
+			owned_characters = [0]
+	else:
+		owned_characters = [0]
+
+	# Slots unlocked in the current run via the Talent Tree
+	# Always start with the first slot (Main character) swappable
+	swappable_slots = [0]
+	
+	# RESTORE: Load previously unlocked slots from saved talents
+	var saved_talents = _upgrade_manager.load_unlocked_talents_from_disk() if _upgrade_manager else {}
+	for slot_idx in range(1, _selected_char_indices.size()):
+		var reg_idx = _selected_char_indices[slot_idx]
+		var char_data = saved_talents.get(reg_idx, saved_talents.get(str(reg_idx), {}))
+		if char_data.get("unlock", 0) > 0:
+			if slot_idx not in swappable_slots:
+				swappable_slots.append(slot_idx)
+	
+	swappable_slots.sort()
+	print("[PlayerCore] Initialized swappable_slots: ", swappable_slots)
+
 	
 	# Set initial controller
 	if current_character < _controllers.size() and _controllers[current_character] != null:
@@ -373,122 +411,60 @@ func _init_character_system() -> void:
 
 func _apply_character_shop_upgrades(all_ids: Array) -> void:
 	"""Apply character-specific shop upgrades based on selected squad.
-	   Only applies if the character's slot is unlocked in the skill tree."""
-	for slot_idx in range(_selected_char_indices.size()):
-		var char_idx: int = _selected_char_indices[slot_idx]
-		if char_idx < 0 or char_idx >= all_ids.size():
-			continue
+	   Delegated to PlayerUpgradeManager."""
+	if _upgrade_manager:
+		# PASS swappable_slots to ensure we only apply upgrades to characters active in the current run
+		_upgrade_manager.apply_character_shop_upgrades(all_ids, _selected_char_indices, swappable_slots)
 		
-		# Check if this character slot is unlocked in the skill tree
-		# Support characters (slots 1, 2) must be unlocked during gameplay
-		if slot_idx not in unlocked_characters:
-			continue
-		
-		var char_id: String = all_ids[char_idx]
-		
-		# Check each character's basic_attack upgrade
-		match char_id:
-			"rapunzel":
-				if ShopMenuScript.has_character_upgrade("rapunzel", "basic_attack"):
-					_has_rapunzel_healer_upgrade = true
-					print("[PlayerCore] Rapunzel 'I'm a healer, but...' upgrade active")
-			"commander":
-				if ShopMenuScript.has_character_upgrade("commander", "basic_attack"):
-					_has_commander_burst_upgrade = true
-					print("[PlayerCore] Commander 'Obviously Anderson' upgrade active")
-			"crown":
-				if ShopMenuScript.has_character_upgrade("crown", "basic_attack"):
-					_has_crown_xp_upgrade = true
-					print("[PlayerCore] Crown 'Royal Knowledge' upgrade active")
-			"cecil":
-				if ShopMenuScript.has_character_upgrade("cecil", "basic_attack"):
-					_has_cecil_lives_upgrade = true
-					_cecil_lives_remaining = 3
-					print("[PlayerCore] Cecil 'Three Wishes...' upgrade active (3 lives)")
-				
-				# Noah's Defiance (Eden's Shield)
-				if ShopMenuScript.has_character_upgrade("cecil", "eden_shield"):
-					_has_eden_shield_upgrade = true
-					_eden_shield_max = int(max_hp * 0.5)
-					_eden_shield_current = 0  # Shield starts empty
-					_create_eden_shield_visual()
-					call_deferred("_update_shield_display")
-					print("[PlayerCore] Cecil 'Noah's Defiance' upgrade active")
-			"kilo":
-				# Kilo has no active player-core upgrades (Ammo is handled in CharacterController)
-				pass
-			"nayuta":
-				if ShopMenuScript.has_character_upgrade("nayuta", "basic_attack"):
-					_has_nayuta_duplicity_upgrade = true
-					print("[PlayerCore] Nayuta 'Duplicity' upgrade active (10% clone spawn)")
-			"marian":
-				if ShopMenuScript.has_character_upgrade("marian", "beam_absorb"):
-					_has_marian_beam_absorb = true
-					print("[PlayerCore] Marian 'She'll Eat Anything' upgrade active")
-			"sin":
-				if ShopMenuScript.has_character_upgrade("sin", "wish_save"):
-					_has_sin_wish_upgrade = true
-					print("[PlayerCore] Sin 'I WISH They Were Gone' upgrade active")
+		# Handle local visual side effects
+		if _upgrade_manager.has_cecil_eden_shield:
+			_eden_shield_max = int(max_hp * 0.5)
+			if not _eden_shield_visual:
+				_create_eden_shield_visual()
+				call_deferred("_update_shield_display")
 
 func _apply_upgrade_for_character(char_idx: int) -> void:
-	"""Apply shop upgrade for a specific character when unlocked during gameplay."""
+	"""Apply shop upgrade for a specific character when unlocked during gameplay.
+	   Delegated to PlayerUpgradeManager."""
 	if not _registry:
 		return
+	if not _upgrade_manager:
+		return
+	
+	if char_idx < 0:
+		return
+		
 	var all_ids: Array = _registry.get_all_character_ids()
-	if char_idx < 0 or char_idx >= all_ids.size():
+	if char_idx >= all_ids.size():
 		return
 	
 	var char_id: String = all_ids[char_idx]
+	_upgrade_manager.apply_upgrade_for_character(char_id)
 	
-	match char_id:
-		"rapunzel":
-			if ShopMenuScript.has_character_upgrade("rapunzel", "basic_attack"):
-				_has_rapunzel_healer_upgrade = true
-				print("[PlayerCore] Rapunzel 'I'm a healer, but...' upgrade now active (unlocked)")
-		"commander":
-			if ShopMenuScript.has_character_upgrade("commander", "basic_attack"):
-				_has_commander_burst_upgrade = true
-				print("[PlayerCore] Commander 'Obviously Anderson' upgrade now active (unlocked)")
-		"crown":
-			if ShopMenuScript.has_character_upgrade("crown", "basic_attack"):
-				_has_crown_xp_upgrade = true
-				print("[PlayerCore] Crown 'Royal Knowledge' upgrade now active (unlocked)")
-		"cecil":
-			if ShopMenuScript.has_character_upgrade("cecil", "basic_attack"):
-				_has_cecil_lives_upgrade = true
-				_cecil_lives_remaining = 3
-				print("[PlayerCore] Cecil 'Three Wishes...' upgrade now active (unlocked)")
-			
-			if ShopMenuScript.has_character_upgrade("cecil", "eden_shield"):
-				_has_eden_shield_upgrade = true
-				_eden_shield_max = int(max_hp * 0.5)
-				_eden_shield_current = 0
-				_create_eden_shield_visual()
-				call_deferred("_update_shield_display")
-				print("[PlayerCore] Cecil 'Noah's Defiance' upgrade now active (unlocked)")
-		"kilo":
-			# Kilo has no active player-core upgrades (Ammo is handled in CharacterController)
-			pass
-		"nayuta":
-			if ShopMenuScript.has_character_upgrade("nayuta", "basic_attack"):
-				_has_nayuta_duplicity_upgrade = true
-				print("[PlayerCore] Nayuta 'Duplicity' upgrade now active (unlocked)")
-		"marian":
-			if ShopMenuScript.has_character_upgrade("marian", "beam_absorb"):
-				_has_marian_beam_absorb = true
-				print("[PlayerCore] Marian 'She'll Eat Anything' upgrade now active (unlocked)")
-		"sin":
-			if ShopMenuScript.has_character_upgrade("sin", "wish_save"):
-				_has_sin_wish_upgrade = true
-				print("[PlayerCore] Sin 'I WISH They Were Gone' upgrade now active (unlocked)")
+	# Handle local visual side effects
+	if char_id == "cecil" and _upgrade_manager.has_cecil_eden_shield:
+		_eden_shield_max = int(max_hp * 0.5)
+		if not _eden_shield_visual:
+			_create_eden_shield_visual()
+			call_deferred("_update_shield_display")
+
 
 func _apply_all_talents_to_controllers() -> void:
 	"""Apply all unlocked talents to controllers when the game starts."""
-	var tree := _get_talent_tree()
-	if not tree or not tree.has_method("get_unlocked_talents"):
-		return
+	# Load directly from disk to ensure we have data even if UI isn't open
+	var unlocked_talents: Dictionary = {}
 	
-	var unlocked_talents: Dictionary = tree.get_unlocked_talents()
+	if _upgrade_manager:
+		unlocked_talents = _upgrade_manager.load_unlocked_talents_from_disk()
+	
+	# If disk load failed (empty), try tree as backup (if it happens to exist)
+	if unlocked_talents.is_empty():
+		var tree := _get_talent_tree()
+		if tree and tree.has_method("get_unlocked_talents"):
+			unlocked_talents = tree.get_unlocked_talents()
+	
+	if unlocked_talents.is_empty():
+		return
 	
 	# Apply talents for each character slot
 	for slot_idx in range(_controllers.size()):
@@ -496,10 +472,22 @@ func _apply_all_talents_to_controllers() -> void:
 			continue
 		
 		var registry_idx: int = _selected_char_indices[slot_idx]
+		
+		# Fundamental Logic Fix: Do not apply talents if character slot is not active in the current run
+		# This prevents upgrades from "leaking" to locked characters who happen to be in the default squad
+		if not slot_idx in swappable_slots:
+			continue
+
 		var controller = _controllers[slot_idx]
 		
-		if controller and registry_idx in unlocked_talents:
-			var char_talents: Dictionary = unlocked_talents[registry_idx]
+		# Handle potential String/Int key mismatch from JSON/Config loading
+		var char_talents: Dictionary = {}
+		if registry_idx in unlocked_talents:
+			char_talents = unlocked_talents[registry_idx]
+		elif str(registry_idx) in unlocked_talents:
+			char_talents = unlocked_talents[str(registry_idx)]
+			
+		if controller and not char_talents.is_empty():
 			for talent_id in char_talents:
 				var talent_level: int = char_talents[talent_id]
 				for i in range(talent_level):
@@ -517,19 +505,20 @@ func on_enemy_killed(_enemy: Node2D, killer_source: String = "player") -> void:
 	
 	# Rapunzel: "I'm a healer, but..." - Heal 2% HP on each kill (exclude clone kills)
 	var rapunzel_valid_kill: bool = killer_source in ["player", "projectile", "cecil_drone"]
-	if _has_rapunzel_healer_upgrade and rapunzel_valid_kill:
+	if _upgrade_manager.has_rapunzel_healer and rapunzel_valid_kill:
 		var heal_amount: int = int(max_hp * 0.02)
 		if heal_amount < 1:
 			heal_amount = 1
 		heal(heal_amount)
 	
-	# Regen Eden Shield on kill (1% of max HP)
-	if _has_eden_shield_upgrade and _eden_shield_current < _eden_shield_max:
+	# Regen Eden Shield on kill (1% of max HP) - direct player kills only
+	if _upgrade_manager.has_cecil_eden_shield and _eden_shield_current < _eden_shield_max and rapunzel_valid_kill:
 		var regen_amount: int = maxi(1, int(max_hp * 0.01))
 		gain_shield(regen_amount)
 	
-	# Nayuta: "Duplicity" - 10% chance to spawn a clone when an enemy dies (any kill)
-	if _has_nayuta_duplicity_upgrade and randf() < 0.10:
+	# Nayuta: "Duplicity" - 10% chance to spawn a clone when player directly kills enemy
+	# Exclude summon/clone kills to prevent chain reactions
+	if _upgrade_manager.has_nayuta_duplicity_upgrade and rapunzel_valid_kill and randf() < 0.10:
 		_spawn_duplicity_clone()
 
 func _spawn_duplicity_clone() -> void:
@@ -547,7 +536,7 @@ func _spawn_duplicity_clone() -> void:
 	var clone_attack: float = 0.2
 	
 	# Determine weapon type - use Nayuta's weapon pool if available
-	var weapon_type: String = "smg"  # Default fallback
+	var weapon_type: String = "smg" # Default fallback
 	if _current_controller is NayutaController:
 		var nayuta_ctrl := _current_controller as NayutaController
 		if nayuta_ctrl.has_method("get_weapon_pool"):
@@ -566,6 +555,7 @@ func _init_ui() -> void:
 		overhead_hud.update_character(registry_idx)
 		_update_overhead_ammo()
 	update_xp_bar()
+	_hud_initialized = true
 
 func _update_hud() -> void:
 	if player_hud and player_hud.is_inside_tree():
@@ -617,6 +607,11 @@ func _apply_character_stats(char_data: Resource) -> void:
 func calculate_damage(base_damage: float, multiplier: float = 1.0) -> int:
 	var level_multiplier: float = 1.0 + (level - 1) * 0.25
 	var atk_multiplier: float = 1.0 + _shop_atk_bonus
+	
+	# Apply character-specific multiplier (e.g. Marian beam absorb +100%)
+	if _current_controller and _current_controller.has_method("get_damage_multiplier"):
+		multiplier *= _current_controller.get_damage_multiplier()
+		
 	return maxi(1, int(base_damage * level_multiplier * atk_multiplier * multiplier))
 
 ## Calculate damage with potential critical hit (uses shop crit bonus)
@@ -698,7 +693,7 @@ func get_sin_damage() -> int:
 	"""Get Sin's current damage for explosion calculations (if Sin is in party)."""
 	for controller in _controllers:
 		if controller is SinController:
-			return calc_damage()  # Use player's damage (includes level scaling)
+			return calc_damage() # Use player's damage (includes level scaling)
 	return 0
 
 func _create_shadow() -> void:
@@ -743,97 +738,51 @@ func _on_environment_modulate_changed(color: Color) -> void:
 func take_damage(dmg: int, is_crit: bool = false, direction: Vector2 = Vector2.ZERO, is_true_damage: bool = false, source: String = "enemy") -> void:
 	if CheatManager.is_cheat_active("invincible"):
 		return
-		
-	if invincible and not is_true_damage:
-		return
-	# Debug invincibility from debug menu
-	if has_meta("debug_invincible") and get_meta("debug_invincible"):
-		return
-	if _current_controller and _current_controller.is_invincible():
-		return
 	
-	# Marian "She'll Eat Anything" - absorb boss beam attacks
-	if source == "boss_beam" and _has_marian_beam_absorb and _current_controller is MarianController:
-		_activate_marian_beam_buff()
-		return
+	# Pass to health component
+	_health.take_damage(dmg, is_crit, direction, is_true_damage, source)
+
+func _on_health_damage_taken_visuals(dmg: int, is_crit: bool, direction: Vector2) -> void:
+	"""Handle visuals when the health component actually takes damage."""
+	if screen_flash and screen_flash.has_method("flash_damage"):
+		screen_flash.flash_damage()
 	
-	# Check if Cecil's shield can absorb the hit
-	if _current_controller is CecilController:
-		var cecil_ctrl := _current_controller as CecilController
-		if cecil_ctrl.try_absorb_damage():
-			# Shield absorbed the hit
-			return
-	
-	# Eden Shield damage absorption
-	if _has_eden_shield_upgrade and _eden_shield_current > 0:
-		var shield_damage = min(dmg, _eden_shield_current)
-		if shield_damage > 0:
-			_eden_shield_current -= shield_damage
-			dmg -= shield_damage
-			_spawn_shield_hit_effect()
-			call_deferred("_update_shield_display")
-			
-			# If damage fully absorbed, return early
-			if dmg <= 0:
-				return
-	
-	var prev_hp = hp
-	hp -= dmg
-	
-	# Check if Sin's wish will save the player (don't show damage effects if so)
-	var sin_wish_will_save = hp <= 0 and _has_sin_wish_upgrade and not _sin_wish_used_this_match and is_character_in_squad("sin")
-	
-	# Only show damage effects if not being saved by Sin's wish
-	if not sin_wish_will_save:
-		if screen_flash and screen_flash.has_method("flash_damage"):
-			screen_flash.flash_damage()
-		
-		# Hit effects
-		var HitSparkScript = preload("res://scripts/effects/HitSpark.gd")
-		if get_parent() and HitSparkScript:
-			HitSparkScript.spawn_player_hit(get_parent(), global_position)
-	
-	# Camera shake disabled for player damage
-	# var combat_juice_script = load("res://scripts/CombatJuice.gd")
-	# if combat_juice_script and combat_juice_script.instance:
-	#	combat_juice_script.camera_shake(12.0)
+	# Hit effects
+	var HitSparkScript = preload("res://scripts/effects/HitSpark.gd")
+	if get_parent() and HitSparkScript:
+		HitSparkScript.spawn_player_hit(get_parent(), global_position)
 	
 	var FloatingNumber = preload("res://scripts/effects/FloatingDamageNumber.gd")
 	if get_parent():
 		FloatingNumber.spawn_damage(get_parent(), global_position + Vector2(0, -100), dmg)
 	
-	_update_health_display(hp - prev_hp, true)
+	# Update HP bar displays (both main HUD and overhead)
+	_update_health_display(-dmg, true)
 	
 	# Emit global event for decoupled systems
 	EventBus.player_damaged.emit(dmg, null)
-	
-	if hp <= 0:
-		_on_player_death()
 
-func _on_player_death() -> void:
-	# Sin "I WISH They Were Gone" upgrade: Trigger wish sequence if Sin in squad
-	if _has_sin_wish_upgrade and not _sin_wish_used_this_match and is_character_in_squad("sin"):
-		_sin_wish_used_this_match = true
-		hp = 1  # Prevent death
-		_trigger_sin_wish_sequence()
-		print("[PlayerCore] Sin's wish save triggered!")
-		return
-	
-	# Cecil "Three Wishes..." upgrade: Use an extra life if available
-	if _has_cecil_lives_upgrade and _cecil_lives_remaining > 0:
-		_cecil_lives_remaining -= 1
-		hp = max_hp
-		_update_health_display(max_hp, false)
-		_spawn_revive_effect()
-		# Grant 5 seconds of invincibility
-		_cecil_revive_invincible_timer = 5.0
-		invincible = true
-		print("[PlayerCore] Cecil's extra life used! %d lives remaining (5s invincibility)" % _cecil_lives_remaining)
-		return
-	
-	# Record the run result to GameState for leaderboard
-	if GameState:
-		GameState.record_run_result("")
+func _on_health_shield_blocked_visuals(_amount: int) -> void:
+	_spawn_shield_hit_effect()
+	call_deferred("_update_shield_display")
+
+func _on_health_sin_wish_triggered() -> void:
+	_trigger_sin_wish_sequence()
+	print("[PlayerCore] Sin's wish save triggered (via component)!")
+
+func _on_health_cecil_revive_triggered() -> void:
+	_spawn_revive_effect()
+	_update_health_display(max_hp, false) # Full heal display
+	print("[PlayerCore] Cecil revive triggered (via component)!")
+
+func _on_health_marian_beam_absorbed() -> void:
+	_activate_marian_beam_buff()
+
+func _on_health_death_final() -> void:
+	# Record the run result to GameManager for leaderboard
+	var game_manager = get_node_or_null("/root/GameManager")
+	if game_manager:
+		game_manager.record_run_result("")
 	
 	# Find the Level node and trigger defeat menu
 	var level_node = get_parent()
@@ -845,6 +794,13 @@ func _on_player_death() -> void:
 		if root and root.has_method("show_defeat_menu"):
 			root.show_defeat_menu()
 
+func _on_health_changed(current: int, maximum: int) -> void:
+	# Call directly when HUD is ready, defer only during initialization
+	if _hud_initialized:
+		_update_health_display(0, false)
+	else:
+		call_deferred("_update_health_display", 0, false)
+
 func add_skill_points(amount: int) -> void:
 	if _progression:
 		_progression.add_skill_points(amount)
@@ -855,19 +811,18 @@ func add_skill_points(amount: int) -> void:
 		overhead_hud.update_skill_points_available(true)
 
 func heal(amount: int) -> void:
-	var prev_hp = hp
-	hp = min(hp + amount, max_hp)
-	var actual_heal = hp - prev_hp
+	# Pass to health component
+	_health.heal(amount)
 	
 	# Always heal Nayuta clones for the full intended amount
 	_heal_nayuta_clones(amount)
 	
-	if actual_heal > 0:
-		var FloatingNumber = preload("res://scripts/effects/FloatingDamageNumber.gd")
-		if get_parent():
-			FloatingNumber.spawn_heal(get_parent(), global_position + Vector2(0, -100), actual_heal)
+	# Visuals handled in heal (but can be moved to signal if needed)
+	var FloatingNumber = preload("res://scripts/effects/FloatingDamageNumber.gd")
+	if get_parent():
+		FloatingNumber.spawn_heal(get_parent(), global_position + Vector2(0, -100), amount)
 	
-	_update_health_display(hp - prev_hp, true)
+	_update_health_display(amount, true)
 
 func _update_health_display(change: int = 0, animate: bool = false) -> void:
 	if player_hud:
@@ -910,7 +865,7 @@ func register_burst_hit(_target = null, from_burst: bool = false, weapon_type: S
 		burst_rate = BurstConfig.get_rate(weapon_type)
 	
 	# Commander "Obviously Anderson" upgrade: 2x burst generation
-	if _has_commander_burst_upgrade:
+	if _upgrade_manager.has_commander_burst:
 		burst_rate *= 2.0
 	
 	# Delegate to BurstSystem if available (fixes desync)
@@ -927,7 +882,7 @@ func register_burst_hit(_target = null, from_burst: bool = false, weapon_type: S
 func _get_current_weapon_type() -> String:
 	## Get weapon type string for current character
 	if not _registry:
-		return "smg"  # Fallback
+		return "smg" # Fallback
 	
 	var all_ids = _registry.get_all_character_ids()
 	if current_character < 0 or current_character >= _selected_char_indices.size():
@@ -978,6 +933,9 @@ func use_burst() -> bool:
 		overhead_hud.update_burst(burst_current, burst_max)
 	return true
 
+func is_using_controller() -> bool:
+	return _using_controller
+
 func _attempt_burst_activation() -> void:
 	if not is_burst_unlocked():
 		return
@@ -1024,7 +982,7 @@ func _play_burst_voice() -> void:
 		audio_player.name = "BurstVoice_%d" % Time.get_ticks_msec()
 		audio_player.stream = sound
 		audio_player.volume_db = 10.0
-		audio_player.bus = "SFX"  # Use SFX bus for voice lines
+		audio_player.bus = "SFX" # Use SFX bus for voice lines
 		audio_player.process_mode = Node.PROCESS_MODE_ALWAYS
 		root.add_child(audio_player)
 		audio_player.play()
@@ -1040,6 +998,7 @@ func set_xp(value: int) -> void:
 	if _progression:
 		_progression.xp = value
 
+
 func get_level() -> int:
 	return _progression.level if _progression else 1
 
@@ -1054,7 +1013,7 @@ func add_xp(amount: int) -> void:
 	var xp_multiplier: float = 1.0 + _shop_xp_bonus
 	
 	# Crown "Royal Knowledge" upgrade: 2x XP gain
-	if _has_crown_xp_upgrade:
+	if _upgrade_manager.has_crown_xp:
 		xp_multiplier *= 2.0
 		
 	# Cheat: Recipes (50x XP)
@@ -1090,25 +1049,20 @@ func _on_progression_level_up(new_level: int, skill_points_gained: int) -> void:
 	
 	# Note: EventBus.player_leveled_up already emitted by PlayerProgression
 
-func _on_health_damage_taken(amount: int) -> void:
-	"""Called when PlayerHealth module processes damage"""
-	# Update HUD
-	call_deferred("_update_hud")
 
-func _on_health_death() -> void:
-	"""Called when PlayerHealth module triggers death"""
-	# Handle player death
-	# Note: Death logic already in PlayerCore, will be refactored later
-	pass
-
-func _on_dash_started() -> void:
-	"""Called when PlayerMovement starts a dash"""
-	# Could add dash effects here
-	pass
-
-func _on_dash_ended() -> void:
-	"""Called when PlayerMovement ends a dash"""
-	pass
+func _on_stamina_changed(current: float, max_val: float) -> void:
+	"""Handle stamina changes from PlayerMovement component."""
+	# Regenerating if current > previous? Hard to tell without prev state.
+	# But PlayerHud usually handles the color/animation based on the 'regenerating' bool.
+	# We can infer regenerating if current < max and not dashing/running?
+	# Simpler: just pass 'true' for spending if we don't have perfect info, or assume regen.
+	# Actually PlayerHud probably wants to know if we are draining.
+	var draining = false
+	if _movement:
+		draining = _movement.running or _movement.dashing
+	
+	if player_hud:
+		player_hud.update_stamina(current, max_val, draining)
 
 func _play_level_up_sound() -> void:
 	## Plays the level up sound effect
@@ -1173,7 +1127,7 @@ func _spawn_shield_hit_effect() -> void:
 
 func gain_shield(amount: int) -> void:
 	## Add shield HP, up to max
-	if _has_eden_shield_upgrade and _eden_shield_current < _eden_shield_max:
+	if _upgrade_manager.has_cecil_eden_shield and _eden_shield_current < _eden_shield_max:
 		var old = _eden_shield_current
 		_eden_shield_current = mini(_eden_shield_current + amount, _eden_shield_max)
 		if _eden_shield_current != old:
@@ -1182,18 +1136,9 @@ func gain_shield(amount: int) -> void:
 # ============= MARIAN BEAM BUFF =============
 
 func _activate_marian_beam_buff() -> void:
-	"""Activate Marian's beam absorption buff (+100% damage, enhanced beam)."""
-	_marian_beam_buff_active = true
-	_marian_beam_buff_timer = MARIAN_BEAM_BUFF_DURATION
-	
-	# Notify controller
-	if _current_controller is MarianController:
-		_current_controller.set_beam_buff_active(true)
-	
-	# Create purple glow visual
-	_create_marian_buff_visual()
-	
-	print("[PlayerCore] Marian beam buff activated! +100% damage for 5s")
+	"""Activate Marian's beam absorption buff (Delegated to Manager)."""
+	if _upgrade_manager:
+		_upgrade_manager.trigger_marian_beam_absorb()
 
 func _create_marian_buff_visual() -> void:
 	"""Create smoky purple glow around player."""
@@ -1245,21 +1190,23 @@ func _draw() -> void:
 	script.reload()
 	return script
 
-func _deactivate_marian_beam_buff() -> void:
-	"""End Marian's beam buff."""
-	_marian_beam_buff_active = false
-	_marian_beam_buff_timer = 0.0
-	
-	# Notify controller
-	if _current_controller is MarianController:
-		_current_controller.set_beam_buff_active(false)
-	
-	# Remove visual
-	if _marian_beam_buff_visual and is_instance_valid(_marian_beam_buff_visual):
-		_marian_beam_buff_visual.queue_free()
-		_marian_beam_buff_visual = null
-	
-	print("[PlayerCore] Marian beam buff ended")
+func _update_marian_beam_visual(active: bool) -> void:
+	"""Update Marian beam visual state (Called by PlayerUpgradeManager)."""
+	if active:
+		_create_marian_buff_visual()
+		if _current_controller is MarianController:
+			_current_controller.set_beam_buff_active(true)
+		print("[PlayerCore] Marian beam buff visual ON")
+	else:
+		if _marian_beam_buff_visual and is_instance_valid(_marian_beam_buff_visual):
+			_marian_beam_buff_visual.queue_free()
+			_marian_beam_buff_visual = null
+		
+		# Notify controller
+		if _current_controller is MarianController:
+			_current_controller.set_beam_buff_active(false)
+		
+		print("[PlayerCore] Marian beam buff visual OFF")
 
 # ============= SIN WISH SAVE =============
 
@@ -1282,14 +1229,14 @@ func _on_sin_wish_complete() -> void:
 	"""Called when Sin's wish sequence finishes."""
 	# Grant 3 seconds of invulnerability
 	invincible = true
-	_cecil_revive_invincible_timer = 3.0  # Reuse Cecil's timer for invincibility
-	hp = max_hp  # Full heal
+	_cecil_revive_invincible_timer = 3.0 # Reuse Cecil's timer for invincibility
+	hp = max_hp # Full heal
 	_update_health_display(max_hp, false)
 	print("[PlayerCore] Sin wish sequence complete. 3s invulnerability granted.")
 
 func reset_sin_wish_for_new_match() -> void:
 	"""Reset Sin's wish usage for a new match."""
-	_sin_wish_used_this_match = false
+	_upgrade_manager.sin_wish_used_this_match = false
 
 
 func update_xp_bar() -> void:
@@ -1323,20 +1270,18 @@ func _add_skill_point() -> void:
 	_update_skill_points_notification(points_available)
 
 func is_character_in_squad(char_id: String) -> bool:
-	"""Check if a specific character is currently unlocked in the squad."""
-	if not _registry:
-		return false
+	"""Check if a character is currently available in the squad (swappable/active in run)."""
+	char_id = char_id.to_lower()
 	
-	# Check if any unlocked slot maps to this character ID
-	for slot_idx in unlocked_characters:
-		if slot_idx < 0 or slot_idx >= _selected_char_indices.size():
-			continue
-		
-		var registry_idx: int = _selected_char_indices[slot_idx]
-		var id = _registry.get_character_id(registry_idx)
-		if id == char_id:
-			return true
-	
+	# Check active squad slots
+	for slot_idx in swappable_slots:
+		if slot_idx >= 0 and slot_idx < _controllers.size():
+			var controller = _controllers[slot_idx]
+			if controller:
+				# Check script path for name match (robust fallback)
+				var path = controller.get_script().resource_path.to_lower()
+				if char_id in path: # e.g. "wellscontroller.gd" contains "wells"
+					return true
 	return false
 
 func _refresh_squad_synergies() -> void:
@@ -1349,22 +1294,24 @@ func _on_talent_unlocked(char_id: int, talent_id: String) -> void:
 	# char_id is a registry index, we need to convert to slot index
 	var slot_idx: int = _selected_char_indices.find(char_id)
 	
-	# Unlock character if this is an unlock talent
+	# Unlock character slot if this is an unlock talent
 	if talent_id == "unlock":
 		# Find which slot this registry index corresponds to
-		if slot_idx >= 0 and slot_idx not in unlocked_characters:
-			unlocked_characters.append(slot_idx)
-			unlocked_characters.sort()
-			print("[PlayerCore] Unlocked character slot %d (registry %d)" % [slot_idx, char_id])
+		if slot_idx >= 0 and slot_idx not in swappable_slots:
+			swappable_slots.append(slot_idx)
+			swappable_slots.sort()
+			print("[PlayerCore] Activated character slot %d (registry %d) in current run" % [slot_idx, char_id])
 			
 			# Apply shop upgrades for the newly unlocked character
 			_apply_upgrade_for_character(char_id)
+			print("[PlayerCore] Swappable slots now: ", swappable_slots)
 			
 			# Refresh squad synergies (e.g. Kilo's ammo buff needing Kilo in squad)
 			_refresh_squad_synergies()
 	
 	# Forward talent to controller - use slot index
-	if slot_idx >= 0 and slot_idx < _controllers.size():
+	# FIX: Only apply talent if the character slot is actually active in the current run
+	if slot_idx >= 0 and slot_idx < _controllers.size() and slot_idx in swappable_slots:
 		var controller = _controllers[slot_idx]
 		if controller and controller.has_method("apply_talent"):
 			controller.apply_talent(talent_id)
@@ -1513,30 +1460,40 @@ func _update_burst_visibility() -> void:
 # ============= CHARACTER SWITCHING =============
 
 func switch_character(direction: int) -> void:
-	if unlocked_characters.size() <= 1:
+	if swappable_slots.size() <= 1:
 		return
 	
 	# Cleanup old controller before switching
 	if _current_controller and _current_controller.has_method("cleanup"):
 		_current_controller.cleanup()
 	
-	var idx = unlocked_characters.find(current_character)
-	idx = (idx + direction + unlocked_characters.size()) % unlocked_characters.size()
-	current_character = unlocked_characters[idx]
+	var old_char = current_character
+	var idx = swappable_slots.find(current_character)
+	idx = (idx + direction + swappable_slots.size()) % swappable_slots.size()
+	current_character = swappable_slots[idx]
 	_current_controller = _controllers[current_character]
+	
+	print("[PlayerCore] Swapping from slot %d to %d. SwappableSlots: %s. Controller: %s" % [old_char, current_character, swappable_slots, _current_controller])
 	
 	_trigger_swap_effect()
 	update_sprite()
 	_update_overhead_ammo()
-	_update_burst_visibility()  # Update burst bar for new character
+	_update_burst_visibility() # Update burst bar for new character
 	
-	# Update GameState so achievements track the correct character
+	# Update GameManager so achievements track the correct character
 	var registry_idx: int = _selected_char_indices[current_character] if current_character < _selected_char_indices.size() else 0
-	GameState.set_player_character(registry_idx)
+	var game_manager = get_node_or_null("/root/GameManager")
+	if game_manager:
+		game_manager.set_player_character(registry_idx)
 	
 	if overhead_hud:
 		# Pass registry index (not slot index) for proper ammo display
 		overhead_hud.update_character(registry_idx)
+	
+	# Sync character ID with health component for character-specific blocks/buffs
+	if _health and _registry:
+		var char_id = _registry.get_character_id(registry_idx)
+		_health.current_character_id = char_id
 
 func _trigger_swap_effect() -> void:
 	if not is_instance_valid(_swap_effect):
@@ -1581,7 +1538,7 @@ func _update_overhead_special() -> void:
 	# Check current character index in _selected_char_indices
 	if _selected_char_indices.size() > current_character:
 		var char_idx = _selected_char_indices[current_character]
-		if char_idx == 1:  # Scarlet's index in CharacterRegistry
+		if char_idx == 1: # Scarlet's index in CharacterRegistry
 			overhead_hud.update_scarlet_special_unlocked(unlocked)
 	
 	# Get special cooldown progress from controller
@@ -1607,7 +1564,15 @@ func _update_overhead_special() -> void:
 
 # ============= MAIN GAME LOOP =============
 
+	# Animator state is updated in _physics_process via update_state()
+
 func _process(delta: float) -> void:
+	if shop_open:
+		return
+		
+	# Update aim every frame for smooth visual tracking
+	_update_aim()
+	
 	# Cheats
 	if CheatManager.is_cheat_active("infinite_burst"):
 		if burst_current < burst_max:
@@ -1632,25 +1597,10 @@ func _process(delta: float) -> void:
 		_current_controller.process(delta)
 	
 	# Marian beam buff timer
-	if _marian_beam_buff_active:
-		_marian_beam_buff_timer -= delta
-		if _marian_beam_buff_timer <= 0:
-			_deactivate_marian_beam_buff()
-	
-	# Stamina management
-	var infinite_stamina: bool = has_meta("debug_infinite_stamina") and get_meta("debug_infinite_stamina")
-	if running and not dashing and not infinite_stamina:
-		stamina = max(stamina - running_stamina_drain * delta, 0)
-		if player_hud:
-			player_hud.update_stamina(stamina, max_stamina, true)
 
-	else:
-		if infinite_stamina:
-			stamina = max_stamina
-		else:
-			stamina = min(stamina + stamina_regen * delta, max_stamina)
-		if player_hud:
-			player_hud.update_stamina(stamina, max_stamina, false)
+	
+	# Stamina management delegated to PlayerMovement
+	# UI updates via signal connection
 	
 	# Update ammo UI
 	_update_overhead_ammo()
@@ -1662,49 +1612,72 @@ func _physics_process(delta: float) -> void:
 	if shop_open:
 		return
 	
-	# Cecil revive invincibility timer
-	if _cecil_revive_invincible_timer > 0.0:
-		_cecil_revive_invincible_timer -= delta
-		if _cecil_revive_invincible_timer <= 0.0:
-			_cecil_revive_invincible_timer = 0.0
-			if not dashing:  # Don't remove invincibility if currently dashing
-				invincible = false
+	_handle_input()
 	
-	# Grace timer for dash
-	if _dash_press_timer > 0.0:
-		_dash_press_timer -= delta
+	# _update_aim() is now called in _process for smoother visual tracking
 	
-	# Input
-	var input_vector = Vector2.ZERO
-	input_vector.x = Input.get_action_strength("move_right") - Input.get_action_strength("move_left")
-	input_vector.y = Input.get_action_strength("move_down") - Input.get_action_strength("move_up")
-	input_vector = input_vector.normalized()
+	# Delegate movement to component
+	var input_vector = Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	if _movement:
+		_movement.handle_movement(delta, input_vector)
 	
-	var aim_direction = _get_aim_direction()
-	
-	# Attack cooldown
+	# Update attack timer
 	if attack_timer > 0:
 		attack_timer -= delta
 	
 	# Handle attacks
 	_handle_attacks(aim_direction, delta)
 	
-	# Handle dash
-	_handle_dash(input_vector, delta)
+	# Cecil revive invincibility timer
+	if _cecil_revive_invincible_timer > 0.0:
+		_cecil_revive_invincible_timer -= delta
+		if _cecil_revive_invincible_timer <= 0.0:
+			_cecil_revive_invincible_timer = 0.0
+			if not dashing:
+				invincible = false
 	
-	# Handle movement
-	_handle_movement(input_vector, delta)
+	# Grace timer for dash
+
 	
-	# Update current controller physics (for DoT, healing, etc.)
+	# Update current controller physics
 	if _current_controller and _current_controller.has_method("physics_process"):
 		_current_controller.physics_process(delta)
 	
-	# Character swap and burst are handled in _input()
+	# Update animator state
+	if _animator and _animator.has_method("update_state"):
+		_animator.update_state(velocity, aim_direction)
 
-func _get_aim_direction() -> Vector2:
-	var mouse_world_pos = get_global_mouse_position()
-	var aim = (mouse_world_pos - global_position).normalized()
-	return aim if aim != Vector2.ZERO else Vector2.RIGHT
+func _handle_input() -> void:
+	if dashing:
+		return
+	
+	var input_dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	
+	# Dash input
+	if Input.is_action_just_pressed("dash"):
+		if _movement:
+			_movement.try_dash(input_dir if input_dir.length() > 0 else aim_direction)
+	
+	# Character switching and Burst are now handled exclusively in _input(event) 
+	# to prevent duplicate triggers (which caused swap-and-swap-back bugs).
+
+func _update_aim() -> void:
+	# Controller aim
+	var stick_aim := Input.get_vector("aim_left", "aim_right", "aim_up", "aim_down")
+	if stick_aim.length() > 0.3:
+		_using_controller = true
+		aim_direction = stick_aim.normalized()
+		aim_direction = _apply_aim_assist(aim_direction)
+	elif not _using_controller:
+		# Mouse aim
+		var mouse_pos := get_global_mouse_position()
+		aim_direction = (mouse_pos - global_position).normalized()
+	
+	if aim_direction == Vector2.ZERO:
+		aim_direction = Vector2.RIGHT
+
+	# Animator state is updated in _physics_process via update_state()
+
 
 func _handle_attacks(aim_direction: Vector2, _delta: float) -> void:
 	if not _current_controller:
@@ -1713,15 +1686,20 @@ func _handle_attacks(aim_direction: Vector2, _delta: float) -> void:
 	# Check if Kilo burst mode is active for automatic fire
 	var is_kilo_burst: bool = _current_controller is KiloController and _current_controller.burst_active
 	
-	# Check if Commander (AR), Sin (SMG), Cecil (SMG), Crown (Minigun), Marian (Minigun), or Nayuta (SMG) - always auto-fire
-	var is_auto_fire: bool = _current_controller is CommanderController or _current_controller is SinController or _current_controller is CecilController or _current_controller is CrownController or _current_controller is MarianController or _current_controller is NayutaController
+	
+	# Use get_is_automatic() from controller base class instead of hardcoded checks
+	var is_auto_fire: bool = false
+	if _current_controller.has_method("get_is_automatic"):
+		is_auto_fire = _current_controller.get_is_automatic()
+	else:
+		# Fallback for old controllers? Shouldn't happen if base class updated
+		is_auto_fire = _current_controller is CommanderController or _current_controller is SinController or _current_controller is CecilController or _current_controller is CrownController or _current_controller is MarianController or _current_controller is NayutaController
 	
 	# Primary attack - during Kilo burst or auto-fire weapons: continuous while holding, no stamina cost
 	var wants_attack := false
 	
 	# Block attacks if mouse is hovering over music player UI
-	var music_player_script = load("res://scripts/ui/MusicPlayerUI.gd")
-	if music_player_script and music_player_script.is_hovered:
+	if MusicPlayerUIScript.is_mouse_over():
 		wants_attack = false
 	elif is_kilo_burst or is_auto_fire:
 		wants_attack = Input.is_action_pressed("attack")
@@ -1729,6 +1707,11 @@ func _handle_attacks(aim_direction: Vector2, _delta: float) -> void:
 		wants_attack = Input.is_action_just_pressed("attack")
 	
 	var can_fire := wants_attack and attack_timer <= 0
+	
+	# Debug attack logic (temporary)
+	# if wants_attack:
+	# 	print("[PlayerCore] Attack requested. Timer: %.3f, Stamina: %.1f, CanFire: %s" % [attack_timer, stamina, can_fire])
+	
 	if not is_kilo_burst and not is_auto_fire:
 		can_fire = can_fire and stamina >= attack_stamina_cost
 	
@@ -1751,65 +1734,37 @@ func _handle_attacks(aim_direction: Vector2, _delta: float) -> void:
 			stamina -= attack_stamina_cost
 			attack_timer = attack_cooldown
 
-func _handle_dash(input_vector: Vector2, delta: float) -> void:
-	if dashing:
-		dash_timer -= delta
-		if dash_timer <= 0:
-			dashing = false
-			invincible = false
-			if wants_running and stamina > 0:
-				running = true
-		else:
-			velocity = dash_direction * dash_speed
-			invincible = true
-	elif Input.is_action_just_pressed("dash") and input_vector != Vector2.ZERO and not running and stamina >= dash_stamina_cost:
-		stamina -= dash_stamina_cost
-		dashing = true
-		dash_direction = input_vector
-		dash_timer = dash_duration
-		_dash_press_timer = dash_press_grace
-		wants_running = Input.is_action_pressed("dash")
-		
-		# Notify camera for juicy lag effect
-		var camera = get_node_or_null("Camera2D")
-		if camera and camera.has_method("notify_dash"):
-			camera.notify_dash()
+func _on_dash_started() -> void:
+	invincible = true
+	# Notify camera for juicy lag effect
+	var camera = get_node_or_null("Camera2D")
+	if camera and camera.has_method("notify_dash"):
+		camera.notify_dash()
 
-func _handle_movement(input_vector: Vector2, delta: float) -> void:
-	if dashing:
-		move_and_slide()
-		return
-	
-	# Running
-	if running:
-		if not Input.is_action_pressed("dash") or stamina <= 0 or input_vector == Vector2.ZERO:
-			running = false
-	
-	var target_speed = speed
-	if running:
-		target_speed *= running_speed_multiplier
-	
-	if input_vector != Vector2.ZERO:
-		velocity = velocity.move_toward(input_vector * target_speed, acceleration * delta)
-	else:
-		velocity = velocity.move_toward(Vector2.ZERO, friction * delta)
-	
-	move_and_slide()
-	
-	# Update sprite animation based on movement direction
-	if _animator and _animator.has_method("update_state"):
-		var aim_dir = _get_aim_direction()
-		_animator.update_state(velocity, aim_dir)
+func _on_dash_ended() -> void:
+	invincible = false
 
 func _input(event: InputEvent) -> void:
+	# Delegate device detection to InputManager (which updates is_controller property)
+	# But keep local listener for burst/switch if not handled by manager globally
+	# If input manager handles buffering, we still need to buffer here? 
+	# No, InputManager._input handles buffering global inputs.
 	if shop_open:
 		return
+
+	# Detect mouse usage to switch aim mode - lower threshold to catch subtle movements
+	if event is InputEventMouseMotion and event.relative.length_squared() > 0.01:
+		_using_controller = false
 	
 	# Character switching (using remappable actions)
-	if event.is_action_pressed("next_character"):
+	if event.is_action_pressed("next_character") and not event.is_echo():
 		switch_character(1)
-	elif event.is_action_pressed("prev_character"):
+	elif event.is_action_pressed("prev_character") and not event.is_echo():
 		switch_character(-1)
+	
+	# Burst activation via controller button (Y/Triangle)
+	if event.is_action_pressed("burst") and not event.is_echo():
+		_attempt_burst_activation()
 	
 	# Keyboard inputs
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -1826,13 +1781,14 @@ func _input(event: InputEvent) -> void:
 				_attempt_burst_activation()
 			KEY_R:
 				_try_manual_reload()
-			KEY_TAB:
-				_show_talent_tree()
-
+	
+	# Skill tree via remappable action
+	if event.is_action_pressed("show_talent_tree") and not event.is_echo():
+		_show_talent_tree()
 
 
 func _select_character_by_index(index: int) -> void:
-	if index in unlocked_characters and index in _controllers:
+	if index in swappable_slots and index >= 0 and index < _controllers.size():
 		# Cleanup previous controller (removes active effects like Bullet Time audio/visuals)
 		if _current_controller and _current_controller.has_method("cleanup"):
 			_current_controller.cleanup()
@@ -1843,13 +1799,12 @@ func _select_character_by_index(index: int) -> void:
 		_trigger_swap_effect()
 		update_sprite()
 		_update_overhead_ammo()
-		_update_burst_visibility()  # Update burst bar for new character
+		_update_burst_visibility() # Update burst bar for new character
 		
 		if overhead_hud:
 			# Pass registry index (not slot index) for proper ammo display
 			var registry_idx: int = _selected_char_indices[current_character] if current_character < _selected_char_indices.size() else 0
 			overhead_hud.update_character(registry_idx)
-
 
 
 func _try_manual_reload() -> void:
@@ -1880,7 +1835,7 @@ func _show_talent_tree(add_point: bool = false) -> void:
 	var existing = canvas.get_node_or_null("TalentTree")
 	if existing:
 		if add_point:
-			existing.add_skill_points(1)  # Add point for leveling up
+			existing.add_skill_points(1) # Add point for leveling up
 		# Sync points if needed (only if mismatch, but usually trust tree)
 		# if _progression:
 		# 	existing.set_skill_points(_progression.get_skill_points()) -> CAUSES INFINITE POINTS EXPLOIT
@@ -1938,3 +1893,35 @@ func _exit_tree() -> void:
 		if controller and controller.has_method("cleanup"):
 			controller.cleanup()
 
+
+## Apply subtle aim assist for controller users - pulls aim toward nearby enemies
+func _apply_aim_assist(base_aim: Vector2) -> Vector2:
+	if not _using_controller:
+		return base_aim
+	
+	var best_target: Node2D = null
+	var best_score: float = 0.0
+	
+	# Find best target in cone
+	for enemy in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(enemy):
+			continue
+		var to_enemy: Vector2 = enemy.global_position - global_position
+		var dist: float = to_enemy.length()
+		if dist > AIM_ASSIST_RANGE or dist < 10:
+			continue
+		
+		var angle_diff: float = rad_to_deg(absf(base_aim.angle_to(to_enemy.normalized())))
+		if angle_diff > AIM_ASSIST_ANGLE:
+			continue
+		
+		# Score: closer + more aligned = better
+		var score: float = (1.0 - dist / AIM_ASSIST_RANGE) * (1.0 - angle_diff / AIM_ASSIST_ANGLE)
+		if score > best_score:
+			best_score = score
+			best_target = enemy
+	
+	if best_target:
+		var target_aim: Vector2 = (best_target.global_position - global_position).normalized()
+		return base_aim.lerp(target_aim, AIM_ASSIST_STRENGTH * best_score)
+	return base_aim

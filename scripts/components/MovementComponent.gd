@@ -44,7 +44,9 @@ func _physics_process(delta: float) -> void:
 		return
 		
 	# Apply Global Enemy Time Scale (Bullet Time)
-	delta *= GameState.enemy_time_scale
+	var game_manager = get_node_or_null("/root/GameManager")
+	var time_scale = game_manager.enemy_time_scale if game_manager else 1.0
+	delta *= time_scale
 	
 	var direction := Vector2.ZERO
 	
@@ -56,7 +58,7 @@ func _physics_process(delta: float) -> void:
 	
 	# Apply physics
 	if direction != Vector2.ZERO:
-		var current_max_speed = max_speed * GameState.enemy_time_scale
+		var current_max_speed = max_speed * time_scale
 		_velocity = _velocity.move_toward(direction * current_max_speed, acceleration * delta)
 		# Smooth rotation
 		if _actor.has_method("look_at"):

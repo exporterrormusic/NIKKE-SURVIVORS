@@ -589,7 +589,7 @@ func _attack_scarlet(direction: Vector2) -> void:
 	slash.base_damage = attack_damage
 	slash.owner_node = self  # Set owner for killer_source tracking
 	if "killer_source_override" in slash:
-		slash.killer_source_override = "CommanderBurst"
+		slash.killer_source_override = "summon"
 	add_child(slash)  # Attach to self
 	slash.position = Vector2.ZERO
 	
@@ -618,7 +618,7 @@ func _attack_snow_white(direction: Vector2) -> void:
 	bullet.rotation = direction.angle()
 	bullet.owner_node = self
 	if "killer_source_override" in bullet:
-		bullet.killer_source_override = "CommanderBurst"
+		bullet.killer_source_override = "summon"
 	bullet.base_damage = attack_damage
 	bullet.pierce_all = true  # Snow White's signature piercing
 
@@ -643,7 +643,7 @@ func _attack_rapunzel(direction: Vector2) -> void:
 	
 	rocket.owner_node = self  # Set self as owner so rocket ignores us
 	if "killer_source_override" in rocket:
-		rocket.killer_source_override = "CommanderBurst"
+		rocket.killer_source_override = "summon"
 	rocket.direction = direction
 	rocket.target_position = _target_enemy.global_position if _target_enemy else global_position + direction * 400
 	rocket.speed = 400.0
@@ -713,7 +713,7 @@ func _attack_crown(direction: Vector2) -> void:
 	if bs:
 		# Gold color for Crown
 		var gold_color = Color(1.0, 0.84, 0.0)
-		bs.spawn_colored_bullet(global_position + direction * 20, direction * 1100.0, attack_damage, self, gold_color)
+		bs.spawn_colored_bullet(global_position + direction * 20, direction * 1100.0, attack_damage, self, gold_color, "summon")
 
 func _attack_kilo(direction: Vector2) -> void:
 	# Shotgun blast - Orange/Amber color
@@ -726,7 +726,7 @@ func _attack_kilo(direction: Vector2) -> void:
 		for i in range(count):
 			var angle_offset = deg_to_rad(spread * (float(i) / (count - 1) - 0.5))
 			var final_dir = direction.rotated(angle_offset)
-			bs.spawn_colored_bullet(global_position + direction * 20, final_dir * 850.0, attack_damage, self, amber_color)
+			bs.spawn_colored_bullet(global_position + direction * 20, final_dir * 850.0, attack_damage, self, amber_color, "summon")
 
 func _should_use_special() -> bool:
 	# Use special when:
@@ -784,6 +784,8 @@ func _special_scarlet() -> void:
 	wave.owner_node = self
 	wave.pierce_all = true
 	wave.damage = attack_damage * 2
+	if "killer_source_override" in wave:
+		wave.killer_source_override = "summon"
 	get_parent().add_child(wave)
 	wave.global_position = global_position + direction * 30
 	wave.velocity = direction.normalized() * 1800
@@ -798,6 +800,8 @@ func _special_snow_white() -> void:
 	turret.ammo = 12
 	turret.max_ammo = 12
 	# Mark turret as spawned by summon for killer_source tracking
+	if "killer_source_override" in turret:
+		turret.killer_source_override = "summon"
 	turret.spawned_by_summon = true
 	turret.spawner_node = self
 	

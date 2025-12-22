@@ -6,7 +6,7 @@ class_name WaveUI
 
 # UI elements
 var _progress_container: Control = null
-var _progress_bar: Control = null  # Custom drawn progress
+var _progress_bar: Control = null # Custom drawn progress
 var _timer_label: Label = null
 var _wave_label: Label = null
 var _event_label: Label = null
@@ -17,11 +17,11 @@ var _event_fade_timer := 0.0
 var _boss_warning_timer := 0.0
 var _current_progress := 0.0
 var _target_progress := 0.0
-var _current_wave := 1
+var _current_wave := 0
 var _bar_flash_timer := 0.0
 
 # Wave timing - matches WaveDirector SPAWN_BRACKETS
-const WAVE_DURATION := 30.0  # Each wave is 30 seconds
+const WAVE_DURATION := 30.0 # Each wave is 30 seconds
 const TOTAL_WAVES := 11
 
 const EVENT_DISPLAY_TIME := 3.0
@@ -37,7 +37,7 @@ const BAR_FLASH_COLOR := Color(1.0, 0.9, 0.5, 1.0)
 const BAR_BORDER_COLOR := Color(0.4, 0.45, 0.5, 1.0)
 
 
-# Local override to ensure UI stays correct even if GameState flags are flaky
+# Local override to ensure UI stays correct even if GameManager flags are flaky
 var _goddess_mode_override: bool = false
 
 func set_goddess_mode(enabled: bool) -> void:
@@ -130,7 +130,7 @@ func _draw_progress_bar() -> void:
 	
 	# Check mode for colors
 	var is_goddess: bool = _goddess_mode_override
-	if GameState and (GameState.she_descends_mode or GameState.goddess_fall_mode):
+	if GameManager and (GameManager.she_descends_mode or GameManager.goddess_fall_mode):
 		is_goddess = true
 	
 	# Background
@@ -171,7 +171,7 @@ func _draw_progress_bar() -> void:
 func _process(delta: float) -> void:
 	# Force override for She Descends mode
 	var is_goddess: bool = _goddess_mode_override
-	if GameState and (GameState.she_descends_mode or GameState.goddess_fall_mode):
+	if GameManager and (GameManager.she_descends_mode or GameManager.goddess_fall_mode):
 		is_goddess = true
 		
 	if is_goddess:
@@ -202,9 +202,8 @@ func _process(delta: float) -> void:
 
 func update_time(elapsed: float, remaining: float) -> void:
 	# Special Countdown for Goddess Fall / She Descends (2:55 = 175s)
-	
 	var is_goddess: bool = _goddess_mode_override
-	if GameState and (GameState.she_descends_mode or GameState.goddess_fall_mode):
+	if GameManager and (GameManager.she_descends_mode or GameManager.goddess_fall_mode):
 		is_goddess = true
 
 	if is_goddess:
@@ -239,7 +238,7 @@ func update_time(elapsed: float, remaining: float) -> void:
 		if _timer_label:
 			_timer_label.text = "%d:%02d" % [mins, secs]
 			_timer_label.remove_theme_color_override("font_color")
-	if GameState and (GameState.she_descends_mode or GameState.goddess_fall_mode):
+	if GameManager and (GameManager.she_descends_mode or GameManager.goddess_fall_mode):
 		var total_duration := 175.0
 		var time_left := clampf(total_duration - elapsed, 0.0, total_duration)
 		
@@ -269,16 +268,19 @@ func update_time(elapsed: float, remaining: float) -> void:
 			_timer_label.text = "%d:%02d" % [mins, secs]
 	
 	# Calculate progress within current wave (0.0 to 1.0)
-	# Each wave is WAVE_DURATION seconds
-	var wave_start_time := float(_current_wave - 1) * WAVE_DURATION
-	var time_in_wave := elapsed - wave_start_time
+	# Use modulo to ensure it loops correctly regardless of wave index drift
+	var time_in_wave := fmod(elapsed, WAVE_DURATION)
 	_target_progress = clampf(time_in_wave / WAVE_DURATION, 0.0, 1.0)
+	
+	# Special case: If exactly at end of wave (e.g. 30.0), fmod gives 0.0
+	# We might want it to stay full until wave change triggers reset.
+	# But generally it's fine as visual.
 
 
 func update_wave(wave_number: int) -> void:
 	# Called when wave changes
 	if wave_number != _current_wave:
-		_bar_flash_timer = 0.5  # Flash when wave changes
+		_bar_flash_timer = 0.5 # Flash when wave changes
 		_current_progress = 0.0
 		_target_progress = 0.0
 	
@@ -286,7 +288,7 @@ func update_wave(wave_number: int) -> void:
 	
 	if _wave_label:
 		var is_goddess: bool = _goddess_mode_override
-		if GameState and (GameState.she_descends_mode or GameState.goddess_fall_mode):
+		if GameManager and (GameManager.she_descends_mode or GameManager.goddess_fall_mode):
 			is_goddess = true
 			
 		if is_goddess:
@@ -311,7 +313,7 @@ func show_event(event_type: String, event_data: Dictionary, elapsed_time: float 
 	var show_warning_bar := false
 	
 	# Helper buffer for text
-	var is_she_descends: bool = (GameState and (GameState.get("she_descends_mode") or GameState.get("goddess_fall_mode")))
+	var is_she_descends: bool = (GameManager and (GameManager.get("she_descends_mode") or GameManager.get("goddess_fall_mode")))
 	var custom_text: String = "ENDGAME"
 	
 	match event_type:

@@ -15,9 +15,9 @@ var _dodge_timer: float = 0.0
 # Ability config
 const TELEPORT_COOLDOWN := 8.0
 const REGEN_COOLDOWN := 15.0
-const REGEN_AMOUNT := 0.05  # 5% of max HP per tick
+const REGEN_AMOUNT := 0.05 # 5% of max HP per tick
 const REGEN_DURATION := 3.0
-const DODGE_CHANCE := 0.35  # 35% chance to dodge attacks (INCREASED from 15%)
+const DODGE_CHANCE := 0.35 # 35% chance to dodge attacks (INCREASED from 15%)
 
 # State
 var _regen_accumulator: float = 0.0
@@ -33,7 +33,7 @@ const EVENT_EXPLOSION_TIME := 174.0 # 2:54
 # XP Deduplication - prevent double XP from duplicate damage signals
 var _last_xp_frame: int = -1
 var _last_xp_amount: int = 0
-var _xp_accumulator: float = 0.0  # Accumulates partial XP for fast weapons (e.g. Minigun 0.5%)
+var _xp_accumulator: float = 0.0 # Accumulates partial XP for fast weapons (e.g. Minigun 0.5%)
 
 func _ready() -> void:
 	# Mark as boss BEFORE super._ready() so ModularEnemy can see the group
@@ -45,7 +45,8 @@ func _ready() -> void:
 	# Setup health and movement override (MOVED BEFORE HUD NOTIFICATION)
 	if health_component:
 		# Goddess Fall / She Descends override: 999 HP (Hardcore)
-		if GameState and (GameState.she_descends_mode or GameState.goddess_fall_mode):
+		var game_manager = get_node_or_null("/root/GameManager")
+		if game_manager and (game_manager.she_descends_mode or game_manager.goddess_fall_mode):
 			health_component.max_hp = 999
 			health_component.current_hp = 999
 			# Connect damaged signal for XP-from-damage
@@ -196,13 +197,14 @@ func _setup_boss_shield() -> void:
 	_boss_shield.bar_offset_y = -120.0 # High above HP bar
 	# Note: draw_hp_bar is now enabled so boss has both HUD and world-space bars
 	
-	_boss_shield.recharge_complete.connect(func(): 
+	_boss_shield.recharge_complete.connect(func():
 		_shield_ready_to_deploy = true
 	)
 	
 	# 3. Boss Shield XP
 	# Connect to the shield's damage signal to award XP when hitting shield
-	if GameState and (GameState.she_descends_mode or GameState.goddess_fall_mode):
+	var game_manager = get_node_or_null("/root/GameManager")
+	if game_manager and (game_manager.she_descends_mode or game_manager.goddess_fall_mode):
 		if _boss_shield and _boss_shield.has_signal("shield_damaged"):
 			if not _boss_shield.shield_damaged.is_connected(Callable(self, "_on_she_descends_damaged")):
 				# Pass the actual source from the shield instead of hardcoding "boss_shield"
@@ -454,7 +456,7 @@ func _perform_teleport_dodge() -> void:
 	var dissolve_effect = Node2D.new()
 	dissolve_effect.set_script(load("res://scripts/enemies/bosses/effects/RaptureQueenTeleportEffect.gd"))
 	get_parent().add_child(dissolve_effect)
-	dissolve_effect.setup_dissolve(start_pos, scale.x)  # Pass scale for proper sizing
+	dissolve_effect.setup_dissolve(start_pos, scale.x) # Pass scale for proper sizing
 	
 	# Multi-stage teleport animation
 	var tween = create_tween()
@@ -474,7 +476,7 @@ func _perform_teleport_dodge() -> void:
 		var reform_effect = Node2D.new()
 		reform_effect.set_script(load("res://scripts/enemies/bosses/effects/RaptureQueenTeleportEffect.gd"))
 		get_parent().add_child(reform_effect)
-		reform_effect.setup_reform(new_pos, scale.x)  # Pass scale for proper sizing
+		reform_effect.setup_reform(new_pos, scale.x) # Pass scale for proper sizing
 	)
 	
 	# Brief pause while fully dissolved
@@ -509,12 +511,11 @@ func get_velocity_for_hair() -> Vector2:
 func _on_she_descends_damaged(amount: int, _source: String) -> void:
 	## Award XP and Burst to player based on weapon type in She Descends mode
 	## Uses unified BurstConfig for rates (same as normal mode burst gen)
-	
 	# Deduplication: Skip if same damage amount received in same frame
 	# This handles the duplicate signal issue from body + hitbox collision
 	var current_frame := Engine.get_process_frames()
 	if current_frame == _last_xp_frame and amount == _last_xp_amount:
-		return  # Duplicate, skip
+		return # Duplicate, skip
 	_last_xp_frame = current_frame
 	_last_xp_amount = amount
 	
@@ -549,18 +550,16 @@ func _on_she_descends_damaged(amount: int, _source: String) -> void:
 		if player_node.has_method("_get_current_weapon_type"):
 			var weapon_type: String = player_node._get_current_weapon_type()
 			gain_percent = BurstConfig.get_rate(weapon_type)
-			src_lower = weapon_type  # For debug
+			src_lower = weapon_type # For debug
 	
 	# Apply XP gain (% of 100 XP to next level)
 	if player_node.has_method("add_xp") and gain_percent > 0:
 		_xp_accumulator += gain_percent
-		var xp_gain := int(_xp_accumulator)  # Get only the whole number part
+		var xp_gain := int(_xp_accumulator) # Get only the whole number part
 		if xp_gain >= 1:
 			player_node.add_xp(xp_gain)
-			_xp_accumulator -= xp_gain  # Remove ONLY the awarded part, keep fraction
+			_xp_accumulator -= xp_gain # Remove ONLY the awarded part, keep fraction
 	
 	# Apply Burst gain (% of 100 max burst)
 	if player_node.has_method("add_burst_charge") and gain_percent > 0:
 		player_node.add_burst_charge(gain_percent)
-
-

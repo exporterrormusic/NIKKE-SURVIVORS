@@ -165,7 +165,7 @@ func _create_notification() -> Control:
 	# Sub label
 	var sub_label := Label.new()
 	sub_label.name = "SubLabel"
-	sub_label.text = "PRESS TAB TO OPEN SKILL TREE"
+	sub_label.text = "PRESS TAB OR [Select] TO OPEN SKILL TREE"
 	sub_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	sub_label.add_theme_font_size_override("font_size", 9)

@@ -9,23 +9,23 @@ var drone_index: int = 0
 var base_angle_offset: float = 0.0
 
 # Movement
-var orbit_radius: float = 90.0  # Larger orbit for shield mode
-var orbit_speed: float = 2.5  # Radians per second
+var orbit_radius: float = 90.0 # Larger orbit for shield mode
+var orbit_speed: float = 2.5 # Radians per second
 var current_angle: float = 0.0
-var hunt_speed: float = 400.0  # Faster hunting speed
+var hunt_speed: float = 400.0 # Faster hunting speed
 
 # Combat
-var attack_range: float = 400.0  # Much longer range
-var fire_cooldown: float = 0.92  # Balanced firing rate (35% slower than 0.6)
+var attack_range: float = 400.0 # Much longer range
+var fire_cooldown: float = 0.92 # Balanced firing rate (35% slower than 0.6)
 var _fire_timer: float = 0.0
-var laser_speed: float = 800.0  # Faster projectiles
+var laser_speed: float = 800.0 # Faster projectiles
 
 # Multipliers from upgrades
 var speed_multiplier: float = 1.0
 
 # Mode
-var _mode: String = "hunt"  # "hunt" or "shield"
-var _is_returning: bool = false  # Transitioning back to player for shield mode
+var _mode: String = "hunt" # "hunt" or "shield"
+var _is_returning: bool = false # Transitioning back to player for shield mode
 var _current_target: Node2D = null
 
 # Callback when drone reaches player for shield mode
@@ -127,7 +127,7 @@ func _process_hunt_mode(delta: float) -> void:
 		var dist := to_target.length()
 		
 		# Check if target is too far from owner - stay relatively near Cecil
-		var max_distance_from_owner := 450.0  # Increased to match longer attack range
+		var max_distance_from_owner := 450.0 # Increased to match longer attack range
 		var dist_from_owner := global_position.distance_to(owner_player.global_position)
 		
 		if dist_from_owner > max_distance_from_owner:
@@ -154,7 +154,7 @@ func _process_hunt_mode(delta: float) -> void:
 				_fire_timer = fire_cooldown / speed_multiplier
 			
 			# Stay close to target for continuous firing (don't orbit away)
-			var optimal_range := attack_range * 0.5  # Stay at half range for better accuracy
+			var optimal_range := attack_range * 0.5 # Stay at half range for better accuracy
 			var desired_pos := _current_target.global_position + (global_position - _current_target.global_position).normalized() * optimal_range
 			
 			# Clamp desired position to max distance from owner
@@ -163,7 +163,7 @@ func _process_hunt_mode(delta: float) -> void:
 				var dir := (desired_pos - owner_player.global_position).normalized()
 				desired_pos = owner_player.global_position + dir * max_distance_from_owner
 			
-			global_position = global_position.lerp(desired_pos, 5.0 * delta)  # Faster positioning
+			global_position = global_position.lerp(desired_pos, 5.0 * delta) # Faster positioning
 	else:
 		# No target, orbit around player
 		_orbit_player(delta)
@@ -218,7 +218,7 @@ func _process_returning(delta: float) -> void:
 	if dist < 15.0:
 		# Arrived at designated orbit position
 		_is_returning = false
-		current_angle = base_angle_offset  # Lock to designated angle
+		current_angle = base_angle_offset # Lock to designated angle
 		global_position = target_pos
 		if _on_arrived_callback.is_valid():
 			_on_arrived_callback.call()
@@ -256,7 +256,7 @@ func _find_nearest_enemy() -> Node2D:
 		
 		# If sibling is targeting this enemy, add penalty to distance (prefer different targets)
 		if sibling_target and enemy == sibling_target:
-			dist += 500.0  # Large penalty to prefer different targets
+			dist += 500.0 # Large penalty to prefer different targets
 		
 		if dist < nearest_dist:
 			nearest_dist = dist
@@ -271,7 +271,7 @@ func _fire_laser_at(target: Node2D) -> void:
 	var direction := (target.global_position - global_position).normalized()
 	
 	# Calculate damage as 50% of player's damage
-	var laser_damage: int = 3  # Fallback
+	var laser_damage: int = 3 # Fallback
 	if owner_player and is_instance_valid(owner_player) and owner_player.has_method("calc_damage"):
 		laser_damage = maxi(1, int(owner_player.calc_damage() * 0.5))
 	
@@ -348,6 +348,11 @@ func _physics_process(_delta: float) -> void:
 	for result in results:
 		var collider = result.get(\"collider\")
 		if collider and collider.is_in_group(\"enemies\"):
+			# Skip charmed allies
+			if collider.is_in_group(\"charmed_allies\"):
+				continue
+				
+			if collider.is_in_group(\"charmed_allies\"): return
 			if collider.has_method(\"take_damage\"):
 				collider.take_damage(damage, false, direction, false, \"cecil_drone\")
 			queue_free()

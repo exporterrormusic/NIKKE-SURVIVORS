@@ -20,7 +20,6 @@ static var _back_stream: AudioStream = null
 static var _select_stream: AudioStream = null
 static var _confirm_stream: AudioStream = null
 
-
 static func _ensure_initialized() -> void:
 	if _initialized:
 		return
@@ -31,6 +30,25 @@ static func _ensure_initialized() -> void:
 	_confirm_stream = load(SFX_CONFIRM)
 	
 	_initialized = true
+
+
+## Clean up static audio players to prevent RID leaks on exit
+static func cleanup() -> void:
+	if _back_player and is_instance_valid(_back_player):
+		_back_player.queue_free()
+		_back_player = null
+	if _select_player and is_instance_valid(_select_player):
+		_select_player.queue_free()
+		_select_player = null
+	if _confirm_player and is_instance_valid(_confirm_player):
+		_confirm_player.queue_free()
+		_confirm_player = null
+	
+	_back_stream = null
+	_select_stream = null
+	_confirm_stream = null
+	_initialized = false
+	print("[UISoundManager] Cleanup complete")
 
 
 static func _get_or_create_player(stream: AudioStream, existing: AudioStreamPlayer) -> AudioStreamPlayer:

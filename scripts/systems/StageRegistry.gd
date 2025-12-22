@@ -16,17 +16,6 @@ const STAGES := [
 		"description": "Survive 11 waves of Raptures to complete the mission."
 	},
 	{
-		"id": "stage_2",
-		"name": "Elite Hunt",
-		"biome": "snowfield",
-		"time": "night",
-		"unlock_after": null,  # Always unlocked
-		"spawn_rules": {
-			"elite_only": true,  # Normal enemies become elites, elites become bosses
-		},
-		"description": "All enemies spawn one rarity tier higher. Normals become Elites!"
-	},
-	{
 		"id": "stage_3",
 		"name": "Endless",
 		"biome": "sakura_grove",
@@ -89,3 +78,10 @@ static func is_endless(stage_id: String) -> bool:
 		return false
 	var rules: Dictionary = stage.get("spawn_rules", {})
 	return rules.get("endless", false)
+
+## Helper stubs for compatibility (always return false now)
+static func is_hunt_mode(_stage_id: String) -> bool:
+	return false
+
+static func is_defense_mode(_stage_id: String) -> bool:
+	return false

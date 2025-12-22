@@ -11,6 +11,7 @@ signal boss_incoming(boss_type: String, time_until: float)
 signal run_complete(survived: bool, final_time: float)
 signal time_updated(elapsed: float, remaining: float)
 signal wave_changed(wave_number: int)
+signal wave_reward_earned(count: int)
 signal rapture_event_started()
 
 # Run settings
@@ -148,6 +149,10 @@ func _update_wave_state() -> void:
 	emit_signal("wave_changed", _current_wave)
 	EventBus.wave_started.emit(_current_wave)
 	
+	# Reward for completing the PREVIOUS wave (e.g. at start of Wave 2, reward for Wave 1)
+	if _current_wave > 1:
+		_calculate_and_emit_reward(_current_wave - 1)
+	
 	# DDA Check (Only if not Gate/N01)
 	if not _gate_active and not _n01_active:
 		_calculate_dda()
@@ -282,6 +287,22 @@ func format_time(seconds: float) -> String:
 	var m = int(seconds / 60)
 	var s = int(seconds) % 60
 	return "%d:%02d" % [m, s]
+func _calculate_and_emit_reward(completed_wave: int) -> void:
+	# Reward Logic:
+	# Waves 1-4: 1 Core
+	# Waves 5-9: 2 Cores
+	# Waves 10+: 3 Cores
+	
+	var count := 1
+	if completed_wave >= 10:
+		count = 3
+	elif completed_wave >= 5:
+		count = 2
+		
+	# Emit signal for Level to handle spawning
+	emit_signal("wave_reward_earned", count)
+	print("[WaveDirector] Wave %d complete! Reward: %d Pristine Cores" % [completed_wave, count])
+
 func debug_jump_to_wave(w: int) -> void:
 	if w < 12:
 		_elapsed_time = (w - 1) * 30.0

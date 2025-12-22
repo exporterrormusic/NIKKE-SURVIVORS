@@ -38,6 +38,21 @@ const XPOrbScene: PackedScene = preload("res://scenes/effects/XPOrb.tscn")
 static var _pools: Dictionary = {}
 
 # =============================================================================
+# POOL CLEANUP (Call on game exit to prevent RID leaks)
+# =============================================================================
+static func clear_all_pools() -> void:
+	## Free all pooled objects to prevent RID leaks on exit.
+	## Call this from a level's _exit_tree or from main menu when returning.
+	for type in _pools.keys():
+		var pool_list: Array = _pools[type]
+		for node in pool_list:
+			if is_instance_valid(node):
+				node.queue_free()
+		pool_list.clear()
+	_pools.clear()
+	print("[ProjectileCache] All pools cleared")
+
+# =============================================================================
 # BULLET FACTORY METHODS
 # =============================================================================
 static func create_bullet() -> Node:
@@ -123,8 +138,6 @@ static func create_rocket() -> Node:
 static func create_explosion() -> Node:
 	# DEBUG: User reports "Purple Explosion" during Scarlet Burst.
 	# Scarlet should NOT spawn explosions. Trace who calls this.
-	print("[DEBUG] create_explosion called! Stack trace:")
-	print_stack() 
 	return ExplosionScene.instantiate()
 
 static func create_explosion_effect() -> Node:

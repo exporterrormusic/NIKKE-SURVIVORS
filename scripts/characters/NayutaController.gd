@@ -1,8 +1,11 @@
 extends "res://scripts/characters/CharacterController.gd"
 class_name NayutaController
-## Nayuta - SMG with clone summoning
-## Special: Summon a clone that fights alongside (8s cooldown, clone lives until killed)
-## Burst: Galaxy explosion that damages all enemies on screen
+## Nayuta - SMG (Subject One)
+# Special: Reality Distortion
+# Burst: Convergence
+
+func get_is_automatic() -> bool:
+	return true
 
 # Preload scripts
 const NayutaCloneScript = preload("res://scripts/characters/effects/NayutaClone.gd")
@@ -11,22 +14,22 @@ const NayutaCloneScript = preload("res://scripts/characters/effects/NayutaClone.
 var bullet_speed: float = 900.0
 
 # Clone state
-var _active_clones: Array = []  # Array of WeakRef to active clones
-var _weapon_pool: Array[String] = ["smg"]  # Available weapons for clones
+var _active_clones: Array = [] # Array of WeakRef to active clones
+var _weapon_pool: Array[String] = ["smg"] # Available weapons for clones
 
 # Clone upgrade levels (heal on death)
-var clone_heal_level: int = 0  # 0=none, 1=20%, 2=35%, 3=50%
+var clone_heal_level: int = 0 # 0=none, 1=20%, 2=35%, 3=50%
 var _heal_percentages: Array[float] = [0.0, 0.20, 0.35, 0.50]
 
 # Clone weapon upgrades (adds to pool)
-var clone_weapon_level: int = 0  # 0=smg only, 1=+sword, 2=+rocket, 3=+sniper
+var clone_weapon_level: int = 0 # 0=smg only, 1=+sword, 2=+rocket, 3=+sniper
 
 # Burst config
-var burst_damage: int = 50  # Base burst damage
+var burst_damage: int = 50 # Base burst damage
 
 # Burst upgrades
-var burst_stun_bosses: bool = false  # Stun bosses/elites for 8s
-var burst_debuff_bosses: bool = false  # Bosses/elites take 50% more damage
+var burst_stun_bosses: bool = false # Stun bosses/elites for 8s
+var burst_debuff_bosses: bool = false # Bosses/elites take 50% more damage
 const BURST_STUN_DURATION := 8.0
 const BURST_DEBUFF_MULTIPLIER := 1.5
 
@@ -51,7 +54,6 @@ func _can_attack() -> bool:
 
 func _perform_attack(direction: Vector2) -> void:
 	# Fire dual SMG bullets (same as Sin/Cecil) - using pooled bullets
-	
 	var perp := Vector2(-direction.y, direction.x).normalized()
 	var gun_offset := 18.0
 	
@@ -110,7 +112,7 @@ func _summon_clone() -> void:
 	# HP scales: base 25% of player HP, +25% per level
 	var hp_level_mult := 1.0 + (player_level - 1) * 0.25
 	var clone_hp: int = maxi(1, int((player.max_hp / 4) * hp_level_mult))
-	var clone_attack: float = 0.2  # 1/5 damage multiplier
+	var clone_attack: float = 0.2 # 1/5 damage multiplier
 	
 	# Create clone (CharacterBody2D required for NayutaClone)
 	var clone = CharacterBody2D.new()
@@ -376,13 +378,6 @@ func _on_cleanup() -> void:
 	# Only clean up dead clone references
 	_cleanup_clones()
 
-func _play_sound(weapon_type: String) -> void:
-	if player.audio_director:
-		player.audio_director.play_weapon_fire_sound(weapon_type)
-
-func get_attack_cooldown() -> float:
-	return data.attack_cooldown
-
 func apply_talent(talent_id: String) -> void:
 	match talent_id:
 		"special":
@@ -411,9 +406,6 @@ func _update_weapon_pool() -> void:
 		_weapon_pool.append("rocket")
 	if clone_weapon_level >= 3:
 		_weapon_pool.append("sniper")
-
-func is_invincible() -> bool:
-	return false
 
 func _get_weapon_type_name() -> String:
 	return "SMG"

@@ -10,7 +10,7 @@ const FRAME_BORDER_WIDTH := 4
 const FRAME_CORNER_RADIUS := 8
 const TEXT_COLOR := Color(1.0, 1.0, 1.0, 1.0)
 const LABEL_COLOR := Color(0.7, 0.75, 0.85, 1.0)
-const SCORE_COLOR := Color(1.0, 0.85, 0.25, 1.0)  # Gold/yellow like burst
+const SCORE_COLOR := Color(1.0, 0.85, 0.25, 1.0) # Gold/yellow like burst
 
 # Animation
 const SCORE_PULSE_SCALE := 1.15
@@ -29,12 +29,12 @@ func _ready() -> void:
 	_build_ui()
 	_update_display()
 	
-	# Start polling GameState for score updates
+	# Start polling GameManager for score updates
 	set_process(true)
 
 func _process(_delta: float) -> void:
-	if GameState:
-		var new_score: int = GameState.current_score
+	if GameManager:
+		var new_score: int = GameManager.current_score
 		if new_score != _current_score:
 			_set_score(new_score)
 	
@@ -43,17 +43,17 @@ func _process(_delta: float) -> void:
 		_update_display()
 
 func _build_ui() -> void:
-	# Main container - anchor to top right, below XP bar
+	# Main container - anchor to bottom right, above core counter
 	custom_minimum_size = Vector2(180, 70)
-	set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	anchor_left = 1.0
 	anchor_right = 1.0
-	anchor_top = 0.0
-	anchor_bottom = 0.0
+	anchor_top = 1.0
+	anchor_bottom = 1.0
 	offset_left = -200
 	offset_right = -20
-	offset_top = 50
-	offset_bottom = 120
+	offset_top = -165 # Above core counter (which is at -85 to -20)
+	offset_bottom = -95
 	
 	# Panel background
 	_panel = Panel.new()
@@ -88,16 +88,15 @@ func _build_ui() -> void:
 	_score_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(_score_label)
 	
-	# FPS Label (outside the main panel, just below it)
+	# FPS Label (outside the main panel, just above it)
 	_fps_label = Label.new()
 	_fps_label.text = "FPS: 60"
 	_fps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_fps_label.add_theme_font_size_override("font_size", 10)
 	_fps_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
-	_fps_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	# Position relative to top right of screen, below score box
-	# Score box bottom is approx 120 (50 top + 70 height).
-	_fps_label.position = Vector2(-70, 75) 
+	_fps_label.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	# Position relative to bottom right, above score box
+	_fps_label.position = Vector2(-70, -180)
 	add_child(_fps_label)
 	_fps_label.visible = false
 

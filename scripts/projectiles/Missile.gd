@@ -1,12 +1,15 @@
 extends Area2D
 
+# Cached ShopMenu reference for intangibility checks
+const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
+
 var velocity = Vector2.ZERO
 var target_pos = Vector2.ZERO
 var acceleration = 1000
 var max_speed = 1000
 var owner_node: Node = null
-var killer_source: String = "turret"  # For ShielderShield collision detection (Snow White turret missiles)
-var create_burning_ground: bool = false  # Only true for Rapunzel's missiles
+var killer_source: String = "turret" # For ShielderShield collision detection (Snow White turret missiles)
+var create_burning_ground: bool = false # Only true for Rapunzel's missiles
 
 # These match the original simple missile but can be set externally
 var direction = Vector2.ZERO
@@ -16,11 +19,11 @@ var speed = 400
 var target_node: Node = null
 
 # Damage config
-var base_damage: int = 10  # Default explosion damage
+var base_damage: int = 10 # Default explosion damage
 var damage: int = 10 # Direct hit damage
 var explosion_damage: int = 10 # AOE damage
 var explosion_radius: float = 120.0 # AOE radius
-var killer_source_override: String = "" #For summoned units
+var killer_source_override: String = "" # For summoned units
 var ground_fire_enabled: bool = false
 var ground_fire_duration: float = 3.0
 var ground_fire_damage: int = 3
@@ -33,8 +36,8 @@ const SMOKE_START_SIZE := 6.0
 const SMOKE_END_SIZE := 14.0
 var _smoke_timer := 0.0
 var _smoke_particles: Array = []
-var _trail_color := Color(0.5, 0.5, 0.55, 0.6)  # Grey smoke
-var _fire_color := Color(1.0, 0.5, 0.2, 0.8)  # Orange fire core
+var _trail_color := Color(0.5, 0.5, 0.55, 0.6) # Grey smoke
+var _fire_color := Color(1.0, 0.5, 0.2, 0.8) # Orange fire core
 var _light: PointLight2D = null
 
 # Performance: disable dynamic lights on missiles (expensive with many projectiles)
@@ -55,7 +58,7 @@ func _ready():
 	if ENABLE_MISSILE_LIGHTS:
 		_light = PointLight2D.new()
 		_light.name = "MissileLight"
-		_light.color = Color(1.0, 0.6, 0.2)  # Orange glow
+		_light.color = Color(1.0, 0.6, 0.2) # Orange glow
 		_light.energy = 0.7
 		_light.texture = _create_light_texture()
 		_light.texture_scale = 0.25
@@ -122,8 +125,9 @@ func _draw():
 func _physics_process(delta):
 	# Apply Global Enemy Time Scale (Bullet Time) - ONLY for non-player projectiles
 	var time_scale = 1.0
+	var game_manager = get_node_or_null("/root/GameManager")
 	if not (owner_node and owner_node.is_in_group("player")):
-		time_scale = GameState.enemy_time_scale
+		time_scale = game_manager.enemy_time_scale if game_manager else 1.0
 	delta *= time_scale
 
 	# Update target_pos if we have a valid target_node (for homing)
@@ -146,7 +150,7 @@ func _physics_process(delta):
 	var hit_distance: float = 10.0
 	if target_node and is_instance_valid(target_node) and target_node is Node2D:
 		var enemy_scale: float = target_node.scale.x if target_node.scale.x > 1.0 else 1.0
-		hit_distance = 10.0 + 30.0 * (enemy_scale - 1.0)  # Scale hitbox for large enemies
+		hit_distance = 10.0 + 30.0 * (enemy_scale - 1.0) # Scale hitbox for large enemies
 	if global_position.distance_to(target_pos) < hit_distance:
 		explode()
 	if position.x < -100 or position.x > 2000 or position.y < -100 or position.y > 1200:
@@ -154,11 +158,18 @@ func _physics_process(delta):
 
 func _check_boulder_collision() -> bool:
 	"""Check if missile hit a boulder."""
-	# Skip if Chrono-Intangibility upgrade is active
-	var shop = load("res://scripts/ui/ShopMenu.gd")
 	# Skip if Chrono-Intangibility upgrade is active AND Wells is in squad
 	var player = get_tree().get_first_node_in_group("player")
-	if shop and shop.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+	var has_upgrade = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility")
+	var in_squad = false
+	if player and player.has_method("is_character_in_squad"):
+		in_squad = player.is_character_in_squad("wells") or player.is_character_in_squad("Wells")
+	
+	# DIAGNOSTIC
+	if has_upgrade:
+		print("[Missile] Intangibility Check: has_upgrade=", has_upgrade, " in_squad=", in_squad)
+	
+	if has_upgrade and in_squad:
 		return false
 	
 	var boulders := get_tree().get_nodes_in_group("boulders")
@@ -177,7 +188,7 @@ func explode():
 	
 	# Create explosion and let it handle damage (including shields)
 	var explosion = ProjectileCache.create_explosion()
-	explosion.owner_node = owner_node  # Pass owner for killer_source tracking
+	explosion.owner_node = owner_node # Pass owner for killer_source tracking
 	explosion.killer_source_override = killer_source_override # Pass override info if needed
 	
 	# Pass dynamic damage to explosion
@@ -188,6 +199,8 @@ func explode():
 		
 	get_parent().add_child(explosion)
 	explosion.global_position = global_position
+	if explosion.has_method("force_damage_check"):
+		explosion.force_damage_check()
 	
 	# Combat juice camera shake for explosion
 	var combat_juice_script = load("res://scripts/systems/CombatJuice.gd")

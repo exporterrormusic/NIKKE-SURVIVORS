@@ -8,8 +8,8 @@ class_name StatsPanel
 const UI := preload("res://scripts/ui/UITheme.gd")
 
 # Data source
-var _stats_data: Dictionary = {}  # From RunStatsTracker or leaderboard entry
-var _squad_indices: Array = []     # Character indices in the squad
+var _stats_data: Dictionary = {} # From GameManager or leaderboard entry
+var _squad_indices: Array = [] # Character indices in the squad
 
 # UI elements
 var _title_label: Label = null
@@ -84,13 +84,12 @@ func _build_ui() -> void:
 	_content.add_theme_constant_override("separation", 12)
 	vbox.add_child(_content)
 
-## Set stats from RunStatsTracker (live mode)
+## Set stats from GameManager (live mode)
 func set_live_stats() -> void:
-	var run_stats_tracker = get_node_or_null("/root/RunStatsTracker")
-	var game_state = get_node_or_null("/root/GameState")
-	if run_stats_tracker and game_state:
-		_stats_data = run_stats_tracker.get_run_stats()
-		_squad_indices = game_state.selected_character_indices.duplicate()
+	var game_manager = get_node_or_null("/root/GameManager")
+	if game_manager:
+		_stats_data = game_manager.get_run_stats()
+		_squad_indices = game_manager.selected_character_indices.duplicate()
 		_refresh_display()
 
 ## Set stats from a leaderboard entry (historical mode)
@@ -122,7 +121,7 @@ func _refresh_display() -> void:
 	
 	# Get damage data for max calculation
 	var damage_data: Dictionary = _stats_data.get("damage_by_character", {})
-	var max_damage := 1  # Avoid div by zero
+	var max_damage := 1 # Avoid div by zero
 	for char_idx in _squad_indices:
 		var dmg: int = damage_data.get(char_idx, 0)
 		max_damage = max(max_damage, dmg)

@@ -4,13 +4,14 @@ extends Area2D
 
 var speed = 1000
 var player
-var xp_bar  # Reference to the actual ProgressBar node
+var xp_bar # Reference to the actual ProgressBar node
+var xp_value: int = 1 # XP granted when collected (set by enemy spawner)
 
 # Visual effect properties
-const PRIMARY_COLOR := Color(0.2, 0.6, 1.0, 1.0)      # Bright blue
-const SECONDARY_COLOR := Color(0.4, 0.8, 1.0, 1.0)     # Light blue accent
-const GLOW_COLOR := Color(0.1, 0.5, 1.0, 0.6)          # Blue outer glow
-const SPARKLE_COLOR := Color(0.9, 0.95, 1.0, 0.9)      # White-blue sparkles
+const PRIMARY_COLOR := Color(0.2, 0.6, 1.0, 1.0) # Bright blue
+const SECONDARY_COLOR := Color(0.4, 0.8, 1.0, 1.0) # Light blue accent
+const GLOW_COLOR := Color(0.1, 0.5, 1.0, 0.6) # Blue outer glow
+const SPARKLE_COLOR := Color(0.9, 0.95, 1.0, 0.9) # White-blue sparkles
 
 var _age := 0.0
 var _bob_offset := 0.0
@@ -33,7 +34,7 @@ const ROTATION_SPEED := 3.375
 
 func _ready():
 	_rng.randomize()
-	_bob_offset = _rng.randf() * TAU  # Random phase so orbs don't sync
+	_bob_offset = _rng.randf() * TAU # Random phase so orbs don't sync
 	# Find player in the scene tree
 	player = TargetCache.get_player()
 	# Get xp_bar from the XPUI node
@@ -48,6 +49,13 @@ func _ready():
 	# Use cached texture for performance
 	_glow_texture = TextureCache.get_glow_texture_32()
 	_create_glow_layers()
+
+func initialize(xp_amount: int, spawn_pos: Vector2) -> void:
+	"""Initialize orb with XP value and position (called by enemy spawner)."""
+	xp_value = xp_amount
+	global_position = spawn_pos
+	_base_position = spawn_pos
+	_last_position = spawn_pos
 
 func _exit_tree() -> void:
 	# Clean up any trail particles still in the scene
@@ -75,7 +83,7 @@ func _create_glow_layers() -> void:
 	_inner_glow = Sprite2D.new()
 	_inner_glow.texture = _glow_texture
 	_inner_glow.centered = true
-	_inner_glow.modulate = Color(0.85, 0.9, 1.0, 0.9)  # Bright white-blue center
+	_inner_glow.modulate = Color(0.85, 0.9, 1.0, 0.9) # Bright white-blue center
 	_inner_glow.scale = Vector2(0.6, 0.6)
 	_inner_glow.z_index = 1
 	_inner_glow.material = additive_mat
@@ -99,7 +107,7 @@ func _physics_process(delta):
 	_age += delta
 	# PERFORMANCE: Only update visuals every 4th frame (was 2nd)
 	if Engine.get_process_frames() % 4 == 0:
-		_update_visuals(delta * 4.0)  # Compensate delta for skipped frames
+		_update_visuals(delta * 4.0) # Compensate delta for skipped frames
 	# _update_trail(delta) # Disabled for performance
 	
 	var progress = float(player.xp) / player.xp_to_next
@@ -121,7 +129,7 @@ func _physics_process(delta):
 	# Calculate arc path that pushes toward screen edges
 	var to_target: Vector2 = target_pos_world - global_position
 	var distance_to_target: float = to_target.length()
-	var perp := Vector2(-dir.y, dir.x)  # Perpendicular to movement
+	var perp := Vector2(-dir.y, dir.x) # Perpendicular to movement
 	
 	# Determine which side of screen the orb is on and push outward
 	var orb_screen_pos: Vector2 = global_position - camera.global_position + screen_center
@@ -129,7 +137,7 @@ func _physics_process(delta):
 	
 	# Arc strength peaks in the middle of the journey, fades near start/end
 	var journey_progress := 1.0 - clampf(distance_to_target / 400.0, 0.0, 1.0)
-	var arc_strength := sin(journey_progress * PI) * 120.0  # Strong outward arc
+	var arc_strength := sin(journey_progress * PI) * 120.0 # Strong outward arc
 	
 	# Apply arc force pushing toward screen edge
 	var arc_offset: Vector2 = perp * side_bias * arc_strength * delta
@@ -144,7 +152,7 @@ func _physics_process(delta):
 	if global_position.distance_to(target_pos_world) < 20:
 		_spawn_collection_burst()
 		if player:
-			player.add_xp(1)
+			player.add_xp(xp_value)
 		ProjectileCache.return_to_pool(self)
 
 func _update_visuals(delta: float) -> void:
@@ -205,7 +213,7 @@ func _spawn_collection_burst_disabled() -> void:
 		tween.tween_property(spark, "scale", Vector2(0.1, 0.1), 0.25)
 		
 		# Use a safer cleanup method - free after delay even if tween fails
-		tween.chain().tween_callback(func(): 
+		tween.chain().tween_callback(func():
 			if is_instance_valid(spark):
 				spark.queue_free()
 		)

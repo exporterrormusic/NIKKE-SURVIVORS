@@ -55,17 +55,17 @@ var _music_tween: Tween = null  # Track active music fade tween to prevent race 
 # --- MUSIC PLAYER ADDITIONS ---
 # Name: [Display Name, Unlock Condition (Achievement ID or empty if unlocked)]
 const MUSIC_METADATA := {
-	"battle.mp3": { "name": "BATTLE", "unlock_id": "" },
-	"dark.mp3": { "name": "DARK", "unlock_id": "" },
-	"nayuta.mp3": { "name": "SEEN IT ALL (Nayuta's Theme)", "unlock_id": "" },
-	"racer.mp3": { "name": "FAST", "unlock_id": "" },
-	"rapunzel.mp3": { "name": "YET STILL I BELIEVE (Rapunzel's Theme)", "unlock_id": "" },
-	"sin.mp3": { "name": "TASTE MY SILVER TONGUE (Sin's Theme)", "unlock_id": "" },
-	"snow.mp3": { "name": "UNYIELDING (Snow White's Theme)", "unlock_id": "" },
-	"western.mp3": { "name": "WESTERN", "unlock_id": "" },
-	"wishes.mp3": { "name": "ABANDON YOUR WISHES (Scheherezade's Theme)", "unlock_id": "abandoned_wishes", "event_only": true },
-	"main-menu.mp3": { "name": "MAIN MENU", "unlock_id": "" },
-	"timer.mp3": { "name": "TIMER", "unlock_id": "she_descends", "event_only": true },
+	"battle": { "name": "BATTLE", "unlock_id": "" },
+	"dark": { "name": "DARK", "unlock_id": "" },
+	"nayuta": { "name": "SEEN IT ALL (Nayuta's Theme)", "unlock_id": "" },
+	"racer": { "name": "FAST", "unlock_id": "" },
+	"rapunzel": { "name": "YET STILL I BELIEVE (Rapunzel's Theme)", "unlock_id": "" },
+	"sin": { "name": "TASTE MY SILVER TONGUE (Sin's Theme)", "unlock_id": "" },
+	"snow": { "name": "UNYIELDING (Snow White's Theme)", "unlock_id": "" },
+	"western": { "name": "WESTERN", "unlock_id": "" },
+	"wishes": { "name": "ABANDON YOUR WISHES (Scheherezade's Theme)", "unlock_id": "abandoned_wishes", "event_only": true },
+	"main-menu": { "name": "MAIN MENU", "unlock_id": "" },
+	"timer": { "name": "TIMER", "unlock_id": "she_descends", "event_only": true },
 }
 
 signal music_track_changed(track_name: String)
@@ -138,10 +138,12 @@ func play_random_battle_track(fade_time: float = 0.5) -> void:
 	ResourceManifest.ensure_initialized()
 	var candidates: Array[String] = []
 	# Filter out event_only songs (timer.mp3, wishes.mp3)
+	# Filter out event_only songs (timer.mp3, wishes.mp3)
+	# Filter out event_only songs (timer.mp3, wishes.mp3)
 	for path in ResourceManifest.battle_music:
-		var file_name = path.get_file()
-		if MUSIC_METADATA.has(file_name):
-			var data = MUSIC_METADATA[file_name]
+		var file_id = path.get_file().get_basename()
+		if MUSIC_METADATA.has(file_id):
+			var data = MUSIC_METADATA[file_id]
 			if data.get("event_only", false):
 				continue  # Skip event-only songs from random selection
 		candidates.append(path)
@@ -187,6 +189,20 @@ func play_music_by_path(path: String, loop: bool = true, fade_time: float = 0.5)
 			_music_tween.tween_property(_music_player, "volume_db", 0.0, fade_time)
 	_current_music_path = path
 	_current_track_path = path  # Sync for Music Player UI
+	
+	# Add to history if this is a new track (enables "Previous" button for first song)
+	if _history.is_empty() or _history[_history.size() - 1] != path:
+		_history.append(path)
+		if _history.size() > 20:
+			_history.pop_front()
+	
+	# Emit signal so Music Player UI updates immediately
+	var file_id = path.get_file().get_basename().to_lower()
+	var display_name = file_id.capitalize()
+	if MUSIC_METADATA.has(file_id):
+		display_name = MUSIC_METADATA[file_id]["name"]
+	emit_signal("music_track_changed", display_name)
+	emit_signal("music_playback_state_changed", true)
 
 func stop_music(fade_time: float = 0.3) -> void:
 	if _music_player == null or not _music_player.playing:
@@ -728,9 +744,9 @@ func _update_playlist() -> void:
 		all_files.append(menu_path)
 		
 	for file_path in all_files:
-		var file_name = file_path.get_file()
-		if MUSIC_METADATA.has(file_name):
-			var data = MUSIC_METADATA[file_name]
+		var file_id = file_path.get_file().get_basename().to_lower()
+		if MUSIC_METADATA.has(file_id):
+			var data = MUSIC_METADATA[file_id]
 			var unlock_id = data.get("unlock_id", "")
 			
 			if unlock_id == "" or (AchievementManager and AchievementManager.is_achievement_unlocked(unlock_id)):
@@ -787,13 +803,6 @@ func _play_track_internal(path: String, add_to_history: bool) -> void:
 	_current_track_path = path
 	play_music_by_path(path, true, 0.5)
 	
-	var file_name = path.get_file()
-	var display_name = file_name
-	if MUSIC_METADATA.has(file_name):
-		display_name = MUSIC_METADATA[file_name]["name"]
-	
-	emit_signal("music_track_changed", display_name)
-	emit_signal("music_playback_state_changed", true)
 	_is_paused_by_user = false
 
 func toggle_pause_music() -> void:
@@ -819,13 +828,13 @@ func get_current_song_name() -> String:
 	if _current_track_path == "": 
 		# Also check _current_music_path as fallback
 		if _current_music_path != "":
-			var file_name = _current_music_path.get_file()
-			if MUSIC_METADATA.has(file_name):
-				return MUSIC_METADATA[file_name]["name"]
-			return file_name.get_basename().capitalize()
+			var file_id = _current_music_path.get_file().get_basename().to_lower()
+			if MUSIC_METADATA.has(file_id):
+				return MUSIC_METADATA[file_id]["name"]
+			return file_id.capitalize()
 		return "No Music"
-	var file_name = _current_track_path.get_file()
-	if MUSIC_METADATA.has(file_name):
-		return MUSIC_METADATA[file_name]["name"]
+	var file_id = _current_track_path.get_file().get_basename().to_lower()
+	if MUSIC_METADATA.has(file_id):
+		return MUSIC_METADATA[file_id]["name"]
 	# Fallback: try to make the filename readable
-	return file_name.get_basename().capitalize()
+	return file_id.capitalize()

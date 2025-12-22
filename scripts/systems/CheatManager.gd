@@ -51,7 +51,7 @@ static func try_activate_cheat(input_code: String) -> bool:
 				activated_any = true
 				
 			# Mark session as cheated regardless of unlock status
-			if CHEATS[cheat_key] != "give_skill_points": # give_skill_points is one-shot, but still counts? 
+			if CHEATS[cheat_key] != "give_skill_points": # give_skill_points is one-shot, but still counts?
 				# Yes, user said "When cheats are active". But logic implies any cheat usage invalidates run.
 				_cheat_used_this_session = true
 	
@@ -64,8 +64,9 @@ static func is_cheat_active(cheat_id: String) -> bool:
 	return _active_cheats.get(cheat_id, false)
 
 static func set_cheat_active(cheat_id: String, active: bool) -> void:
-	if _active_cheats.has(cheat_id):
-		_active_cheats[cheat_id] = active
+	_active_cheats[cheat_id] = active
+	if active:
+		_cheat_used_this_session = true
 
 static func has_cheated_this_session() -> bool:
 	return _cheat_used_this_session

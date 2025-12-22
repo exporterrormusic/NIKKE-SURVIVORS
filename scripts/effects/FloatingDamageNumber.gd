@@ -3,21 +3,21 @@ class_name FloatingDamageNumber
 
 # HoloCure-style floating damage/healing numbers with pop animation
 
-enum NumberType { DAMAGE, CRITICAL, HEAL }
+enum NumberType {DAMAGE, CRITICAL, HEAL}
 
 # HoloCure-style colors - bold and readable
-const DAMAGE_COLOR := Color(1.0, 1.0, 1.0, 1.0)       # White for normal damage
-const CRITICAL_COLOR := Color(1.0, 0.9, 0.2, 1.0)     # Bright yellow for crits
-const HEAL_COLOR := Color(0.35, 1.0, 0.45, 1.0)       # Bright green for healing
+const DAMAGE_COLOR := Color(1.0, 1.0, 1.0, 1.0) # White for normal damage
+const CRITICAL_COLOR := Color(1.0, 0.9, 0.2, 1.0) # Bright yellow for crits
+const HEAL_COLOR := Color(0.35, 1.0, 0.45, 1.0) # Bright green for healing
 
-const FLOAT_SPEED := 80.0           # Pixels per second upward
-const FLOAT_DURATION := 0.9         # Total lifetime
-const FADE_START := 0.6             # When to start fading (0-1 of duration)
-const SPREAD_X := 30.0              # Random horizontal spread
-const SPREAD_Y := 15.0              # Random vertical spread
-const POP_SCALE := 1.6              # Initial scale multiplier for pop effect
-const POP_DURATION := 0.12          # How long the pop animation takes
-const OUTLINE_WIDTH := 2.5          # Thickness of black outline
+const FLOAT_SPEED := 80.0 # Pixels per second upward
+const FLOAT_DURATION := 0.9 # Total lifetime
+const FADE_START := 0.6 # When to start fading (0-1 of duration)
+const SPREAD_X := 30.0 # Random horizontal spread
+const SPREAD_Y := 15.0 # Random vertical spread
+const POP_SCALE := 1.6 # Initial scale multiplier for pop effect
+const POP_DURATION := 0.12 # How long the pop animation takes
+const OUTLINE_WIDTH := 2.5 # Thickness of black outline
 
 var _value: int = 0
 var _type: NumberType = NumberType.DAMAGE
@@ -45,13 +45,13 @@ func _ready() -> void:
 	match _type:
 		NumberType.CRITICAL:
 			_base_scale = 1.8
-			_font_size = 34  # Larger for crits
+			_font_size = 34 # Larger for crits
 		NumberType.HEAL:
 			_base_scale = 1.4
 			_font_size = 26
 		_:
 			_base_scale = 1.2
-			_font_size = 24  # Larger base size
+			_font_size = 24 # Larger base size
 	
 	# Start with pop scale
 	scale = Vector2.ONE * _base_scale * POP_SCALE
@@ -106,13 +106,16 @@ func _draw() -> void:
 	
 	var text := prefix + str(_value)
 	
-	# HoloCure-style outline for readability (reduced from 4 to 2 directions)
+	# HoloCure-style outline for readability - tighter offset to prevent "double text" look
 	var shadow_color := Color(0, 0, 0, color.a * 0.95)
+	var outline_w := 1.5 # Tighter outline
 	
-	# Draw outline at 2 angles only for performance
+	# Draw outline at 4 cardinal directions (up/down/left/right)
 	var outline_offsets := [
-		Vector2(OUTLINE_WIDTH, OUTLINE_WIDTH),
-		Vector2(-OUTLINE_WIDTH, -OUTLINE_WIDTH)
+		Vector2(outline_w, 0),
+		Vector2(-outline_w, 0),
+		Vector2(0, outline_w),
+		Vector2(0, -outline_w)
 	]
 	for offset in outline_offsets:
 		draw_string(

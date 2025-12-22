@@ -26,7 +26,7 @@ const RATE_TROMBE := 15.0      # Crown Trombe activation
 # SPECIAL MODIFIERS
 # ===========================================
 const RATE_CHARMED_ENEMY := 0.5  # Charmed enemies (Marian/Sin) hits
-const SUMMON_MULTIPLIER := 0.333  # Summons generate 1/3 normal rate
+const SUMMON_MULTIPLIER := 0.0  # Summons do not generate burst (unless upgraded)
 
 # ===========================================
 # HELPER FUNCTIONS
@@ -63,6 +63,9 @@ static func get_rate(weapon_type: String) -> float:
 			return RATE_TROMBE
 		"charmed", "mind_control":
 			return RATE_CHARMED_ENEMY
+		"summon", "summoned_ally":
+			# Summons use the multiplier (currently 0.0)
+			return 1.0 * SUMMON_MULTIPLIER
 		_:
 			# Default fallback - 1% per hit
 			return 1.0

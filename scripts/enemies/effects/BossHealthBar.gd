@@ -7,14 +7,14 @@ var _container: Control = null
 var _bar_background: ColorRect = null
 var _bar_fill: Control = null
 var _name_label: Label = null
-var _timer_label: Label = null  # Enrage timer display
+var _timer_label: Label = null # Enrage timer display
 var _boss: Node2D = null
 var _target_fill: float = 1.0
 var _current_fill: float = 1.0
 var _shake_offset: Vector2 = Vector2.ZERO
 var _shake_timer: float = 0.0
 var _is_goddess_fall: bool = false
-var _flash_time: float = 0.0  # For timer flashing effect
+var _flash_time: float = 0.0 # For timer flashing effect
 
 const BAR_WIDTH := 600.0
 const BAR_HEIGHT := 24.0
@@ -22,8 +22,8 @@ const SEGMENT_COUNT := 10
 const SEGMENT_GAP := 2.0
 
 const BG_COLOR := Color(0.1, 0.05, 0.12, 0.9)
-const FILL_COLOR := Color(0.7, 0.2, 0.9, 1.0)  # Purple for regular boss
-const SUPER_BOSS_COLOR := Color(0.9, 0.2, 0.2, 1.0)  # Red for N01/super boss
+const FILL_COLOR := Color(0.7, 0.2, 0.9, 1.0) # Purple for regular boss
+const SUPER_BOSS_COLOR := Color(0.9, 0.2, 0.2, 1.0) # Red for N01/super boss
 const FILL_LOW_COLOR := Color(0.9, 0.2, 0.3, 1.0)
 const BORDER_COLOR := Color(0.9, 0.85, 1.0, 0.9)
 const SEGMENT_LINE_COLOR := Color(0.2, 0.1, 0.25, 0.8)
@@ -31,13 +31,13 @@ const SEGMENT_LINE_COLOR := Color(0.2, 0.1, 0.25, 0.8)
 const SHIELD_HEIGHT := 16.0
 const SHIELD_GAP := 4.0
 
-var _is_super_boss := false  # Track if current boss is super boss (red bar)
+var _is_super_boss := false # Track if current boss is super boss (red bar)
 var _shield_bar: Control = null
 var _shield_fill: float = 0.0
 
 
 func _ready() -> void:
-	layer = 50  # Above game elements
+	layer = 50 # Above game elements
 	visible = false
 	_setup_ui()
 
@@ -46,7 +46,7 @@ func _setup_ui() -> void:
 	_container = Control.new()
 	_container.name = "BossBarContainer"
 	_container.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_container.position = Vector2(-BAR_WIDTH / 2, 140)  # Lowered from 115
+	_container.position = Vector2(-BAR_WIDTH / 2, 140) # Lowered from 115
 	_container.size = Vector2(BAR_WIDTH, BAR_HEIGHT + 30)
 	add_child(_container)
 	
@@ -85,14 +85,14 @@ func _setup_ui() -> void:
 	_name_label.position = Vector2(0, (BAR_HEIGHT - label_height) / 2.0)
 	
 	_name_label.clip_text = false # Allow text to use full height
-	_name_label.z_index = 1  # Above the bar fill
+	_name_label.z_index = 1 # Above the bar fill
 	_container.add_child(_name_label)
 	
 	# Shield Bar (Stacked ABOVE main bar)
 	# Positioned at negative Y to sit on top with a gap
 	_shield_bar = Control.new()
 	_shield_bar.name = "ShieldBar"
-	_shield_bar.position = Vector2(0, -(SHIELD_HEIGHT + SHIELD_GAP))
+	_shield_bar.position = Vector2(0, - (SHIELD_HEIGHT + SHIELD_GAP))
 	_shield_bar.size = Vector2(BAR_WIDTH, SHIELD_HEIGHT)
 	_shield_bar.draw.connect(_draw_shield_bar)
 	_shield_bar.visible = false
@@ -157,7 +157,7 @@ func _draw_bar() -> void:
 
 func show_boss(boss: Node2D, boss_name: String = "BOSS", is_super: bool = false) -> void:
 	_boss = boss
-	_is_super_boss = is_super  # Red bar for super boss (N01)
+	_is_super_boss = is_super # Red bar for super boss (N01)
 	_name_label.text = boss_name
 	
 	# Connect to boss tree_exiting to reliably hide when boss dies/freed
@@ -189,7 +189,8 @@ func show_boss(boss: Node2D, boss_name: String = "BOSS", is_super: bool = false)
 
 	
 	# Check if Goddess Fall mode - show enrage timer
-	_is_goddess_fall = GameState and GameState.goddess_fall_mode
+	var game_manager = get_node_or_null("/root/GameManager")
+	_is_goddess_fall = game_manager and game_manager.goddess_fall_mode
 	_timer_label.visible = _is_goddess_fall
 	
 	# Entrance animation - slide down from above
@@ -206,8 +207,8 @@ func _on_boss_exiting() -> void:
 
 func hide_boss() -> void:
 	if _boss == null and not visible:
-		return  # Already hidden
-	_boss = null  # Clear reference immediately to prevent duplicate calls
+		return # Already hidden
+	_boss = null # Clear reference immediately to prevent duplicate calls
 	var tween := create_tween()
 	tween.tween_property(_container, "modulate:a", 0.0, 0.3)
 	tween.finished.connect(func(): visible = false)
@@ -330,12 +331,12 @@ func _update_enrage_timer_display() -> void:
 	if time_remaining <= 3.0:
 		# Solid intense red for last 3 seconds
 		_timer_label.add_theme_color_override("font_color", Color(1.0, 0.1, 0.1, 1.0))
-		_timer_label.add_theme_font_size_override("font_size", 26)  # Larger
+		_timer_label.add_theme_font_size_override("font_size", 26) # Larger
 	elif time_remaining <= 10.0:
 		# Flashing red - speed increases as time decreases
 		# Flash frequency: starts at 1Hz at 10s, increases to 5Hz at 3s
-		var urgency := 1.0 - (time_remaining - 3.0) / 7.0  # 0 at 10s, 1 at 3s
-		var flash_speed := 2.0 + urgency * 8.0  # 2Hz to 10Hz
+		var urgency := 1.0 - (time_remaining - 3.0) / 7.0 # 0 at 10s, 1 at 3s
+		var flash_speed := 2.0 + urgency * 8.0 # 2Hz to 10Hz
 		var flash := sin(_flash_time * flash_speed * PI) * 0.5 + 0.5
 		
 		# Lerp between yellow and red based on flash

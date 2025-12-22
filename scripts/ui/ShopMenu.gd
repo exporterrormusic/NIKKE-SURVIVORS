@@ -4,7 +4,7 @@ class_name ShopMenu
 ## Layout: Left sidebar with character portraits + GENERAL, right side with upgrade grid.
 ## Characters can be unlocked here. Default unlocked: Snow White, Rapunzel, Scarlet.
 
-const SaveManagerScript = preload("res://scripts/systems/SaveManager.gd")
+# Removed SaveManagerScript preload - now using global SaveManager autoload
 const UI := preload("res://scripts/ui/UITheme.gd")
 const UISounds := preload("res://scripts/ui/UISoundManager.gd")
 
@@ -19,66 +19,13 @@ static var _session_warning_shown: bool = false
 var _registry: CharacterRegistry = null
 
 # Character unlock costs
-const CHARACTER_UNLOCK_COST := 3  # Pristine Rapture Cores to unlock a character
+const CHARACTER_UNLOCK_COST := 3 # Pristine Rapture Cores to unlock a character
 
-# General upgrades (apply to all characters)
-const GENERAL_UPGRADES := [
-	{"id": "atk", "name": "ATK", "desc": "+25% Attack Damage", "max_level": 99, "base_cost": 1, "icon": "⚔️"},
-	{"id": "hp", "name": "HP", "desc": "+1 Max HP", "max_level": 99, "base_cost": 1, "icon": "❤️"},
-	{"id": "speed", "name": "SPD", "desc": "+5% Movement Speed", "max_level": 99, "base_cost": 1, "icon": "👟"},
-	{"id": "crit", "name": "CRIT", "desc": "+2% Critical Chance", "max_level": 99, "base_cost": 1, "icon": "💥"},
-	{"id": "xp", "name": "XP", "desc": "+5% Experience Gain", "max_level": 99, "base_cost": 2, "icon": "⭐"},
-]
-
-# Character-specific "Basic Attack" upgrades - cost 50 cores, max level 1
-const CHARACTER_UPGRADES := {
-	"snow_white": [
-		{"id": "basic_attack", "name": "Best Girl", "desc": "Attacks leave burning trails for 1.5s. Enemies take 3% HP/s burn damage for 10s. Bosses take 1% HP/s.", "max_level": 1, "base_cost": 10, "icon": "🔥"},
-		{"id": "master_mechanic", "name": "Master Mechanic", "desc": "Ammo Capacity: +100% for Rocket/Sniper, +50% for Minigun/SMG/Shotgun. Applies to Squad.", "max_level": 1, "base_cost": 10, "icon": "🔧"},
-	],
-	"scarlet": [
-		{"id": "basic_attack", "name": "Rose's Core", "desc": "Sword slashes release 5 rose petal projectiles dealing full damage.", "max_level": 1, "base_cost": 10, "icon": "🌹"},
-		{"id": "low_hp_damage", "name": "Scraping the Bottle", "desc": "Deal up to +100% damage based on missing HP (max bonus at 15% HP).", "max_level": 1, "base_cost": 20, "icon": "🩸"},
-	],
-	"rapunzel": [
-		{"id": "basic_attack", "name": "I'm a Healer, But...", "desc": "All squad kills heal player for 2% max HP.", "max_level": 1, "base_cost": 10, "icon": "💖"},
-		{"id": "burning_sensation", "name": "A Burning Sensation", "desc": "Healing Aura also burns enemies for equivalent damage (3-25% HP/s). Bosses capped at 3%.", "max_level": 1, "base_cost": 20, "icon": "🔥"},
-	],
-	"nayuta": [
-		{"id": "basic_attack", "name": "Duplicity", "desc": "10% chance to spawn a Nayuta clone when ANY squad member kills an enemy.", "max_level": 1, "base_cost": 10, "icon": "👥"},
-	],
-	"commander": [
-		{"id": "basic_attack", "name": "Obviously Anderson", "desc": "All squad attacks generate Burst gauge at 2x rate.", "max_level": 1, "base_cost": 10, "icon": "⚡"},
-	],
-	"marian": [
-		{"id": "basic_attack", "name": "Main Heroine", "desc": "Replace minigun with a continuous purple beam cannon.", "max_level": 1, "base_cost": 10, "icon": "💜"},
-		{"id": "beam_absorb", "name": "She'll Eat Anything", "desc": "Boss beams deal no damage to Marian. Instead, grants 5s of +100% damage and enhanced beam.", "max_level": 1, "base_cost": 20, "icon": "🍽️"},
-	],
-	"crown": [
-		{"id": "basic_attack", "name": "Royal Knowledge", "desc": "All squad members earn XP at 2x rate.", "max_level": 1, "base_cost": 10, "icon": "👑"},
-		{"id": "trombe_stacking", "name": "How Does This Keep Working?", "desc": "Trombe +35% size per use. Max 3 stacks, 12s each.", "max_level": 1, "base_cost": 20, "icon": "🐴"},
-	],
-	"kilo": [
-		{"id": "talos_ammo", "name": "Build-a-Bullet", "desc": "Every 2nd bullet fired regenerates 1 ammo. Applies to Squad.", "max_level": 1, "base_cost": 10, "icon": "🤖"},
-	],
-	"cecil": [
-		{"id": "basic_attack", "name": "Three Wishes...", "desc": "Gain 3 extra lives. Revive at full HP with 5s invincibility.", "max_level": 1, "base_cost": 10, "icon": "✨"},
-		{"id": "eden_shield", "name": "Noah's Defiance", "desc": "Kills generate shield HP. Max 50% of HP, +1% per kill.", "max_level": 1, "base_cost": 20, "icon": "🛡️"},
-	],
-	"sin": [
-		{"id": "basic_attack", "name": "Magnetic Personality", "desc": "Passive aura permanently mind-controls nearby regular enemies.", "max_level": 1, "base_cost": 10, "icon": "🔮"},
-		{"id": "wish_save", "name": "I WISH They Were Gone", "desc": "Once per match: When you would die, freeze time and destroy all non-boss enemies. Grants 3s invulnerability.", "max_level": 1, "base_cost": 20, "icon": "✨"},
-	],
-	"wells": [
-		{"id": "ally_speed", "name": "I Can't Predict the Future", "desc": "All summoned allies move 50% faster.", "max_level": 1, "base_cost": 10, "icon": "⏰"},
-		{"id": "chrono_intangibility", "name": "Chrono-\nIntangibility", "desc": "Player bullets phase through shields and boulders.", "max_level": 1, "base_cost": 20, "icon": "👻"},
-	],
-}
 
 # Shop data persistence
 var _unlocked_characters: Array[String] = []
-var _upgrade_levels: Dictionary = {}  # "upgrade_id" -> level
-var _cores_spent: Dictionary = {}  # "character_id" or "general" -> total cores spent
+var _upgrade_levels: Dictionary = {} # "upgrade_id" -> level
+var _cores_spent: Dictionary = {} # "character_id" or "general" -> total cores spent
 
 var _selected_filter: String = GENERAL_FILTER
 var _character_entries: Array[Dictionary] = []
@@ -125,73 +72,71 @@ func _input(event: InputEvent) -> void:
 
 
 func _load_shop_data() -> void:
-	var config := ConfigFile.new()
-	var err := config.load(SaveManagerScript.SHOP_PATH)
+	var data: Dictionary = SaveManager.load_config(SaveManager.SHOP_PATH)
 	
 	# Start with default unlocked characters
 	_unlocked_characters.clear()
 	for char_id in CharacterRegistry.DEFAULT_UNLOCKED:
 		_unlocked_characters.append(char_id)
 	
-	if err == OK:
+	if not data.is_empty():
 		# Load unlocked characters
-		var saved_unlocked = config.get_value("characters", "unlocked", [])
+		var saved_unlocked = data.get("characters", {}).get("unlocked", [])
 		for char_id in saved_unlocked:
 			if char_id not in _unlocked_characters:
 				_unlocked_characters.append(char_id)
 		
 		# Load upgrade levels
-		if config.has_section("upgrades"):
-			for key in config.get_section_keys("upgrades"):
-				_upgrade_levels[key] = config.get_value("upgrades", key, 0)
+		var saved_upgrades = data.get("upgrades", {})
+		if saved_upgrades is Dictionary:
+			for key in saved_upgrades:
+				_upgrade_levels[key] = saved_upgrades[key]
 		
 		# Load cores spent
-		if config.has_section("cores_spent"):
-			for key in config.get_section_keys("cores_spent"):
-				_cores_spent[key] = config.get_value("cores_spent", key, 0)
+		var saved_cores = data.get("cores_spent", {})
+		if saved_cores is Dictionary:
+			for key in saved_cores:
+				_cores_spent[key] = saved_cores[key]
 		
-		# Load talent data
-		if config.has_section("talents"):
-			var talent_tree = _get_talent_tree()
-			if talent_tree and talent_tree.has_method("set_unlocked_talents"):
-				var saved_talents = config.get_value("talents", "unlocked", {})
-				talent_tree.set_unlocked_talents(saved_talents)
-				print("[ShopMenu] Loaded talent data for %d characters" % saved_talents.size())
+		# Load talent tree data
+		var talent_tree = _get_talent_tree()
+		if talent_tree and talent_tree.has_method("set_unlocked_talents"):
+			var saved_talents = data.get("talents", {}).get("unlocked", {})
+			talent_tree.set_unlocked_talents(saved_talents)
 	
+	_build_ui()
 	print("[ShopMenu] Loaded shop data: %d characters unlocked, %d upgrades" % [_unlocked_characters.size(), _upgrade_levels.size()])
 
 
 func _save_shop_data() -> void:
-	var config := ConfigFile.new()
-	
-	# Save unlocked characters (excluding defaults to save space)
+	# Save unlocked characters (excluding defaults to save space, though we could save all)
 	var extra_unlocked: Array = []
 	for char_id in _unlocked_characters:
 		if char_id not in CharacterRegistry.DEFAULT_UNLOCKED:
 			extra_unlocked.append(char_id)
-	config.set_value("characters", "unlocked", extra_unlocked)
 	
-	# Save upgrade levels
-	for upgrade_id in _upgrade_levels:
-		config.set_value("upgrades", upgrade_id, _upgrade_levels[upgrade_id])
-	
-	# Save cores spent
-	for category in _cores_spent:
-		config.set_value("cores_spent", category, _cores_spent[category])
+	var data := {
+		"characters": {
+			"unlocked": extra_unlocked
+		},
+		"upgrades": _upgrade_levels,
+		"cores_spent": _cores_spent
+	}
 	
 	# Save talent data
 	var talent_tree = _get_talent_tree()
 	if talent_tree and talent_tree.has_method("get_unlocked_talents"):
-		var talents = talent_tree.get_unlocked_talents()
-		config.set_value("talents", "unlocked", talents)
+		data["talents"] = {
+			"unlocked": talent_tree.get_unlocked_talents()
+		}
 	
-	var err := config.save(SaveManagerScript.SHOP_PATH)
+	var err := SaveManager.save_config(data, SaveManager.SHOP_PATH)
 	if err == OK:
 		print("[ShopMenu] Shop data saved")
 		# Invalidate upgrade cache so hot paths get fresh data
 		invalidate_upgrade_cache()
 	else:
-		push_error("[ShopMenu] Failed to save shop data: " + str(err))
+		push_error("[ShopMenu] Failed to save shop data: %d" % err)
 
 
 func _build_ui() -> void:
@@ -237,12 +182,12 @@ func _build_ui() -> void:
 	title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top_bar.add_child(title_label) # Restored
 	
-	# BACK Button - Sci-fi container style
-	var back_btn := _BackButtonContainer.new()
+	# BACK Button - Modular SciFiBackButton component
+	var back_btn := SciFiBackButton.new()
 	back_btn.position = Vector2(48, 30) # Absolute center for 136px header
 	back_btn.custom_minimum_size = Vector2(200, 75)
 	
-	back_btn.pressed.connect(func(): 
+	back_btn.pressed.connect(func():
 		UISounds.play_back()
 		back_requested.emit()
 	)
@@ -292,8 +237,8 @@ func _build_ui() -> void:
 	currency_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	currency_row.add_child(currency_spacer)
 	
-	# Sci-fi danger container for Pristine Rapture Core currency
-	var core_container := _PristineCoreContainer.new()
+	# Sci-fi danger container for Pristine Rapture Core currency (modular component)
+	var core_container := PristineCoreContainer.new()
 	core_container.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	currency_row.add_child(core_container)
 	
@@ -390,7 +335,7 @@ func _build_ui() -> void:
 	_upgrade_scroll.add_child(grid_margin)
 	
 	_upgrade_grid = GridContainer.new()
-	_upgrade_grid.columns = 5  # 5 per row instead of 3
+	_upgrade_grid.columns = 5 # 5 per row instead of 3
 	_upgrade_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_upgrade_grid.add_theme_constant_override("h_separation", 12)
 	_upgrade_grid.add_theme_constant_override("v_separation", 12)
@@ -411,7 +356,8 @@ func _create_core_icon(icon_size: int) -> Control:
 	var container := Control.new()
 	container.custom_minimum_size = Vector2(icon_size, icon_size)
 	
-	var core := _PristineCoreIcon.new()
+	# Use inner class from PristineCoreContainer component
+	var core := PristineCoreContainer.PristineCoreIcon.new()
 	core.custom_minimum_size = Vector2(icon_size, icon_size)
 	core.size = Vector2(icon_size, icon_size)
 	container.add_child(core)
@@ -636,7 +582,7 @@ func _rebuild_content() -> void:
 
 
 func _build_general_upgrades() -> void:
-	for upgrade in GENERAL_UPGRADES:
+	for upgrade in ShopData.GENERAL_UPGRADES:
 		var card := _create_upgrade_card(upgrade, "general")
 		_upgrade_grid.add_child(card)
 	
@@ -646,8 +592,8 @@ func _build_general_upgrades() -> void:
 
 func _build_character_upgrades(char_id: String) -> void:
 	# Get character-specific upgrades
-	if char_id in CHARACTER_UPGRADES:
-		var upgrades: Array = CHARACTER_UPGRADES[char_id]
+	if char_id in ShopData.CHARACTER_UPGRADES:
+		var upgrades: Array = ShopData.CHARACTER_UPGRADES[char_id]
 		for upgrade in upgrades:
 			var card := _create_upgrade_card(upgrade, char_id)
 			_upgrade_grid.add_child(card)
@@ -673,13 +619,13 @@ func _create_upgrade_card(upgrade: Dictionary, category: String) -> Control:
 	var max_level: int = upgrade["max_level"]
 	var is_maxed: bool = current_level >= max_level
 	var cost: int = _calculate_upgrade_cost(upgrade["base_cost"], current_level)
-	var can_afford: bool = GameState.get_pristine_cores() >= cost
+	var can_afford: bool = GameManager.get_pristine_cores() >= cost
 	
 	# Use interactive card class for hover effects
 	var card := _UpgradeCard.new()
-	card.custom_minimum_size = Vector2(200, 560)  # Minimum height
+	card.custom_minimum_size = Vector2(200, 560) # Minimum height
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	card.size_flags_vertical = Control.SIZE_EXPAND_FILL  # Expand to fill container
+	card.size_flags_vertical = Control.SIZE_EXPAND_FILL # Expand to fill container
 	card.setup(is_maxed)
 	card.set_can_purchase(can_afford and not is_maxed)
 	
@@ -705,7 +651,7 @@ func _create_upgrade_card(upgrade: Dictionary, category: String) -> Control:
 	
 	var icon := Label.new()
 	icon.text = upgrade["icon"]
-	icon.add_theme_font_size_override("font_size", 80)  # Slightly smaller icon
+	icon.add_theme_font_size_override("font_size", 80) # Slightly smaller icon
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon_center.add_child(icon)
 	
@@ -715,10 +661,10 @@ func _create_upgrade_card(upgrade: Dictionary, category: String) -> Control:
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if UI.FONT_BOLD:
 		name_label.add_theme_font_override("font", UI.FONT_BOLD)
-	name_label.add_theme_font_size_override("font_size", 40)  # Slightly smaller
+	name_label.add_theme_font_size_override("font_size", 40) # Slightly smaller
 	name_label.add_theme_color_override("font_color", UI.ACCENT_PRIMARY)
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD  # WORD not WORD_SMART to avoid breaking at hyphens
+	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD # WORD not WORD_SMART to avoid breaking at hyphens
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_child(name_label)
 	
@@ -758,7 +704,7 @@ func _create_upgrade_card(upgrade: Dictionary, category: String) -> Control:
 	desc_label.add_theme_font_size_override("font_size", font_size)
 	
 	desc_label.add_theme_color_override("font_color", UI.TEXT_SECONDARY)
-	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD  # WORD not WORD_SMART to avoid breaking at hyphens
+	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD # WORD not WORD_SMART to avoid breaking at hyphens
 	desc_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	desc_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	desc_label.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -793,10 +739,10 @@ func _create_buy_button(cost: int, upgrade_id: String) -> Button:
 
 
 func _create_core_cost_button(cost: int, upgrade_id: String, parent_card: _UpgradeCard = null) -> Button:
-	var can_afford: bool = GameState.get_pristine_cores() >= cost
+	var can_afford: bool = GameManager.get_pristine_cores() >= cost
 	
 	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(160, 72)  # Much bigger button
+	btn.custom_minimum_size = Vector2(160, 72) # Much bigger button
 	btn.focus_mode = Control.FOCUS_NONE
 	
 	# Style: sci-fi container look matching the header
@@ -847,13 +793,13 @@ func _create_core_cost_button(cost: int, upgrade_id: String, parent_card: _Upgra
 	icon_section.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	content.add_child(icon_section)
 	
-	var core_icon := _create_core_icon(44)  # Much bigger icon
+	var core_icon := _create_core_icon(44) # Much bigger icon
 	core_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon_section.add_child(core_icon)
 	
 	# Divider line
 	var divider := ColorRect.new()
-	divider.custom_minimum_size = Vector2(2, 48)  # Taller divider
+	divider.custom_minimum_size = Vector2(2, 48) # Taller divider
 	divider.color = UI.SHOP_DIVIDER_AFFORD if can_afford else UI.SHOP_DIVIDER_CANT
 	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	content.add_child(divider)
@@ -868,7 +814,7 @@ func _create_core_cost_button(cost: int, upgrade_id: String, parent_card: _Upgra
 	cost_label.text = str(cost)
 	if UI.FONT_BOLD:
 		cost_label.add_theme_font_override("font", UI.FONT_BOLD)
-	cost_label.add_theme_font_size_override("font_size", 36)  # Much bigger text
+	cost_label.add_theme_font_size_override("font_size", 36) # Much bigger text
 	cost_label.add_theme_color_override("font_color", UI.COLOR_CORE if can_afford else UI.COLOR_LOCKED)
 	cost_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cost_section.add_child(cost_label)
@@ -1001,7 +947,7 @@ func _update_unlock_panel(char_id: String) -> void:
 		unlock_label.text = char_name.to_upper() + " LOCKED"
 	
 	var cost := CHARACTER_UNLOCK_COST
-	var can_afford: bool = GameState.get_pristine_cores() >= cost
+	var can_afford: bool = GameManager.get_pristine_cores() >= cost
 	
 	# Update cost row
 	var cost_row := content.get_node_or_null("CostRow") as HBoxContainer
@@ -1047,13 +993,13 @@ func _on_upgrade_purchased(upgrade_id: String, cost: int) -> void:
 
 
 func _on_upgrade_purchased_with_card(upgrade_id: String, cost: int, card: _UpgradeCard) -> void:
-	if GameState.spend_pristine_cores(cost):
+	if GameManager.spend_pristine_cores(cost):
 		UISounds.play_confirm()
 		_upgrade_levels[upgrade_id] = _upgrade_levels.get(upgrade_id, 0) + 1
 		
 		# Track cores spent - character upgrades go to char_id, others go to GENERAL_FILTER
 		var category: String = GENERAL_FILTER
-		for char_id in CHARACTER_UPGRADES.keys():
+		for char_id in ShopData.CHARACTER_UPGRADES.keys():
 			if upgrade_id.begins_with(char_id + "_"):
 				category = char_id
 				break
@@ -1074,7 +1020,7 @@ func _on_upgrade_purchased_with_card(upgrade_id: String, cost: int, card: _Upgra
 
 
 func _on_character_unlock(char_id: String, cost: int) -> void:
-	if GameState.spend_pristine_cores(cost):
+	if GameManager.spend_pristine_cores(cost):
 		_unlocked_characters.append(char_id)
 		
 		# Track cores spent for unlocking
@@ -1104,9 +1050,9 @@ func _on_reset_pressed() -> void:
 
 func _reset_all_shop_data() -> void:
 	# Reset pristine cores to 0
-	var current_cores := GameState.get_pristine_cores()
+	var current_cores := GameManager.get_pristine_cores()
 	if current_cores > 0:
-		GameState.spend_pristine_cores(current_cores)
+		GameManager.spend_pristine_cores(current_cores)
 	
 	# Reset unlocked characters to defaults only
 	_unlocked_characters.clear()
@@ -1190,7 +1136,7 @@ func _on_category_reset(category: String) -> void:
 		return
 	
 	# Refund the cores
-	GameState.add_pristine_cores(refund_amount)
+	GameManager.add_pristine_cores(refund_amount)
 	
 	# Reset upgrade levels for this category
 	var keys_to_remove: Array[String] = []
@@ -1220,7 +1166,7 @@ func _on_category_reset(category: String) -> void:
 	
 	# Update UI
 	_update_currency_display()
-	_build_character_list()  # Rebuild to show re-locked status
+	_build_character_list() # Rebuild to show re-locked status
 	_update_sidebar_counts()
 	_rebuild_content()
 	
@@ -1229,7 +1175,7 @@ func _on_category_reset(category: String) -> void:
 
 func _update_currency_display() -> void:
 	if _currency_label:
-		_currency_label.text = str(GameState.get_pristine_cores())
+		_currency_label.text = str(GameManager.get_pristine_cores())
 
 
 func _update_sidebar_counts() -> void:
@@ -1325,25 +1271,25 @@ static func _calculate_upgrade_cost(base_cost: int, current_level: int) -> int:
 
 ## Get total bonus for an upgrade type (for use by game systems)
 static func get_upgrade_bonus(upgrade_type: String) -> float:
-	var config := ConfigFile.new()
-	if config.load(SaveManagerScript.SHOP_PATH) != OK:
+	var data := SaveManager.load_config(SaveManager.SHOP_PATH)
+	if data.is_empty():
 		return 0.0
 	
-	var level: int = config.get_value("upgrades", "general_" + upgrade_type, 0)
+	var level: int = data.get("upgrades", {}).get("general_" + upgrade_type, 0)
 	
 	match upgrade_type:
 		"atk":
-			return level * 0.25  # +25% per level
+			return level * 0.25 # +25% per level
 		"hp":
-			return float(level)  # +1 HP per level
+			return float(level) # +1 HP per level
 		"speed":
-			return level * 0.05  # +5% per level
+			return level * 0.05 # +5% per level
 		"crit":
-			return level * 0.02  # +2% per level
+			return level * 0.02 # +2% per level
 		"pickup":
-			return level * 0.10  # +10% per level
+			return level * 0.10 # +10% per level
 		"xp":
-			return level * 0.05  # +5% per level
+			return level * 0.05 # +5% per level
 	
 	return 0.0
 
@@ -1353,11 +1299,11 @@ static func is_character_unlocked(char_id: String) -> bool:
 	if char_id in CharacterRegistry.DEFAULT_UNLOCKED:
 		return true
 	
-	var config := ConfigFile.new()
-	if config.load(SaveManagerScript.SHOP_PATH) != OK:
+	var data := SaveManager.load_config(SaveManager.SHOP_PATH)
+	if data.is_empty():
 		return false
 	
-	var unlocked = config.get_value("characters", "unlocked", [])
+	var unlocked = data.get("characters", {}).get("unlocked", [])
 	return char_id in unlocked
 
 
@@ -1388,20 +1334,20 @@ static func _load_upgrade_cache() -> void:
 	_upgrade_cache_loaded = true
 	_upgrade_cache.clear()
 	
-	var config := ConfigFile.new()
-	if config.load(SaveManagerScript.SHOP_PATH) != OK:
+	var data := SaveManager.load_config(SaveManager.SHOP_PATH)
+	if data.is_empty():
 		return
 	
 	# Cache all upgrade values
-	if config.has_section("upgrades"):
-		for key in config.get_section_keys("upgrades"):
-			var value = config.get_value("upgrades", key, 0)
-			if value is int or value is float:
-				_upgrade_cache[key] = int(value) > 0
-			else:
-				# Log warning but don't crash, assume not purchased (false)
-				# push_warning("[ShopMenu] Invalid upgrade value for key '%s': %s" % [key, str(value)])
-				_upgrade_cache[key] = false
+	var upgrades_data: Dictionary = data.get("upgrades", {})
+	for key in upgrades_data:
+		var value = upgrades_data[key]
+		if value is int or value is float:
+			_upgrade_cache[key] = int(value) > 0
+		else:
+			# Log warning but don't crash, assume not purchased (false)
+			# push_warning("[ShopMenu] Invalid upgrade value for key '%s': %s" % [key, str(value)])
+			_upgrade_cache[key] = false
 
 ## Invalidate the upgrade cache (call when upgrades are purchased)
 static func invalidate_upgrade_cache() -> void:
@@ -1436,7 +1382,7 @@ class _UpgradeCard extends Control:
 			var mb := event as InputEventMouseButton
 			if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
 				if _is_maxed:
-					return  # Can't click maxed cards
+					return # Can't click maxed cards
 				if not _can_purchase:
 					flash_cant_afford()
 					return
@@ -1462,7 +1408,7 @@ class _UpgradeCard extends Control:
 	
 	func flash_cant_afford() -> void:
 		_flash_color = UI.SHOP_CARD_CANT_AFFORD_BG
-		_flash_time = _flash_duration * 0.5  # Shorter red flash
+		_flash_time = _flash_duration * 0.5 # Shorter red flash
 		queue_redraw()
 	
 	func _draw() -> void:
@@ -1633,273 +1579,6 @@ class _GeneralUpgradeIcon extends Control:
 			var sparkle_alpha: float = 0.6 + sin(_time * 5.0 + float(i) * 0.7) * 0.3
 			draw_circle(sparkle_pos, sparkle_size, Color(UI.ORB_SPARKLE.r, UI.ORB_SPARKLE.g, UI.ORB_SPARKLE.b, sparkle_alpha))
 
-
-# === PRISTINE CORE ICON (Inner class) ===
-
-class _PristineCoreIcon extends Control:
-	const UI := preload("res://scripts/ui/UITheme.gd")
-	func _draw() -> void:
-		var center: Vector2 = size / 2.0
-		var radius: float = minf(size.x, size.y) / 2.0 - 2.0
-		
-		# Outer glow
-		for i in range(8, 0, -1):
-			var glow_alpha: float = 0.15 * (1.0 - float(i) / 8.0)
-			var glow_radius: float = radius + float(i) * 2.0
-			draw_circle(center, glow_radius, Color(UI.ORB_DANGER_GLOW.r, UI.ORB_DANGER_GLOW.g, UI.ORB_DANGER_GLOW.b, glow_alpha))
-		
-		# Main sphere gradient (darker red outer to bright inner)
-		var segments: int = 32
-		for i in range(segments, 0, -1):
-			var t: float = float(i) / float(segments)
-			var r: float = radius * t
-			var color := Color(0.6 + 0.4 * (1.0 - t), 0.1 + 0.2 * (1.0 - t), 0.1 + 0.1 * (1.0 - t))
-			draw_circle(center, r, color)
-		
-		# Inner glowing core
-		var core_radius: float = radius * 0.5
-		for i in range(16, 0, -1):
-			var t: float = float(i) / 16.0
-			var r: float = core_radius * t
-			var alpha: float = 0.8 * (1.0 - t * 0.5)
-			draw_circle(center, r, Color(UI.ORB_DANGER_RING.r, UI.ORB_DANGER_RING.g, UI.ORB_DANGER_RING.b, alpha))
-		
-		# Hot center
-		draw_circle(center, radius * 0.15, UI.ORB_DANGER_CENTER)
-		
-		# Specular highlight
-		var highlight_offset: Vector2 = Vector2(-radius * 0.25, -radius * 0.25)
-		var highlight_radius: float = radius * 0.2
-		draw_circle(center + highlight_offset, highlight_radius, UI.ORB_DANGER_HIGHLIGHT)
-		draw_circle(center + highlight_offset, highlight_radius * 0.5, UI.ORB_DANGER_HIGHLIGHT_CORE)
-
-
-# Sci-fi danger container for Pristine Rapture Core display
-class _PristineCoreContainer extends Control:
-	const UI := preload("res://scripts/ui/UITheme.gd")
-	const CONTAINER_WIDTH := 200.0  # Wider for padding
-	const CONTAINER_HEIGHT := 75.0
-	const BORDER_THICKNESS := 3.0  # Thicker border
-	const CORNER_CUT := 10.0  # Slightly larger corner cuts
-	
-	var _core_icon: Control = null
-	var _count_label: Label = null
-	var _glow_time: float = 0.0
-	
-	func _init() -> void:
-		custom_minimum_size = Vector2(CONTAINER_WIDTH, CONTAINER_HEIGHT)
-	
-	func _ready() -> void:
-		_build_container()
-	
-	func _process(delta: float) -> void:
-		_glow_time += delta
-		queue_redraw()
-	
-	func get_core_icon() -> Control:
-		return _core_icon
-	
-	func get_count_label() -> Label:
-		return _count_label
-	
-	func _build_container() -> void:
-		# Main content HBox
-		var content := HBoxContainer.new()
-		content.set_anchors_preset(Control.PRESET_FULL_RECT)
-		content.offset_left = 16
-		content.offset_right = -16
-		content.offset_top = 18  # Below the title with more padding
-		content.offset_bottom = -8
-		content.add_theme_constant_override("separation", 0)
-		content.alignment = BoxContainer.ALIGNMENT_CENTER
-		add_child(content)
-		
-		# Core icon section (left side)
-		var icon_section := CenterContainer.new()
-		icon_section.custom_minimum_size = Vector2(50, 0)
-		content.add_child(icon_section)
-		
-		var icon_container := Control.new()
-		icon_container.custom_minimum_size = Vector2(40, 40)
-		icon_section.add_child(icon_container)
-		
-		_core_icon = _PristineCoreIcon.new()
-		_core_icon.custom_minimum_size = Vector2(40, 40)
-		_core_icon.size = Vector2(40, 40)
-		icon_container.add_child(_core_icon)
-		
-		# Vertical divider - drawn in _draw() instead
-		var divider_space := Control.new()
-		divider_space.custom_minimum_size = Vector2(16, 0)
-		content.add_child(divider_space)
-		
-		# Count section (right side)
-		var count_section := CenterContainer.new()
-		count_section.custom_minimum_size = Vector2(60, 0)
-		count_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		content.add_child(count_section)
-		
-		_count_label = Label.new()
-		_count_label.text = "0"
-		_count_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_count_label.add_theme_font_override("font", UI.FONT_TITLE)
-		_count_label.add_theme_font_size_override("font_size", 36)
-		_count_label.add_theme_color_override("font_color", UI.SHOP_CORE_TEXT)
-		_count_label.add_theme_color_override("font_outline_color", UI.SHOP_COUNT_OUTLINE)
-		_count_label.add_theme_constant_override("outline_size", 2)
-		count_section.add_child(_count_label)
-	
-	func _draw() -> void:
-		var w := size.x
-		var h := size.y
-		
-		# Pulsing glow effect - stronger
-		var glow_pulse: float = 0.5 + 0.2 * sin(_glow_time * 2.5)
-		
-		# Draw outer glow - more intense red
-		for i in range(6, 0, -1):
-			var glow_alpha: float = glow_pulse * 0.08 * (1.0 - float(i) / 6.0)
-			var offset: float = float(i) * 2.0
-			var glow_rect := Rect2(-offset, -offset, w + offset * 2, h + offset * 2)
-			draw_rect(glow_rect, Color(UI.SHOP_CORE_GLOW.r, UI.SHOP_CORE_GLOW.g, UI.SHOP_CORE_GLOW.b, glow_alpha))
-		
-		# Draw background with cut corners (sci-fi hexagonal look)
-		var bg_points := PackedVector2Array([
-			Vector2(CORNER_CUT, 0),
-			Vector2(w - CORNER_CUT, 0),
-			Vector2(w, CORNER_CUT),
-			Vector2(w, h - CORNER_CUT),
-			Vector2(w - CORNER_CUT, h),
-			Vector2(CORNER_CUT, h),
-			Vector2(0, h - CORNER_CUT),
-			Vector2(0, CORNER_CUT)
-		])
-		draw_colored_polygon(bg_points, UI.SHOP_CORE_BG)
-		
-		# Draw border - use danger red color for more visible border
-		for i in range(bg_points.size()):
-			var p1: Vector2 = bg_points[i]
-			var p2: Vector2 = bg_points[(i + 1) % bg_points.size()]
-			draw_line(p1, p2, UI.SHOP_CORE_BORDER, BORDER_THICKNESS, true)
-		
-		# Draw vertical divider line in the middle
-		var divider_x := w * 0.42  # Position divider between icon and count
-		var divider_top := 16.0
-		var divider_bottom := h - 8.0
-		draw_line(Vector2(divider_x, divider_top), Vector2(divider_x, divider_bottom), UI.SHOP_CORE_DIVIDER, 1.5)
-		
-		# Draw "PRISTINE CORE" title at top (shorter)
-		var title_text := "PRISTINE CORE"
-		var title_size := 10
-		var title_width: float = UI.FONT_TITLE.get_string_size(title_text, HORIZONTAL_ALIGNMENT_LEFT, -1, title_size).x
-		var title_x: float = (w - title_width) / 2.0
-		draw_string(UI.FONT_TITLE, Vector2(title_x, 12), title_text, HORIZONTAL_ALIGNMENT_LEFT, -1, title_size, UI.RESET_TITLE)
-		
-		# Draw subtle scan lines for tech effect
-		var scan_alpha: float = 0.03 + 0.02 * sin(_glow_time * 5.0)
-		for y_line in range(0, int(h), 4):
-			draw_line(Vector2(CORNER_CUT, y_line), Vector2(w - CORNER_CUT, y_line), 
-					 Color(UI.RESET_SCAN_LINE.r, UI.RESET_SCAN_LINE.g, UI.RESET_SCAN_LINE.b, scan_alpha), 1.0)
-
-
-# Sci-fi styled Back Button
-class _BackButtonContainer extends Button:
-	const UI := preload("res://scripts/ui/UITheme.gd")
-	const CONTAINER_WIDTH := 200.0  # Match PristineCoreContainer
-	const CONTAINER_HEIGHT := 75.0
-	const BORDER_THICKNESS := 3.0
-	const CORNER_CUT := 10.0
-	
-	var _glow_time: float = 0.0
-	var _is_hovered: bool = false
-	
-	func _init() -> void:
-		custom_minimum_size = Vector2(CONTAINER_WIDTH, CONTAINER_HEIGHT)
-		focus_mode = Control.FOCUS_NONE
-		mouse_entered.connect(func(): _is_hovered = true)
-		mouse_exited.connect(func(): _is_hovered = false)
-	
-	func _ready() -> void:
-		_build_content()
-	
-	func _process(delta: float) -> void:
-		_glow_time += delta
-		if _is_hovered:
-			queue_redraw()
-	
-
-	# ... (Previous _BackButtonContainer code) ...
-	
-	func _build_content() -> void:
-		var center := CenterContainer.new()
-		center.set_anchors_preset(Control.PRESET_FULL_RECT)
-		center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		add_child(center)
-		
-		var hbox := HBoxContainer.new()
-		hbox.add_theme_constant_override("separation", 12)
-		center.add_child(hbox)
-		
-		var arrow := Label.new()
-		arrow.text = "<<"
-		arrow.add_theme_font_size_override("font_size", 32)
-		arrow.add_theme_color_override("font_color", UI.BTN_BACK_BORDER)
-		hbox.add_child(arrow)
-		
-		var label := Label.new()
-		label.text = "BACK"
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		if UI.FONT_TITLE:
-			label.add_theme_font_override("font", UI.FONT_TITLE)
-		label.add_theme_font_size_override("font_size", 36)
-		label.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
-		hbox.add_child(label)
-	
-	func _draw() -> void:
-		var w := size.x
-		var h := size.y
-		
-		# Define colors based on state
-		var bg_color := UI.BTN_BACK_BG
-		var border_color := UI.BTN_BACK_BORDER
-		
-		if _is_hovered:
-			bg_color = UI.BTN_BACK_HOVER_BG
-			border_color = UI.BTN_BACK_HOVER_BORDER
-		
-		if button_pressed:
-			bg_color = bg_color.darkened(0.2)
-		
-		# Draw background with cut corners
-		var bg_points := PackedVector2Array([
-			Vector2(CORNER_CUT, 0),
-			Vector2(w - CORNER_CUT, 0),
-			Vector2(w, CORNER_CUT),
-			Vector2(w, h - CORNER_CUT),
-			Vector2(w - CORNER_CUT, h),
-			Vector2(CORNER_CUT, h),
-			Vector2(0, h - CORNER_CUT),
-			Vector2(0, CORNER_CUT)
-		])
-		draw_colored_polygon(bg_points, bg_color)
-		
-		# Draw border
-		for i in range(bg_points.size()):
-			var p1: Vector2 = bg_points[i]
-			var p2: Vector2 = bg_points[(i + 1) % bg_points.size()]
-			draw_line(p1, p2, border_color, BORDER_THICKNESS, true)
-		
-		# Tech decoration lines
-		var line_alpha: float = 0.3
-		if _is_hovered:
-			line_alpha = 0.6 + 0.2 * sin(_glow_time * 8.0)
-		
-		var deco_color := border_color
-		deco_color.a = line_alpha
-		
-		draw_line(Vector2(CORNER_CUT + 5, 5), Vector2(CORNER_CUT + 30, 5), deco_color, 2.0)
-		draw_line(Vector2(w - CORNER_CUT - 30, h - 5), Vector2(w - CORNER_CUT - 5, h - 5), deco_color, 2.0)
 
 func _create_warning_popup() -> void:
 	_warning_popup = ConfirmationDialog.new()

@@ -5,7 +5,7 @@ extends Node
 ## Saves/loads achievement data to persistent storage.
 ## Accessed as autoload: /root/AchievementManager
 
-const SaveManagerScript = preload("res://scripts/systems/SaveManager.gd")
+# Removed SaveManagerScript preload - now using global SaveManager autoload
 
 signal achievement_unlocked(achievement_id: String, achievement_data: Dictionary)
 
@@ -21,18 +21,18 @@ const SKILL_PURCHASES_PER_CHARACTER := 11
 
 # Achievement types
 enum AchievementType {
-	SHOP_UNLOCK,      # Unlock character in shop
-	KILL_COUNT,       # Kill 10,000 Raptures as character
-	ALL_SKILLS,       # Purchase all skills in a single match
-	WIN_GAME,         # Win a game with character in squad
+	SHOP_UNLOCK, # Unlock character in shop
+	KILL_COUNT, # Kill 10,000 Raptures as character
+	ALL_SKILLS, # Purchase all skills in a single match
+	WIN_GAME, # Win a game with character in squad
 	# General Achievements
-	MASSACRE,         # Kill 50,000 Raptures total
-	BOSS_SLAYER,      # Defeat a boss enemy
-	FIRST_BLOOD,      # Complete a Stage 1 map
-	NO_DAMAGE,        # Complete a wave without taking damage
-	ALL_MAPS,          # Play on all maps
+	MASSACRE, # Kill 50,000 Raptures total
+	BOSS_SLAYER, # Defeat a boss enemy
+	FIRST_BLOOD, # Complete a Stage 1 map
+	NO_DAMAGE, # Complete a wave without taking damage
+	ALL_MAPS, # Play on all maps
 	ABANDONED_WISHES, # Reach Wave 10
-	SHE_DESCENDS      # Spawn N01
+	SHE_DESCENDS # Spawn N01
 }
 
 const GENERAL_ID := "general"
@@ -44,10 +44,10 @@ const MAP_TARGET_COUNT := 4
 var _achievements: Dictionary = {}
 
 # Runtime kill tracking (per character, resets on game end)
-var _session_kills: Dictionary = {}  # char_id -> kills this run
+var _session_kills: Dictionary = {} # char_id -> kills this run
 
 # Runtime skill tracking (per character, resets on game end)
-var _session_skills: Dictionary = {}  # char_index -> total skill purchases this run (int)
+var _session_skills: Dictionary = {} # char_index -> total skill purchases this run (int)
 
 # Track current active character
 var _current_character_id: String = ""
@@ -74,6 +74,8 @@ func _ready() -> void:
 			EventBus.biome_changed.connect(_on_biome_changed)
 		if EventBus.has_signal("player_damaged"):
 			EventBus.player_damaged.connect(_on_player_damaged)
+		if EventBus.has_signal("boss_spawned"):
+			EventBus.boss_spawned.connect(_on_boss_spawned)
 	
 	# Wait for MenuManager's intro screen to render before doing heavy initialization
 	# CharacterRegistry has many preloads that cascade to other scripts
@@ -90,7 +92,11 @@ func _on_intro_ready() -> void:
 func _async_init() -> void:
 	# Yield a frame to let animation continue
 	await get_tree().process_frame
-	_registry = CharacterRegistry.get_instance()
+	var game_manager = get_node_or_null("/root/GameManager")
+	if game_manager:
+		_registry = game_manager.get_character_registry()
+	else:
+		_registry = CharacterRegistry.get_instance()
 	
 	await get_tree().process_frame
 	_load_achievements()
@@ -99,7 +105,11 @@ func _async_init() -> void:
 func _ensure_registry() -> void:
 	# Ensure registry is loaded if accessed before deferred init completed
 	if _registry == null:
-		_registry = CharacterRegistry.get_instance()
+		var game_manager = get_node_or_null("/root/GameManager")
+		if game_manager:
+			_registry = game_manager.get_character_registry()
+		else:
+			_registry = CharacterRegistry.get_instance()
 
 
 # --- Achievement Definition Helpers ---
@@ -329,7 +339,7 @@ func get_achievement_data(achievement_id: String) -> Dictionary:
 ## Call when a character is unlocked in the shop
 func on_character_unlocked_in_shop(char_id: String) -> void:
 	if char_id in CharacterRegistry.DEFAULT_UNLOCKED:
-		return  # No achievement for default characters
+		return # No achievement for default characters
 	
 	var achievement_id := get_achievement_id(AchievementType.SHOP_UNLOCK, char_id)
 	_unlock_achievement(achievement_id, char_id, AchievementType.SHOP_UNLOCK)
@@ -359,27 +369,46 @@ func on_enemy_killed(char_id: String) -> void:
 		_save_achievements()
 
 
-## Call when a skill is purchased in talent tree (char_index is registry index, skill_id is the talent id)
-func on_skill_purchased(char_index: int, _skill_id: String) -> void:
+## Call when a skill is purchased in talent tree (char_id is registry string ID, skill_id is the talent id)
+func on_skill_purchased(char_id, _skill_id: String) -> void:
 	_ensure_registry()
+	
+	# Handle both String (from TalentTree) and int (legacy) calls
+	var char_index: int = -1
+	if char_id is String:
+		char_index = _registry.get_character_index(char_id)
+	elif char_id is int:
+		char_index = char_id
+	
 	var char_count := _registry.get_character_count()
 	if char_index < 0 or char_index >= char_count:
+		print("[AchievementManager] Invalid char_id for skill purchase: %s" % str(char_id))
 		return
 	
-	# Track total skill purchases this session (not unique - each level counts)
+	# Initialize skill counter if not exists, pre-crediting squad members with their unlock
 	if not _session_skills.has(char_index):
-		_session_skills[char_index] = 0
+		_session_skills[char_index] = _get_initial_skill_credit(char_index)
 	
 	_session_skills[char_index] += 1
 	
 	# Check if all skills are now purchased (11 total points to max a tree)
 	var skills_count: int = _session_skills[char_index]
-	print("[AchievementManager] Character %d now has %d/%d skills" % [char_index, skills_count, SKILL_PURCHASES_PER_CHARACTER])
+	print("[AchievementManager] Character %s (idx %d) now has %d/%d skills" % [str(char_id), char_index, skills_count, SKILL_PURCHASES_PER_CHARACTER])
 	
 	if skills_count >= SKILL_PURCHASES_PER_CHARACTER:
-		var char_id: String = _registry.get_character_id(char_index)
-		var achievement_id := get_achievement_id(AchievementType.ALL_SKILLS, char_id)
-		_unlock_achievement(achievement_id, char_id, AchievementType.ALL_SKILLS)
+		var resolved_char_id: String = _registry.get_character_id(char_index)
+		var achievement_id := get_achievement_id(AchievementType.ALL_SKILLS, resolved_char_id)
+		_unlock_achievement(achievement_id, resolved_char_id, AchievementType.ALL_SKILLS)
+
+
+## Get initial skill credit for a character (1 if they're in the selected squad, 0 otherwise)
+func _get_initial_skill_credit(char_index: int) -> int:
+	var game_manager = get_node_or_null("/root/GameManager")
+	if game_manager and game_manager.selected_character_indices:
+		if char_index in game_manager.selected_character_indices:
+			print("[AchievementManager] Character %d is in squad, pre-crediting unlock skill" % char_index)
+			return 1 # They start with unlock already purchased
+	return 0
 
 
 ## Call when a game is won (pass array of squad character IDs)
@@ -403,7 +432,7 @@ func reset_session() -> void:
 
 func _unlock_achievement(achievement_id: String, char_id: String, type: AchievementType) -> void:
 	if _achievements.get(achievement_id, {}).get("unlocked", false):
-		return  # Already unlocked
+		return # Already unlocked
 	
 	# Initialize if needed
 	if not _achievements.has(achievement_id):
@@ -503,8 +532,19 @@ func _on_enemy_killed_event(enemy: Node, killer_source: String) -> void:
 	if enemy.is_in_group("boss") or enemy.is_in_group("super_boss"):
 		_unlock_achievement(get_achievement_id(AchievementType.BOSS_SLAYER, ""), "", AchievementType.BOSS_SLAYER)
 	
+	# Ensure we have a valid character ID (fallback to current squad's first character)
+	if _current_character_id.is_empty():
+		_ensure_registry()
+		var game_manager = get_node_or_null("/root/GameManager")
+		if game_manager and game_manager.selected_character_indices.size() > 0:
+			var first_idx = game_manager.selected_character_indices[0]
+			if _registry:
+				_current_character_id = _registry.get_character_id(first_idx)
+		print("[AchievementManager] Fallback character ID: %s" % _current_character_id)
+	
 	# Track per-character kills
-	on_enemy_killed(_current_character_id)
+	if not _current_character_id.is_empty():
+		on_enemy_killed(_current_character_id)
 
 
 func _on_run_started(map_id: String) -> void:
@@ -522,8 +562,10 @@ func _on_biome_changed(biome_id: StringName) -> void:
 	_track_world_traveler_progress(str(biome_id))
 
 
-func _on_wave_started(_wave_number: int) -> void:
+func _on_wave_started(wave_number: int) -> void:
 	_wave_damaged = false
+	# Track "Abandoned Wishes" - Reach Wave 10
+	_track_abandoned_wishes(wave_number)
 
 
 func _on_wave_completed(_wave_number: int) -> void:
@@ -534,6 +576,18 @@ func _on_wave_completed(_wave_number: int) -> void:
 func _on_player_damaged(_amount: int, _source: Node) -> void:
 	_wave_damaged = true
 
+
+func _on_boss_spawned(boss: Node) -> void:
+	# Check if this is N01 (Rapture Queen) - triggers "She Descends" achievement
+	if boss and (boss.name.contains("N01") or boss.name.contains("RaptureQueen") or boss.is_in_group("super_boss")):
+		print("[AchievementManager] N01 spawned! Unlocking She Descends achievement")
+		_unlock_achievement(get_achievement_id(AchievementType.SHE_DESCENDS, ""), "", AchievementType.SHE_DESCENDS)
+
+
+func _track_abandoned_wishes(wave_number: int) -> void:
+	# "Abandoned Wishes" - Reach Wave 10
+	if wave_number >= 10:
+		_unlock_achievement(get_achievement_id(AchievementType.ABANDONED_WISHES, ""), "", AchievementType.ABANDONED_WISHES)
 
 func _track_massacre_progress() -> void:
 	var achievement_id := get_achievement_id(AchievementType.MASSACRE, "")
@@ -589,25 +643,24 @@ func _format_number(value: int) -> String:
 # --- Persistence ---
 
 func _load_achievements() -> void:
-	var config := ConfigFile.new()
-	var err := config.load(SaveManagerScript.ACHIEVEMENTS_PATH)
+	var data := SaveManager.load_config(SaveManager.ACHIEVEMENTS_PATH)
 	
-	if err == OK:
-		if config.has_section("achievements"):
-			for key in config.get_section_keys("achievements"):
-				_achievements[key] = config.get_value("achievements", key, {"unlocked": false, "progress": 0})
+	if not data.is_empty():
+		var achievements_data = data.get("achievements", {})
+		if achievements_data is Dictionary:
+			for key in achievements_data:
+				_achievements[key] = achievements_data[key]
 		print("[AchievementManager] Loaded %d achievements" % _achievements.size())
 	else:
 		print("[AchievementManager] No save file found, starting fresh")
 
 
 func _save_achievements() -> void:
-	var config := ConfigFile.new()
+	var data := {
+		"achievements": _achievements
+	}
 	
-	for achievement_id in _achievements:
-		config.set_value("achievements", achievement_id, _achievements[achievement_id])
-	
-	var err := config.save(SaveManagerScript.ACHIEVEMENTS_PATH)
+	var err := SaveManager.save_config(data, SaveManager.ACHIEVEMENTS_PATH)
 	if err == OK:
 		print("[AchievementManager] Saved %d achievements" % _achievements.size())
 	else:

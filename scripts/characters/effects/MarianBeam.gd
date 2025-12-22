@@ -20,21 +20,21 @@ var outer_color := Color(0.5, 0.1, 0.9, 0.7)
 var edge_color := Color(0.3, 0.0, 0.6, 0.5)
 
 var owner_node: Node = null
-var player_ref: Node2D = null  # Reference to player for position tracking
-var target_enemy: Node2D = null  # For summons: track this enemy instead of mouse
-var initial_direction: Vector2 = Vector2.ZERO  # Set by controller before adding to scene
+var player_ref: Node2D = null # Reference to player for position tracking
+var target_enemy: Node2D = null # For summons: track this enemy instead of mouse
+var initial_direction: Vector2 = Vector2.ZERO # Set by controller before adding to scene
 var _age: float = 0.0
 var _damage_timer: float = 0.0
 var _beam_direction: Vector2 = Vector2.RIGHT
 var _target_direction: Vector2 = Vector2.RIGHT
-var _turn_speed: float = 4.0  # How fast beam follows mouse
+var _turn_speed: float = 20.0 # How fast beam follows mouse
 
 # Player level for damage scaling
 var player_level: int = 1
 
 # Upgrade states
-var missile_upgrade: bool = false  # Left upgrade: fire homing missiles
-var trail_upgrade: bool = false    # Right upgrade: leave burning trail
+var missile_upgrade: bool = false # Left upgrade: fire homing missiles
+var trail_upgrade: bool = false # Right upgrade: leave burning trail
 
 # "She'll Eat Anything" enhanced mode - 50% wider, brighter purple
 var enhanced_mode: bool = false
@@ -42,10 +42,10 @@ var _base_beam_width: float = 240.0
 
 var _missile_timer: float = 0.0
 var _missiles_per_volley: int = 4
-var _missile_volleys_fired: int = 0  # Track volleys (fire at 0.1s and 3.1s)
+var _missile_volleys_fired: int = 0 # Track volleys (fire at 0.1s and 3.1s)
 
-var _burn_area: Node2D = null  # Burn area with rectangular coverage
-const BURN_CHARGE_TIME: float = 1.0  # Seconds of continuous coverage needed
+var _burn_area: Node2D = null # Burn area with rectangular coverage
+const BURN_CHARGE_TIME: float = 1.0 # Seconds of continuous coverage needed
 
 # Shader material
 var _shader_material: ShaderMaterial = null
@@ -57,8 +57,16 @@ var _ring_phase: float = 0.0
 # Audio
 var _beam_audio_player: AudioStreamPlayer2D = null
 
+# Source ID for burst generation
+var damage_source: String = "MarianBurst"
+
 func _ready() -> void:
 	z_index = 500
+	top_level = true
+	
+	# Check if owned by a summon and override source
+	if owner_node and (owner_node.is_in_group("summoned_allies") or owner_node.name.contains("SummonedAlly")):
+		damage_source = "summon"
 	
 	# Start continuous beam audio
 	_start_beam_audio()
@@ -142,76 +150,30 @@ func _process(delta: float) -> void:
 	
 	queue_redraw()
 
-func _update_beam_direction(delta: float) -> void:
-	# Update position to follow player
-	if player_ref and is_instance_valid(player_ref):
-		global_position = player_ref.global_position + _beam_direction * 80.0  # Offset further in front of player
+func _update_beam_direction(_delta: float) -> void:
+	# EXACT match of MarianBeamCannon logic
+	if not player_ref or not is_instance_valid(player_ref):
+		return
+
+	# Calculate aim direction from player to mouse
+	var mouse_pos: Vector2 = player_ref.get_global_mouse_position()
+	var aim_dir: Vector2 = (mouse_pos - player_ref.global_position).normalized()
 	
-	# If we have a target enemy (summon mode), track it
-	if target_enemy and is_instance_valid(target_enemy):
-		var player_pos := global_position
-		if player_ref and is_instance_valid(player_ref):
-			player_pos = player_ref.global_position
+	if aim_dir == Vector2.ZERO:
+		aim_dir = Vector2.RIGHT
 		
-		# Check if target is blocked by boulder or out of range
-		var to_target := target_enemy.global_position - player_pos
-		var dist := to_target.length()
+	# Smoothly rotate beam toward mouse (High responsivness)
+	# User requested faster than Crown (4.0), restoring high speed now that jitter is fixed
+	if _beam_direction.dot(aim_dir) > -0.99: # Avoid lerping if exact opposite (flip issue)
+		_beam_direction = _beam_direction.lerp(aim_dir, 25.0 * _delta).normalized()
+	else:
+		_beam_direction = _beam_direction.rotated(25.0 * _delta) # Turn manual if behind
 		
-		# If blocked by boulder or too far, force retargeting
-		if dist > beam_range * 1.5 or _is_line_blocked_by_boulder(player_pos, target_enemy.global_position, 10.0):
-			target_enemy = null # Force find new target
-		else:
-			if dist > 10.0:
-				_target_direction = to_target.normalized()
+	_target_direction = aim_dir
 	
-	if target_enemy == null:
-		# Target was set but is now invalid (dead) OR blocked - find new closest valid enemy
-		var enemies := TargetCache.get_enemies()
-		var closest_dist: float = 999999.0
-		var player_pos := global_position
-		if player_ref and is_instance_valid(player_ref):
-			player_pos = player_ref.global_position
-		
-		for enemy in enemies:
-			if not is_instance_valid(enemy) or not enemy is Node2D:
-				continue
-			var dist := player_pos.distance_to(enemy.global_position)
-			
-			# Skip if out of range
-			if dist > beam_range:
-				continue
-				
-			# Skip if blocked by boulder
-			if _is_line_blocked_by_boulder(player_pos, enemy.global_position, 10.0):
-				continue
-			
-			if dist < closest_dist:
-				closest_dist = dist
-				target_enemy = enemy
-		
-		# Update direction to new target
-		if target_enemy and is_instance_valid(target_enemy):
-			var to_target := target_enemy.global_position - player_pos
-			if to_target.length() > 10.0:
-				_target_direction = to_target.normalized()
-	
-	if target_enemy == null:
-		# No target set and no valid enemies found - use mouse (player mode) or keep looking
-		var mouse_pos := get_global_mouse_position()
-		var player_pos := global_position
-		if player_ref and is_instance_valid(player_ref):
-			player_pos = player_ref.global_position
-		var to_mouse := mouse_pos - player_pos
-		
-		if to_mouse.length() > 10.0:
-			_target_direction = to_mouse.normalized()
-	
-	# Smoothly rotate beam toward target
-	_beam_direction = _beam_direction.lerp(_target_direction, _turn_speed * delta).normalized()
-	
-	# Update position again with new direction
-	if player_ref and is_instance_valid(player_ref):
-		global_position = player_ref.global_position + _beam_direction * 80.0
+	# Direct transform update
+	rotation = _beam_direction.angle()
+	global_position = player_ref.global_position + _beam_direction * 35.0
 
 func _deal_beam_damage() -> void:
 	var tree := get_tree()
@@ -223,18 +185,27 @@ func _deal_beam_damage() -> void:
 	# Calculate level-scaled damage (+50% per level)
 	var level_mult := 1.0 + (player_level - 1) * 0.5
 	var scaled_dps := damage_per_second * level_mult
+	
+	# Apply enhanced mode multiplier
+	if enhanced_mode:
+		scaled_dps *= 2.0
+		
 	var damage_this_tick := int(scaled_dps * damage_tick_interval)
 	
 	for enemy in enemies:
 		if not is_instance_valid(enemy) or not enemy is Node2D:
 			continue
 		
+		# Skip charmed allies (Sin's mind control)
+		if enemy.is_in_group("charmed_allies"):
+			continue
+			
 		var enemy_node := enemy as Node2D
 		
 		# Check if enemy is within beam
 		if _is_point_in_beam(enemy_node.global_position):
 			if enemy.has_method("take_damage"):
-				enemy.take_damage(damage_this_tick, false, _beam_direction, true, "MarianBurst")
+				enemy.take_damage(damage_this_tick, false, _beam_direction, true, damage_source)
 			elif "hp" in enemy:
 				enemy.hp -= damage_this_tick
 
@@ -252,7 +223,7 @@ func _is_point_in_beam(point: Vector2) -> bool:
 	
 	# Check perpendicular distance
 	var perp: float = abs(to_point.dot(_beam_direction.orthogonal()))
-	var width_at_point := beam_width * 0.5  # Half width
+	var width_at_point := beam_width * 0.5 # Half width
 	
 	return perp <= width_at_point
 
@@ -289,7 +260,7 @@ func _is_boulder_blocking(distance_along_beam: float) -> bool:
 		# Check perpendicular distance to beam center line
 		var perp: float = abs(to_boulder.dot(_beam_direction.orthogonal()))
 		if perp < boulder_radius + beam_width * 0.5:
-			return true  # Beam is blocked by this boulder
+			return true # Beam is blocked by this boulder
 	
 	return false
 
@@ -323,7 +294,7 @@ func _is_line_blocked_by_boulder(start: Vector2, end: Vector2, width: float) -> 
 		# Check perpendicular distance to line
 		var perp: float = abs(to_boulder.dot(direction.orthogonal()))
 		if perp < boulder_radius + width * 0.5:
-			return true  # Blocked
+			return true # Blocked
 			
 	return false
 
@@ -416,7 +387,7 @@ func _create_burn_area() -> void:
 	_burn_area.set_script(_get_burn_area_script())
 	_burn_area.z_as_relative = false
 	_burn_area.z_index = -5
-	_burn_area.global_position = Vector2.ZERO  # Keep at origin, use global coords
+	_burn_area.global_position = Vector2.ZERO # Keep at origin, use global coords
 	
 	# PARENTING FIX: Add to World (Player's parent) instead of EffectsLayer
 	# EffectsLayer forces high rendering order, ignoring negative Z-index relative to world
@@ -656,7 +627,7 @@ func _expand_organic(corners: PackedVector2Array, amount: float) -> PackedVector
 	return script
 
 func _exit_tree() -> void:
-	pass  # Burn area manages itself now
+	pass # Burn area manages itself now
 
 func _update_particles(delta: float) -> void:
 	# Update existing particles
@@ -669,13 +640,13 @@ func _update_particles(delta: float) -> void:
 		p["pos"] += p["vel"] * delta
 		_particles[i] = p
 	
-	# Spawn new particles along beam
-	if randf() < 0.8:  # 80% chance per frame
+	# Spawn new particles along beam (Local Space)
+	if randf() < 0.8: # 80% chance per frame
 		var dist := randf() * beam_range
-		var offset := _beam_direction.orthogonal() * randf_range(-beam_width * 0.3, beam_width * 0.3)
+		var offset := Vector2.UP * randf_range(-beam_width * 0.3, beam_width * 0.3)
 		var particle := {
-			"pos": _beam_direction * dist + offset,
-			"vel": _beam_direction.orthogonal() * randf_range(-50, 50) + Vector2(0, -30),
+			"pos": Vector2.RIGHT * dist + offset,
+			"vel": Vector2.UP * randf_range(-50, 50) + Vector2(0, -30),
 			"size": randf_range(3, 8),
 			"age": 0.0,
 			"lifespan": randf_range(0.3, 0.8),
@@ -706,8 +677,8 @@ func _draw() -> void:
 	_draw_origin_effect(intensity)
 
 func _draw_beam(intensity: float) -> void:
-	var beam_end := _beam_direction * beam_range
-	var perp := _beam_direction.orthogonal()
+	var beam_end := Vector2.RIGHT * beam_range
+	var perp := Vector2.UP
 	
 	# Multiple layers from outer to inner
 	var layers := [
@@ -725,8 +696,8 @@ func _draw_beam(intensity: float) -> void:
 		# Create beam polygon
 		var points := PackedVector2Array([
 			perp * w,
-			-perp * w,
-			beam_end - perp * w * 0.8,  # Slightly narrower at end
+			- perp * w,
+			beam_end - perp * w * 0.8, # Slightly narrower at end
 			beam_end + perp * w * 0.8,
 		])
 		
@@ -752,7 +723,7 @@ func _draw_energy_rings(intensity: float) -> void:
 	
 	for i in range(ring_count):
 		var ring_pos := fmod(_ring_phase * 200.0 + float(i) * ring_spacing, beam_range)
-		var ring_center := _beam_direction * ring_pos
+		var ring_center := Vector2.RIGHT * ring_pos
 		var ring_size := beam_width * 0.4 * (1.0 - ring_pos / beam_range * 0.3)
 		
 		var ring_alpha := 0.5 * intensity * (1.0 - ring_pos / beam_range * 0.5)
@@ -763,14 +734,14 @@ func _draw_energy_rings(intensity: float) -> void:
 
 func _draw_ring(center: Vector2, radius: float, color: Color, width: float) -> void:
 	var segments := 24
-	var perp := _beam_direction.orthogonal()
+	var perp := Vector2.UP
 	var prev_pt := center + perp * radius
 	
 	for i in range(1, segments + 1):
 		var angle := TAU * float(i) / float(segments)
 		# Flatten ring in beam direction
 		var local := Vector2(cos(angle) * 0.3, sin(angle)) * radius
-		var pt := center + _beam_direction * local.x + perp * local.y
+		var pt := center + Vector2.RIGHT * local.x + perp * local.y
 		draw_line(prev_pt, pt, color, width, true)
 		prev_pt = pt
 
@@ -794,12 +765,12 @@ func _draw_origin_effect(intensity: float) -> void:
 const BEAM_SOUND_PATH := "res://assets/sounds/sfx/weapons/minigun/beam.wav"
 var _beam_sound: AudioStreamPlayer2D = null
 
-@export var beam_volume_db: float = 6.0  # Default to loud (Player/Boss volume)
+@export var beam_volume_db: float = 6.0 # Default to loud (Player/Boss volume)
 
 func _start_beam_audio() -> void:
 	# Create beam sound player like MarianBeamCannon does
 	if _beam_sound != null:
-		return  # Already created
+		return # Already created
 	
 	_beam_sound = AudioStreamPlayer2D.new()
 	_beam_sound.bus = "SFX"

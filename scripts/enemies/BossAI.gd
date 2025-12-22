@@ -4,17 +4,17 @@ class_name BossAI
 ## Manages boss special attacks: tracking missiles and beam attack
 
 # Attack timing - base values (adjusted per enemy type)
-const MISSILE_COOLDOWN_BOSS := 10.0   # Bosses fire every 10s
-const MISSILE_COOLDOWN_ELITE := 20.0  # Elites fire half as often (every 20s)
-const MISSILE_COOLDOWN_TANK := 30.0   # Tanks fire rarely (every 30s)
-const BEAM_COOLDOWN := 12.0           # Seconds between beam attacks
-const ATTACK_START_DELAY := 3.0       # Delay before boss starts attacking
+const MISSILE_COOLDOWN_BOSS := 10.0 # Bosses fire every 10s
+const MISSILE_COOLDOWN_ELITE := 20.0 # Elites fire half as often (every 20s)
+const MISSILE_COOLDOWN_TANK := 30.0 # Tanks fire rarely (every 30s)
+const BEAM_COOLDOWN := 12.0 # Seconds between beam attacks
+const ATTACK_START_DELAY := 3.0 # Delay before boss starts attacking
 
 # Missile settings - adjusted per enemy type
-const MISSILES_BOSS := 4      # Bosses fire 4 missiles (2 per side)
-const MISSILES_ELITE := 1     # Elites fire 1 missile
-const MISSILES_TANK := 1      # Tanks fire 1 missile
-const MISSILE_SPAWN_OFFSET := 80.0  # Distance from boss to spawn missiles (increased for large bosses like Queen)
+const MISSILES_BOSS := 4 # Bosses fire 4 missiles (2 per side)
+const MISSILES_ELITE := 1 # Elites fire 1 missile
+const MISSILES_TANK := 1 # Tanks fire 1 missile
+const MISSILE_SPAWN_OFFSET := 80.0 # Distance from boss to spawn missiles (increased for large bosses like Queen)
 
 # Beam settings
 const BEAM_CHARGE_TIME := 2.0
@@ -56,7 +56,7 @@ func _ready() -> void:
 	
 	# Safety check: Tanks should only have BossAI in Goddess Fall mode
 	# UPDATE: Mechanics are now baseline.
-	# if _is_tank and not GameState.goddess_fall_mode:
+	# if _is_tank and not GameManager.goddess_fall_mode:
 	# 	push_warning("[BossAI] Tank has BossAI but not in Goddess Fall mode - disabling")
 	# 	queue_free()
 	# 	return
@@ -125,7 +125,7 @@ func _fire_missile_barrage() -> void:
 	
 	# Get direction to player for spawning
 	var to_player := (_player.global_position - _boss.global_position).normalized()
-	var perpendicular := Vector2(-to_player.y, to_player.x)  # 90 degree rotation
+	var perpendicular := Vector2(-to_player.y, to_player.x) # 90 degree rotation
 	
 	# Set total missiles for this barrage
 	_total_missiles_in_volley = _missiles_per_barrage

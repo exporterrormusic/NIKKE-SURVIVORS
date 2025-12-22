@@ -12,6 +12,12 @@ func setup(summon_owner: Node) -> void:
 		if summon_owner.has_method("get") and summon_owner.get("current_hp") != null:
 			_current_hp = summon_owner.current_hp
 			_max_hp = summon_owner.max_hp
+	
+	# Apply unshaded material to prevent night darkening
+	var unshaded_mat := CanvasItemMaterial.new()
+	unshaded_mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+	material = unshaded_mat
+	
 	queue_redraw()
 
 func update_values(current: int, maximum: int) -> void:

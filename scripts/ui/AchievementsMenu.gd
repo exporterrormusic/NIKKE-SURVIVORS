@@ -16,7 +16,7 @@ var _registry: CharacterRegistry = null
 # Achievement data
 var _achievements: Array[Dictionary] = []
 var _selected_filter: String = GENERAL_FILTER
-var _completion_filter: String = "ALL"  # ALL, COMPLETE, INCOMPLETE
+var _completion_filter: String = "ALL" # ALL, COMPLETE, INCOMPLETE
 var _character_entries: Array[Dictionary] = []
 
 # UI references
@@ -26,7 +26,8 @@ var _achievement_scroll: ScrollContainer = null
 var _empty_label: Label = null
 var _button_group: ButtonGroup = null
 var _filter_button_group: ButtonGroup = null
-var _filter_buttons: Dictionary = {}  # Store references to filter buttons
+var _filter_buttons: Dictionary = {} # Store references to filter buttons
+var _focus_in_content: bool = false # Track if focus is in the right panel (achievements)
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -38,13 +39,25 @@ func _ready() -> void:
 	_load_achievements()
 	_build_ui()
 	_select_filter(GENERAL_FILTER)
+	
+	# Auto-focus first character for controller
+	call_deferred("_grab_initial_focus")
 
 
 func _input(event: InputEvent) -> void:
+	if not is_visible_in_tree():
+		return
+	
 	if event.is_action_pressed("ui_cancel") and not event.is_echo():
 		get_viewport().set_input_as_handled()
 		UISounds.play_back()
-		emit_signal("back_requested")
+		
+		# Two-stage back: if in content area, go to categories first
+		if _focus_in_content:
+			_focus_in_content = false
+			_grab_initial_focus() # Go back to category sidebar
+		else:
+			back_requested.emit() # Exit to main menu
 
 
 func _load_achievements() -> void:
@@ -101,21 +114,18 @@ func _build_ui() -> void:
 	top_bar.add_child(title_label)
 	
 	# BACK Button - Sci-fi container style
-	var back_btn := _BackButtonContainer.new()
+	var back_btn := SciFiBackButton.new()
 	# back_btn.set_anchors_preset(Control.PRESET_CENTER_LEFT)
 	back_btn.position = Vector2(48, 30) # Absolute center for 136px header
 	back_btn.custom_minimum_size = Vector2(200, 75)
 	
-	back_btn.pressed.connect(func(): 
+	back_btn.pressed.connect(func():
 		UISounds.play_back()
 		back_requested.emit()
 	)
 	top_bar.add_child(back_btn)
 
 # Sci-fi styled Back Button
-
-	
-
 
 	
 	# Main content panel
@@ -168,7 +178,7 @@ func _build_ui() -> void:
 	
 	_character_list = VBoxContainer.new()
 	_character_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_character_list.add_theme_constant_override("separation", 10)  # More padding between entries
+	_character_list.add_theme_constant_override("separation", 10) # More padding between entries
 	# Add right margin so scrollbar doesn't cover content
 	var char_list_margin := MarginContainer.new()
 	char_list_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -272,8 +282,8 @@ func _create_character_entry(code: String, display_name: String, portrait: Textu
 	var button := Button.new()
 	button.toggle_mode = true
 	button.button_group = _button_group
-	button.focus_mode = Control.FOCUS_NONE
-	button.custom_minimum_size = Vector2(0, 165)  # Height for portrait
+	button.focus_mode = Control.FOCUS_ALL # Enable controller focus
+	button.custom_minimum_size = Vector2(0, 165) # Height for portrait
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_apply_character_button_styles(button)
 	
@@ -295,7 +305,7 @@ func _create_character_entry(code: String, display_name: String, portrait: Textu
 	var portrait_panel := Panel.new()
 	portrait_panel.custom_minimum_size = Vector2(150, 150)
 	portrait_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	portrait_panel.clip_contents = true  # Clip portrait to panel bounds
+	portrait_panel.clip_contents = true # Clip portrait to panel bounds
 	portrait_panel.add_theme_stylebox_override("panel", _make_portrait_style())
 	portrait_container.add_child(portrait_panel)
 	
@@ -385,7 +395,7 @@ func _create_character_entry(code: String, display_name: String, portrait: Textu
 	var count_margin := MarginContainer.new()
 	count_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	count_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	count_margin.add_theme_constant_override("margin_left", 10)  # Nudge right by 10px
+	count_margin.add_theme_constant_override("margin_left", 10) # Nudge right by 10px
 	count_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(count_margin)
 	
@@ -439,7 +449,7 @@ func _create_filter_button(parent: HBoxContainer, filter_name: String, color: Co
 	button.text = filter_name
 	button.toggle_mode = true
 	button.button_group = _filter_button_group
-	button.focus_mode = Control.FOCUS_NONE
+	button.focus_mode = Control.FOCUS_ALL # Enable controller focus
 	button.custom_minimum_size = Vector2(120, 36)
 	
 	# Style the button
@@ -495,6 +505,8 @@ func _on_completion_filter_pressed(filter_name: String) -> void:
 func _on_character_pressed(code: String) -> void:
 	UISounds.play_select()
 	_select_filter(code)
+	# Transfer focus to content area
+	call_deferred("_focus_first_content_item")
 
 
 func _select_filter(filter_code: String) -> void:
@@ -596,7 +608,7 @@ func _create_achievement_item(achievement: Dictionary) -> Control:
 	# Use Button for hover effect
 	var container := Button.new()
 	container.set_anchors_preset(Control.PRESET_FULL_RECT)
-	container.focus_mode = Control.FOCUS_NONE
+	container.focus_mode = Control.FOCUS_ALL # Enable controller focus
 	container.mouse_default_cursor_shape = Control.CURSOR_ARROW
 	_apply_achievement_button_styles(container, is_unlocked)
 	wrapper.add_child(container)
@@ -740,7 +752,7 @@ func _make_portrait_style() -> StyleBoxFlat:
 	style.bg_color = UI.ACH_PORTRAIT_BG
 	style.set_border_width_all(3)
 	style.border_color = UI.ACH_PORTRAIT_BORDER
-	style.set_corner_radius_all(8)  # Rounded corners, not circle
+	style.set_corner_radius_all(8) # Rounded corners, not circle
 	return style
 
 
@@ -771,7 +783,7 @@ func _apply_achievement_button_styles(button: Button, is_unlocked: bool) -> void
 	button.add_theme_stylebox_override("normal", _make_achievement_style(is_unlocked))
 	button.add_theme_stylebox_override("hover", _make_achievement_hover_style(is_unlocked))
 	button.add_theme_stylebox_override("pressed", _make_achievement_style(is_unlocked))
-	button.add_theme_stylebox_override("focus", _make_achievement_hover_style(is_unlocked))
+	button.add_theme_stylebox_override("focus", UI.create_button_style_focus())
 
 
 func _make_achievement_hover_style(is_unlocked: bool) -> StyleBoxFlat:
@@ -786,97 +798,36 @@ func _make_achievement_hover_style(is_unlocked: bool) -> StyleBoxFlat:
 	style.set_corner_radius_all(8)
 	return style
 
-# Sci-fi styled Back Button
-class _BackButtonContainer extends Button:
-	const UI := preload("res://scripts/ui/UITheme.gd")
-	const CONTAINER_WIDTH := 200.0  # Match PristineCoreContainer
-	const CONTAINER_HEIGHT := 75.0
-	const BORDER_THICKNESS := 3.0
-	const CORNER_CUT := 10.0
+func _focus_first_content_item() -> void:
+	# Wait for UI updates to propagate
+	if is_inside_tree():
+		await get_tree().process_frame
+		await get_tree().process_frame
 	
-	var _glow_time: float = 0.0
-	var _is_hovered: bool = false
+	# Try filter buttons first (they're always visible in content area)
+	if _filter_buttons.has("ALL"):
+		_filter_buttons["ALL"].grab_focus()
+		_focus_in_content = true
+		return
 	
-	func _init() -> void:
-		custom_minimum_size = Vector2(CONTAINER_WIDTH, CONTAINER_HEIGHT)
-		focus_mode = Control.FOCUS_NONE
-		mouse_entered.connect(func(): _is_hovered = true)
-		mouse_exited.connect(func(): _is_hovered = false)
+	# Fallback: try achievement list
+	if _achievement_list and _achievement_list.get_child_count() > 0:
+		for child in _achievement_list.get_children():
+			if child is Button and child.focus_mode != Control.FOCUS_NONE:
+				child.grab_focus()
+				_focus_in_content = true
+				return
+
+
+func _grab_initial_focus() -> void:
+	# Focus first character in sidebar (categories)
+	if not _character_entries.is_empty():
+		var first_entry := _character_entries[0]
+		var button: Button = first_entry.get("button")
+		if button:
+			button.grab_focus()
+			return
 	
-	func _ready() -> void:
-		_build_content()
-	
-	func _process(delta: float) -> void:
-		_glow_time += delta
-		if _is_hovered:
-			queue_redraw()
-	
-	func _build_content() -> void:
-		var center := CenterContainer.new()
-		center.set_anchors_preset(Control.PRESET_FULL_RECT)
-		center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		add_child(center)
-		
-		var hbox := HBoxContainer.new()
-		hbox.add_theme_constant_override("separation", 12)
-		center.add_child(hbox)
-		
-		var arrow := Label.new()
-		arrow.text = "<<"
-		arrow.add_theme_font_size_override("font_size", 32)
-		arrow.add_theme_color_override("font_color", UI.BTN_BACK_BORDER)
-		hbox.add_child(arrow)
-		
-		var label := Label.new()
-		label.text = "BACK"
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		if UI.FONT_TITLE:
-			label.add_theme_font_override("font", UI.FONT_TITLE)
-		label.add_theme_font_size_override("font_size", 36)
-		label.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
-		hbox.add_child(label)
-	
-	func _draw() -> void:
-		var w := size.x
-		var h := size.y
-		
-		# Define colors based on state
-		var bg_color := UI.BTN_BACK_BG
-		var border_color := UI.BTN_BACK_BORDER
-		
-		if _is_hovered:
-			bg_color = UI.BTN_BACK_HOVER_BG
-			border_color = UI.BTN_BACK_HOVER_BORDER
-		
-		if button_pressed:
-			bg_color = bg_color.darkened(0.2)
-		
-		# Draw background with cut corners
-		var bg_points := PackedVector2Array([
-			Vector2(CORNER_CUT, 0),
-			Vector2(w - CORNER_CUT, 0),
-			Vector2(w, CORNER_CUT),
-			Vector2(w, h - CORNER_CUT),
-			Vector2(w - CORNER_CUT, h),
-			Vector2(CORNER_CUT, h),
-			Vector2(0, h - CORNER_CUT),
-			Vector2(0, CORNER_CUT)
-		])
-		draw_colored_polygon(bg_points, bg_color)
-		
-		# Draw border
-		for i in range(bg_points.size()):
-			var p1: Vector2 = bg_points[i]
-			var p2: Vector2 = bg_points[(i + 1) % bg_points.size()]
-			draw_line(p1, p2, border_color, BORDER_THICKNESS, true)
-		
-		# Tech decoration lines
-		var line_alpha: float = 0.3
-		if _is_hovered:
-			line_alpha = 0.6 + 0.2 * sin(_glow_time * 8.0)
-		
-		var deco_color := border_color
-		deco_color.a = line_alpha
-		
-		draw_line(Vector2(CORNER_CUT + 5, 5), Vector2(CORNER_CUT + 30, 5), deco_color, 2.0)
-		draw_line(Vector2(w - CORNER_CUT - 30, h - 5), Vector2(w - CORNER_CUT - 5, h - 5), deco_color, 2.0)
+	# Fallback to filter buttons
+	if _filter_buttons.has("ALL"):
+		_filter_buttons["ALL"].grab_focus()

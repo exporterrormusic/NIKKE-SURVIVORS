@@ -34,7 +34,7 @@ const VERSION_TEXT := "v0.1B"
 @onready var _coming_soon_dialog: AcceptDialog = get_node_or_null("%ComingSoonDialog")
 
 var _buttons: Array[Button] = []
-var _selected_index: int = 3  # Default to PLAY (center button)
+var _selected_index: int = 3 # Default to PLAY (center button)
 
 func _ready() -> void:
 	_setup_title()
@@ -47,6 +47,12 @@ func _ready() -> void:
 	# to ensure signals are connected and navigation works
 	if MenuManager and get_tree().current_scene == self:
 		call_deferred("_register_with_manager")
+	
+	# Auto-focus the default button (PLAY) for controller support
+	call_deferred("_grab_initial_focus")
+	
+	# Restore focus when becoming visible (e.g., returning from another menu)
+	visibility_changed.connect(_on_visibility_changed)
 
 func _register_with_manager() -> void:
 	MenuManager.register_root_main_menu(self)
@@ -56,7 +62,7 @@ func _setup_title() -> void:
 	print("[MainMenu] Setting up title...")
 	
 	# Attempt to load logo
-	var logo_path = "res://assets/ui/logo.png"
+	var logo_path = ScenePaths.LOGO
 	if not ResourceLoader.exists(logo_path):
 		print("[MainMenu] ERROR: Logo file not found at ", logo_path)
 		return
@@ -94,7 +100,7 @@ func _setup_title() -> void:
 
 func _setup_patch_notes() -> void:
 	"""Create a patch notes box directly beneath the logo."""
-	var patch_path := "res://patch.txt"
+	var patch_path := ScenePaths.PATCH_NOTES
 	
 	# Try to load patch notes
 	var patch_text := ""
@@ -125,11 +131,11 @@ func _setup_patch_notes() -> void:
 	
 	# Style the panel
 	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.05, 0.05, 0.1, 0.9)  # Dark translucent
+	panel_style.bg_color = Color(0.05, 0.05, 0.1, 0.9) # Dark translucent
 	panel_style.border_color = UI.ACCENT_PRIMARY
 	panel_style.set_border_width_all(2)
 	panel_style.set_corner_radius_all(10)
-	panel_style.set_content_margin_all(16)  # More padding
+	panel_style.set_content_margin_all(16) # More padding
 	panel.add_theme_stylebox_override("panel", panel_style)
 	
 	# VBox for title and content
@@ -141,7 +147,7 @@ func _setup_patch_notes() -> void:
 	var title := Label.new()
 	title.text = "PATCH NOTES"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 20)  # Larger title
+	title.add_theme_font_size_override("font_size", 20) # Larger title
 	title.add_theme_color_override("font_color", UI.ACCENT_SECONDARY)
 	vbox.add_child(title)
 	
@@ -159,7 +165,7 @@ func _setup_patch_notes() -> void:
 	
 	var content := Label.new()
 	content.text = patch_text
-	content.add_theme_font_size_override("font_size", 16)  # Larger text
+	content.add_theme_font_size_override("font_size", 16) # Larger text
 	content.add_theme_color_override("font_color", UI.TEXT_SECONDARY)
 	content.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -180,14 +186,14 @@ func _position_patch_notes_panel(panel: PanelContainer) -> void:
 	
 	# Get logo position and size
 	var panel_width := 400
-	var top_position := 260  # Default: Below logo (50 + 200 + 10px gap)
-	var logo_center_x: float = size.x / 2  # Default to screen center
+	var top_position := 260 # Default: Below logo (50 + 200 + 10px gap)
+	var logo_center_x: float = size.x / 2 # Default to screen center
 	
 	if logo:
 		# Get logo's center position
 		var logo_rect: Rect2 = logo.get_global_rect()
 		logo_center_x = logo_rect.position.x + logo_rect.size.x / 2
-		top_position = int(logo_rect.position.y + logo_rect.size.y + 10)  # 10px below logo
+		top_position = int(logo_rect.position.y + logo_rect.size.y + 10) # 10px below logo
 	
 	# Menu bar is at bottom - 279, so leave margin above it
 	var bottom_margin := 300
@@ -217,6 +223,10 @@ func _setup_buttons() -> void:
 				print("[MainMenu] Connected pressed signal for: ", button_name)
 			if not button.mouse_entered.is_connected(_on_button_hovered.bind(_buttons.size() - 1)):
 				button.mouse_entered.connect(_on_button_hovered.bind(_buttons.size() - 1))
+			
+			# Connect controller focus signals to sync selection state
+			if not button.focus_entered.is_connected(_on_button_hovered.bind(_buttons.size() - 1)):
+				button.focus_entered.connect(_on_button_hovered.bind(_buttons.size() - 1))
 		else:
 			print("[MainMenu] Button NOT found: ", button_name)
 	
@@ -229,15 +239,20 @@ func _connect_signals() -> void:
 
 
 func _on_button_pressed(option_id: String) -> void:
+	# Prevent re-triggering if we just closed a dialog
+	if _input_consumed_this_frame:
+		_input_consumed_this_frame = false
+		return
+	
 	print("[MainMenu] Button pressed: ", option_id)
 	# Play appropriate sound
 	match option_id:
 		"PLAY":
-			UISounds.play_select()
+			AudioManager.play_ui_select()
 		"QUIT":
-			UISounds.play_back()
+			AudioManager.play_ui_back()
 		_:
-			UISounds.play_select()
+			AudioManager.play_ui_select()
 	
 	match option_id:
 		"PLAY":
@@ -279,7 +294,10 @@ func _update_selection() -> void:
 
 
 var _quit_dialog: Control = null
+var _quit_cancel_btn: Button = null
+
 var _outpost_dialog: Control = null
+var _input_consumed_this_frame: bool = false
 
 func _unhandled_input(event: InputEvent) -> void:
 	# If outpost dialog is open, handle its input first
@@ -287,6 +305,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.is_action_pressed("ui_cancel") or event.is_action_pressed("ui_accept"):
 			_hide_outpost_dialog()
 			get_viewport().set_input_as_handled()
+			# CRITICAL: Prevent this same input from triggering anything else this frame
+			set_deferred("_input_consumed_this_frame", true)
 		return
 	
 	# If quit dialog is open, handle its input first
@@ -296,26 +316,22 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		return
 	
+	# Only handle ui_cancel for quit confirmation on main menu
+	# DO NOT handle ui_accept or ui_left/right here - buttons handle those via focus system
 	if event.is_action_pressed("ui_cancel"):
-		# On main menu, Escape shows quit confirmation
+		# On main menu, Escape/B shows quit confirmation
 		_show_quit_confirmation()
-		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("ui_left"):
-		_move_selection(-1)
-		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("ui_right"):
-		_move_selection(1)
-		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("ui_accept"):
-		_activate_current()
 		get_viewport().set_input_as_handled()
 
 
 func _show_quit_confirmation() -> void:
-	UISounds.play_back()
+	AudioManager.play_ui_back()
 	if _quit_dialog:
 		_quit_dialog.visible = true
+		if _quit_cancel_btn:
+			_quit_cancel_btn.grab_focus.call_deferred()
 		return
+
 	
 	# Create overlay
 	_quit_dialog = Control.new()
@@ -327,7 +343,7 @@ func _show_quit_confirmation() -> void:
 	var overlay := ColorRect.new()
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	overlay.color = UI.BG_OVERLAY
-	overlay.gui_input.connect(func(event): 
+	overlay.gui_input.connect(func(event):
 		if event is InputEventMouseButton and event.pressed:
 			_hide_quit_dialog()
 	)
@@ -383,6 +399,11 @@ func _show_quit_confirmation() -> void:
 	var cancel_btn := _create_dialog_button("CANCEL", false)
 	cancel_btn.pressed.connect(_hide_quit_dialog)
 	btn_row.add_child(cancel_btn)
+	_quit_cancel_btn = cancel_btn
+	
+	# Initial focus
+	cancel_btn.grab_focus.call_deferred()
+
 	
 	# Quit button
 	var quit_btn := _create_dialog_button("QUIT", true)
@@ -424,9 +445,10 @@ func _create_dialog_button(text: String, is_danger: bool) -> Button:
 
 
 func _hide_quit_dialog() -> void:
-	UISounds.play_back()
+	AudioManager.play_ui_back()
 	if _quit_dialog:
 		_quit_dialog.visible = false
+		call_deferred("_grab_initial_focus")
 
 
 func _move_selection(direction: int) -> void:
@@ -463,7 +485,7 @@ func _show_outpost_coming_soon() -> void:
 	var overlay := ColorRect.new()
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	overlay.color = UI.BG_OVERLAY
-	overlay.gui_input.connect(func(event): 
+	overlay.gui_input.connect(func(event):
 		if event is InputEventMouseButton and event.pressed:
 			_hide_outpost_dialog()
 	)
@@ -528,7 +550,7 @@ func _show_outpost_coming_soon() -> void:
 
 
 func _hide_outpost_dialog() -> void:
-	UISounds.play_back()
+	AudioManager.play_ui_back()
 	if _outpost_dialog:
 		_outpost_dialog.visible = false
 
@@ -537,17 +559,17 @@ func _hide_outpost_dialog() -> void:
 
 func _debug_unlock_all() -> void:
 	## Debug: Unlock all stages (F3)
-	if not GameState:
-		print("[DEBUG] GameState not available")
+	if not GameManager:
+		print("[DEBUG] GameManager not available")
 		return
 	
 	# Unlock all stages
 	for stage in StageRegistry.STAGES:
 		var stage_id: String = stage["id"]
-		if stage_id not in GameState.stages_cleared:
-			GameState.stages_cleared.append(stage_id)
+		if stage_id not in GameManager.stages_cleared:
+			GameManager.stages_cleared.append(stage_id)
 	
-	GameState._save_stage_progress()
+	GameManager.save_game()
 	
 	# Show feedback
 	print("[DEBUG] All stages unlocked!")
@@ -572,3 +594,16 @@ func _show_debug_notification(text: String) -> void:
 	var tween := create_tween()
 	tween.tween_property(label, "modulate:a", 0.0, 1.5).set_delay(1.0)
 	tween.tween_callback(label.queue_free)
+
+
+func _grab_initial_focus() -> void:
+	if _buttons.size() > _selected_index and _selected_index >= 0:
+		_buttons[_selected_index].grab_focus()
+	elif not _buttons.is_empty():
+		_buttons[0].grab_focus()
+
+
+func _on_visibility_changed() -> void:
+	if is_visible_in_tree():
+		# Small delay to ensure everything is set up
+		call_deferred("_grab_initial_focus")

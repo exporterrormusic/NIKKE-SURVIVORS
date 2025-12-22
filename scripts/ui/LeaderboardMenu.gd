@@ -20,7 +20,7 @@ const ENTRIES_PER_COLUMN := 5
 # Detail popup for showing run stats
 var _detail_popup: Control = null
 var _detail_stats_panel: Node = null
-var _entries_cache: Array = []  # Cache for entry data
+var _entries_cache: Array = [] # Cache for entry data
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -32,12 +32,12 @@ func _ready() -> void:
 	# Setup Back Button
 	var top_bar = get_node_or_null("TopBar")
 	if top_bar:
-		var back_btn := _BackButtonContainer.new()
+		var back_btn := SciFiBackButton.new()
 		# back_btn.set_anchors_preset(Control.PRESET_CENTER_LEFT)
 		back_btn.position = Vector2(48, 42) # Absolute center for 160px header
 		back_btn.custom_minimum_size = Vector2(200, 75)
 		
-		back_btn.pressed.connect(func(): 
+		back_btn.pressed.connect(func():
 			UISounds.play_back()
 			back_requested.emit()
 		)
@@ -46,103 +46,35 @@ func _ready() -> void:
 	_update_static_labels()
 	_refresh_entries()
 	_build_detail_popup()
+	
+	# Auto-focus first entry or back button
+	call_deferred("_grab_initial_focus")
+
+
+## Auto-focus first entry or back button
+func _grab_initial_focus() -> void:
+	# Try left column first
+	if _left_column and _left_column.get_child_count() > 0:
+		var entry = _left_column.get_child(0)
+		# Entry wrapper contains a Panel child which is the focusable one
+		if entry is MarginContainer and entry.get_child_count() > 0:
+			var panel = entry.get_child(0)
+			if panel is Panel:
+				panel.grab_focus()
+				return
+	
+	# Fallback to back button logic if we can find it, 
+	# but back button is created in _build_content inside the inner class? 
+	# No, back_btn is added to top_bar in _ready.
+	var top_bar = get_node_or_null("TopBar")
+	if top_bar:
+		for child in top_bar.get_children():
+			if child is Button:
+				child.grab_focus()
+				return
 
 
 # Sci-fi styled Back Button
-class _BackButtonContainer extends Button:
-	const UI := preload("res://scripts/ui/UITheme.gd")
-	const CONTAINER_WIDTH := 200.0  # Match PristineCoreContainer
-	const CONTAINER_HEIGHT := 75.0
-	const BORDER_THICKNESS := 3.0
-	const CORNER_CUT := 10.0
-	
-	var _glow_time: float = 0.0
-	var _is_hovered: bool = false
-	
-	func _init() -> void:
-		custom_minimum_size = Vector2(CONTAINER_WIDTH, CONTAINER_HEIGHT)
-		focus_mode = Control.FOCUS_NONE
-		mouse_entered.connect(func(): _is_hovered = true)
-		mouse_exited.connect(func(): _is_hovered = false)
-	
-	func _ready() -> void:
-		_build_content()
-	
-	func _process(delta: float) -> void:
-		_glow_time += delta
-		if _is_hovered:
-			queue_redraw()
-	
-	func _build_content() -> void:
-		var center := CenterContainer.new()
-		center.set_anchors_preset(Control.PRESET_FULL_RECT)
-		center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		add_child(center)
-		
-		var hbox := HBoxContainer.new()
-		hbox.add_theme_constant_override("separation", 12)
-		center.add_child(hbox)
-		
-		var arrow := Label.new()
-		arrow.text = "<<"
-		arrow.add_theme_font_size_override("font_size", 32)
-		arrow.add_theme_color_override("font_color", UI.BTN_BACK_BORDER)
-		hbox.add_child(arrow)
-		
-		var label := Label.new()
-		label.text = "BACK"
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		if UI.FONT_TITLE:
-			label.add_theme_font_override("font", UI.FONT_TITLE)
-		label.add_theme_font_size_override("font_size", 36)
-		label.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
-		hbox.add_child(label)
-	
-	func _draw() -> void:
-		var w := size.x
-		var h := size.y
-		
-		# Define colors based on state
-		var bg_color := UI.BTN_BACK_BG
-		var border_color := UI.BTN_BACK_BORDER
-		
-		if _is_hovered:
-			bg_color = UI.BTN_BACK_HOVER_BG
-			border_color = UI.BTN_BACK_HOVER_BORDER
-		
-		if button_pressed:
-			bg_color = bg_color.darkened(0.2)
-		
-		# Draw background with cut corners
-		var bg_points := PackedVector2Array([
-			Vector2(CORNER_CUT, 0),
-			Vector2(w - CORNER_CUT, 0),
-			Vector2(w, CORNER_CUT),
-			Vector2(w, h - CORNER_CUT),
-			Vector2(w - CORNER_CUT, h),
-			Vector2(CORNER_CUT, h),
-			Vector2(0, h - CORNER_CUT),
-			Vector2(0, CORNER_CUT)
-		])
-		draw_colored_polygon(bg_points, bg_color)
-		
-		# Draw border
-		for i in range(bg_points.size()):
-			var p1: Vector2 = bg_points[i]
-			var p2: Vector2 = bg_points[(i + 1) % bg_points.size()]
-			draw_line(p1, p2, border_color, BORDER_THICKNESS, true)
-		
-		# Tech decoration lines
-		var line_alpha: float = 0.3
-		if _is_hovered:
-			line_alpha = 0.6 + 0.2 * sin(_glow_time * 8.0)
-		
-		var deco_color := border_color
-		deco_color.a = line_alpha
-		
-		draw_line(Vector2(CORNER_CUT + 5, 5), Vector2(CORNER_CUT + 30, 5), deco_color, 2.0)
-		draw_line(Vector2(w - CORNER_CUT - 30, h - 5), Vector2(w - CORNER_CUT - 5, h - 5), deco_color, 2.0)
-
 
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel") and not event.is_echo():
@@ -178,9 +110,9 @@ func _update_static_labels() -> void:
 func _refresh_entries() -> void:
 	_clear_columns()
 	
-	# Get leaderboard data from GameState
+	# Get leaderboard data from GameManager
 	var entries: Array = _get_leaderboard_entries()
-	_entries_cache = entries.duplicate()  # Cache for click handling
+	_entries_cache = entries.duplicate() # Cache for click handling
 	
 	_update_total_score_label()
 	
@@ -216,11 +148,11 @@ func _refresh_entries() -> void:
 
 
 func _get_leaderboard_entries() -> Array:
-	# Get leaderboard data from GameState
+	# Get leaderboard data from GameManager
 	var entries: Array = []
 	
-	if GameState and GameState.has_method("get_leaderboard_entries"):
-		entries = GameState.get_leaderboard_entries(MAX_VISIBLE_ENTRIES)
+	if GameManager and GameManager.has_method("get_leaderboard_entries"):
+		entries = GameManager.get_leaderboard_entries(MAX_VISIBLE_ENTRIES)
 	
 	return entries
 
@@ -230,15 +162,15 @@ func _update_total_score_label() -> void:
 		return
 	
 	var total_score := 0
-	if GameState and GameState.has_method("get_total_score"):
-		total_score = GameState.get_total_score()
+	if GameManager and GameManager.has_method("get_total_score"):
+		total_score = GameManager.get_total_score()
 	
 	_total_score_label.text = "Total Score: %s" % _format_number(total_score)
 
 
 func _format_number(value: int) -> String:
 	# Abbreviate large numbers with 3 significant digits: 102K, 11.3M, 1.23B, etc.
-	if value >= 1000000000:  # Billions
+	if value >= 1000000000: # Billions
 		var billions := float(value) / 1000000000.0
 		if billions >= 100:
 			return "%dB" % int(billions)
@@ -246,7 +178,7 @@ func _format_number(value: int) -> String:
 			return "%.1fB" % billions
 		else:
 			return "%.2fB" % billions
-	elif value >= 1000000:  # Millions
+	elif value >= 1000000: # Millions
 		var millions := float(value) / 1000000.0
 		if millions >= 100:
 			return "%dM" % int(millions)
@@ -254,7 +186,7 @@ func _format_number(value: int) -> String:
 			return "%.1fM" % millions
 		else:
 			return "%.2fM" % millions
-	elif value >= 1000:  # Thousands
+	elif value >= 1000: # Thousands
 		var thousands := float(value) / 1000.0
 		if thousands >= 100:
 			return "%dK" % int(thousands)
@@ -297,25 +229,47 @@ func _create_entry_control(entry: Dictionary, rank: int, is_left_column: bool = 
 	wrapper.add_theme_constant_override("margin_top", 10)
 	wrapper.add_theme_constant_override("margin_bottom", 10)
 	
-	var panel := Panel.new()
+	# Use Button instead of Panel for proper focus/hover visualization
+	var panel := Button.new()
 	panel.custom_minimum_size = Vector2(0, 120)
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.mouse_filter = Control.MOUSE_FILTER_STOP  # Make clickable
-	panel.add_theme_stylebox_override("panel", _make_entry_stylebox(rank == 1))
+	panel.focus_mode = Control.FOCUS_ALL
+	panel.flat = false
+	
+	# Normal style
+	var normal_style := _make_entry_stylebox(rank == 1)
+	panel.add_theme_stylebox_override("normal", normal_style)
+	
+	# Hover style - brighten background
+	var hover_style := normal_style.duplicate()
+	hover_style.bg_color = hover_style.bg_color.lightened(0.15)
+	hover_style.border_color = UI.ACCENT_SECONDARY
+	panel.add_theme_stylebox_override("hover", hover_style)
+	
+	# Focus style - visible border for controller
+	var focus_style := normal_style.duplicate()
+	focus_style.bg_color = focus_style.bg_color.lightened(0.2)
+	focus_style.border_color = UI.ACCENT_PRIMARY
+	focus_style.set_border_width_all(4)
+	panel.add_theme_stylebox_override("focus", focus_style)
+	
+	# Pressed style
+	var pressed_style := normal_style.duplicate()
+	pressed_style.bg_color = pressed_style.bg_color.darkened(0.1)
+	panel.add_theme_stylebox_override("pressed", pressed_style)
+	
 	wrapper.add_child(panel)
 	
-	# Make entry clickable
+	# Connect click
 	if entry_index >= 0:
-		panel.gui_input.connect(func(event: InputEvent):
-			if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-				_on_entry_clicked(entry_index)
-		)
+		panel.pressed.connect(_on_entry_clicked.bind(entry_index))
 	
 	var layout := HBoxContainer.new()
 	layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	layout.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	layout.add_theme_constant_override("separation", 0)
 	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layout.mouse_filter = Control.MOUSE_FILTER_IGNORE # Let button handle input
 	panel.add_child(layout)
 	
 	# Rank block
@@ -351,6 +305,7 @@ func _create_rank_block(rank: int) -> Control:
 	container.add_theme_constant_override("margin_left", 12)
 	container.add_theme_constant_override("margin_right", 8)
 	container.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	
 	var label := Label.new()
 	label.text = "#%d" % rank
@@ -365,6 +320,7 @@ func _create_rank_block(rank: int) -> Control:
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	label.modulate = UI.RANK_GOLD if rank <= 3 else UI.TEXT_PRIMARY
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	container.add_child(label)
 	
 	return container
@@ -377,6 +333,7 @@ func _create_portrait_block(entry: Dictionary) -> Control:
 	container.add_theme_constant_override("margin_bottom", 10)
 	container.add_theme_constant_override("margin_left", 8)
 	container.add_theme_constant_override("margin_right", 8)
+	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	
 	var panel := Panel.new()
 	panel.custom_minimum_size = Vector2(96, 96)
@@ -417,6 +374,7 @@ func _create_name_block(entry: Dictionary) -> Control:
 	wrapper.custom_minimum_size = Vector2(200, 0)
 	wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	wrapper.size_flags_stretch_ratio = 2.0
+	wrapper.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	
 	var name_label := Label.new()
 	var display_name: String = String(entry.get("display_name", ""))
@@ -452,6 +410,7 @@ func _create_score_block(entry: Dictionary) -> Control:
 	wrapper.add_theme_constant_override("margin_top", 12)
 	wrapper.add_theme_constant_override("margin_bottom", 12)
 	wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wrapper.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	
 	var container := VBoxContainer.new()
 	container.add_theme_constant_override("separation", 4)
@@ -481,7 +440,7 @@ func _create_score_block(entry: Dictionary) -> Control:
 	value_label.add_theme_font_size_override("font_size", 40)
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	value_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	value_label.mouse_filter = Control.MOUSE_FILTER_PASS  # Enable tooltip
+	value_label.mouse_filter = Control.MOUSE_FILTER_PASS # Enable tooltip
 	container.add_child(value_label)
 	
 	return wrapper
@@ -495,6 +454,7 @@ func _create_wave_block(entry: Dictionary) -> Control:
 	wrapper.add_theme_constant_override("margin_top", 12)
 	wrapper.add_theme_constant_override("margin_bottom", 12)
 	wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wrapper.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	
 	var container := VBoxContainer.new()
 	container.add_theme_constant_override("separation", 4)
@@ -531,16 +491,16 @@ func _create_wave_block(entry: Dictionary) -> Control:
 		value_label.text = "--"
 		value_label.modulate = UI.TEXT_MUTED
 	value_label.add_theme_font_override("font", UI.FONT_TITLE)
-	value_label.add_theme_font_size_override("font_size", 40)  # Same as score
+	value_label.add_theme_font_size_override("font_size", 40) # Same as score
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	value_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	value_label.mouse_filter = Control.MOUSE_FILTER_PASS  # Enable tooltip
+	value_label.mouse_filter = Control.MOUSE_FILTER_PASS # Enable tooltip
 	value_hbox.add_child(value_label)
 	
 # Add wing badge for Goddess Fall runs
 	if goddess_fall and best_wave > 0:
 		var wing_label := Label.new()
-		wing_label.text = "🫅"  # Wing emoji for Goddess Fall
+		wing_label.text = "🫅" # Wing emoji for Goddess Fall
 		wing_label.add_theme_font_size_override("font_size", 28)
 		wing_label.tooltip_text = "Goddess Fall"
 		wing_label.modulate = UI.RANK_GOLD_TINT

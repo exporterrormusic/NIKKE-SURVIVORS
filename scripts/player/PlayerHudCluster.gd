@@ -38,8 +38,8 @@ signal stamina_fill_finished
 @export var low_health_color: Color = Color(1.0, 0.4, 0.4, 1.0)
 @export var burst_ready_badge_color: Color = Color(1.0, 0.85, 0.25, 1.0)
 @export var burst_ready_text_color: Color = Color(0.1, 0.1, 0.1, 1.0)
-@export var burst_locked_bar_color: Color = Color(0.35, 0.35, 0.4, 0.6)  # Greyed out fill
-@export var burst_locked_badge_color: Color = Color(0.4, 0.4, 0.45, 0.8)  # Greyed out badge
+@export var burst_locked_bar_color: Color = Color(0.35, 0.35, 0.4, 0.6) # Greyed out fill
+@export var burst_locked_badge_color: Color = Color(0.4, 0.4, 0.45, 0.8) # Greyed out badge
 
 @onready var _outer_frame: Panel = %OuterFrame
 @onready var _portrait_slot: Control = %PortraitShake
@@ -76,11 +76,11 @@ var _current_burst: float = 0.0
 var _max_stamina: float = 100.0
 var _current_stamina: float = 100.0
 var _burst_ready_state: bool = false
-var _burst_unlocked: bool = false  # Whether burst ability is unlocked
+var _burst_unlocked: bool = false # Whether burst ability is unlocked
 
-# Character portraits - dynamically loaded from GameState/CharacterRegistry
+# Character portraits - dynamically loaded from GameManager/CharacterRegistry
 var _character_portraits: Array[String] = []
-var _portrait_indices: Array[int] = []  # Map slot index to registry index
+var _portrait_indices: Array[int] = [] # Map slot index to registry index
 
 func _ready() -> void:
 	_load_character_portraits()
@@ -98,20 +98,17 @@ func _ready() -> void:
 	set_character(0)
 
 func _load_character_portraits() -> void:
-	# Load portraits from GameState's selected characters
+	# Load portraits from GameManager's selected characters
 	# Order: [Main, Support1, Support2] - same as selected_character_indices
 	_character_portraits.clear()
 	_portrait_indices.clear()
 	
-	# Try to get from GameState autoload
-	var game_state = Engine.get_singleton("GameState") if Engine.has_singleton("GameState") else null
-	if not game_state:
-		# Try loading via get_node
-		game_state = get_node_or_null("/root/GameState")
+	# Try to get from GameManager autoloadas
+	var game_manager = get_node_or_null("/root/GameManager")
 	
-	if game_state:
+	if game_manager:
 		# Use selected_character_indices directly (Main, Support1, Support2 order)
-		var selected: Array[int] = game_state.selected_character_indices.duplicate()
+		var selected: Array[int] = game_manager.selected_character_indices.duplicate()
 		_portrait_indices = selected.duplicate()
 		
 		# Get CharacterRegistry to map indices to portrait paths
@@ -178,7 +175,7 @@ func set_character(character_slot: int, burst_unlocked: bool = true) -> void:
 		_load_character_portraits()
 	
 	if _character_portraits.is_empty():
-		return  # Still empty, can't set portrait
+		return # Still empty, can't set portrait
 	
 	# character_slot is the slot in the squad (0=Main, 1=Support1, 2=Support2)
 	# _character_portraits is in the same order, so use directly
@@ -216,20 +213,20 @@ func _apply_burst_locked_style() -> void:
 		# Normal active style - restore yellow badge and bar
 		_burst_bar.add_theme_stylebox_override("fill", _create_bar_fill(burst_bar_color))
 		_burst_bar.modulate = Color.WHITE
-		_style_badge(_burst_badge, burst_badge_background)  # Yellow badge
-		_burst_badge.modulate = Color.WHITE  # Reset modulate
+		_style_badge(_burst_badge, burst_badge_background) # Yellow badge
+		_burst_badge.modulate = Color.WHITE # Reset modulate
 		if _burst_badge_label:
 			_burst_badge_label.text = "BURST"
-			_burst_badge_label.modulate = burst_badge_text_color  # White text
+			_burst_badge_label.modulate = burst_badge_text_color # White text
 	else:
 		# Greyed out locked style - grey badge and bar
 		_burst_bar.add_theme_stylebox_override("fill", _create_bar_fill(burst_locked_bar_color))
 		_burst_bar.modulate = Color(0.6, 0.6, 0.65, 1.0)
-		_style_badge(_burst_badge, burst_locked_badge_color)  # Grey badge
-		_burst_badge.modulate = Color(0.7, 0.7, 0.75, 1.0)  # Grey modulate on badge
+		_style_badge(_burst_badge, burst_locked_badge_color) # Grey badge
+		_burst_badge.modulate = Color(0.7, 0.7, 0.75, 1.0) # Grey modulate on badge
 		if _burst_badge_label:
-			_burst_badge_label.text = "BURST"  # Show BURST even when locked
-			_burst_badge_label.modulate = Color(0.85, 0.85, 0.9, 1.0)  # Lighter grey text
+			_burst_badge_label.text = "BURST" # Show BURST even when locked
+			_burst_badge_label.modulate = Color(0.85, 0.85, 0.9, 1.0) # Lighter grey text
 
 func configure(current_health: int, max_health: int, burst_current: float = 0.0, burst_max: float = 1.0, stamina_current: float = 100.0, stamina_max: float = 100.0) -> void:
 	_max_health = maxi(1, max_health)
@@ -525,4 +522,3 @@ func _trigger_damage_shake() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_THEME_CHANGED and auto_apply_styles:
 		_apply_styles()
-

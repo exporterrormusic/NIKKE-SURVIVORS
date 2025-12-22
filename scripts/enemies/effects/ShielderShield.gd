@@ -135,7 +135,13 @@ func _handle_projectile_hit(projectile: Node2D) -> void:
 	# Check if Chrono-Intangibility upgrade allows player projectiles to pass through
 	# This must be checked before we destroy the projectile
 	if projectile.is_in_group("player_projectiles") or projectile.is_in_group("projectiles"):
-		if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility"):
+		var player = get_tree().get_first_node_in_group("player")
+		var has_upgrade = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility")
+		var in_squad = false
+		if player and player.has_method("is_character_in_squad"):
+			in_squad = player.is_character_in_squad("wells") or player.is_character_in_squad("Wells")
+			
+		if has_upgrade and in_squad:
 			# Player projectile phases completely through - no shield damage, no projectile destruction
 			return
 		

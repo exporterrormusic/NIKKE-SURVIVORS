@@ -31,13 +31,15 @@ var _smg_bullet_scene: PackedScene = null
 
 # Container for inactive pooled objects
 var _pool_container: Node = null
+var _damage_layer_override: CanvasLayer = null
 
+func set_damage_layer(layer: CanvasLayer) -> void:
+	_damage_layer_override = layer
 
 func _get_smg_bullet_scene() -> PackedScene:
 	if _smg_bullet_scene == null:
 		_smg_bullet_scene = load("res://scenes/effects/SMGBullet.tscn")
 	return _smg_bullet_scene
-
 
 static func get_instance() -> EffectPool:
 	# If we are quitting, don't create new instance
@@ -54,23 +56,44 @@ static func get_instance() -> EffectPool:
 				root.call_deferred("add_child", _instance)
 	return _instance
 
-
 func _ready() -> void:
 	# Create container for pooled objects
 	_pool_container = Node.new()
 	_pool_container.name = "PooledEffects"
 	add_child(_pool_container)
 	
-	# Pre-warm pools
-	_prewarm_damage_numbers()
-	_prewarm_hit_sparks()
-	_prewarm_smg_bullets()
+	# Pre-warm pools asynchronously to prevent frame freeze
+	_perform_prewarm.call_deferred()
+
+func _exit_tree() -> void:
+	# Clear static instance to prevent RID leaks on restart
+	if _instance == self:
+		_instance = null
+	
+	# Clear pool arrays (children will be freed by tree cleanup)
+	_damage_number_pool.clear()
+	_hit_spark_pool.clear()
+	_smg_bullet_pool.clear()
+	print("[EffectPool] Cleanup complete")
+
+func _perform_prewarm() -> void:
+	if not is_inside_tree():
+		return
+		
+	# Spread instantiation over multiple frames
+	await _prewarm_damage_numbers_async()
+	await get_tree().process_frame
+	
+	await _prewarm_hit_sparks_async()
+	await get_tree().process_frame
+	
+	await _prewarm_smg_bullets_async()
+	
 	print("[EffectPool] Initialized: %d damage#, %d sparks, %d SMG bullets" % [
 		DAMAGE_NUMBER_POOL_SIZE, HIT_SPARK_POOL_SIZE, SMG_BULLET_POOL_SIZE
 	])
 
-
-func _prewarm_damage_numbers() -> void:
+func _prewarm_damage_numbers_async() -> void:
 	for i in range(DAMAGE_NUMBER_POOL_SIZE):
 		var num := FloatingDamageNumber.new()
 		num.visible = false
@@ -78,8 +101,7 @@ func _prewarm_damage_numbers() -> void:
 		_pool_container.add_child(num)
 		_damage_number_pool.append(num)
 
-
-func _prewarm_hit_sparks() -> void:
+func _prewarm_hit_sparks_async() -> void:
 	for i in range(HIT_SPARK_POOL_SIZE):
 		var spark := HitSpark.new()
 		spark.visible = false
@@ -87,8 +109,7 @@ func _prewarm_hit_sparks() -> void:
 		_pool_container.add_child(spark)
 		_hit_spark_pool.append(spark)
 
-
-func _prewarm_smg_bullets() -> void:
+func _prewarm_smg_bullets_async() -> void:
 	var scene := _get_smg_bullet_scene()
 	for i in range(SMG_BULLET_POOL_SIZE):
 		var bullet = scene.instantiate()
@@ -99,7 +120,6 @@ func _prewarm_smg_bullets() -> void:
 		_pool_container.add_child(bullet)
 		_smg_bullet_pool.append(bullet)
 
-
 # =============================================================================
 # DAMAGE NUMBERS
 # =============================================================================
@@ -107,28 +127,34 @@ func _prewarm_smg_bullets() -> void:
 func spawn_damage_number(parent: Node, pos: Vector2, value: int, type: FloatingDamageNumber.NumberType = FloatingDamageNumber.NumberType.DAMAGE) -> FloatingDamageNumber:
 	var num: FloatingDamageNumber = _get_pooled_damage_number()
 	
+	# Determine actual parent (override takes precedence to avoid night tint)
+	var target_parent = parent
+	if _damage_layer_override and is_instance_valid(_damage_layer_override):
+		target_parent = _damage_layer_override
+	
 	if num == null:
 		# Pool exhausted, create new (will be freed normally)
 		num = FloatingDamageNumber.new()
 		num.setup(value, type)
 		num.global_position = pos
-		parent.add_child(num)
+		target_parent.add_child(num)
 		return num
 	
 	# Reset and configure pooled number
 	_reset_damage_number(num, value, type, pos)
 	
 	# Reparent to target parent
-	if num.get_parent() != parent:
-		num.get_parent().remove_child(num)
-		parent.add_child(num)
+	if num.get_parent() != target_parent:
+		if num.get_parent():
+			num.get_parent().remove_child(num)
+		target_parent.add_child(num)
 	
 	return num
 
 
 func _get_pooled_damage_number() -> FloatingDamageNumber:
 	for num in _damage_number_pool:
-		if not num.visible:
+		if is_instance_valid(num) and not num.visible:
 			return num
 	return null
 
@@ -185,7 +211,7 @@ func spawn_hit_spark(parent: Node, pos: Vector2, type: HitSpark.SparkType = HitS
 
 func _get_pooled_hit_spark() -> HitSpark:
 	for spark in _hit_spark_pool:
-		if not spark.visible:
+		if is_instance_valid(spark) and not spark.visible:
 			return spark
 	return null
 
@@ -252,7 +278,7 @@ func spawn_smg_bullet(parent: Node, pos: Vector2, velocity: Vector2, damage: int
 
 func _get_pooled_smg_bullet() -> Node:
 	for bullet in _smg_bullet_pool:
-		if not bullet.visible:
+		if is_instance_valid(bullet) and not bullet.visible:
 			return bullet
 	return null
 

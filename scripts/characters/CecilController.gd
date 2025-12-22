@@ -1,8 +1,11 @@
 extends "res://scripts/characters/CharacterController.gd"
 class_name CecilController
-## Cecil - SMG with drone robots that switch between hunt/shield modes
-## Special: Toggle drones between Hunt (seek & attack) and Shield (protect Cecil) modes
-## Burst: Freeze all enemies, hack non-elite/boss to fight for player
+## Cecil - SMG
+# Special: Repair Drone
+# Burst: "Three Wishes"
+
+func get_is_automatic() -> bool:
+	return true
 
 # Preload scripts
 const CecilDroneScript = preload("res://scripts/characters/effects/CecilDrone.gd")
@@ -12,24 +15,24 @@ const CecilShieldScript = preload("res://scripts/characters/effects/CecilShield.
 var bullet_speed: float = 900.0
 
 # Drone state
-var _drones: Array = []  # Two CecilDrone instances
-var _drone_mode: String = "hunt"  # "hunt" or "shield"
+var _drones: Array = [] # Two CecilDrone instances
+var _drone_mode: String = "hunt" # "hunt" or "shield"
 const DRONE_COUNT := 2
 
 # Shield reference
 var _shield: Node2D = null
 
 # Upgrade levels
-var drone_upgrade_level: int = 0  # 0-3: each level = +50% speed/damage (50/100/200%)
-var shield_upgrade_level: int = 0  # 0-3: each level = +1 hit absorbed
+var drone_upgrade_level: int = 0 # 0-3: each level = +50% speed/damage (50/100/200%)
+var shield_upgrade_level: int = 0 # 0-3: each level = +1 hit absorbed
 
 # Burst config
 const BURST_FREEZE_DURATION := 1.5
-const BURST_BOSS_DAMAGE_PERCENT := 0.25  # 25% of max HP
+const BURST_BOSS_DAMAGE_PERCENT := 0.25 # 25% of max HP
 
 # Burst upgrades
-var burst_damage_boost: bool = false  # Hacked enemies do 50% more damage
-var burst_boss_damage: bool = false  # Deal 25% max HP to bosses/elites after stun
+var burst_damage_boost: bool = false # Hacked enemies do 50% more damage
+var burst_boss_damage: bool = false # Deal 25% max HP to bosses/elites after stun
 
 func _on_initialize() -> void:
 	# Ammo already set from CharacterRegistry by base class
@@ -60,7 +63,7 @@ func _spawn_drones() -> void:
 		parent.add_child(drone)
 		
 		# Initialize drone - position them on opposite sides (0 and PI)
-		var angle_offset = (TAU / DRONE_COUNT) * i  # 0 and PI for 2 drones
+		var angle_offset = (TAU / DRONE_COUNT) * i # 0 and PI for 2 drones
 		drone.initialize(player, i, angle_offset, _get_drone_speed_multiplier())
 		drone.set_mode(_drone_mode)
 		
@@ -93,7 +96,6 @@ func _can_attack() -> bool:
 
 func _perform_attack(direction: Vector2) -> void:
 	# Fire dual SMG bullets (same as Sin) - using pooled bullets
-	
 	var perp := Vector2(-direction.y, direction.x).normalized()
 	var gun_offset := 18.0
 	
@@ -268,7 +270,7 @@ func _hack_enemy(enemy: Node) -> void:
 		enemy.add_child(effect)
 
 func _on_burst_end() -> void:
-	pass  # Hacking is permanent, nothing to clean up
+	pass # Hacking is permanent, nothing to clean up
 
 func _on_cleanup() -> void:
 	# Clean up drones
@@ -432,13 +434,6 @@ func _draw() -> void:
 	script.reload()
 	return script
 
-func _play_sound(weapon_type: String) -> void:
-	if player.audio_director:
-		player.audio_director.play_weapon_fire_sound(weapon_type)
-
-func get_attack_cooldown() -> float:
-	return data.attack_cooldown
-
 func apply_talent(talent_id: String) -> void:
 	match talent_id:
 		"special":
@@ -461,9 +456,6 @@ func apply_talent(talent_id: String) -> void:
 			burst_damage_boost = true
 		"burst_boss":
 			burst_boss_damage = true
-
-func is_invincible() -> bool:
-	return false
 
 func _get_weapon_type_name() -> String:
 	return "SMG"

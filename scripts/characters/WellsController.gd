@@ -74,8 +74,9 @@ func _cleanup_allies() -> void:
 func _on_physics_process(delta: float) -> void:
     if is_time_slowed:
         # Enforce slow scale in case it gets reset
-        if GameState.enemy_time_scale != TIME_SCALE_SLOW:
-            GameState.enemy_time_scale = TIME_SCALE_SLOW
+        var game_manager = player.get_node_or_null("/root/GameManager")
+        if game_manager and game_manager.enemy_time_scale != TIME_SCALE_SLOW:
+            game_manager.enemy_time_scale = TIME_SCALE_SLOW
         _apply_active_effects(delta)
 
 func _handle_time_slow_input(delta: float) -> void:
@@ -122,7 +123,6 @@ func _handle_time_slow_input(delta: float) -> void:
                 current_fuel = max_fuel
 
 
-
 # Audio Effect indices (cached)
 var _music_bus_idx: int = -1
 var _sfx_bus_idx: int = -1
@@ -132,7 +132,9 @@ var _distortion_idx_sfx: int = -1
 
 func _start_time_slow() -> void:
     is_time_slowed = true
-    GameState.enemy_time_scale = TIME_SCALE_SLOW
+    var game_manager = player.get_node_or_null("/root/GameManager")
+    if game_manager:
+        game_manager.enemy_time_scale = TIME_SCALE_SLOW
     
     # Visual Effect: Monochrome Filter
     _create_mono_filter()
@@ -150,7 +152,9 @@ func _start_time_slow() -> void:
         
 func _end_time_slow() -> void:
     is_time_slowed = false
-    GameState.enemy_time_scale = 1.0
+    var game_manager = player.get_node_or_null("/root/GameManager")
+    if game_manager:
+        game_manager.enemy_time_scale = 1.0
     
     # Cleanup Visual Effect
     # Cleanup Visual Effect
@@ -223,7 +227,7 @@ func _create_mono_filter() -> void:
     # Size matches viewport
     var viewport_size = player.get_viewport_rect().size / camera.zoom
     _filter_rect.size = viewport_size * 2.0 # Oversize to be safe
-    _filter_rect.position = -_filter_rect.size / 2.0 # Center on camera
+    _filter_rect.position = - _filter_rect.size / 2.0 # Center on camera
     
     _filter_rect.z_as_relative = false
     _filter_rect.z_index = 50
@@ -381,7 +385,6 @@ func _perform_attack(direction: Vector2) -> void:
     _fire_sniper(direction)
 
 
-
 func _on_burst_start() -> void:
     _summon_allies()
 
@@ -523,10 +526,11 @@ func _spawn_enemy_marian() -> void:
         enemy.died.connect(_on_enemy_marian_died)
 
 func _get_current_boss_hp() -> int:
-    # Get wave number from WaveDirector or GameState
+    # Get wave number from WaveDirector or GameManager
     var wave_num := 1
-    if GameState and "current_wave" in GameState:
-        wave_num = GameState.current_wave
+    var game_manager = player.get_node_or_null("/root/GameManager")
+    if game_manager and "current_wave" in game_manager:
+        wave_num = game_manager.current_wave
     
     # Boss HP scales with wave: 25 + 50/wave
     var boss_hp := 25 + wave_num * 50
@@ -542,7 +546,7 @@ func _spawn_temporal_breach_effect(spawn_pos: Vector2) -> void:
     # Show screen-wide warning via WaveUI
     var wave_ui = player.get_tree().get_first_node_in_group("wave_ui")
     if wave_ui and wave_ui.has_method("show_event"):
-        wave_ui.show_event("boss", {"name": "FUTURE MARIAN"}, 30.0)  # 30s elapsed to ensure warning shows
+        wave_ui.show_event("boss", {"name": "FUTURE MARIAN"}, 30.0) # 30s elapsed to ensure warning shows
     else:
         # Fallback: try EventBus
         if EventBus and EventBus.has_signal("boss_warning"):
@@ -553,7 +557,7 @@ func _spawn_spark_effect() -> void:
     var sparks = Node2D.new()
     sparks.set_script(_get_spark_script())
     player.add_child(sparks)
-    sparks.position = Vector2(0, -80)  # Near the HUD
+    sparks.position = Vector2(0, -80) # Near the HUD
 
 
 func _on_enemy_marian_died() -> void:

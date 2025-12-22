@@ -3,11 +3,13 @@ extends RefCounted
 ## Base class for character-specific combat logic.
 ## Each character extends this and implements their unique attack, special, and burst.
 
+const MusicPlayerUI := preload("res://scripts/ui/MusicPlayerUI.gd")
+
 # Reference to the player node
 var player: Node2D = null
 
 # Character data resource
-var data: Resource = null  # CharacterData
+var data: Resource = null # CharacterData
 
 # State tracking
 var ammo: int = -1
@@ -16,7 +18,7 @@ var base_max_ammo: int = -1
 var is_reloading: bool = false
 var reload_timer: float = 0.0
 
-var special_unlocked: bool = false  # Must be unlocked via talent
+var special_unlocked: bool = false # Must be unlocked via talent
 var special_timer: float = 0.0
 var special_ready: bool = true
 
@@ -34,7 +36,7 @@ signal burst_activated()
 signal burst_ended()
 
 ## Initialize the controller with player reference and character data
-func initialize(p_player: Node2D, p_data: Resource) -> void:  # CharacterData
+func initialize(p_player: Node2D, p_data: Resource) -> void: # CharacterData
 	player = p_player
 	data = p_data
 	
@@ -156,6 +158,10 @@ func _on_process(_delta: float) -> void:
 
 ## Attempt to attack - returns true if attack was performed
 func attack(direction: Vector2) -> bool:
+	# Block attacks when hovering UI elements like the Music Player
+	if MusicPlayerUI and MusicPlayerUI.is_hovered:
+		return false
+	
 	if attack_timer > 0:
 		return false
 	
@@ -166,7 +172,7 @@ func attack(direction: Vector2) -> bool:
 	if max_ammo > 0 and not burst_active:
 		ammo -= 1
 		
-		# Kilo's "Build-a-Bullet": Every 2nd shot regenerates 1 ammo
+		# Kilo's "Build-a-Bullet": Every 3rd shot regenerates 1 ammo
 		if has_upgrade("kilo", "talos_ammo"):
 			var kilo_active = false
 			if player and player.has_method("is_character_in_squad"):
@@ -174,7 +180,7 @@ func attack(direction: Vector2) -> bool:
 			
 			if kilo_active:
 				_kilo_shot_counter += 1
-				if _kilo_shot_counter >= 2:
+				if _kilo_shot_counter >= 3:
 					_kilo_shot_counter = 0
 					ammo = mini(ammo + 1, max_ammo)
 		
@@ -203,6 +209,10 @@ func _perform_attack(_direction: Vector2) -> void:
 
 ## Attempt to use special attack - returns true if used
 func use_special(direction: Vector2) -> bool:
+	# Block when hovering UI elements like the Music Player
+	if MusicPlayerUI and MusicPlayerUI.is_hovered:
+		return false
+	
 	if not special_unlocked:
 		return false
 	if not special_ready:
@@ -254,7 +264,7 @@ func manual_reload() -> void:
 ## Get weapon type name for audio
 func _get_weapon_type_name() -> String:
 	# Override in subclasses for specific weapon types
-	return "sniper"  # Default
+	return "sniper" # Default
 
 ## Finish reloading
 func _finish_reload() -> void:
@@ -299,7 +309,7 @@ func get_damage_multiplier() -> float:
 
 ## Check if the character is invincible (e.g., during burst)
 func is_invincible() -> bool:
-	return false  # Override in subclasses
+	return false # Override in subclasses
 
 ## Get reload progress (0.0 to 1.0)
 func get_reload_progress() -> float:
@@ -318,3 +328,21 @@ func reset_special_cooldown() -> void:
 	special_timer = 0.0
 	special_ready = true
 	special_cooldown_changed.emit(1.0)
+
+## Get whether this character uses automatic fire (hold to shoot)
+## Override in subclasses (e.g. Miniguns, ARs, SMGs)
+func get_is_automatic() -> bool:
+	return false
+
+
+## Play a weapon fire sound via the audio director
+## Shared helper to avoid duplicate implementations in all subclasses
+func _play_sound(weapon_type: String) -> void:
+	if player and player.audio_director:
+		player.audio_director.play_weapon_fire_sound(weapon_type)
+
+
+## Get the attack cooldown for this character
+## Override in subclasses for characters with dynamic cooldowns (e.g. spin-up, burst mode)
+func get_attack_cooldown() -> float:
+	return data.attack_cooldown

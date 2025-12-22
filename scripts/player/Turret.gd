@@ -2,9 +2,11 @@ extends Node2D
 
 var ammo = 4
 var max_ammo = 4
-var spawned_by_summon := false  # Track if this turret was spawned by a SummonedAlly
-var spawner_node: Node = null  # The node that spawned this turret (for killer_source tracking)
-var fire_delay := 0.0  # Stagger fire times to spread CPU load
+var spawned_by_summon := false # Track if this turret was spawned by a SummonedAlly
+var spawner_node: Node = null # The node that spawned this turret (for killer_source tracking)
+var killer_source_override: String = "" # If set, missiles use this source
+var fire_delay := 0.0 # Stagger fire times to spread CPU load
+var _fire_timer: Timer = null # Timer for firing projectiles
 
 @onready var ammo_bar = get_node_or_null("AmmoBar")
 @onready var ammo_label = get_node_or_null("AmmoLabel")
@@ -21,12 +23,12 @@ var _current_target: Node2D = null
 var _rng := RandomNumberGenerator.new()
 
 # Visual constants - Iron Man style white/gray metal
-const BASE_COLOR := Color(0.85, 0.87, 0.9, 1.0)        # Light gray metal
-const ACCENT_COLOR := Color(0.7, 0.72, 0.75, 1.0)      # Darker gray accent
-const HIGHLIGHT_COLOR := Color(0.95, 0.96, 0.98, 1.0)  # White highlight
-const SHADOW_COLOR := Color(0.4, 0.42, 0.45, 1.0)      # Dark gray shadow
-const WARNING_COLOR := Color(1.0, 0.3, 0.2, 1.0)       # Red warning
-const MUZZLE_FLASH_COLOR := Color(1.0, 0.9, 0.7, 1.0)  # Warm flash
+const BASE_COLOR := Color(0.85, 0.87, 0.9, 1.0) # Light gray metal
+const ACCENT_COLOR := Color(0.7, 0.72, 0.75, 1.0) # Darker gray accent
+const HIGHLIGHT_COLOR := Color(0.95, 0.96, 0.98, 1.0) # White highlight
+const SHADOW_COLOR := Color(0.4, 0.42, 0.45, 1.0) # Dark gray shadow
+const WARNING_COLOR := Color(1.0, 0.3, 0.2, 1.0) # Red warning
+const MUZZLE_FLASH_COLOR := Color(1.0, 0.9, 0.7, 1.0) # Warm flash
 
 const ROTATION_SPEED := 8.0
 const DEPLOY_TIME := 0.4
@@ -61,15 +63,16 @@ func _ready():
 	if has_node("Sprite2D"):
 		$Sprite2D.visible = false
 	
-	var timer = Timer.new()
-	add_child(timer)
-	timer.wait_time = 2.0
-	timer.connect("timeout", Callable(self, "shoot"))
+	_fire_timer = Timer.new()
+	add_child(_fire_timer)
+	_fire_timer.wait_time = 2.0 # Assuming a default fire rate of 2 seconds
+	_fire_timer.timeout.connect(Callable(self, "shoot"))
+	
 	# Apply fire_delay to stagger initial shots across turrets
 	if fire_delay > 0.0:
-		get_tree().create_timer(fire_delay).timeout.connect(func(): timer.start())
+		get_tree().create_timer(fire_delay).timeout.connect(func(): _fire_timer.start())
 	else:
-		timer.start()
+		_fire_timer.start()
 	
 	# Make turret unshaded (bright) to match other summons
 	var mat := CanvasItemMaterial.new()
@@ -110,7 +113,7 @@ func _process(delta: float) -> void:
 
 var _enemy_cache: Array = []
 var _enemy_cache_timer := 0.0
-const ENEMY_CACHE_INTERVAL := 0.1  # Update enemy list every 100ms instead of every frame
+const ENEMY_CACHE_INTERVAL := 0.1 # Update enemy list every 100ms instead of every frame
 
 func _update_targeting(delta: float) -> void:
 	# Update enemy cache periodically instead of every frame
@@ -300,7 +303,7 @@ func shoot():
 	enemies.sort_custom(func(a, b): return global_position.distance_squared_to(a.global_position) < global_position.distance_squared_to(b.global_position))
 	
 	if enemies.size() == 0:
-		return  # No enemies, don't fire
+		return # No enemies, don't fire
 	
 	# Determine how many rockets to fire (up to 2, but limited by ammo)
 	var rockets_to_fire := mini(2, ammo)
@@ -326,6 +329,7 @@ func shoot():
 		var offset := perp * (12.0 if i == 0 else -12.0)
 		rocket.global_position = global_position + dir * 20.0 + offset
 		
+		# ExplosiveProjectile properties - these are the correct ones for Rocket.tscn
 		var target_pos = targets[i].global_position
 		var fire_dir = (target_pos - rocket.global_position).normalized()
 		rocket.direction = fire_dir
@@ -341,24 +345,24 @@ func shoot():
 			rocket.killer_source_override = "summon"
 			if is_instance_valid(spawner_node):
 				rocket.owner_node = spawner_node
-			# Performance optimizations for Rapunzel burst turret rockets:
-			# - No homing (fly straight to target position, explode on arrival or impact)
-			# - No target_node tracking (just use initial target_position)
-			# - Disable exhaust, trail, smoke for lightweight rockets
+			# Performance optimizations for Rapunzel burst turret rockets
 			rocket.homing_enabled = false
-			rocket.target_node = null  # Don't track, just fly to position
+			rocket.target_node = null # Don't track, just fly to position
 			rocket.exhaust_enabled = false
 			rocket.trail_enabled = false
 			rocket.smoke_enabled = false
 			rocket.lightweight_mode = true
 		else:
 			rocket.owner_node = get_parent().get_node_or_null("Player")
-			rocket.target_node = targets[i]  # Normal turrets track targets
+			rocket.target_node = targets[i] # Normal turrets track targets
 			rocket.homing_enabled = true
 			rocket.homing_strength = 10.0
 		
 		rocket.scale = Vector2(0.5, 0.5)
 		rocket.ground_fire_enabled = false
+		rocket.ground_fire_damage = 0
+		rocket.ground_fire_duration = 0.0
+		
 		# Turret damage = 50% of player's calculated damage
 		var player_node = get_parent().get_node_or_null("Player")
 		if player_node and player_node.has_method("calc_damage"):
@@ -369,7 +373,7 @@ func shoot():
 			# Fallback if player not found
 			rocket.damage = 2
 			rocket.explosion_damage = 2
-		rocket.explosion_radius = 60.0  # Smaller explosion radius
+		rocket.explosion_radius = 60.0 # Smaller explosion radius
 	
 	# Check if out of ammo after firing
 	if ammo <= 0:

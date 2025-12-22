@@ -160,6 +160,14 @@ func remove_character_by_id(char_id: String) -> void:
 			remove_character(i)
 			return
 
+func remove_last_character() -> bool:
+	# Iterate backwards to find last non-empty slot
+	for i in range(2, -1, -1):
+		if _squad[i] != "":
+			remove_character(i)
+			return true
+	return false
+
 func has_character(char_id: String) -> bool:
 	return char_id in _squad
 

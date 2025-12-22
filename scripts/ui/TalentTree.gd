@@ -28,8 +28,8 @@ var _character_registry = null
 var _game_state = null
 
 # Which characters to show in shop cards (indices into CHARACTER_NAMES/TALENT_DATA)
-# This is now loaded from GameState to sync with character selection
-var _shop_character_order: Array[int] = [8, 9, 4]  # Default: Cecil, Nayuta, Marian
+# This is now loaded from GameManager to sync with character selection
+var _shop_character_order: Array[int] = [8, 9, 4] # Default: Cecil, Nayuta, Marian
 
 # Talent definitions - Simplified: 3 main abilities + 4 upgrades (2 per special/burst)
 # Layout: UNLOCK (row 0) -> SPECIAL (row 1) -> BURST (row 2)
@@ -37,7 +37,7 @@ var _shop_character_order: Array[int] = [8, 9, 4]  # Default: Cecil, Nayuta, Mar
 # IMPORTANT: Indices match CharacterRegistry order:
 # 0=snow_white, 1=scarlet, 2=rapunzel, 3=nayuta, 4=commander, 5=marian, 6=crown, 7=kilo, 8=cecil, 9=sin
 var TALENT_DATA := {
-	0: [  # Snow White - Sniper with Turret
+	0: [ # Snow White - Sniper with Turret
 		{"id": "unlock", "name": "Unlock Snow White", "desc": "Add Snow White to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
 		 "tooltip": "Sniper with piercing shots. 7 ammo, 1.5s reload."},
 		{"id": "special", "name": "Auto-Turret", "desc": "Deploy auto-targeting turrets", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
@@ -53,7 +53,7 @@ var TALENT_DATA := {
 		{"id": "burst_gauge", "name": "Fully Active", "desc": "Kills during burst refill gauge", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
 		 "tooltip": "Burst kills generate burst gauge for chaining."},
 	],
-	1: [  # Scarlet - Melee DPS
+	1: [ # Scarlet - Melee DPS
 		{"id": "unlock", "name": "Unlock Scarlet", "desc": "Add Scarlet to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
 		 "tooltip": "Melee warrior who loses 3% max HP per attack but deals high damage."},
 		{"id": "special", "name": "Dash Slash", "desc": "Dash leaves a damaging wave", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
@@ -69,7 +69,7 @@ var TALENT_DATA := {
 		{"id": "burst_vuln", "name": "Expose Weakness", "desc": "Surviving targets take 50% more damage", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
 		 "tooltip": "Marked enemies take +50% damage from all sources."},
 	],
-	2: [  # Rapunzel - Support Healer
+	2: [ # Rapunzel - Support Healer
 		{"id": "unlock", "name": "Unlock Rapunzel", "desc": "Add Rapunzel to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
 		 "tooltip": "Support with explosive missiles and healing abilities."},
 		{"id": "special", "name": "Divine Blessing", "desc": "Create a healing zone", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
@@ -85,7 +85,7 @@ var TALENT_DATA := {
 		{"id": "burst_turrets", "name": "6,000? Really?", "desc": "Spawn 20 turrets across the map", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
 		 "tooltip": "Summons 20 Snow White turrets spread across the entire map. Each has 4 ammo."},
 	],
-	3: [  # Nayuta - SMG with Clone Summoning & Galaxy Burst
+	3: [ # Nayuta - SMG with Clone Summoning & Galaxy Burst
 		{"id": "unlock", "name": "Unlock Nayuta", "desc": "Add Nayuta to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
 		 "tooltip": "SMG user. 30 ammo, high fire rate. Summons clones."},
 		{"id": "special", "name": "Summon Clone", "desc": "Summon a fighting clone", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
@@ -101,7 +101,7 @@ var TALENT_DATA := {
 		{"id": "burst_debuff", "name": "Impermanence", "desc": "Bosses/elites take 50% more damage", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
 		 "tooltip": "Marked enemies take +50% damage. Purple star effect shows debuff."},
 	],
-	4: [  # Commander - Assault Rifle with Time Freeze & Ally Summons
+	4: [ # Commander - Assault Rifle with Time Freeze & Ally Summons
 		{"id": "unlock", "name": "Commander", "desc": "Already in your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 0, "unlock": true, "default": true,
 		 "tooltip": "Leader with assault rifle. Stuns enemies and summons allies."},
 		{"id": "special", "name": "I've Got a Meeting", "desc": "Stun all enemies in time", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
@@ -117,7 +117,7 @@ var TALENT_DATA := {
 		{"id": "burst_right", "name": "Reinforcements II", "desc": "Summon +1 ally", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
 		 "tooltip": "Summons 3 allies instead of 2. All 3 types available."},
 	],
-	5: [  # Marian - Minigun with Charm & Epic Beam
+	5: [ # Marian - Minigun with Charm & Epic Beam
 		{"id": "unlock", "name": "Unlock Marian", "desc": "Add Marian to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
 		 "tooltip": "Minigun user. 100 ammo, high fire rate. Charms enemies and fires epic beams."},
 		{"id": "special", "name": "Rapture Queen", "desc": "AoE charm converts enemies", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
@@ -133,7 +133,7 @@ var TALENT_DATA := {
 		{"id": "burst_right", "name": "Queen Beam", "desc": "Beam leaves purple fire", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
 		 "tooltip": "Beam leaves a 5s burning trail that damages enemies."},
 	],
-	6: [  # Crown - Minigun with Cavalry Charge & Golden Nova
+	6: [ # Crown - Minigun with Cavalry Charge & Golden Nova
 		{"id": "unlock", "name": "Unlock Crown", "desc": "Add Crown to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
 		 "tooltip": "Minigun user. 100 ammo, high fire rate. Cavalry charge and golden nova."},
 		{"id": "special", "name": "Summon Trombe", "desc": "Summon Trombe, charge forward", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
@@ -149,7 +149,7 @@ var TALENT_DATA := {
 		{"id": "burst_beam", "name": "Naked King", "desc": "Adds 3s forward beam", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
 		 "tooltip": "Adds massive golden frontal beam lasting 3s dealing huge damage."},
 	],
-	7: [  # Kilo - Shotgun DPS
+	7: [ # Kilo - Shotgun DPS
 		{"id": "unlock", "name": "Unlock Kilo", "desc": "Add Kilo to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
 		 "tooltip": "Shotgun wielder. 8 ammo, 5 pellets per shot. Pilot of T.A.L.O.S."},
 		{"id": "special", "name": "Explosive Shells", "desc": "Pellets create explosive beams", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
@@ -165,7 +165,7 @@ var TALENT_DATA := {
 		{"id": "burst_invuln", "name": "T.A.L.O.S. Shield", "desc": "Invincible during burst", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
 		 "tooltip": "Grants invincibility for burst duration."},
 	],
-	8: [  # Cecil - SMG with Drones & Hacking Burst
+	8: [ # Cecil - SMG with Drones & Hacking Burst
 		{"id": "unlock", "name": "Unlock Cecil", "desc": "Add Cecil to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
 		 "tooltip": "SMG user. 30 ammo, high fire rate. Drone robots and hacking burst."},
 		{"id": "special", "name": "Drone Deploy", "desc": "Deploy 2 companion drones", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
@@ -181,7 +181,7 @@ var TALENT_DATA := {
 		{"id": "burst_boss", "name": "Exploit", "desc": "25% max HP to elites/bosses", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
 		 "tooltip": "Elites and bosses take 25% of their max HP as damage after stun."},
 	],
-	9: [  # Sin - SMG with Charm & Life Drain
+	9: [ # Sin - SMG with Charm & Life Drain
 		{"id": "unlock", "name": "Unlock Sin", "desc": "Add Sin to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
 		 "tooltip": "SMG user. 30 ammo, high fire rate. Charms enemies and drains life."},
 		{"id": "special", "name": "Heavy Talker", "desc": "AoE charm converts enemies", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
@@ -220,9 +220,9 @@ var _tooltip: PanelContainer = null
 
 # Stats panel reference
 var _stats_panel: PanelContainer = null
-var _player_ref: Node = null  # Reference to player for stats
-var _hovered_character: int = -1  # Which character card is being hovered (-1 = none/current)
-var _last_hovered_character: int = -1  # Last character that was hovered (for sticky display)
+var _player_ref: Node = null # Reference to player for stats
+var _hovered_character: int = -1 # Which character card is being hovered (-1 = none/current)
+var _last_hovered_character: int = -1 # Last character that was hovered (for sticky display)
 
 # Player's unlocked talents
 var _unlocked_talents: Dictionary = {0: {}, 1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}, 8: {}, 9: {}, 10: {}}
@@ -232,7 +232,7 @@ var _lines_control: Control = null
 
 # Animation state for scanline effect
 var _scanline_overlay: Control = null
-var _anim_state := 0  # 0=hidden, 1=animating in, 2=showing, 3=animating out
+var _anim_state := 0 # 0=hidden, 1=animating in, 2=showing, 3=animating out
 var _anim_progress := 0.0
 var _anim_time := 0.0
 const ANIM_DURATION := 0.5
@@ -242,7 +242,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	# Ensure TalentTree is rendered above all other UI
 	z_index = 100
-	process_mode = Node.PROCESS_MODE_ALWAYS  # Process during pause
+	process_mode = Node.PROCESS_MODE_ALWAYS # Process during pause
 	
 	# Load character data from registry
 	_load_character_data()
@@ -267,14 +267,14 @@ func _ready() -> void:
 	_build_scanline_overlay()
 	visible = false
 	_apply_default_talents()
-	_refresh_character_cards()  # Refresh after defaults are applied
+	_refresh_character_cards() # Refresh after defaults are applied
 
 func _load_character_data() -> void:
 	# Get registry using class_name directly
 	_character_registry = CharacterRegistry.get_instance()
 	
-	# Get GameState for shop character order (it's an autoload singleton)
-	var game_state_node = get_node_or_null("/root/GameState")
+	# Get GameManager for shop character order (it's an autoload singleton)
+	var game_state_node = get_node_or_null("/root/GameManager")
 	if game_state_node:
 		_game_state = game_state_node
 		_shop_character_order = _game_state.get_shop_character_order()
@@ -385,7 +385,7 @@ func _build_scanline_overlay() -> void:
 	_scanline_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_scanline_overlay.z_index = 200
 	_scanline_overlay.visible = false
-	_scanline_overlay.clip_contents = true  # Clip to bounds
+	_scanline_overlay.clip_contents = true # Clip to bounds
 	add_child(_scanline_overlay)
 	_scanline_overlay.draw.connect(_draw_scanline_overlay)
 
@@ -397,13 +397,13 @@ func _draw_scanline_overlay() -> void:
 	var panel_size := _scanline_overlay.size
 	var intensity := 0.0
 	
-	if _anim_state == 1:  # Animating in
+	if _anim_state == 1: # Animating in
 		intensity = 1.0 - _anim_progress
-	elif _anim_state == 3:  # Animating out
+	elif _anim_state == 3: # Animating out
 		intensity = _anim_progress
 	
 	# Fine scanline effect - more detail as requested
-	var scanline_count := 40  # More scanlines for finer detail
+	var scanline_count := 40 # More scanlines for finer detail
 	var scanline_color := Color(0.3, 0.8, 1.0, intensity * 0.5)
 	var glow_color := Color(0.2, 0.6, 0.9, intensity * 0.25)
 	
@@ -449,7 +449,7 @@ func _process(delta: float) -> void:
 	
 	_anim_time += delta
 	
-	if _anim_state == 1:  # Animating in
+	if _anim_state == 1: # Animating in
 		_anim_progress += delta / ANIM_DURATION
 		if _anim_progress >= 1.0:
 			_anim_progress = 1.0
@@ -462,7 +462,7 @@ func _process(delta: float) -> void:
 		# Fade in content
 		modulate.a = _anim_progress
 		
-	elif _anim_state == 3:  # Animating out
+	elif _anim_state == 3: # Animating out
 		_anim_progress += delta / ANIM_DURATION
 		if _anim_progress >= 1.0:
 			_anim_progress = 1.0
@@ -603,11 +603,11 @@ func _update_stats_panel(char_id: int = -1) -> void:
 		if _last_hovered_character >= 0:
 			display_char = _last_hovered_character
 		elif _shop_character_order.size() > 1:
-			display_char = _shop_character_order[1]  # Main character is middle slot
+			display_char = _shop_character_order[1] # Main character is middle slot
 		elif _shop_character_order.size() > 0:
 			display_char = _shop_character_order[0]
 		else:
-			display_char = 1  # Fallback to Commander
+			display_char = 1 # Fallback to Commander
 	
 	# Update character label
 	var char_name: String = CHARACTER_NAMES[display_char] if display_char >= 0 and display_char < CHARACTER_NAMES.size() else "Current"
@@ -652,10 +652,10 @@ func _update_stats_panel(char_id: int = -1) -> void:
 	var crit_bonus: float = 0.0
 	
 	if ShopMenuScript and ShopMenuScript.has_method("get_upgrade_bonus"):
-		atk_bonus = ShopMenuScript.get_upgrade_bonus("atk")     # +25% per level
-		hp_bonus = int(ShopMenuScript.get_upgrade_bonus("hp"))  # +1 per level
+		atk_bonus = ShopMenuScript.get_upgrade_bonus("atk") # +25% per level
+		hp_bonus = int(ShopMenuScript.get_upgrade_bonus("hp")) # +1 per level
 		speed_bonus = ShopMenuScript.get_upgrade_bonus("speed") # +5% per level
-		crit_bonus = ShopMenuScript.get_upgrade_bonus("crit")   # +2% per level
+		crit_bonus = ShopMenuScript.get_upgrade_bonus("crit") # +2% per level
 	
 	# Apply Scarlet's Low HP Bonus if applicable
 	if display_char == 1 and _player_ref and _player_ref.has_method("get_low_hp_damage_multiplier"):
@@ -716,25 +716,25 @@ func _get_weapon_type_for_index(char_index: int) -> String:
 	# Indices: 0=snow_white, 1=scarlet, 2=rapunzel, 3=nayuta, 4=commander, 
 	#          5=marian, 6=crown, 7=kilo, 8=cecil, 9=sin
 	match char_index:
-		0:  # Snow White
+		0: # Snow White
 			return "sniper"
-		1:  # Scarlet
+		1: # Scarlet
 			return "sword"
-		2:  # Rapunzel
+		2: # Rapunzel
 			return "rocket"
-		3:  # Nayuta
+		3: # Nayuta
 			return "smg"
-		4:  # Commander
+		4: # Commander
 			return "assault"
-		5:  # Marian
+		5: # Marian
 			return "minigun"
-		6:  # Crown
+		6: # Crown
 			return "minigun"
-		7:  # Kilo
+		7: # Kilo
 			return "shotgun"
-		8:  # Cecil
+		8: # Cecil
 			return "smg"
-		9:  # Sin
+		9: # Sin
 			return "smg"
 		10: # Wells
 			return "sniper"
@@ -809,7 +809,7 @@ func _create_character_card(char_id: int) -> PanelContainer:
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(280, 520)
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
-	card.pivot_offset = Vector2(140, 260)  # Center pivot for scale animation
+	card.pivot_offset = Vector2(140, 260) # Center pivot for scale animation
 	card.set_meta("char_id", char_id)
 	
 	# Connect mouse hover signals for stats panel update and animation
@@ -819,10 +819,10 @@ func _create_character_card(char_id: int) -> PanelContainer:
 	# Card style with white rounded border - add content margins so border is visible
 	var card_style := StyleBoxFlat.new()
 	card_style.bg_color = Color(0.02, 0.02, 0.04, 1.0)
-	card_style.border_color = Color(1.0, 1.0, 1.0, 1.0)  # Pure white border
+	card_style.border_color = Color(1.0, 1.0, 1.0, 1.0) # Pure white border
 	card_style.set_border_width_all(4)
 	card_style.set_corner_radius_all(14)
-	card_style.set_content_margin_all(4)  # Margin so content doesn't cover border
+	card_style.set_content_margin_all(4) # Margin so content doesn't cover border
 	card.add_theme_stylebox_override("panel", card_style)
 	
 	# Main container for layering (portrait + overlays) - offset to show border
@@ -878,14 +878,14 @@ func _create_character_card(char_id: int) -> PanelContainer:
 	var bottom_bar := ColorRect.new()
 	bottom_bar.color = Color(0.0, 0.0, 0.0, 0.8)
 	bottom_bar.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	bottom_bar.offset_top = -130  # Raised to show more button
+	bottom_bar.offset_top = -130 # Raised to show more button
 	bottom_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	main_container.add_child(bottom_bar)
 	
 	var bottom_vbox := VBoxContainer.new()
 	bottom_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bottom_vbox.add_theme_constant_override("separation", 2)
-	bottom_vbox.alignment = BoxContainer.ALIGNMENT_END  # Push content toward bottom
+	bottom_vbox.alignment = BoxContainer.ALIGNMENT_END # Push content toward bottom
 	bottom_bar.add_child(bottom_vbox)
 	
 	# Button with padding (moved above count for better layout)
@@ -935,7 +935,7 @@ func _update_card_count(label: Label, char_id: int) -> void:
 	var char_talents: Dictionary = _unlocked_talents.get(char_id, {})
 	var unlocked: int = 0
 	for talent_id in char_talents.keys():
-		unlocked += char_talents[talent_id]  # Add the level/points spent
+		unlocked += char_talents[talent_id] # Add the level/points spent
 	# Total possible talent points = sum of all max levels (including unlock)
 	var talent_list: Array = TALENT_DATA.get(char_id, [])
 	var total: int = 0
@@ -1039,7 +1039,7 @@ func _build_tree_view(char_id: int) -> void:
 	var node_width: float = 180.0
 	var node_height: float = 90.0
 	var h_spacing: float = 230.0
-	var v_spacing: float = 155.0  # Increased from 105 to fill tree_holder height better
+	var v_spacing: float = 155.0 # Increased from 105 to fill tree_holder height better
 	var grid_width: float = 3.0 * h_spacing
 	var start_x: float = (700.0 - grid_width) / 2.0 + (h_spacing - node_width) / 2.0
 	
@@ -1077,12 +1077,12 @@ func _create_talent_button(talent: Dictionary, char_id: int) -> Button:
 	btn.set_meta("char_id", char_id)
 	btn.pressed.connect(_on_talent_clicked.bind(btn))
 	btn.draw.connect(_draw_talent_button.bind(btn))
-	btn.mouse_entered.connect(func(): 
+	btn.mouse_entered.connect(func():
 		btn.set_meta("hovered", true)
 		btn.queue_redraw()
 		_show_tooltip(talent, btn)
 	)
-	btn.mouse_exited.connect(func(): 
+	btn.mouse_exited.connect(func():
 		btn.set_meta("hovered", false)
 		btn.queue_redraw()
 		_hide_tooltip()
@@ -1095,13 +1095,13 @@ func _create_tooltip() -> void:
 	_tooltip.name = "Tooltip"
 	_tooltip.visible = false
 	_tooltip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_tooltip.z_index = 200  # Above everything
+	_tooltip.z_index = 200 # Above everything
 	_tooltip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_tooltip.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	
 	var tooltip_style := StyleBoxFlat.new()
 	tooltip_style.bg_color = Color(0.02, 0.02, 0.04, 0.98)
-	tooltip_style.border_color = Color(1.0, 0.85, 0.2, 1.0)  # Golden border
+	tooltip_style.border_color = Color(1.0, 0.85, 0.2, 1.0) # Golden border
 	tooltip_style.set_border_width_all(2)
 	tooltip_style.set_corner_radius_all(8)
 	tooltip_style.set_content_margin_all(12)
@@ -1118,14 +1118,14 @@ func _create_tooltip() -> void:
 	var title_label := Label.new()
 	title_label.name = "TitleLabel"
 	title_label.add_theme_font_size_override("font_size", 16)
-	title_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2, 1.0))  # Golden title
+	title_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2, 1.0)) # Golden title
 	vbox.add_child(title_label)
 	
 	# Short description
 	var desc_label := Label.new()
 	desc_label.name = "DescLabel"
 	desc_label.add_theme_font_size_override("font_size", 13)
-	desc_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))  # White
+	desc_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0)) # White
 	vbox.add_child(desc_label)
 	
 	# Separator
@@ -1139,7 +1139,7 @@ func _create_tooltip() -> void:
 	tooltip_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tooltip_label.custom_minimum_size = Vector2(250, 0)
 	tooltip_label.add_theme_font_size_override("font_size", 12)
-	tooltip_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.9, 1.0))  # Slightly dimmer white
+	tooltip_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.9, 1.0)) # Slightly dimmer white
 	vbox.add_child(tooltip_label)
 	
 	add_child(_tooltip)
@@ -1213,7 +1213,7 @@ func _draw_talent_button(btn: Button) -> void:
 	var can_unlock := _can_unlock_talent(char_id, talent)
 	
 	# Colors - default for regular talents
-	var bg_color := Color(0.08, 0.08, 0.1, 1.0)  # Dark gray when locked
+	var bg_color := Color(0.08, 0.08, 0.1, 1.0) # Dark gray when locked
 	var border_color := UI.TALENT_LOCKED
 	
 	# Determine talent type
@@ -1225,40 +1225,40 @@ func _draw_talent_button(btn: Button) -> void:
 	if is_burst:
 		# Red/Crimson for burst
 		if is_maxed:
-			bg_color = Color(0.6, 0.15, 0.15, 1.0)  # Bright red
+			bg_color = Color(0.6, 0.15, 0.15, 1.0) # Bright red
 			border_color = Color(1.0, 0.4, 0.4, 1.0)
 		elif is_unlocked:
-			bg_color = Color(0.45, 0.1, 0.1, 1.0)  # Medium red
+			bg_color = Color(0.45, 0.1, 0.1, 1.0) # Medium red
 			border_color = Color(0.9, 0.3, 0.3, 1.0)
 		else:
-			bg_color = Color(0.15, 0.05, 0.05, 1.0)  # Dark red
+			bg_color = Color(0.15, 0.05, 0.05, 1.0) # Dark red
 	elif is_special:
 		# Yellow/Gold for special
 		if is_maxed:
-			bg_color = Color(0.5, 0.4, 0.1, 1.0)  # Bright gold
+			bg_color = Color(0.5, 0.4, 0.1, 1.0) # Bright gold
 			border_color = Color(1.0, 0.85, 0.3, 1.0)
 		elif is_unlocked:
-			bg_color = Color(0.4, 0.3, 0.08, 1.0)  # Medium gold
+			bg_color = Color(0.4, 0.3, 0.08, 1.0) # Medium gold
 			border_color = Color(0.9, 0.75, 0.25, 1.0)
 		else:
-			bg_color = Color(0.12, 0.1, 0.03, 1.0)  # Dark gold
+			bg_color = Color(0.12, 0.1, 0.03, 1.0) # Dark gold
 	elif is_unlock:
 		# White/Silver for character unlock
 		if is_maxed:
-			bg_color = Color(0.35, 0.35, 0.4, 1.0)  # Bright silver
+			bg_color = Color(0.35, 0.35, 0.4, 1.0) # Bright silver
 			border_color = Color(0.9, 0.9, 1.0, 1.0)
 		elif is_unlocked:
-			bg_color = Color(0.25, 0.25, 0.3, 1.0)  # Medium silver
+			bg_color = Color(0.25, 0.25, 0.3, 1.0) # Medium silver
 			border_color = Color(0.8, 0.8, 0.9, 1.0)
 		else:
-			bg_color = Color(0.1, 0.1, 0.12, 1.0)  # Dark
+			bg_color = Color(0.1, 0.1, 0.12, 1.0) # Dark
 	else:
 		# Green for regular upgrades
 		if is_maxed:
-			bg_color = Color(0.15, 0.4, 0.15, 1.0)  # Bright green
+			bg_color = Color(0.15, 0.4, 0.15, 1.0) # Bright green
 			border_color = UI.TALENT_UNLOCKED
 		elif is_unlocked:
-			bg_color = Color(0.1, 0.25, 0.1, 1.0)  # Medium green
+			bg_color = Color(0.1, 0.25, 0.1, 1.0) # Medium green
 			border_color = Color(0.6, 0.8, 0.3, 1.0)
 		elif can_unlock:
 			border_color = UI.TALENT_HOVER_BORDER if hovered else border_color
@@ -1361,7 +1361,7 @@ func _on_talent_clicked(btn: Button) -> void:
 	
 	# Only close if no skill points remaining - with delay for player to prepare
 	if _skill_points <= 0:
-		_on_close(true)  # true = with delay before unpause
+		_on_close(true) # true = with delay before unpause
 
 func _refresh_tree() -> void:
 	var points := _tree_panel.get_node_or_null("TreeSkillPoints")
@@ -1399,7 +1399,7 @@ func _refresh_character_cards() -> void:
 		# bottom_bar -> bottom_vbox -> [btn_margin, count_label, status_label, spacer]
 		var main_container := card.get_child(0) if card.get_child_count() > 0 else null
 		if main_container and main_container.get_child_count() >= 3:
-			var bottom_bar := main_container.get_child(2)  # Third child is bottom_bar overlay
+			var bottom_bar := main_container.get_child(2) # Third child is bottom_bar overlay
 			if bottom_bar and bottom_bar.get_child_count() > 0:
 				var bottom_vbox := bottom_bar.get_child(0)
 				if bottom_vbox:
@@ -1435,7 +1435,7 @@ func _on_close(with_delay: bool = false) -> void:
 func _on_card_mouse_entered(char_id: int, card: PanelContainer) -> void:
 	# Get actual character id from shop order (char_id is already the correct index)
 	_hovered_character = char_id
-	_last_hovered_character = char_id  # Remember for sticky display
+	_last_hovered_character = char_id # Remember for sticky display
 	_update_stats_panel(char_id)
 	
 	# Hover animation - scale up slightly
@@ -1447,12 +1447,12 @@ func _on_card_mouse_entered(char_id: int, card: PanelContainer) -> void:
 	style.border_color = UI.TALENT_HOVER_BORDER
 	style.set_border_width_all(4)
 	style.set_corner_radius_all(14)
-	style.set_content_margin_all(4)  # Keep content margin for border visibility
+	style.set_content_margin_all(4) # Keep content margin for border visibility
 	card.add_theme_stylebox_override("panel", style)
 
 func _on_card_mouse_exited(card: PanelContainer) -> void:
 	_hovered_character = -1
-	_update_stats_panel(-1)  # Show last hovered or main character stats
+	_update_stats_panel(-1) # Show last hovered or main character stats
 	
 	# Hover animation - scale back to normal
 	var tween := create_tween()
@@ -1460,10 +1460,10 @@ func _on_card_mouse_exited(card: PanelContainer) -> void:
 	
 	# Reset border
 	var style: StyleBoxFlat = card.get_theme_stylebox("panel").duplicate()
-	style.border_color = Color(1.0, 1.0, 1.0, 1.0)  # Pure white stroke
+	style.border_color = Color(1.0, 1.0, 1.0, 1.0) # Pure white stroke
 	style.set_border_width_all(4)
 	style.set_corner_radius_all(14)
-	style.set_content_margin_all(4)  # Keep content margin for border visibility
+	style.set_content_margin_all(4) # Keep content margin for border visibility
 	card.add_theme_stylebox_override("panel", style)
 
 func _input(event: InputEvent) -> void:
@@ -1538,7 +1538,7 @@ func get_unlocked_for_char(char_id: int) -> Dictionary:
 	return _unlocked_talents.get(char_id, {})
 
 func _apply_default_talents() -> void:
-	# Auto-unlock only the MAIN character from GameState (slot 0)
+	# Auto-unlock only the MAIN character from GameManager (slot 0)
 	# Support characters (slots 1 and 2) must be unlocked by spending skill points
 	if not _game_state:
 		return
@@ -1547,7 +1547,7 @@ func _apply_default_talents() -> void:
 	if selected.size() == 0:
 		return
 	
-	var main_char_idx: int = selected[0]  # Only unlock main character
+	var main_char_idx: int = selected[0] # Only unlock main character
 	
 	# Apply 'default': true talents ONLY to the main character
 	if TALENT_DATA.has(main_char_idx):

@@ -104,3 +104,29 @@ func clear() -> void:
 	visible = false
 	sprite_frames = null
 	_last_direction = "down"
+
+func reset() -> void:
+	# Resets the animator to a clean state for pooling
+	# Ensures sprite is visible and playing the default animation
+	
+	if not _has_sprite or not sprite_frames:
+		# If no sprite was ever configured, we can't do much, but we should ensure we aren't hidden
+		# unless we really differ from the "visible" default.
+		# For safety, if we have frames, show.
+		if sprite_frames:
+			visible = true
+			play("down")
+		else:
+			visible = false
+		return
+		
+	visible = true
+	modulate = Color.WHITE
+	self_modulate = Color.WHITE
+	
+	# Reset animation
+	_last_direction = "down"
+	animation = "down"
+	frame = 0
+	play("down")
+

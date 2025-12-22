@@ -26,6 +26,21 @@ static var _slow_cache_timer: float = 0.0
 # Tree reference (set once per scene)
 static var _tree: SceneTree = null
 
+## Clean up all cached references to prevent dangling references on exit
+static func cleanup() -> void:
+	_enemies.clear()
+	_charmed_allies.clear()
+	_nayuta_clones.clear()
+	_shielder_shields.clear()
+	_summoned_allies.clear()
+	_boulders.clear()
+	_player = null
+	_tree = null
+	_last_cache_frame = -1
+	_cache_timer = 0.0
+	_slow_cache_timer = 0.0
+	print("[TargetCache] Cleanup complete")
+
 
 static func _ensure_tree() -> bool:
 	if _tree == null or not is_instance_valid(_tree):

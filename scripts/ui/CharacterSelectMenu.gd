@@ -19,24 +19,34 @@ const CARD_SIZE := Vector2(140, 220)
 const GRID_COLUMNS := 5
 const SQUAD_SLOT_SIZE := Vector2(180, 220)
 
-enum Phase { SQUAD, STAGE }
+enum Phase {SQUAD, STAGE}
 var _phase: Phase = Phase.SQUAD
 
 var _registry: RefCounted
-var _cards: Dictionary = {}  # char_id -> card node
+var _cards: Dictionary = {} # char_id -> card node
+var _card_tweens: Dictionary = {} # char_id -> Tween (for killing old tweens)
 
-var _burst_audio: AudioStreamPlayer  # For character selection burst SFX
+var _burst_audio: AudioStreamPlayer # For character selection burst SFX
 
 var _bg: Control
 var _squad_container: Control
 var _stage_container: Control
-var _grid: Control  # VBoxContainer holding row HBoxContainers
+var _grid: Control # VBoxContainer holding row HBoxContainers
 var _squad_slots: Control
 var _info_panel: Panel
 var _stage_selector: Control
 var _transition_tween: Tween
 
+# PERFORMANCE: Pre-cached StyleBox objects to avoid per-hover allocation
+var _style_normal: StyleBoxFlat
+var _style_hovered: StyleBoxFlat
+var _style_in_squad: StyleBoxFlat
+var _border_style_normal: StyleBoxFlat
+var _border_style_hovered: StyleBoxFlat
+var _border_style_in_squad: StyleBoxFlat
+
 func _ready() -> void:
+	_init_style_cache() # PERFORMANCE: Pre-create StyleBox objects
 	_load_registry()
 	_build_ui()
 	_populate_grid()
@@ -44,10 +54,13 @@ func _ready() -> void:
 	
 	# Start menu music if not already playing (handles direct scene load from game)
 	_ensure_menu_music()
+	
+	# Auto-focus first character card for controller users
+	call_deferred("_grab_initial_focus")
 
 func _setup_burst_audio() -> void:
 	_burst_audio = AudioStreamPlayer.new()
-	_burst_audio.bus = "SFX"  # Use SFX bus for burst preview sounds
+	_burst_audio.bus = "SFX" # Use SFX bus for burst preview sounds
 	add_child(_burst_audio)
 
 func _ensure_menu_music() -> void:
@@ -57,19 +70,75 @@ func _ensure_menu_music() -> void:
 		MenuManager.start_menu_music()
 
 func _input(event: InputEvent) -> void:
+	if not is_visible_in_tree():
+		return
+		
 	if event.is_action_pressed("ui_cancel"):
 		_handle_escape()
 		var vp := get_viewport()
 		if vp:
 			vp.set_input_as_handled()
+	elif event.is_action_pressed("ui_accept"):
+		# Only handle character card selection in SQUAD phase
+		if _phase != Phase.SQUAD:
+			return
+		# Controller A button on focused card
+		var focused := get_viewport().gui_get_focus_owner()
+		if focused and focused.has_meta("char_id"):
+			var char_id: String = focused.get_meta("char_id")
+			var is_unlocked: bool = focused.get_meta("is_unlocked", false)
+			if is_unlocked:
+				if _squad_slots.has_character(char_id):
+					_remove_from_squad(char_id)
+				else:
+					_add_to_squad(char_id)
+			get_viewport().set_input_as_handled()
 
 func _handle_escape() -> void:
 	if _phase == Phase.STAGE:
 		# Go back to squad selection
 		_transition_to_squad()
 	else:
-		# Go back to main menu
+		# Try to deselect the last character first (if any)
+		# This solves the issue where users feel "trapped" if they can't clear the squad via Back button
+		if _squad_slots.remove_last_character():
+			# Logic inside SquadSlots emits 'slot_cleared', which triggers _update_card_states via _on_slot_cleared
+			# So we don't need manual update calls here.
+			return
+			
+		# Only exit if squad is empty
 		_go_back()
+
+
+func _transition_to_stage() -> void:
+	if _phase == Phase.STAGE:
+		return
+	_phase = Phase.STAGE
+	_stage_container.visible = true # Enable input processing for stage selector
+	
+	# Release focus from character cards so controller input doesn't affect them
+	var focused := get_viewport().gui_get_focus_owner()
+	if focused and focused.has_meta("char_id"):
+		focused.release_focus()
+	
+	if _transition_tween:
+		_transition_tween.kill()
+	
+	var vh := get_viewport_rect().size.y
+	_transition_tween = create_tween().set_parallel(true)
+	_transition_tween.tween_property(_squad_container, "position:y", -vh, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	_transition_tween.tween_property(_squad_container, "modulate:a", 0.0, 0.4)
+	_transition_tween.tween_property(_stage_container, "position:y", 0.0, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	_transition_tween.tween_property(_stage_container, "modulate:a", 1.0, 0.4).set_delay(0.1)
+	
+	# CRITICAL: Transfer focus to the Stage Selector so controller works immediately
+	if _stage_selector and _stage_selector.has_method("_grab_initial_focus"):
+		# Wait for transition to start so inputs aren't eaten
+		_stage_selector.call_deferred("_grab_initial_focus")
+	elif _stage_selector:
+		# Fallback to finding a button
+		var btn = _stage_selector.find_child("StartButton", true, false)
+		if btn: btn.grab_focus()
 
 func _go_back() -> void:
 	UISounds.play_back()
@@ -120,6 +189,7 @@ func _build_ui() -> void:
 	_stage_container.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_stage_container.position.y = get_viewport_rect().size.y
 	_stage_container.modulate.a = 0.0
+	_stage_container.visible = false # CRITICAL: Hide so it doesn't eat input relative to is_visible_in_tree()
 	add_child(_stage_container)
 	_build_stage_phase()
 
@@ -289,13 +359,17 @@ func _populate_grid() -> void:
 			row2.add_child(card)
 		
 		_cards[char_id] = card
+	
+	# Set up explicit focus neighbors for proper row-based navigation
+	call_deferred("_setup_card_focus_neighbors")
 
 func _create_card(char_id: String, data: Resource) -> Control:
 	var card := Panel.new()
-	card.custom_minimum_size = Vector2(CARD_SIZE.x, 0)  # Min width only, height expands
+	card.custom_minimum_size = Vector2(CARD_SIZE.x, 0) # Min width only, height expands
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
+	card.focus_mode = Control.FOCUS_ALL # Enable controller focus
 	card.set_meta("char_id", char_id)
 	card.set_meta("char_data", data)
 	card.clip_children = Control.CLIP_CHILDREN_AND_DRAW
@@ -393,6 +467,9 @@ func _create_card(char_id: String, data: Resource) -> Control:
 	card.gui_input.connect(_on_card_input.bind(char_id))
 	card.mouse_entered.connect(_on_card_hover.bind(char_id))
 	card.mouse_exited.connect(_on_card_unhover.bind(char_id))
+	# Controller focus events (same as hover for visual consistency)
+	card.focus_entered.connect(_on_card_hover.bind(char_id))
+	card.focus_exited.connect(_on_card_unhover.bind(char_id))
 	
 	return card
 
@@ -404,29 +481,50 @@ func _apply_panel_style(panel: Panel) -> void:
 	style.set_corner_radius_all(10)
 	panel.add_theme_stylebox_override("panel", style)
 
+
+func _init_style_cache() -> void:
+	"""PERFORMANCE: Pre-create all StyleBox variations to avoid per-hover allocation."""
+	# Base panel style (same for all states)
+	_style_normal = StyleBoxFlat.new()
+	_style_normal.bg_color = UI.CHAR_NORMAL
+	_style_normal.set_corner_radius_all(12)
+	
+	# Border styles - normal
+	_border_style_normal = StyleBoxFlat.new()
+	_border_style_normal.bg_color = UI.TRANSPARENT
+	_border_style_normal.set_corner_radius_all(12)
+	_border_style_normal.border_color = UI.ACCENT_PRIMARY
+	_border_style_normal.set_border_width_all(3)
+	
+	# Border styles - hovered
+	_border_style_hovered = StyleBoxFlat.new()
+	_border_style_hovered.bg_color = UI.TRANSPARENT
+	_border_style_hovered.set_corner_radius_all(12)
+	_border_style_hovered.border_color = UI.ACCENT_HOVER
+	_border_style_hovered.set_border_width_all(4)
+	
+	# Border styles - in squad
+	_border_style_in_squad = StyleBoxFlat.new()
+	_border_style_in_squad.bg_color = UI.TRANSPARENT
+	_border_style_in_squad.set_corner_radius_all(12)
+	_border_style_in_squad.border_color = UI.COLOR_SUCCESS
+	_border_style_in_squad.set_border_width_all(4)
+
+
 func _apply_card_style(card: Panel, in_squad: bool, is_hovered: bool = false) -> void:
-	# Base panel style (no border, just background)
-	var style := StyleBoxFlat.new()
-	style.bg_color = UI.CHAR_NORMAL
-	style.set_corner_radius_all(12)
-	card.add_theme_stylebox_override("panel", style)
+	# PERFORMANCE: Use cached styles instead of creating new ones
+	card.add_theme_stylebox_override("panel", _style_normal)
 	
 	# Update border overlay if it exists
 	var border_overlay = card.get_meta("border_overlay") if card.has_meta("border_overlay") else null
 	if border_overlay:
-		var border_style := StyleBoxFlat.new()
-		border_style.bg_color = UI.TRANSPARENT
-		border_style.set_corner_radius_all(12)
-		
+		var border_style: StyleBoxFlat
 		if in_squad:
-			border_style.border_color = UI.COLOR_SUCCESS
-			border_style.set_border_width_all(4)
+			border_style = _border_style_in_squad
 		elif is_hovered:
-			border_style.border_color = UI.ACCENT_HOVER
-			border_style.set_border_width_all(4)
+			border_style = _border_style_hovered
 		else:
-			border_style.border_color = UI.ACCENT_PRIMARY
-			border_style.set_border_width_all(3)
+			border_style = _border_style_normal
 		
 		border_overlay.add_theme_stylebox_override("panel", border_style)
 
@@ -556,20 +654,32 @@ func _on_card_hover(char_id: String) -> void:
 	if card:
 		var in_squad: bool = _squad_slots.has_character(char_id)
 		_apply_card_style(card, in_squad, true)
+		
+		# PERFORMANCE: Kill old tween before starting new one
+		if _card_tweens.has(char_id) and _card_tweens[char_id] and _card_tweens[char_id].is_valid():
+			_card_tweens[char_id].kill()
+		
 		var tween := create_tween().set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 		tween.tween_property(card, "scale", Vector2(1.02, 1.02), 0.1)
+		_card_tweens[char_id] = tween
 
 func _on_card_unhover(char_id: String) -> void:
 	var card = _cards.get(char_id)
 	if card:
 		var in_squad: bool = _squad_slots.has_character(char_id)
 		_apply_card_style(card, in_squad, false)
+		
+		# PERFORMANCE: Kill old tween before starting new one
+		if _card_tweens.has(char_id) and _card_tweens[char_id] and _card_tweens[char_id].is_valid():
+			_card_tweens[char_id].kill()
+		
 		var tween := create_tween().set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 		tween.tween_property(card, "scale", Vector2.ONE, 0.1)
+		_card_tweens[char_id] = tween
 
 func _add_to_squad(char_id: String) -> void:
 	if _squad_slots.has_character(char_id):
-		return  # Already in squad
+		return # Already in squad
 	
 	if _squad_slots.add_character(char_id):
 		_play_burst_sfx(char_id)
@@ -606,20 +716,6 @@ func _on_squad_complete() -> void:
 	UISounds.play_confirm()
 	_transition_to_stage()
 
-func _transition_to_stage() -> void:
-	if _phase == Phase.STAGE:
-		return
-	_phase = Phase.STAGE
-	
-	if _transition_tween:
-		_transition_tween.kill()
-	
-	var vh := get_viewport_rect().size.y
-	_transition_tween = create_tween().set_parallel(true)
-	_transition_tween.tween_property(_squad_container, "position:y", -vh, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
-	_transition_tween.tween_property(_squad_container, "modulate:a", 0.0, 0.4)
-	_transition_tween.tween_property(_stage_container, "position:y", 0.0, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
-	_transition_tween.tween_property(_stage_container, "modulate:a", 1.0, 0.4).set_delay(0.1)
 
 func _on_stage_back() -> void:
 	UISounds.play_back()
@@ -648,11 +744,15 @@ func _transition_to_squad() -> void:
 	_transition_tween.tween_property(_stage_container, "modulate:a", 0.0, 0.4)
 	_transition_tween.tween_property(_squad_container, "position:y", 0.0, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 	_transition_tween.tween_property(_squad_container, "modulate:a", 1.0, 0.4).set_delay(0.1)
+	_transition_tween.tween_callback(func(): _stage_container.visible = false) # Disable input processing after transition
+	
+	# Restore focus to first card when returning to squad phase
+	call_deferred("_grab_initial_focus")
 
 func _on_stage_confirmed(stage_id: String) -> void:
 	var squad_ids: Array[String] = _squad_slots.get_squad()
 	
-	# Convert character IDs to indices for the Level/GameState
+	# Convert character IDs to indices for the Level/GameManager
 	var squad_indices: Array[int] = []
 	var all_ids = _registry.get_all_character_ids()
 	for char_id in squad_ids:
@@ -668,12 +768,12 @@ func _on_stage_confirmed(stage_id: String) -> void:
 		_start_game(squad_indices, stage_id)
 
 func _start_game(squad: Array[int], stage_id: String) -> void:
-	# Save selection to GameState
-	if GameState:
-		GameState.set_selected_characters(squad)
+	# Save selection to GameManager
+	if GameManager:
+		GameManager.set_selected_characters(squad)
 		if squad.size() > 0:
-			GameState.set_player_character(squad[0])
-		GameState.current_stage_id = stage_id
+			GameManager.set_player_character(squad[0])
+		GameManager.current_stage_id = stage_id
 	
 	# Stop menu music
 	if MenuManager:
@@ -681,3 +781,64 @@ func _start_game(squad: Array[int], stage_id: String) -> void:
 	
 	# Change to Level scene
 	get_tree().change_scene_to_file("res://scenes/levels/Level.tscn")
+
+
+## Auto-focus first character card for controller users
+func _grab_initial_focus() -> void:
+	# Find and focus the first unlocked character card
+	for char_id in _cards.keys():
+		var card: Control = _cards[char_id]
+		if card and card.get_meta("is_unlocked", false):
+			card.grab_focus()
+			return
+	# Fallback to first card if all locked
+	if not _cards.is_empty():
+		var first_card: Control = _cards.values()[0]
+		if first_card:
+			first_card.grab_focus()
+
+
+## Set up explicit focus neighbors for row-based navigation
+func _setup_card_focus_neighbors() -> void:
+	var row1: HBoxContainer = _grid.get_meta("row1") if _grid else null
+	var row2: HBoxContainer = _grid.get_meta("row2") if _grid else null
+	if not row1 or not row2:
+		return
+	
+	var row1_cards: Array[Control] = []
+	var row2_cards: Array[Control] = []
+	
+	for child in row1.get_children():
+		if child is Control and child.focus_mode != Control.FOCUS_NONE:
+			row1_cards.append(child)
+	for child in row2.get_children():
+		if child is Control and child.focus_mode != Control.FOCUS_NONE:
+			row2_cards.append(child)
+	
+	# Set up row 1 horizontal neighbors
+	for i in range(row1_cards.size()):
+		var card := row1_cards[i]
+		# Left neighbor (wrap to end of row)
+		var left_idx := i - 1 if i > 0 else row1_cards.size() - 1
+		card.focus_neighbor_left = card.get_path_to(row1_cards[left_idx])
+		# Right neighbor (wrap to start of row)
+		var right_idx := i + 1 if i < row1_cards.size() - 1 else 0
+		card.focus_neighbor_right = card.get_path_to(row1_cards[right_idx])
+		# Down neighbor (same column in row 2, or last if row 2 is shorter)
+		if row2_cards.size() > 0:
+			var down_idx := mini(i, row2_cards.size() - 1)
+			card.focus_neighbor_bottom = card.get_path_to(row2_cards[down_idx])
+	
+	# Set up row 2 horizontal neighbors
+	for i in range(row2_cards.size()):
+		var card := row2_cards[i]
+		# Left neighbor (wrap to end of row)
+		var left_idx := i - 1 if i > 0 else row2_cards.size() - 1
+		card.focus_neighbor_left = card.get_path_to(row2_cards[left_idx])
+		# Right neighbor (wrap to start of row)
+		var right_idx := i + 1 if i < row2_cards.size() - 1 else 0
+		card.focus_neighbor_right = card.get_path_to(row2_cards[right_idx])
+		# Up neighbor (same column in row 1, or last if row 1 is shorter)
+		if row1_cards.size() > 0:
+			var up_idx := mini(i, row1_cards.size() - 1)
+			card.focus_neighbor_top = card.get_path_to(row1_cards[up_idx])

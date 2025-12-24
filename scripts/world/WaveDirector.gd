@@ -153,7 +153,9 @@ func _update_wave_state() -> void:
 	
 	# Reward for completing the PREVIOUS wave (e.g. at start of Wave 2, reward for Wave 1)
 	if _current_wave > 1:
-		_calculate_and_emit_reward(_current_wave - 1)
+		var completed_wave := _current_wave - 1
+		EventBus.wave_completed.emit(completed_wave) # Signal for upgrades like Commander's wave heal
+		_calculate_and_emit_reward(completed_wave)
 	
 	# DDA Check (Only if not Gate/N01)
 	if not _gate_active and not _n01_active:

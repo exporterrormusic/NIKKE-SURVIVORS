@@ -211,6 +211,19 @@ func heal(amount: int) -> void:
 	hp = mini(hp + amount, max_hp)
 	health_changed.emit(hp, max_hp)
 
+## Heal a specific character by their ID (for squad-wide healing like Commander's wave heal)
+func heal_character_by_id(char_id: String, amount: int) -> void:
+	if char_id == _current_char_id:
+		# Currently active character
+		heal(amount)
+	elif char_id in character_states:
+		# Inactive squad member - heal their stored state
+		var state = character_states[char_id]
+		var char_max_hp = state.get("max_hp", max_hp)
+		state["hp"] = mini(state["hp"] + amount, char_max_hp)
+		print("[PlayerHealth] Healed inactive %s for %d (now %d/%d)" % [char_id, amount, state["hp"], char_max_hp])
+	else:
+		print("[PlayerHealth] Cannot heal %s - not in squad" % char_id)
 
 ## Trigger invincibility
 func _trigger_invincibility(duration: float) -> void:

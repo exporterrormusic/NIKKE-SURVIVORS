@@ -57,6 +57,10 @@ static func try_activate_cheat(input_code: String) -> bool:
 	
 	if activated_any:
 		_cheat_used_this_session = true
+		# Taint the match to block leaderboards and achievements
+		var game_manager = Engine.get_main_loop().root.get_node_or_null("/root/GameManager")
+		if game_manager and game_manager.has_method("taint_match"):
+			game_manager.taint_match("Cheat code entered")
 		
 	return activated_any
 
@@ -67,6 +71,10 @@ static func set_cheat_active(cheat_id: String, active: bool) -> void:
 	_active_cheats[cheat_id] = active
 	if active:
 		_cheat_used_this_session = true
+		# Taint the match to block leaderboards and achievements
+		var game_manager = Engine.get_main_loop().root.get_node_or_null("/root/GameManager")
+		if game_manager and game_manager.has_method("taint_match"):
+			game_manager.taint_match("Cheat: " + cheat_id)
 
 static func has_cheated_this_session() -> bool:
 	return _cheat_used_this_session

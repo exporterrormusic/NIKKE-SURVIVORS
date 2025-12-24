@@ -32,7 +32,8 @@ enum AchievementType {
 	NO_DAMAGE, # Complete a wave without taking damage
 	ALL_MAPS, # Play on all maps
 	ABANDONED_WISHES, # Reach Wave 10
-	SHE_DESCENDS # Spawn N01
+	SHE_DESCENDS, # Spawn N01
+	NO_SHOTS_FIRED # Beat Wave 11 without firing a shot
 }
 
 const GENERAL_ID := "general"
@@ -53,6 +54,7 @@ var _session_skills: Dictionary = {} # char_index -> total skill purchases this 
 var _current_character_id: String = ""
 var _current_map_id: String = ""
 var _wave_damaged: bool = false
+var _shots_fired: bool = false # Track if player fired any shots this run
 
 
 func _ready() -> void:
@@ -145,6 +147,8 @@ func get_achievement_id(type: AchievementType, char_id: String) -> String:
 			return "abandoned_wishes"
 		AchievementType.SHE_DESCENDS:
 			return "she_descends"
+		AchievementType.NO_SHOTS_FIRED:
+			return "no_shots_fired"
 	return ""
 
 
@@ -242,6 +246,19 @@ func get_character_achievements(char_id: String) -> Array[Dictionary]:
 			"category": "GENERAL",
 			"unlocked": sd_data.get("unlocked", false),
 			"progress": sd_data.get("progress", 0),
+			"target": 1
+		})
+		
+		# No Shots Fired
+		var ns_id := get_achievement_id(AchievementType.NO_SHOTS_FIRED, "")
+		var ns_data: Dictionary = _achievements.get(ns_id, {"unlocked": false, "progress": 0})
+		achievements.append({
+			"id": ns_id,
+			"title": "Look Commander, No Hands!",
+			"desc": "Defeat Wave 11 without firing any bullets, rockets, or pellets",
+			"category": "GENERAL",
+			"unlocked": ns_data.get("unlocked", false),
+			"progress": ns_data.get("progress", 0),
 			"target": 1
 		})
 		
@@ -428,11 +445,23 @@ func reset_session() -> void:
 	print("[AchievementManager] Session tracking reset")
 
 
+## Call when player fires any projectile (bullet, rocket, pellet)
+## Invalidates "No Shots Fired" achievement for this run
+func on_shot_fired() -> void:
+	_shots_fired = true
+
+
 # --- Internal Helpers ---
 
 func _unlock_achievement(achievement_id: String, char_id: String, type: AchievementType) -> void:
 	if _achievements.get(achievement_id, {}).get("unlocked", false):
 		return # Already unlocked
+	
+	# Block achievements if match is tainted (cheats/dev menu used)
+	var game_manager = get_node_or_null("/root/GameManager")
+	if game_manager and "match_tainted" in game_manager and game_manager.match_tainted:
+		print("[AchievementManager] Achievement '%s' blocked - match tainted" % achievement_id)
+		return
 	
 	# Initialize if needed
 	if not _achievements.has(achievement_id):
@@ -481,6 +510,8 @@ func _get_target_for_type(type: AchievementType) -> int:
 			return 1
 		AchievementType.SHE_DESCENDS:
 			return 1
+		AchievementType.NO_SHOTS_FIRED:
+			return 1
 	return 1
 
 
@@ -508,6 +539,8 @@ func _get_achievement_title(type: AchievementType, display_name: String) -> Stri
 			return "Abandoned Wishes"
 		AchievementType.SHE_DESCENDS:
 			return "She Descends"
+		AchievementType.NO_SHOTS_FIRED:
+			return "Look Commander, No Hands!"
 	return "Unknown Achievement"
 
 
@@ -550,6 +583,7 @@ func _on_enemy_killed_event(enemy: Node, killer_source: String) -> void:
 func _on_run_started(map_id: String) -> void:
 	_current_map_id = map_id
 	_wave_damaged = false
+	_shots_fired = false # Reset for No Shots Fired achievement
 
 
 func _on_run_completed(is_win: bool, map_id: String, _duration: float) -> void:
@@ -568,9 +602,13 @@ func _on_wave_started(wave_number: int) -> void:
 	_track_abandoned_wishes(wave_number)
 
 
-func _on_wave_completed(_wave_number: int) -> void:
+func _on_wave_completed(wave_number: int) -> void:
 	if not _wave_damaged:
 		_unlock_achievement(get_achievement_id(AchievementType.NO_DAMAGE, ""), "", AchievementType.NO_DAMAGE)
+	
+	# Track "Look Commander, No Hands!" - Defeat Wave 11 without firing
+	if wave_number >= 11 and not _shots_fired:
+		_unlock_achievement(get_achievement_id(AchievementType.NO_SHOTS_FIRED, ""), "", AchievementType.NO_SHOTS_FIRED)
 
 
 func _on_player_damaged(_amount: int, _source: Node) -> void:

@@ -118,58 +118,38 @@ func _process(delta: float) -> void:
 		_sprite.rotation = dir
 
 func _process_hunt_mode(delta: float) -> void:
-	# Find nearest enemy if no target or target is invalid
-	if not _current_target or not is_instance_valid(_current_target):
-		_current_target = _find_nearest_enemy()
+	# AGGRESSIVE AI: Always seek nearest enemy, fire immediately when in range
+	# No complex distance constraints - just hunt and kill
+	# Always find the best target (fast re-evaluation)
+	_current_target = _find_nearest_enemy()
 	
 	if _current_target and is_instance_valid(_current_target):
 		var to_target := _current_target.global_position - global_position
 		var dist := to_target.length()
 		
-		# Check if target is too far from owner - stay relatively near Cecil
-		var max_distance_from_owner := 450.0 # Increased to match longer attack range
-		var dist_from_owner := global_position.distance_to(owner_player.global_position)
-		
-		if dist_from_owner > max_distance_from_owner:
-			# Return toward owner if too far
-			var return_dir := (owner_player.global_position - global_position).normalized()
-			global_position += return_dir * hunt_speed * speed_multiplier * delta
-		elif dist > attack_range:
-			# Move toward target aggressively
-			var move_dir := to_target.normalized()
-			var new_pos := global_position + move_dir * hunt_speed * speed_multiplier * delta
-			
-			# Clamp to max distance from owner
-			var new_dist_from_owner := new_pos.distance_to(owner_player.global_position)
-			if new_dist_from_owner <= max_distance_from_owner:
-				global_position = new_pos
-			else:
-				# Move but stay within range
-				var dir_from_owner := (new_pos - owner_player.global_position).normalized()
-				global_position = owner_player.global_position + dir_from_owner * max_distance_from_owner
-		else:
-			# In range, fire immediately and aggressively
+		# If in range, FIRE and hold position
+		if dist <= attack_range:
 			if _fire_timer <= 0:
 				_fire_laser_at(_current_target)
 				_fire_timer = fire_cooldown / speed_multiplier
-			
-			# Stay close to target for continuous firing (don't orbit away)
-			var optimal_range := attack_range * 0.5 # Stay at half range for better accuracy
-			var desired_pos := _current_target.global_position + (global_position - _current_target.global_position).normalized() * optimal_range
-			
-			# Clamp desired position to max distance from owner
-			var desired_dist := desired_pos.distance_to(owner_player.global_position)
-			if desired_dist > max_distance_from_owner:
-				var dir := (desired_pos - owner_player.global_position).normalized()
-				desired_pos = owner_player.global_position + dir * max_distance_from_owner
-			
-			global_position = global_position.lerp(desired_pos, 5.0 * delta) # Faster positioning
+			# Slight drift toward target to stay close
+			global_position += to_target.normalized() * 50.0 * delta
+		else:
+			# Chase target aggressively - move fast!
+			var chase_speed := hunt_speed * 1.5 * speed_multiplier
+			global_position += to_target.normalized() * chase_speed * delta
+		
+		# Rotate to face target
+		_sprite.rotation = to_target.angle()
 	else:
-		# No target, orbit around player
+		# No enemies - orbit player loosely
 		_orbit_player(delta)
 	
-	# Keep drone on screen
-	_clamp_to_screen()
+	# Soft tether to player - if too far, drift back
+	var dist_to_owner := global_position.distance_to(owner_player.global_position)
+	if dist_to_owner > 600.0:
+		var pull := (owner_player.global_position - global_position).normalized()
+		global_position += pull * 200.0 * delta
 
 func _process_shield_mode(delta: float) -> void:
 	# Move exactly with player in shield mode - no lag
@@ -268,7 +248,27 @@ func _fire_laser_at(target: Node2D) -> void:
 	if not target or not is_instance_valid(target):
 		return
 	
-	var direction := (target.global_position - global_position).normalized()
+	# AIM PREDICTION: Lead the target based on its velocity
+	var target_pos := target.global_position
+	var target_velocity := Vector2.ZERO
+	
+	# Get target's velocity if available
+	if target is CharacterBody2D:
+		target_velocity = (target as CharacterBody2D).velocity
+	elif "velocity" in target:
+		target_velocity = target.velocity
+	elif "_velocity" in target:
+		target_velocity = target._velocity
+	
+	# Calculate time for laser to reach target
+	var dist := global_position.distance_to(target_pos)
+	var bullet_speed := laser_speed * speed_multiplier
+	var time_to_target := dist / bullet_speed
+	
+	# Predict where target will be
+	var predicted_pos := target_pos + target_velocity * time_to_target * 0.8 # 0.8 = slight undershoot for accuracy
+	
+	var direction := (predicted_pos - global_position).normalized()
 	
 	# Calculate damage as 50% of player's damage
 	var laser_damage: int = 3 # Fallback
@@ -279,7 +279,7 @@ func _fire_laser_at(target: Node2D) -> void:
 	var laser := Node2D.new()
 	laser.set_script(_get_laser_script())
 	laser.set("direction", direction)
-	laser.set("speed", laser_speed * speed_multiplier)
+	laser.set("speed", bullet_speed)
 	laser.set("damage", laser_damage)
 	laser.global_position = global_position + direction * 15.0
 	

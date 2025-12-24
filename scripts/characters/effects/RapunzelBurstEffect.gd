@@ -214,18 +214,17 @@ func _spawn_edge_turrets() -> void:
 			var y := lerpf(map_min, map_max, ty)
 			positions.append(Vector2(x, y))
 	
-	# Spawn turrets at calculated positions
-	const TurretScript = preload("res://scripts/player/Turret.gd")
+	# Spawn turrets at calculated positions using simplified BurstTurret
+	const BurstTurretScript = preload("res://scripts/characters/effects/BurstTurret.gd")
 	var spawned_turrets: Array = []
 	
 	for i in range(positions.size()):
 		var pos := positions[i]
-		var turret := TurretScript.new()
+		var turret := BurstTurretScript.new()
 		turret.ammo = TURRET_AMMO
 		turret.max_ammo = TURRET_AMMO
-		turret.spawned_by_summon = true
 		turret.spawner_node = owner_node
-		# Stagger fire times: spread across 1 second (0.05s per turret)
+		# Stagger fire times: spread across 1 second (0.05s per turret) for faster deployment
 		turret.fire_delay = float(i) * 0.05
 		
 		parent_node.add_child(turret)

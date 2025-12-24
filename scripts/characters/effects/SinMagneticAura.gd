@@ -1,17 +1,15 @@
-extends Node2D
+extends Area2D
 class_name SinMagneticAura
 
 ## Sin's "Magnetic Personality" upgrade aura
 ## Passively charms enemies that get close to the player
-## Medium radius, continuous effect
+## Uses physics-based detection for instant charm on entry
 
-const AURA_RADIUS := 200.0  # Double the original radius for better coverage
-const CHARM_INTERVAL := 0.5  # Check for enemies every 0.5s
-const AURA_PULSE_DURATION := 1.5  # Visual pulse timing
+const AURA_RADIUS := 200.0 # Detection radius
+const AURA_PULSE_DURATION := 1.5 # Visual pulse timing
 
 var player: Node2D = null
-var controller: RefCounted = null  # Reference to SinController for talent checks
-var _charm_timer: float = 0.0
+var controller: RefCounted = null # Reference to SinController for talent checks
 var _pulse_time: float = 0.0
 
 # Pink/magenta color for the aura (distinct from Sin's purple charm)
@@ -22,6 +20,22 @@ func _ready() -> void:
 	top_level = true
 	z_index = -1
 	
+	# Setup collision for enemy detection
+	collision_layer = 0 # We don't need to be detected
+	collision_mask = 2 # Mask for enemies (layer 2)
+	monitoring = true
+	monitorable = false
+	
+	# Create collision shape
+	var shape := CircleShape2D.new()
+	shape.radius = AURA_RADIUS
+	var collision := CollisionShape2D.new()
+	collision.shape = shape
+	add_child(collision)
+	
+	# Connect signal for instant detection
+	body_entered.connect(_on_body_entered)
+	
 	# Unshaded for visibility
 	var mat := CanvasItemMaterial.new()
 	mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
@@ -30,7 +44,7 @@ func _ready() -> void:
 func initialize(player_ref: Node2D, controller_ref: RefCounted = null) -> void:
 	player = player_ref
 	controller = controller_ref
-	print("[SinMagneticAura] Magnetic Personality aura initialized")
+	print("[SinMagneticAura] Magnetic Personality aura initialized (instant detection)")
 
 func _process(delta: float) -> void:
 	if not player or not is_instance_valid(player):
@@ -45,54 +59,35 @@ func _process(delta: float) -> void:
 	if _pulse_time >= AURA_PULSE_DURATION:
 		_pulse_time = 0.0
 	
-	# Charm check timer
-	_charm_timer += delta
-	if _charm_timer >= CHARM_INTERVAL:
-		_charm_timer = 0.0
-		_charm_nearby_enemies()
-	
 	# PERFORMANCE: Only redraw every 3rd frame
 	if Engine.get_process_frames() % 3 == 0:
 		queue_redraw()
 
-func _charm_nearby_enemies() -> void:
-	var tree := get_tree()
-	if not tree:
+func _on_body_entered(body: Node2D) -> void:
+	"""Instantly charm enemies when they enter the aura."""
+	if not is_instance_valid(body):
 		return
 	
-	var enemies := tree.get_nodes_in_group("enemies")
-	for enemy in enemies:
-		if not is_instance_valid(enemy) or not enemy is Node2D:
-			continue
-		
-		# Skip already charmed enemies
-		if enemy.is_in_group("charmed_allies"):
-			continue
-		
-		# Skip bosses and elites (they're too powerful to charm passively)
-		if enemy.has_meta("is_boss") and enemy.get_meta("is_boss"):
-			continue
-		if enemy.has_meta("is_elite") and enemy.get_meta("is_elite"):
-			continue
-		
-		# Skip bosses, elites, and tanks (passive only affects normal enemies)
-		if enemy.has_meta("enemy_tier"):
-			var tier = enemy.get_meta("enemy_tier")
-			if tier in ["elite", "boss", "super_boss", "tank"]:
-				continue
-		
-		# Check range
-		var dist: float = enemy.global_position.distance_to(global_position)
-		if dist > AURA_RADIUS:
-			continue
-		
-		# Charm the enemy!
-		_apply_charm_to_enemy(enemy)
+	# Must be an enemy
+	if not body.is_in_group("enemies"):
+		return
+	
+	# Skip already charmed enemies
+	if body.is_in_group("charmed_allies"):
+		return
+	
+	# Skip bosses, elites, and tanks (passive only affects normal enemies)
+	if body.has_meta("enemy_tier"):
+		var tier = body.get_meta("enemy_tier")
+		if tier in ["elite", "boss", "super_boss", "tank"]:
+			return
+	
+	# Charm the enemy instantly!
+	_apply_charm_to_enemy(body)
 
 func _apply_charm_to_enemy(enemy: Node2D) -> void:
 	# Use the same charm system as Sin's normal ability
 	# This properly sets up the charmed state and behavior
-	
 	# Check if this is a tank (needs force=true)
 	var is_tank := false
 	if enemy.has_meta("enemy_tier") and enemy.get_meta("enemy_tier") == "tank":
@@ -111,7 +106,7 @@ func _apply_charm_to_enemy(enemy: Node2D) -> void:
 		enemy.remove_from_group("enemies")
 		_apply_charm_visual(enemy)
 	
-	print("[SinMagneticAura] Enemy charmed by aura!")
+	print("[SinMagneticAura] Enemy charmed instantly on entry!")
 
 func _apply_charm_visual(enemy: Node2D) -> void:
 	# Add a pink glow shader or modulate

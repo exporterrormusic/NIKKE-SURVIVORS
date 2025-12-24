@@ -9,7 +9,7 @@ signal beam_finished
 
 # Beam settings
 const BEAM_MAX_LENGTH := 5000.0
-const BEAM_ANGLE_DEG := 70.0
+const BEAM_ANGLE_DEG := 50.0
 const RAY_COUNT := 20
 const BASE_DAMAGE_PER_TICK := 5
 const DAMAGE_INTERVAL := 0.2
@@ -25,7 +25,7 @@ enum BeamState {CHARGING, FIRING, FADING, DONE}
 var _state := BeamState.CHARGING
 var _boss: Node2D = null
 var _player: Node2D = null
-var _charge_time := 2.0
+var _charge_time := 4.0
 var _fire_time := 2.0
 var _fade_time := 0.5
 var _timer := 0.0

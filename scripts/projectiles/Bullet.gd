@@ -153,6 +153,31 @@ func _physics_process(delta):
 		start_position = global_position
 		_start_position_set = true
 	
+	# SLIGHT HOMING for assault rifle - gently curves toward nearest enemy
+	var bullet_name_lower := name.to_lower()
+	if "assault" in bullet_name_lower:
+		var enemies := TargetCache.get_enemies()
+		var nearest_enemy: Node2D = null
+		var min_dist_sq := 150.0 * 150.0 # Only home within 150px
+		
+		for enemy in enemies:
+			if not is_instance_valid(enemy) or not enemy is Node2D:
+				continue
+			var enemy_node: Node2D = enemy as Node2D
+			var dist_sq: float = global_position.distance_squared_to(enemy_node.global_position)
+			if dist_sq < min_dist_sq:
+				min_dist_sq = dist_sq
+				nearest_enemy = enemy_node
+		
+		if nearest_enemy:
+			var to_enemy := (nearest_enemy.global_position - global_position).normalized()
+			var current_dir := velocity.normalized()
+			# Gentle turn rate - 3 radians per second max
+			var turn_rate: float = 3.0 * delta
+			var new_dir := current_dir.slerp(to_enemy, turn_rate)
+			velocity = new_dir * velocity.length()
+			rotation = velocity.angle()
+	
 	var frame_movement = velocity * delta
 	var current_pos = global_position
 	var next_pos = current_pos + frame_movement
@@ -198,6 +223,25 @@ func _physics_process(delta):
 		if traveled >= max_range:
 			_despawn()
 			return
+	
+	# ADDITIONAL: Area-based enemy collision for more forgiving hitbox
+	# Only for assault rifle, sniper, and shotgun - SMG is fine with raycast only
+	var bullet_name := name.to_lower()
+	var needs_forgiving_hitbox := "assault" in bullet_name or "sniper" in bullet_name or "snow" in bullet_name or "shotgun" in bullet_name or "pellet" in bullet_name or "kilo" in bullet_name
+	
+	if needs_forgiving_hitbox:
+		const BULLET_HITBOX_RADIUS := 24.0 # Larger hitbox for forgiveness
+		var enemies := TargetCache.get_enemies()
+		var radius_sq := BULLET_HITBOX_RADIUS * BULLET_HITBOX_RADIUS
+		for enemy in enemies:
+			if not is_instance_valid(enemy):
+				continue
+			if enemy is Node2D:
+				var enemy_node: Node2D = enemy as Node2D
+				var dist_sq: float = global_position.distance_squared_to(enemy_node.global_position)
+				if dist_sq < radius_sq:
+					_on_body_entered(enemy)
+					return # Bullet should be destroyed or pierced
 	
 	# Check boulder collision every frame for accuracy
 	_frame_counter += 1

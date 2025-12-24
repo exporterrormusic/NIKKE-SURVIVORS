@@ -30,6 +30,7 @@ const CHARACTER_UPGRADES := {
 	],
 	"commander": [
 		{"id": "basic_attack", "name": "Obviously Anderson", "desc": "All squad attacks generate Burst gauge at 2x rate.", "max_level": 1, "base_cost": 10, "icon": "⚡"},
+		{"id": "wave_heal", "name": "Good Genes", "desc": "Commander heals at wave end (or every 30s in timerless modes). Heals 2-10 based on Burst gauge: lower gauge = more healing.", "max_level": 1, "base_cost": 20, "icon": "💚"},
 	],
 	"marian": [
 		{"id": "basic_attack", "name": "Main Heroine", "desc": "Replace minigun with a continuous purple beam cannon.", "max_level": 1, "base_cost": 10, "icon": "💜"},
@@ -41,6 +42,7 @@ const CHARACTER_UPGRADES := {
 	],
 	"kilo": [
 		{"id": "talos_ammo", "name": "Build-a-Bullet", "desc": "Every 3rd bullet fired regenerates 1 ammo. Applies to Squad.", "max_level": 1, "base_cost": 10, "icon": "🤖"},
+		{"id": "core_drop", "name": "Filling Crown's Ball Pit", "desc": "+50% core drop chance. Bosses have 50% chance for extra core.", "max_level": 1, "base_cost": 20, "icon": "🔴"},
 	],
 	"cecil": [
 		{"id": "basic_attack", "name": "Three Wishes...", "desc": "Gain 3 extra lives. Revive at full HP with 5s invincibility.", "max_level": 1, "base_cost": 10, "icon": "✨"},

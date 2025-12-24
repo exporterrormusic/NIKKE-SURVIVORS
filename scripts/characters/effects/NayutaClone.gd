@@ -297,8 +297,13 @@ func _physics_process(_delta: float) -> void:
 		velocity = Vector2.ZERO
 		return
 	
-	# Find target
-	_target_enemy = _find_best_target()
+	# Only find new target if current is invalid (optimization - was every frame)
+	if not _target_enemy or not is_instance_valid(_target_enemy) or _target_enemy.is_in_group("charmed_allies"):
+		_target_enemy = _find_best_target()
+	elif _target_enemy.get("_is_dying") == true or _target_enemy.get("is_dying") == true:
+		_target_enemy = _find_best_target()
+	elif _target_enemy.is_queued_for_deletion():
+		_target_enemy = _find_best_target()
 	
 	if _target_enemy and is_instance_valid(_target_enemy):
 		var to_target := _target_enemy.global_position - global_position

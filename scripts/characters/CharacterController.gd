@@ -191,6 +191,11 @@ func attack(direction: Vector2) -> bool:
 	
 	attack_timer = data.attack_cooldown
 	
+	# Track shot for "No Shots Fired" achievement
+	var ach_mgr = Engine.get_main_loop().root.get_node_or_null("/root/AchievementManager")
+	if ach_mgr and ach_mgr.has_method("on_shot_fired"):
+		ach_mgr.on_shot_fired()
+	
 	# Perform the attack
 	_perform_attack(direction)
 	return true

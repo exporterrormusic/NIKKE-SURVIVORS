@@ -4,6 +4,9 @@
 # Export builds
 _EXPORT_/
 
+# Cutscene video files (too large for version control)
+_CUTSCENES_/
+
 # Reference project (not part of this game)
 NIKKE-GODOT - Copy/
 /android/

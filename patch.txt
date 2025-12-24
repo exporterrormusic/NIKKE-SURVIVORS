@@ -1,3 +1,26 @@
+Patch v0.2A  -  "CHRISTMAS EVE LAUNCH"
+COMMANDER IMPROVEMENTS:
+- Assault rifle bullets now have slight homing toward nearby enemies
+- Assault rifle, sniper, and shotgun bullets have larger, more forgiving hitboxes
+- "Good Genes" wave-end heal now triggers correctly
+
+ANTI-CHEAT SYSTEM:
+- Using cheats or debug menu during a match now taints the run
+- Tainted matches are NOT recorded to leaderboards
+- Tainted matches CANNOT unlock achievements
+- Flag resets on starting a new run
+
+NEW ACHIEVEMENTS:
+- "Look Commander, No Hands!" - Defeat Wave 11 without firing any shots
+  (Use summons, drones, mind control, etc. to win)
+
+NEW SHOP UPGRADES:
+- Kilo: "Filling Crown's Ball Pit" (20 cores)
+  - +50% core drop chance on wave rewards
+  - Bosses have 50% chance to drop an extra core
+  - Passive: Active when Kilo is in squad with upgrade purchased
+
+------------------------------------------------------------
 Patch v0.1K  -  "GODDESS FALL"
 GODDESS FALL MODE:
 - Rapture Queen HP increased to 6666 (scales with difficulty)

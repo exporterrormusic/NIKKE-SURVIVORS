@@ -46,6 +46,7 @@ const MAX_LEADERBOARD_ENTRIES := 10
 
 # --- Internal State ---
 var _run_already_recorded: bool = false
+var match_tainted: bool = false # Set true if cheats/dev menu used - blocks leaderboard/achievements
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -89,6 +90,7 @@ func reset_run_stats() -> void:
 	kills_by_character.clear()
 	boss_kills_by_character.clear()
 	_run_already_recorded = false
+	match_tainted = false # Reset tainted flag for new run
 	
 	# Initialize stats for current squad
 	for char_idx in selected_character_indices:
@@ -97,6 +99,16 @@ func reset_run_stats() -> void:
 		boss_kills_by_character[char_idx] = 0
 	
 	print("[GameManager] Run stats reset")
+
+
+## Mark current match as tainted (cheats/dev menu used) - blocks leaderboard and achievements
+func taint_match(reason: String = "") -> void:
+	if not match_tainted:
+		match_tainted = true
+		var msg := "[GameManager] Match TAINTED - leaderboard and achievements disabled"
+		if reason != "":
+			msg += " (Reason: %s)" % reason
+		print(msg)
 
 
 func add_score(amount: int) -> void:
@@ -248,6 +260,11 @@ func record_run_result(character_id: String = "") -> void:
 	if _run_already_recorded:
 		return
 	_run_already_recorded = true
+	
+	# Skip leaderboard if match is tainted (cheats used)
+	if match_tainted:
+		print("[GameManager] Run NOT recorded to leaderboard - match tainted (cheats/dev menu used)")
+		return
 	
 	if character_id.is_empty():
 		# Try to get character_id from player_character_index

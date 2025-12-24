@@ -1360,7 +1360,7 @@ func reset() -> void:
 	
 	# 5. Reset Groups
 	# We must remove any "special" groups assigned during lifetime/spawn
-	var groups_to_remove = ["tank", "shielder", "exploder", "boss", "super_boss", "elite", "ranged"]
+	var groups_to_remove = ["tank", "shielder", "exploder", "boss", "super_boss", "elite", "ranged", "charmed_allies"]
 	for g in groups_to_remove:
 		if is_in_group(g):
 			remove_from_group(g)

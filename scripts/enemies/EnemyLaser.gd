@@ -237,7 +237,12 @@ func _apply_damage(target: Node) -> void:
 			_retire()
 			return
 	else:
-		if target.is_in_group("enemies") and not target.is_in_group("charmed_allies"):
+		# Normal enemy laser - only damages player/allies, NOT enemies (including charmed ones)
+		# Skip ALL enemies (charmed allies are still enemies functionally)
+		if target.is_in_group("enemies"):
+			return
+		# Also skip charmed_allies explicitly (in case they're not in enemies group)
+		if target.is_in_group("charmed_allies"):
 			return
 	
 	# Apply damage

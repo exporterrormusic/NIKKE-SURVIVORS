@@ -18,6 +18,7 @@ const SMG_BULLET_TEXTURE = preload("res://assets/projectiles/smg_bullet.png")
 # Bullet settings
 const MAX_BULLETS = 2000
 const MASK_COLLISION = 7 # World(1) + Enemy(2 - legacy) + Hitbox(4)
+const BULLET_COLLISION_RADIUS = 8.0 # Hitbox radius for collision detection
 
 const BULLET_SCALE = Vector2(0.12, 0.12)
 const BULLET_COLOR = Color(0, 0.9, 1, 1) # Cyan from SMGBullet.tscn
@@ -210,6 +211,22 @@ func _physics_process(delta: float) -> void:
 				b.position = next_pos
 		else:
 			b.position = next_pos
+		
+		# ADDITIONAL: Area-based collision check for more generous hitbox
+		# This catches enemies within BULLET_COLLISION_RADIUS of the bullet
+		if not destroyed:
+			var enemies = TargetCache.get_enemies()
+			var radius_sq := BULLET_COLLISION_RADIUS * BULLET_COLLISION_RADIUS
+			for enemy in enemies:
+				if not is_instance_valid(enemy):
+					continue
+				if enemy is Node2D:
+					var enemy_node: Node2D = enemy as Node2D
+					var dist_sq: float = b.position.distance_squared_to(enemy_node.global_position)
+					if dist_sq < radius_sq:
+						if _handle_collision(b, enemy):
+							destroyed = true
+							break
 			
 		if not destroyed:
 			# Lifecycle checks - use distance_squared for performance

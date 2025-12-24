@@ -3,10 +3,10 @@ extends Node2D
 # Visual charging effect that appears on enemy before firing laser
 # Shows a growing red glow that intensifies as charge completes
 
-const CHARGE_COLOR := Color(1.0, 0.1, 0.05, 1.0)       # Deep red
-const CHARGE_GLOW_COLOR := Color(1.0, 0.15, 0.1, 0.7)  # Red glow
-const CHARGE_CORE_COLOR := Color(1.0, 0.5, 0.4, 1.0)   # Hot pinkish core
-const CHARGE_FLASH_COLOR := Color(1.0, 0.8, 0.6, 1.0)  # Flash at full charge
+const CHARGE_COLOR := Color(3.0, 0.1, 0.1, 1.0) # Deep red (HDR match laser)
+const CHARGE_GLOW_COLOR := Color(2.0, 0.2, 0.1, 0.7) # Red glow (HDR)
+const CHARGE_CORE_COLOR := Color(5.0, 0.5, 0.5, 1.0) # Hot core (HDR match core)
+const CHARGE_FLASH_COLOR := Color(8.0, 2.0, 2.0, 1.0) # Intense Flash (HDR)
 
 var _charge_duration := 1.0
 var _progress := 0.0
@@ -116,19 +116,19 @@ func _update_visuals() -> void:
 	
 	# Outer glow grows and intensifies
 	if _outer_glow:
-		var outer_scale := 0.3 + eased * 1.2
+		var outer_scale := (0.3 + eased * 1.2) * 2.0
 		_outer_glow.scale = Vector2.ONE * outer_scale * pulse
 		_outer_glow.modulate.a = eased * 0.6 * pulse
 	
 	# Mid glow
 	if _mid_glow:
-		var mid_scale := 0.2 + eased * 0.8
+		var mid_scale := (0.2 + eased * 0.8) * 2.0
 		_mid_glow.scale = Vector2.ONE * mid_scale * pulse
 		_mid_glow.modulate.a = eased * 0.8 * pulse
 	
 	# Core glow intensifies
 	if _core_glow:
-		var core_scale := 0.1 + eased * 0.5
+		var core_scale := (0.1 + eased * 0.5) * 2.0
 		_core_glow.scale = Vector2.ONE * core_scale * pulse
 		_core_glow.modulate.a = eased * 0.9
 		# Color shifts toward white as charge completes
@@ -137,7 +137,7 @@ func _update_visuals() -> void:
 	
 	# Solid core
 	if _core_sprite:
-		var solid_scale := 0.05 + eased * 0.25
+		var solid_scale := (0.05 + eased * 0.25) * 2.0
 		_core_sprite.scale = Vector2.ONE * solid_scale
 		_core_sprite.modulate.a = eased
 

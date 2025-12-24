@@ -425,36 +425,35 @@ func _should_ignore_target(target: Node) -> bool:
 			
 	return false
 
+static var _shared_glow_texture: Texture2D = null
+
 func _check_boulder_collision() -> bool:
 	"""Check if projectile hit a boulder."""
 	# Skip if Chrono-Intangibility upgrade is active
-	# Skip if Chrono-Intangibility upgrade is active AND Wells is in squad
-	# Skip if Chrono-Intangibility upgrade is active AND Wells is in squad
 	var player = get_tree().get_first_node_in_group("player")
 	var has_upgrade = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility")
 	var in_squad = false
 	if player and player.has_method("is_character_in_squad"):
 		in_squad = player.is_character_in_squad("wells") or player.is_character_in_squad("Wells")
 	
-	# DIAGNOSTIC for user
-	if has_upgrade:
-		var has_printed = get_meta("debug_intangibility_printed", false)
-		if not has_printed and Engine.get_process_frames() % 60 == 0:
-			# print("[Explosive] Intangibility Check: has_upgrade=", has_upgrade, " in_squad=", in_squad)
-			set_meta("debug_intangibility_printed", true)
-			
 	if has_upgrade and in_squad:
 		return false
 	
-	var boulders := get_tree().get_nodes_in_group("boulders")
+	# Use TargetCache to avoid expensive get_nodes_in_group and array allocation every frame
+	var boulders := TargetCache.get_boulders()
 	for boulder in boulders:
 		if not is_instance_valid(boulder):
 			continue
 		var boulder_pos: Vector2 = boulder.global_position
-		var boulder_radius: float = 150.0 # Default
+		# Optimize: Check squared distance first to avoid sqrt if possible, or just simple check
+		# But boulder radii vary, so we need radius.
+		var boulder_radius: float = 150.0
 		if boulder.get("boulder_size") != null:
 			boulder_radius = boulder.boulder_size * 0.5
-		if global_position.distance_to(boulder_pos) < boulder_radius:
+			
+		# Squared distance check is faster
+		var dist_sq = global_position.distance_squared_to(boulder_pos)
+		if dist_sq < boulder_radius * boulder_radius:
 			return true
 	return false
 
@@ -496,11 +495,11 @@ func _explode() -> void:
 
 func _play_explosion_sound() -> void:
 	# Try to find audio director in scene
-	var player = get_tree().get_first_node_in_group("player")
-	if player == null:
-		player = get_tree().root.find_child("Player", true, false)
-	if player and player.has_node("AudioDirector"):
-		var audio = player.get_node("AudioDirector")
+	var player_node = TargetCache.get_player()
+	if player_node == null:
+		player_node = get_tree().root.find_child("Player", true, false)
+	if player_node and player_node.has_node("AudioDirector"):
+		var audio = player_node.get_node("AudioDirector")
 		if audio and audio.has_method("play_rocket_explosion_sound"):
 			audio.play_rocket_explosion_sound()
 
@@ -566,8 +565,13 @@ func _draw() -> void:
 func _ensure_glow_sprite() -> void:
 	if _glow_sprite:
 		return
-	if _glow_texture == null:
-		_glow_texture = _create_radial_glow_texture()
+	
+	# Use shared static texture to prevent expensive per-instance generation
+	if _shared_glow_texture == null:
+		_shared_glow_texture = _create_radial_glow_texture()
+	
+	_glow_texture = _shared_glow_texture
+	
 	_glow_sprite = Sprite2D.new()
 	_glow_sprite.texture = _glow_texture
 	_glow_sprite.centered = true

@@ -212,7 +212,7 @@ func _hit_target(target: Node) -> void:
 	# Apply damage
 	if target.has_method("take_damage"):
 		var hit_direction := velocity.normalized()
-		target.take_damage(damage, is_crit, hit_direction)
+		target.take_damage(damage, is_crit, hit_direction, false, killer_source)
 		
 		# Register burst hit with weapon type
 		if owner_node and owner_node.has_method("register_burst_hit"):

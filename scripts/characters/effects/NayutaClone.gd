@@ -16,12 +16,12 @@ var _registry: CharacterRegistry = null
 
 # Core properties
 var owner_player: Node2D = null
-var weapon_type: String = "smg"  # smg, sword, rocket, sniper
+var weapon_type: String = "smg" # smg, sword, rocket, sniper
 var max_hp: int = 5
 var current_hp: int = 5
 var attack_multiplier: float = 0.25
 var should_heal_on_death: bool = false
-var player_level: int = 1  # Player level for damage/HP scaling
+var player_level: int = 1 # Player level for damage/HP scaling
 
 # Movement
 var move_speed: float = 180.0
@@ -53,7 +53,7 @@ var _death_duration: float = 1.0
 # Health bar
 var _health_bar_bg: ColorRect = null
 var _health_bar_fill: ColorRect = null
-var _health_bar_label: Node2D = null  # Now uses SummonHPLabel script for world-space text
+var _health_bar_label: Node2D = null # Now uses SummonHPLabel script for world-space text
 const HEALTH_BAR_WIDTH := 40.0
 const HEALTH_BAR_HEIGHT := 8.0
 const HEALTH_BAR_OFFSET_Y := -45.0
@@ -65,7 +65,7 @@ const SMG_FIRE_DURATION := 2.0
 const SMG_PAUSE_DURATION := 2.0
 
 # Death sparkles
-var _sparkles: Array = []  # Array of {pos, vel, life}
+var _sparkles: Array = [] # Array of {pos, vel, life}
 var _sparkles_traveling: bool = false
 
 func _ready() -> void:
@@ -76,8 +76,8 @@ func _ready() -> void:
 	# Collision setup - use layer 8 (allies) so we don't collide with player
 	# Layer 1 = player/world, Layer 4 = enemies, Layer 8 = allies
 	# Mask: World (1), Enemies (4), Boulders (4)
-	collision_layer = 8  # Allies layer
-	collision_mask = 5   # Collide with World (1) and Enemies/Boulders (4)
+	collision_layer = 8 # Allies layer
+	collision_mask = 5 # Collide with World (1) and Enemies/Boulders (4)
 	
 	# Create visual components
 	_create_animator()
@@ -87,7 +87,8 @@ func _ready() -> void:
 	# Configure weapon
 	_configure_weapon()
 	
-	current_hp = max_hp
+	# Note: Don't set current_hp = max_hp here - initialize() will set proper values
+	# Setting it here uses default values (5HP) before initialize() is called
 	
 	set_process(true)
 	set_physics_process(true)
@@ -102,7 +103,7 @@ func _create_animator() -> void:
 	_shader_material.shader = HologramShader
 	_shader_material.set_shader_parameter("spawn_progress", 0.0)
 	_shader_material.set_shader_parameter("time", 0.0)
-	_shader_material.set_shader_parameter("hologram_color", Color(1.0, 0.85, 0.5, 1.0))  # Golden tint for Nayuta
+	_shader_material.set_shader_parameter("hologram_color", Color(1.0, 0.85, 0.5, 1.0)) # Golden tint for Nayuta
 	_shader_material.set_shader_parameter("scanline_speed", 2.0)
 	_shader_material.set_shader_parameter("hex_scale", 25.0)
 	_shader_material.set_shader_parameter("flicker_intensity", 0.08)
@@ -113,8 +114,6 @@ func _create_animator() -> void:
 	
 	# Load Nayuta sprite
 	_load_sprite()
-
-
 
 
 func _load_sprite() -> void:
@@ -181,9 +180,9 @@ func _create_health_bar() -> void:
 	_health_bar_fill = ColorRect.new()
 	_health_bar_fill.size = Vector2(HEALTH_BAR_WIDTH, HEALTH_BAR_HEIGHT)
 	_health_bar_fill.position = Vector2(-HEALTH_BAR_WIDTH / 2.0, HEALTH_BAR_OFFSET_Y)
-	_health_bar_fill.color = Color(0.3, 0.9, 0.3, 1.0)  # Green
+	_health_bar_fill.color = Color(0.3, 0.9, 0.3, 1.0) # Green
 	_health_bar_fill.z_index = 101
-	_health_bar_fill.material = hp_bar_mat.duplicate()  # Use duplicate to avoid shared state issues
+	_health_bar_fill.material = hp_bar_mat.duplicate() # Use duplicate to avoid shared state issues
 	add_child(_health_bar_fill)
 	
 	# HP text label using custom draw script (like EnemyHPLabel) for world-space rendering
@@ -204,11 +203,11 @@ func _update_health_bar() -> void:
 		
 		# Change color based on health (green -> orange -> red)
 		if hp_ratio > 0.5:
-			_health_bar_fill.color = Color(0.3, 0.9, 0.3, 1.0)  # Green
+			_health_bar_fill.color = Color(0.3, 0.9, 0.3, 1.0) # Green
 		elif hp_ratio > 0.25:
-			_health_bar_fill.color = Color(1.0, 0.6, 0.2, 1.0)  # Orange
+			_health_bar_fill.color = Color(1.0, 0.6, 0.2, 1.0) # Orange
 		else:
-			_health_bar_fill.color = Color(1.0, 0.3, 0.3, 1.0)  # Red
+			_health_bar_fill.color = Color(1.0, 0.3, 0.3, 1.0) # Red
 	
 	if _health_bar_label and _health_bar_label.has_method("update_values"):
 		_health_bar_label.update_values(current_hp, max_hp)
@@ -223,25 +222,25 @@ func _configure_weapon() -> void:
 		"smg":
 			var nayuta_data := _registry.get_character("nayuta")
 			attack_range = 350.0
-			attack_cooldown = 0.08  # Normal fire rate, burst system handles pauses
+			attack_cooldown = 0.08 # Normal fire rate, burst system handles pauses
 			max_ammo = nayuta_data.ammo_capacity if nayuta_data else 30
 			ammo = max_ammo
 			reload_time = nayuta_data.reload_time if nayuta_data else 2.0
 		"sword":
 			attack_range = 100.0
-			attack_cooldown = 0.9  # 0.3 * 3
-			max_ammo = -1  # Melee, no ammo
+			attack_cooldown = 0.9 # 0.3 * 3
+			max_ammo = -1 # Melee, no ammo
 		"rocket":
 			var rapunzel_data := _registry.get_character("rapunzel")
 			attack_range = 450.0
-			attack_cooldown = 1.5  # 0.5 * 3
+			attack_cooldown = 1.5 # 0.5 * 3
 			max_ammo = rapunzel_data.ammo_capacity if rapunzel_data else 4
 			ammo = max_ammo
 			reload_time = rapunzel_data.reload_time if rapunzel_data else 3.0
 		"sniper":
 			var snow_white_data := _registry.get_character("snow_white")
 			attack_range = 600.0
-			attack_cooldown = 1.05  # 0.35 * 3
+			attack_cooldown = 1.05 # 0.35 * 3
 			max_ammo = snow_white_data.ammo_capacity if snow_white_data else 7
 			ammo = max_ammo
 			reload_time = snow_white_data.reload_time if snow_white_data else 1.5
@@ -308,7 +307,7 @@ func _physics_process(_delta: float) -> void:
 		# Optimal range based on weapon
 		var optimal_range := attack_range * 0.8
 		if weapon_type == "sword":
-			optimal_range = 60.0  # Get close for melee
+			optimal_range = 60.0 # Get close for melee
 		
 		if dist > optimal_range:
 			var move_dir := to_target.normalized()
@@ -519,7 +518,7 @@ func _apply_separation() -> void:
 		var shield_node := shield as Node2D
 		var to_self := global_position - shield_node.global_position
 		var dist := to_self.length()
-		var shield_radius := 80.0  # Approximate shield radius
+		var shield_radius := 80.0 # Approximate shield radius
 		if dist < shield_radius and dist > 0:
 			# Strong push-back from shields
 			separation += to_self.normalized() * (shield_radius - dist) * 2.0
@@ -624,7 +623,7 @@ func _draw() -> void:
 	if _is_dying:
 		for sparkle in _sparkles:
 			var alpha: float = float(sparkle.life)
-			var color := Color(1.0, 0.85, 0.3, alpha)  # Gold sparkles
+			var color := Color(1.0, 0.85, 0.3, alpha) # Gold sparkles
 			draw_circle(sparkle.pos, sparkle.size * alpha, color)
 			
 			# Add glow
@@ -638,6 +637,10 @@ func _draw() -> void:
 
 func take_damage(amount, _is_crit = false, _direction = Vector2.ZERO, _from_burst = false, _source = "") -> void:
 	if _is_dying:
+		return
+	
+	# Spawn invincibility - can't take damage during spawn animation
+	if _spawn_timer > 0:
 		return
 	
 	# Ensure amount is an integer

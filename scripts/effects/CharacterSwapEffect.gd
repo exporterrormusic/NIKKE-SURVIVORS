@@ -30,6 +30,16 @@ var _theme: String = ""
 var _particles: Array = []
 var _slashes: Array = []
 var _symbols: Array = []
+var _is_ready: bool = false
+
+
+func _ready() -> void:
+	# Ensure effect is visible at night by using unshaded material
+	if material == null:
+		var mat = CanvasItemMaterial.new()
+		mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+		material = mat
+	_is_ready = true
 
 
 func trigger(character_index: int, at_position: Vector2) -> void:
@@ -84,7 +94,7 @@ func _spawn_themed_effect() -> void:
 func _spawn_sword_slashes() -> void:
 	# Red sword slashes in X pattern
 	for i in range(3):
-		var angle := -PI/4 + (PI/4) * i
+		var angle := -PI / 4 + (PI / 4) * i
 		_slashes.append({
 			"angle": angle,
 			"length": 0.0,
@@ -129,7 +139,7 @@ func _spawn_dark_energy() -> void:
 		var dist := randf_range(10, 40)
 		_particles.append({
 			"pos": Vector2.from_angle(angle) * dist,
-			"vel": Vector2.from_angle(angle + PI/2) * randf_range(80, 150),
+			"vel": Vector2.from_angle(angle + PI / 2) * randf_range(80, 150),
 			"size": randf_range(5, 10),
 			"alpha": 1.0,
 			"type": "energy",
@@ -222,7 +232,7 @@ func _spawn_wind_effect() -> void:
 		var dist := randf_range(5, 30)
 		_particles.append({
 			"pos": Vector2.from_angle(angle) * dist,
-			"vel": Vector2.from_angle(angle + PI/3) * randf_range(100, 180),
+			"vel": Vector2.from_angle(angle + PI / 3) * randf_range(100, 180),
 			"size": randf_range(3, 6),
 			"alpha": 0.8,
 			"trail_length": randf_range(15, 30),
@@ -332,7 +342,7 @@ func _draw_sword_slashes() -> void:
 			continue
 		var col := Color(_character_color.r * 1.3, _character_color.g * 0.8, _character_color.b * 0.8, s["alpha"])
 		var dir := Vector2.from_angle(s["angle"])
-		var start: Vector2 = -dir * s["length"] * 0.5
+		var start: Vector2 = - dir * s["length"] * 0.5
 		var end: Vector2 = dir * s["length"] * 0.5
 		draw_line(start, end, col, s["width"], true)
 		# Bright core
@@ -357,7 +367,7 @@ func _draw_snowflake_shape(pos: Vector2, size: float, rot: float, col: Color) ->
 		# Branch
 		var branch_pos := pos + dir * size * 0.6
 		for j in [-1, 1]:
-			var branch_dir := Vector2.from_angle(angle + j * PI/4)
+			var branch_dir := Vector2.from_angle(angle + j * PI / 4)
 			draw_line(branch_pos, branch_pos + branch_dir * size * 0.3, col, 1.5, true)
 
 
@@ -396,14 +406,14 @@ func _draw_clock() -> void:
 			draw_arc(Vector2.ZERO, 50, 0, TAU, 32, col, 3.0)
 			# Hour marks
 			for i in range(12):
-				var angle := (TAU / 12) * i - PI/2
+				var angle := (TAU / 12) * i - PI / 2
 				var start := Vector2.from_angle(angle) * 42
 				var end := Vector2.from_angle(angle) * 50
 				draw_line(start, end, col, 2.0)
 			# Hands
 			var hand_col := Color(1.0, 0.9, 0.7, sym["alpha"])
 			draw_line(Vector2.ZERO, Vector2.from_angle(sym["rotation"]) * 35, hand_col, 3.0)
-			draw_line(Vector2.ZERO, Vector2.from_angle(sym["rotation"] * 0.5 - PI/2) * 25, hand_col, 4.0)
+			draw_line(Vector2.ZERO, Vector2.from_angle(sym["rotation"] * 0.5 - PI / 2) * 25, hand_col, 4.0)
 	
 	# Gear particles
 	for p in _particles:
@@ -443,7 +453,7 @@ func _draw_heart(pos: Vector2, size: float, col: Color) -> void:
 	for i in range(32):
 		var t := float(i) / 31.0 * TAU
 		var x := 16 * pow(sin(t), 3)
-		var y := -(13 * cos(t) - 5 * cos(2*t) - 2 * cos(3*t) - cos(4*t))
+		var y := - (13 * cos(t) - 5 * cos(2 * t) - 2 * cos(3 * t) - cos(4 * t))
 		points.append(pos + Vector2(x, y) * size / 16.0)
 	draw_colored_polygon(points, col)
 
@@ -476,7 +486,7 @@ func _draw_kingly() -> void:
 
 func _draw_sparkle(pos: Vector2, size: float, col: Color) -> void:
 	for i in range(4):
-		var angle := (TAU / 4) * i + PI/4
+		var angle := (TAU / 4) * i + PI / 4
 		var dir := Vector2.from_angle(angle)
 		draw_line(pos, pos + dir * size, col, 2.0)
 
@@ -501,7 +511,7 @@ func _draw_mech() -> void:
 func _draw_hexagon(pos: Vector2, size: float, col: Color) -> void:
 	var points: PackedVector2Array = []
 	for i in range(6):
-		var angle := (TAU / 6) * i - PI/6
+		var angle := (TAU / 6) * i - PI / 6
 		points.append(pos + Vector2.from_angle(angle) * size)
 	draw_colored_polygon(points, col)
 

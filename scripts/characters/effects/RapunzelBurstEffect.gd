@@ -16,14 +16,14 @@ class_name RapunzelBurstEffect
 var owner_node: Node2D = null
 
 # Talent bonuses
-var grant_invuln: bool = false  # Divine Protection talent (now default)
+var grant_invuln: bool = false # Divine Protection talent (now default)
 var invuln_duration: float = 8.0
 
 # "6,000? Really?" talent - turret spawning
 var spawn_turrets: bool = false
 var turret_owner_level: int = 1
-const TURRET_COUNT := 20  # 5x4 grid across the map
-const TURRET_AMMO := 4  # 2 shots at 2 rockets each
+const TURRET_COUNT := 20 # 5x4 grid across the map
+const TURRET_AMMO := 4 # 2 shots at 2 rockets each
 
 var _age: float = 0.0
 var _has_executed: bool = false
@@ -115,7 +115,7 @@ func _execute_burst() -> void:
 		
 		# Register burst hit
 		if owner_node and owner_node.has_method("register_burst_hit"):
-			owner_node.register_burst_hit(enemy, true)  # from_burst = true
+			owner_node.register_burst_hit(enemy, true) # from_burst = true
 	
 	# "6,000? Really?" talent: Spawn 20 turrets around map edges
 	if spawn_turrets:
@@ -191,7 +191,7 @@ func _spawn_edge_turrets() -> void:
 	# Use actual MAP bounds (4000x4000 centered at origin)
 	# This matches the world_size set in Level.gd
 	const MAP_SIZE := 4000.0
-	const MARGIN := 300.0  # Keep turrets away from absolute edge
+	const MARGIN := 300.0 # Keep turrets away from absolute edge
 	var map_min := -MAP_SIZE / 2.0 + MARGIN
 	var map_max := MAP_SIZE / 2.0 - MARGIN
 	

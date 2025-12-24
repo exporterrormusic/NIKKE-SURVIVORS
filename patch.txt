@@ -1,8 +1,23 @@
-Patch v0.1G  -  "FINAL STRETCH"
-- More crash fixes involving N01 shader issues.
-- Remove ELITE mode.  Was pointless given scaling option.
-- Balance changes.  Now all non-boss enemies have a 1% chance to drop and PRISTINE RAPTURE CORE.
-- Completing a wave also rewards a core.
-- Cores now drop in the world and need to be picked up.
-- Fixed music player showing wrong names.
-- Can now use music controls during the pause menu
+Patch v0.1K  -  "GODDESS FALL"
+GODDESS FALL MODE:
+- Rapture Queen HP increased to 6666 (scales with difficulty)
+- Rapture Queen shield now 10% of max HP (666 base)
+- Horde Summon: At 30% HP, summons 70 enemies from all map edges
+- Core Overload: At 10% HP, triggers 10-second self-destruct countdown with 80% damage reduction
+- Warning banners display for both events with smart text scaling
+- Players start with 3 skill points in Goddess Fall mode
+- Aggression system: Queen speeds up and attacks faster as HP drops
+- Passive regeneration: 0.5%/s (high HP), 1%/s (mid), 2%/s (low HP)
+MAJOR OPTIMIZATIONS:
+- RAPUNZEL BURST: Fixed severe lag spike on launch. Restored the epic 0.5x camera zoom!
+- SMART LOD: Floating Damage Text now automatically hides when off-screen or zoomed out.
+- TURRETS: Rocket firing is now staggered over 1 second to prevent CPU spikes.
+- ROCKETS: Optimized physics and texture generation for smoother flight.
+NEW FEATURES:
+- DAMAGE LOG: Added a detailed log of recent damage taken to the Pause and Defeat menus.
+BUG FIXES:
+- Fixed crash related to enemy viewport checks.
+- Fixed HitboxComponent error causing crashes during mass combat.
+- Fixed BossMissile crash on polygon generation.
+- Fixed audio cutoff issues for massive explosions.
+- Fixed animation error when spawning pooled enemies.

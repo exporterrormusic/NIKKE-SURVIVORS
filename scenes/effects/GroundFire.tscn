@@ -1,6 +1,6 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=2 format=3 uid="uid://cm7g5n24hjr0c"]
 
-[ext_resource path="res://scripts/effects/GroundFire.gd" type="Script" id="1"]
+[ext_resource type="Script" uid="uid://d3bh3xucskr3r" path="res://scripts/effects/GroundFire.gd" id="1"]
 
 [node name="GroundFire" type="Area2D"]
-script = ExtResource(1)
+script = ExtResource("1")

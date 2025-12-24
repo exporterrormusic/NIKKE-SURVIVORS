@@ -8,7 +8,7 @@ const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
 
 var velocity := Vector2.ZERO
 var lifetime: float = 0.0
-var max_lifetime: float = 0.6  # Longer travel time for more range
+var max_lifetime: float = 0.6 # Longer travel time for more range
 var owner_node: Node = null
 
 var base_damage := 10
@@ -16,22 +16,22 @@ var _has_hit := false
 
 # Visual - sharp flowing petals
 var _rotation_speed: float = 0.0
-var _color: Color = Color(1.0, 0.2, 0.45, 0.95)  # Vivid rose pink
-var _glow_color: Color = Color(1.0, 0.5, 0.7, 0.6)  # Soft pink glow
-var _size: float = 22.0  # Much larger for visibility
-var _trail_positions: Array = []  # For motion trail
+var _color: Color = Color(1.0, 0.2, 0.45, 0.95) # Vivid rose pink
+var _glow_color: Color = Color(1.0, 0.5, 0.7, 0.6) # Soft pink glow
+var _size: float = 22.0 # Much larger for visibility
+var _trail_positions: Array = [] # For motion trail
 var _max_trail: int = 6
 
 func _ready() -> void:
 	add_to_group("player_projectiles")
-	add_to_group("projectiles")  # Also needed for Wells' Chrono-Intangibility boulder detection
-	collision_layer = 4  # Layer 3 (Projectiles)
-	collision_mask = 7   # 1(World) + 2(Enemies) + 4(Shields/Hitboxes)
+	add_to_group("projectiles") # Also needed for Wells' Chrono-Intangibility boulder detection
+	collision_layer = 4 # Layer 3 (Projectiles)
+	collision_mask = 7 # 1(World) + 2(Enemies) + 4(Shields/Hitboxes)
 	monitoring = true
-	monitorable = true   # Must be monitorable for Shield to detect it too
+	monitorable = true # Must be monitorable for Shield to detect it too
 	
 	var shape := CircleShape2D.new()
-	shape.radius = _size * 0.6  # Hitbox slightly smaller than visual
+	shape.radius = _size * 0.6 # Hitbox slightly smaller than visual
 	var collider := CollisionShape2D.new()
 	collider.shape = shape
 	add_child(collider)
@@ -151,7 +151,7 @@ func _on_body_entered(body: Node2D) -> void:
 		
 	if shield_root and shield_root.has_method("take_shield_damage"):
 		# Shield hit!
-		shield_root.take_shield_damage(base_damage, "projectile") 
+		shield_root.take_shield_damage(base_damage, "projectile")
 		if shield_root.has_method("is_active") and shield_root.is_active():
 			# Shield absorbed it (still active)
 			queue_free()

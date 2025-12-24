@@ -4,22 +4,22 @@ class_name MiniMap
 ## Shows player, bosses, super bosses, N01, and Pristine Rapture Cores.
 
 # Styling
-const MAP_SIZE := 200.0  # Square size in pixels
+const MAP_SIZE := 200.0 # Square size in pixels
 const BORDER_WIDTH := 3.0
 const BACKGROUND_COLOR := Color(0.05, 0.08, 0.12, 0.85)
 const BORDER_COLOR := Color(0.3, 0.5, 0.7, 0.9)
 const GRID_COLOR := Color(0.2, 0.3, 0.4, 0.3)
 
 # Map range - large enough to show entire map
-const MAP_RANGE := 5000.0  # World units visible on map (whole map)
+const MAP_RANGE := 5000.0 # World units visible on map (whole map)
 
 # Icon colors - bright and visible
-const PLAYER_COLOR := Color(0.3, 1.0, 0.5, 1.0)  # Bright green
-const PRISTINE_ORB_COLOR := Color(1.0, 0.3, 0.3, 1.0)  # Bright red for orbs
-const PRISTINE_GLOW_COLOR := Color(1.0, 0.2, 0.1, 0.5)  # Red glow
-const BOSS_COLOR := Color(0.85, 0.4, 1.0, 1.0)  # Bright purple for bosses
-const BOSS_GLOW_COLOR := Color(0.7, 0.2, 1.0, 0.5)  # Purple glow
-const N01_STROKE_COLOR := Color(0.0, 0.0, 0.0, 1.0)  # Black stroke for N01
+const PLAYER_COLOR := Color(0.3, 1.0, 0.5, 1.0) # Bright green
+const PRISTINE_ORB_COLOR := Color(1.0, 0.3, 0.3, 1.0) # Bright red for orbs
+const PRISTINE_GLOW_COLOR := Color(1.0, 0.2, 0.1, 0.5) # Red glow
+const BOSS_COLOR := Color(0.85, 0.4, 1.0, 1.0) # Bright purple for bosses
+const BOSS_GLOW_COLOR := Color(0.7, 0.2, 1.0, 0.5) # Purple glow
+const N01_STROKE_COLOR := Color(0.0, 0.0, 0.0, 1.0) # Black stroke for N01
 
 # Animation
 const OBJECTIVE_PULSE_SPEED := 4.0
@@ -31,10 +31,11 @@ var _objective_position: Vector2 = Vector2.ZERO
 var _objective_type: String = "intel"
 var _show_objective := false
 var _time := 0.0
+var _frame_counter: int = 0 # PERFORMANCE: Frame throttling
 
 # Panel reference
 var _panel: Panel = null
-var _draw_layer: Control = null  # Draw layer on top of panel
+var _draw_layer: Control = null # Draw layer on top of panel
 
 func _ready() -> void:
 	_build_ui()
@@ -42,13 +43,15 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_time += delta
-	# Trigger redraw on the draw layer, not this control
-	if _draw_layer:
+	_frame_counter += 1
+	
+	# PERFORMANCE: Only redraw every 2 frames (users won't notice at 60fps)
+	if _draw_layer and _frame_counter % 2 == 0:
 		_draw_layer.queue_redraw()
 	
-	# Try to find player if not set
-	if not _player or not is_instance_valid(_player):
-		_player = get_tree().get_first_node_in_group("player")
+	# Try to find player if not set (throttled)
+	if _frame_counter % 10 == 0 and (not _player or not is_instance_valid(_player)):
+		_player = TargetCache.get_player()
 
 func _build_ui() -> void:
 	# Set size and anchor to top-right corner
@@ -58,7 +61,7 @@ func _build_ui() -> void:
 	anchor_right = 1.0
 	anchor_top = 0.0
 	anchor_bottom = 0.0
-	offset_left = -MAP_SIZE - BORDER_WIDTH * 2 - 20
+	offset_left = - MAP_SIZE - BORDER_WIDTH * 2 - 20
 	offset_right = -20
 	offset_top = 50
 	offset_bottom = 50 + MAP_SIZE + BORDER_WIDTH * 2
@@ -149,7 +152,8 @@ func _draw_bosses_layer(center: Vector2, half_size: float) -> void:
 	if not _player:
 		return
 		
-	var enemies := get_tree().get_nodes_in_group("enemies")
+	# PERFORMANCE: Use TargetCache instead of get_nodes_in_group every frame
+	var enemies := TargetCache.get_enemies()
 	var player_pos := _player.global_position
 	
 	for enemy in enemies:
@@ -157,9 +161,9 @@ func _draw_bosses_layer(center: Vector2, half_size: float) -> void:
 			continue
 		
 		# Only show bosses, super_bosses, and N01
-		var is_boss := enemy.is_in_group("boss") or enemy.is_in_group("bosses")
-		var is_super := enemy.is_in_group("super_boss") or enemy.is_in_group("super_bosses")
-		var is_n01 := enemy.name == "RaptureQueenN01" or enemy.is_in_group("rapture_queen")
+		var is_boss: bool = enemy.is_in_group("boss") or enemy.is_in_group("bosses")
+		var is_super: bool = enemy.is_in_group("super_boss") or enemy.is_in_group("super_bosses")
+		var is_n01: bool = enemy.name == "RaptureQueenN01" or enemy.is_in_group("rapture_queen")
 		
 		if not (is_boss or is_super or is_n01):
 			continue

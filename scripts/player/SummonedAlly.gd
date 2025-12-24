@@ -19,7 +19,7 @@ var _registry: CharacterRegistry = null
 var _shop_script: Script = null
 
 # Ally type enum
-enum AllyType { SCARLET, SNOW_WHITE, RAPUNZEL, MARIAN, KILO, CROWN }
+enum AllyType {SCARLET, SNOW_WHITE, RAPUNZEL, MARIAN, KILO, CROWN}
 
 # Core properties
 var ally_type: AllyType = AllyType.SCARLET
@@ -28,7 +28,7 @@ var lifetime: float = 10.0
 var _time_alive: float = 0.0
 var _has_used_burst: bool = false
 var _burst_used_time: float = -1.0
-var player_level: int = 1  # Player level for damage scaling
+var player_level: int = 1 # Player level for damage scaling
 
 # Stats (will be configured based on ally type)
 var max_hp: int = 50
@@ -59,16 +59,16 @@ var _snow_white_turret_placed: bool = false
 var _rapunzel_ammo: int = 4
 var _rapunzel_max_ammo: int = 4
 var _rapunzel_reload_timer: float = 0.0
-var _rapunzel_special_used: bool = false  # Limit to 1 special per summon
+var _rapunzel_special_used: bool = false # Limit to 1 special per summon
 
 # Marian-specific
-var _marian_active_beam: Node2D = null  # Only one beam at a time
+var _marian_active_beam: Node2D = null # Only one beam at a time
 
 # Visual
-var _spawn_effect_timer: float = 0.8  # Longer spawn animation
-var _spawn_duration: float = 0.8  # Duration of spawn-in effect
-var _despawn_timer: float = 0.0  # Timer for despawn animation
-var _despawn_duration: float = 0.6  # Duration of despawn effect
+var _spawn_effect_timer: float = 0.8 # Longer spawn animation
+var _spawn_duration: float = 0.8 # Duration of spawn-in effect
+var _despawn_timer: float = 0.0 # Timer for despawn animation
+var _despawn_duration: float = 0.6 # Duration of despawn effect
 var _is_despawning: bool = false
 var _glow_time: float = 0.0
 var _shader_material: ShaderMaterial = null
@@ -79,7 +79,7 @@ const HEALTH_BAR_HEIGHT := 8.0
 const HEALTH_BAR_OFFSET_Y := -45.0
 var _health_bar_bg: ColorRect = null
 var _health_bar_fill: ColorRect = null
-var _health_bar_label: Node2D = null  # Now uses SummonHPLabel script for world-space text
+var _health_bar_label: Node2D = null # Now uses SummonHPLabel script for world-space text
 
 # AI behavior
 var _stuck_timer: float = 0.0
@@ -91,8 +91,8 @@ func _ready() -> void:
 	add_to_group("player_allies")
 	
 	# Set up collision - use layer 8 for allies (doesn't interact with player layer 1)
-	collision_layer = 8  # Unique ally layer
-	collision_mask = 4   # Only collide with enemies, not player
+	collision_layer = 8 # Unique ally layer
+	collision_mask = 4 # Only collide with enemies, not player
 	
 	# Create animator
 	_create_animator()
@@ -140,8 +140,6 @@ func _create_animator() -> void:
 	add_child(_animator)
 
 
-
-
 func _create_collision_shape() -> void:
 	var collision := CollisionShape2D.new()
 	var shape := CircleShape2D.new()
@@ -162,7 +160,7 @@ func _create_health_bar() -> void:
 	_health_bar_fill = ColorRect.new()
 	_health_bar_fill.size = Vector2(HEALTH_BAR_WIDTH, HEALTH_BAR_HEIGHT)
 	_health_bar_fill.position = Vector2(-HEALTH_BAR_WIDTH / 2.0, HEALTH_BAR_OFFSET_Y)
-	_health_bar_fill.color = Color(0.7, 0.85, 1.0, 1.0)  # Light blue/silver
+	_health_bar_fill.color = Color(0.7, 0.85, 1.0, 1.0) # Light blue/silver
 	_health_bar_fill.z_index = 101
 	add_child(_health_bar_fill)
 	
@@ -184,11 +182,11 @@ func _update_health_bar() -> void:
 		
 		# Change color based on health (blue -> orange -> red)
 		if hp_ratio > 0.5:
-			_health_bar_fill.color = Color(0.7, 0.85, 1.0, 1.0)  # Light blue
+			_health_bar_fill.color = Color(0.7, 0.85, 1.0, 1.0) # Light blue
 		elif hp_ratio > 0.25:
-			_health_bar_fill.color = Color(1.0, 0.6, 0.2, 1.0)  # Orange
+			_health_bar_fill.color = Color(1.0, 0.6, 0.2, 1.0) # Orange
 		else:
-			_health_bar_fill.color = Color(1.0, 0.3, 0.3, 1.0)  # Red
+			_health_bar_fill.color = Color(1.0, 0.3, 0.3, 1.0) # Red
 	
 	if _health_bar_label and _health_bar_label.has_method("update_values"):
 		_health_bar_label.update_values(current_hp, max_hp)
@@ -216,11 +214,11 @@ func _configure_scarlet() -> void:
 	# HP scales with player level
 	var hp_mult := 1.0 + (player_level - 1) * 0.25
 	max_hp = int(60 * hp_mult)
-	move_speed = 280.0  # Fast melee rusher
+	move_speed = 280.0 # Fast melee rusher
 	# Damage uses player's full multiplier (level + shop ATK) × weapon base
-	attack_damage = _get_scaled_damage(10)  # Scarlet's base_damage
-	attack_range = 120.0  # Melee
-	attack_cooldown = 1.0  # 1 second between slashes for animation
+	attack_damage = _get_scaled_damage(10) # Scarlet's base_damage
+	attack_range = 120.0 # Melee
+	attack_cooldown = 1.0 # 1 second between slashes for animation
 	_special_cooldown = 3.0
 	
 	# Wells "I Can't Predict the Future" upgrade: +50% ally speed
@@ -233,11 +231,11 @@ func _configure_snow_white() -> void:
 	# HP scales with player level
 	var hp_mult := 1.0 + (player_level - 1) * 0.25
 	max_hp = int(45 * hp_mult)
-	move_speed = 200.0  # Mobile sniper
+	move_speed = 200.0 # Mobile sniper
 	# Damage uses player's full multiplier (level + shop ATK) × weapon base
-	attack_damage = _get_scaled_damage(7)  # Snow White's base_damage
-	attack_range = 600.0  # Sniper
-	attack_cooldown = 0.5  # Slower sniper shots (was 0.2)
+	attack_damage = _get_scaled_damage(7) # Snow White's base_damage
+	attack_range = 600.0 # Sniper
+	attack_cooldown = 0.5 # Slower sniper shots (was 0.2)
 	_special_cooldown = 6.0
 	# Get ammo from registry
 	var snow_white_data := _registry.get_character("snow_white") if _registry else null
@@ -261,11 +259,11 @@ func _configure_rapunzel() -> void:
 	# HP scales with player level
 	var hp_mult := 1.0 + (player_level - 1) * 0.25
 	max_hp = int(55 * hp_mult)
-	move_speed = 220.0  # Mobile launcher
+	move_speed = 220.0 # Mobile launcher
 	# Damage uses player's full multiplier (level + shop ATK) × weapon base
-	attack_damage = _get_scaled_damage(15)  # Rapunzel's base_damage (Registry: 15.0)
-	attack_range = 500.0  # Rockets
-	attack_cooldown = 1.5  # Slower rockets (was 0.3)
+	attack_damage = _get_scaled_damage(15) # Rapunzel's base_damage (Registry: 15.0)
+	attack_range = 500.0 # Rockets
+	attack_cooldown = 1.5 # Slower rockets (was 0.3)
 	_special_cooldown = 4.0
 	# Get ammo from registry (1.5x base ammo for allies)
 	var rapunzel_data := _registry.get_character("rapunzel") if _registry else null
@@ -384,7 +382,7 @@ func _load_sprite(character_id: String) -> void:
 			frames.add_frame(anim_name, atlas)
 	
 	_animator.sprite_frames = frames
-	_animator.scale = Vector2(0.18, 0.18)  # Scale down to match game
+	_animator.scale = Vector2(0.18, 0.18) # Scale down to match game
 	_animator.play("down")
 
 func _process(delta: float) -> void:
@@ -402,7 +400,7 @@ func _process(delta: float) -> void:
 		
 		if _despawn_timer <= 0:
 			queue_free()
-		return  # Don't do anything else while despawning
+		return # Don't do anything else while despawning
 	
 	# Update shader time and spawn animation
 	if _shader_material:
@@ -448,11 +446,11 @@ func _process(delta: float) -> void:
 
 func _physics_process(delta: float) -> void:
 	if _spawn_effect_timer > 0:
-		return  # Don't move during spawn animation
+		return # Don't move during spawn animation
 	
 	if _is_despawning:
 		velocity = Vector2.ZERO
-		return  # Don't move during despawn animation
+		return # Don't move during despawn animation
 	
 	# Find and pursue target
 	_target_enemy = _find_best_target()
@@ -504,11 +502,11 @@ func _physics_process(delta: float) -> void:
 func _get_optimal_range() -> float:
 	match ally_type:
 		AllyType.SCARLET:
-			return 80.0  # Get close for melee
+			return 80.0 # Get close for melee
 		AllyType.SNOW_WHITE:
-			return 400.0  # Keep distance for sniping
+			return 400.0 # Keep distance for sniping
 		AllyType.RAPUNZEL:
-			return 300.0  # Medium range for rockets
+			return 300.0 # Medium range for rockets
 	return 200.0
 
 func _find_best_target() -> Node2D:
@@ -551,7 +549,7 @@ func _update_ai(_delta: float) -> void:
 		# No target - look for any enemy and use special if available
 		if _special_timer <= 0 and _should_use_special():
 			var tree := get_tree()
-			if tree and tree.get_nodes_in_group("enemies").size() > 0:
+			if tree and TargetCache.get_enemies().size() > 0:
 				_perform_special()
 
 func _perform_attack() -> void:
@@ -569,7 +567,7 @@ func _perform_attack() -> void:
 			_attack_rapunzel(direction)
 		AllyType.MARIAN:
 			_attack_marian(direction)
-			return  # Marian manages her own attack timer for beam
+			return # Marian manages her own attack timer for beam
 		AllyType.KILO:
 			_attack_kilo(direction)
 		AllyType.CROWN:
@@ -587,10 +585,10 @@ func _attack_scarlet(direction: Vector2) -> void:
 	
 	slash.rotation = direction.angle()
 	slash.base_damage = attack_damage
-	slash.owner_node = self  # Set owner for killer_source tracking
+	slash.owner_node = self # Set owner for killer_source tracking
 	if "killer_source_override" in slash:
 		slash.killer_source_override = "summon"
-	add_child(slash)  # Attach to self
+	add_child(slash) # Attach to self
 	slash.position = Vector2.ZERO
 	
 	_scarlet_combo_count += 1
@@ -599,7 +597,7 @@ func _attack_snow_white(direction: Vector2) -> void:
 	if _snow_white_ammo <= 0:
 		# Start reload - fast reload
 		if _snow_white_reload_timer <= 0:
-			_snow_white_reload_timer = 0.8  # Quick reload
+			_snow_white_reload_timer = 0.8 # Quick reload
 		return
 	
 	_snow_white_ammo -= 1
@@ -614,19 +612,19 @@ func _attack_snow_white(direction: Vector2) -> void:
 	# Spawn well outside the ally's collision
 	get_parent().add_child(bullet)
 	bullet.global_position = global_position + direction * 60
-	bullet.velocity = direction * 2200.0  # Same speed as player
+	bullet.velocity = direction * 2200.0 # Same speed as player
 	bullet.rotation = direction.angle()
 	bullet.owner_node = self
 	if "killer_source_override" in bullet:
 		bullet.killer_source_override = "summon"
 	bullet.base_damage = attack_damage
-	bullet.pierce_all = true  # Snow White's signature piercing
+	bullet.pierce_all = true # Snow White's signature piercing
 
 func _attack_rapunzel(direction: Vector2) -> void:
 	if _rapunzel_ammo <= 0:
 		# Start reload - faster reload
 		if _rapunzel_reload_timer <= 0:
-			_rapunzel_reload_timer = 1.5  # Quick reload
+			_rapunzel_reload_timer = 1.5 # Quick reload
 		return
 	
 	_rapunzel_ammo -= 1
@@ -641,7 +639,7 @@ func _attack_rapunzel(direction: Vector2) -> void:
 	if rocket == null:
 		return
 	
-	rocket.owner_node = self  # Set self as owner so rocket ignores us
+	rocket.owner_node = self # Set self as owner so rocket ignores us
 	if "killer_source_override" in rocket:
 		rocket.killer_source_override = "summon"
 	rocket.direction = direction
@@ -671,17 +669,17 @@ func _attack_marian(direction: Vector2) -> void:
 	beam.set_script(MarianBeamScript)
 	beam.owner_node = self
 	beam.player_ref = self
-	beam.target_enemy = _target_enemy  # Track this enemy until they die
+	beam.target_enemy = _target_enemy # Track this enemy until they die
 	
 	# Scale down for summon - smaller, quieter, less damage, but CONTINUOUS
-	beam.duration = 4.5  # Long duration for continuous coverage
-	beam.beam_width = 60.0  # Much narrower (was 240)
-	beam.beam_range = 2400.0  # Doubled range for better coverage (was 1200)
-	beam.damage_per_second = 12.0  # Less damage (was 40)
-	beam.missile_upgrade = false  # No missile spam
-	beam.trail_upgrade = false  # No burning trail
+	beam.duration = 4.5 # Long duration for continuous coverage
+	beam.beam_width = 60.0 # Much narrower (was 240)
+	beam.beam_range = 2400.0 # Doubled range for better coverage (was 1200)
+	beam.damage_per_second = 12.0 # Less damage (was 40)
+	beam.missile_upgrade = false # No missile spam
+	beam.trail_upgrade = false # No burning trail
 	beam.initial_direction = direction
-	beam.beam_volume_db = -5.0  # Quieter (summons should not overpower other sounds)
+	beam.beam_volume_db = -5.0 # Quieter (summons should not overpower other sounds)
 	
 	# Set VERY long cooldown - the beam retargets internally when enemies die
 	# We don't want _attack_marian to be called again until beam naturally expires
@@ -696,7 +694,7 @@ func _attack_marian(direction: Vector2) -> void:
 	# Clear reference when beam is actually DESTROYED (not just reparented)
 	# MarianBeam reparents to EffectsLayer which triggers tree_exited
 	# We need to wait a frame and check if beam is truly gone
-	beam.tree_exited.connect(func(): 
+	beam.tree_exited.connect(func():
 		if not is_inside_tree(): return
 		# Wait one frame to see if beam was reparented or destroyed
 		await get_tree().process_frame
@@ -704,7 +702,7 @@ func _attack_marian(direction: Vector2) -> void:
 			# Only clear if we are still tracking THIS beam
 			if _marian_active_beam == beam:
 				_marian_active_beam = null
-				_attack_timer = 0.0  # Allow immediate re-fire of beam
+				_attack_timer = 0.0 # Allow immediate re-fire of beam
 	)
 
 func _attack_crown(direction: Vector2) -> void:
@@ -733,7 +731,6 @@ func _should_use_special() -> bool:
 	# 1. Multiple enemies nearby
 	# 2. Target is tough (elite/boss)
 	# 3. Haven't used it in a while
-	
 	var enemies := TargetCache.get_enemies()
 	var nearby_count := 0
 	
@@ -914,7 +911,7 @@ func _check_burst_usage() -> void:
 		# Burst if 3+ enemies nearby, or randomly in last 1.5 seconds
 		if nearby_count >= 3:
 			should_burst = true
-		elif time_remaining <= 1.5 and randf() < 0.3:  # 30% chance each frame
+		elif time_remaining <= 1.5 and randf() < 0.3: # 30% chance each frame
 			should_burst = true
 	
 	# Emergency burst if about to expire (last 0.5 seconds)
@@ -949,8 +946,8 @@ func _burst_scarlet() -> void:
 	# Use the same burst effect as the player - hits all enemies on screen
 	var effect = ScarletBurstEffectScript.new()
 	effect.owner_node = self
-	effect.execute_talent = false  # No execution talent for allies
-	effect.vuln_talent = false  # No vulnerability talent for allies
+	effect.execute_talent = false # No execution talent for allies
+	effect.vuln_talent = false # No vulnerability talent for allies
 	get_parent().add_child(effect)
 	effect.global_position = global_position
 
@@ -962,11 +959,11 @@ func _burst_snow_white() -> void:
 	
 	var beam = SnowWhiteBurstBeamScript.new()
 	beam.owner_node = self
-	beam.damage = 50  # Same as player
+	beam.damage = 50 # Same as player
 	beam.beam_range = 1200.0
 	beam.beam_angle_degrees = 90.0
-	beam.burn_level = 0  # No burn talent for allies
-	beam.gauge_on_kill = false  # No gauge refill for allies
+	beam.burn_level = 0 # No burn talent for allies
+	beam.gauge_on_kill = false # No gauge refill for allies
 	beam.player_level = player_level
 	beam.configure(direction)
 	get_parent().add_child(beam)
@@ -976,8 +973,8 @@ func _burst_rapunzel() -> void:
 	# Use the same burst effect as the player - full heal + stun all enemies
 	var effect = RapunzelBurstEffectScript.new()
 	effect.owner_node = self
-	effect.stun_duration = 4.0  # Base stun, no talent upgrade for allies
-	effect.grant_invuln = false  # No invulnerability for allies
+	effect.stun_duration = 4.0 # Base stun, no talent upgrade for allies
+	effect.grant_invuln = false # No invulnerability for allies
 	get_parent().add_child(effect)
 	effect.global_position = global_position
 
@@ -998,18 +995,18 @@ func _burst_marian() -> void:
 		beam.set_script(MarianBeamScript)
 		beam.owner_node = self
 		beam.player_ref = self
-		beam.target_enemy = _target_enemy  # Track target enemy
+		beam.target_enemy = _target_enemy # Track target enemy
 		
 		# Full burst beam - wider, longer, with upgrades
 		beam.duration = 4.0
-		beam.beam_width = 240.0  # Full burst width
-		beam.beam_range = 3000.0  # Full range (doubled was 1500)
-		beam.damage_per_second = 40.0  # Full damage
-		beam.missile_upgrade = true  # Fire homing missiles
-		beam.trail_upgrade = true  # Leave burning trail
+		beam.beam_width = 240.0 # Full burst width
+		beam.beam_range = 3000.0 # Full range (doubled was 1500)
+		beam.damage_per_second = 40.0 # Full damage
+		beam.missile_upgrade = true # Fire homing missiles
+		beam.trail_upgrade = true # Leave burning trail
 		beam.initial_direction = direction
 		beam.player_level = player_level
-		beam.beam_volume_db = -5.0  # Quieter (summons should not overpower other sounds)
+		beam.beam_volume_db = -5.0 # Quieter (summons should not overpower other sounds)
 		
 		# Store using class variable - prevents normal attack from creating another
 		_marian_active_beam = beam
@@ -1107,12 +1104,9 @@ func _draw() -> void:
 	# Always use silver/blue hologram glow regardless of ally type
 	draw_circle(Vector2.ZERO, 30.0, Color(0.6, 0.8, 1.0, glow_alpha))
 
-func take_damage(amount: int, _is_crit: bool = false, _direction: Vector2 = Vector2.ZERO, _from_burst: bool = false) -> void:
-	current_hp = maxi(0, current_hp - amount)
-	_update_health_bar()
-	
-	if current_hp <= 0:
-		_die()
+func take_damage(_amount: int, _is_crit: bool = false, _direction: Vector2 = Vector2.ZERO, _from_burst: bool = false, _killer_source: String = "") -> void:
+	# Commander summons are invincible (they expire on timer, not from damage)
+	return
 
 func _die() -> void:
 	# Trigger burst on death if not used (ensure value)
@@ -1122,7 +1116,7 @@ func _die() -> void:
 	# Start despawn animation (faster for death)
 	if not _is_despawning:
 		_is_despawning = true
-		_despawn_timer = _despawn_duration * 0.5  # Faster despawn on death
+		_despawn_timer = _despawn_duration * 0.5 # Faster despawn on death
 		ally_died.emit()
 
 func _expire() -> void:

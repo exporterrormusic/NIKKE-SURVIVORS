@@ -103,7 +103,7 @@ func _deal_cone_damage() -> void:
 			
 		# Hit!
 		var hit_dir = to_enemy.normalized()
-		node.take_damage(blast_damage, false, hit_dir, is_burst)
+		node.take_damage(blast_damage, false, hit_dir, is_burst, "kilo")
 		_hit_enemies.append(node)
 
 func _update_poly_and_lines(left: Vector2, right: Vector2, col: Color) -> void:

@@ -119,6 +119,11 @@ func _summon_clone() -> void:
 	clone.name = "NayutaClone_%d" % Time.get_ticks_msec()
 	clone.set_script(NayutaCloneScript)
 	
+	# CRITICAL: Set collision layers BEFORE adding to scene tree
+	# Layer 8 (value 8) = Allies layer, detected by EnemyLaser mask
+	clone.collision_layer = 8 # Allies layer
+	clone.collision_mask = 5 # World (1) + Enemies (4)
+	
 	# Spawn with Commander-style visual effect
 	var spawn_offset := Vector2(randf_range(-60, 60), randf_range(-60, 60))
 	

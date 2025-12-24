@@ -15,7 +15,7 @@ const UI := preload("res://scripts/ui/UITheme.gd")
 # Monochrome tint - convert to grayscale then apply blue
 # This creates a unified look where all images have similar color tone
 const MONOCHROME_HUE := UI.VFX_VENETIAN_HUE
-const DESATURATION := 0.6  # Lower = more original color shows through
+const DESATURATION := 0.6 # Lower = more original color shows through
 
 const SUPPORTED_EXTENSIONS := [".png", ".jpg", ".jpeg", ".webp"]
 const BACKGROUNDS_DIRECTORY := "res://assets/backgrounds"
@@ -24,9 +24,9 @@ static var _prepared_cache: Dictionary = {}
 static var _default_texture_paths_cache: PackedStringArray = PackedStringArray()
 static var _shared_textures: Array[Texture2D] = []
 static var _textures_loaded: bool = false
-static var _shared_animation_offset: float = 0.0  # Persists across menu instances
-static var _animation_offset_initialized: bool = false  # Track if we've set random start
-static var _last_process_frame: int = -1  # Prevents double-updating when multiple instances exist
+static var _shared_animation_offset: float = 0.0 # Persists across menu instances
+static var _animation_offset_initialized: bool = false # Track if we've set random start
+static var _last_process_frame: int = -1 # Prevents double-updating when multiple instances exist
 
 var _textures: Array[Texture2D] = []
 var _prepared_textures: Array[Dictionary] = []
@@ -116,13 +116,13 @@ func _setup_hex_overlay() -> void:
 		screen_material.shader = screen_shader
 		# Visible but not distracting effects
 		screen_material.set_shader_parameter("scanline_intensity", 0.2)
-		screen_material.set_shader_parameter("scanline_count", 140.0)  # Fewer = bigger/thicker
+		screen_material.set_shader_parameter("scanline_count", 140.0) # Fewer = bigger/thicker
 		screen_material.set_shader_parameter("brightness_wave_speed", 0.5)
 		screen_material.set_shader_parameter("brightness_wave_intensity", 0.08)
 		screen_material.set_shader_parameter("vignette_strength", 0.2)
-		screen_material.set_shader_parameter("refresh_line_speed", 0.4)  # Slower
+		screen_material.set_shader_parameter("refresh_line_speed", 0.4) # Slower
 		screen_material.set_shader_parameter("refresh_line_intensity", 0.18)
-		screen_material.set_shader_parameter("refresh_line_width", 0.08)  # Thicker
+		screen_material.set_shader_parameter("refresh_line_width", 0.08) # Thicker
 		screen_material.set_shader_parameter("screen_size", size)
 		_hex_overlay.material = screen_material
 
@@ -143,7 +143,7 @@ func _process(delta: float) -> void:
 	# Only update animation once per frame, even if multiple instances exist
 	var current_frame = Engine.get_process_frames()
 	if _last_process_frame == current_frame:
-		return  # Skip duplicate processing (removed redundant queue_redraw)
+		return # Skip duplicate processing (removed redundant queue_redraw)
 	_last_process_frame = current_frame
 	
 	var textures = _get_active_textures()
@@ -419,8 +419,8 @@ func _get_active_textures() -> Array:
 			
 			# Calculate UV coordinates using COVER scaling (fill blind without squishing)
 			# This ensures the image fills the full blind height without distortion
-			var blind_aspect = effective_width / size.y  # Aspect of the blind strip
-			var tex_aspect = tex_size.x / tex_size.y     # Aspect of the source texture
+			var blind_aspect = effective_width / size.y # Aspect of the blind strip
+			var tex_aspect = tex_size.x / tex_size.y # Aspect of the source texture
 			
 			var uv_width: float
 			var uv_height: float
@@ -737,26 +737,70 @@ func _build_default_texture_paths() -> PackedStringArray:
 	character_paths.shuffle()
 	environment_paths.shuffle()
 	
-	# Build rotation pattern: CHARACTER - BACKGROUND - CHARACTER - BACKGROUND
-	# Loop characters to always maintain the alternating pattern
+	# Verify we found enough characters. If not (and we expect many), try a fallback scan.
+	# This handles cases where ResourceManifest might be stale or incomplete during development.
+	if character_paths.size() < 5 and OS.has_feature("editor"):
+		print("[VenetianBlinds] ResourceManifest found few characters (%d). Converting fallback scan..." % character_paths.size())
+		var fallback_chars = _scan_characters_fallback()
+		if fallback_chars.size() > character_paths.size():
+			print("[VenetianBlinds] Fallback scan found more characters (%d). Using fallback list." % fallback_chars.size())
+			character_paths = fallback_chars
+
+	# Shuffle both arrays for random order each time
+	character_paths.shuffle()
+	environment_paths.shuffle()
+	
+	# Strict Alternation Logic: Character -> Background -> Character -> Background
+	# We loop the shorter list to match the longer list's length to ensure we show
+	# every unique item from the larger set (usually characters) without interruptions.
+	
 	var char_count := character_paths.size()
 	var env_count := environment_paths.size()
 	
+	# Handle edge cases where one or both lists are empty
 	if char_count == 0 and env_count == 0:
 		_default_texture_paths_cache = paths
 		return paths
-	
-	# Total pairs = max of both counts, so we cover all images
+	elif char_count == 0:
+		# No characters, valid fallback (just backgrounds)
+		paths.append_array(environment_paths)
+		_default_texture_paths_cache = paths
+		return paths
+	elif env_count == 0:
+		# No backgrounds, valid fallback (just characters)
+		paths.append_array(character_paths)
+		_default_texture_paths_cache = paths
+		return paths
+		
+	# Determine strict pairing count based on the LARGER list
+	# This ensures we cycle through ALL characters even if we only have a few backgrounds
 	var total_pairs := maxi(char_count, env_count)
 	
 	for i in range(total_pairs):
-		# Add character (loop if we've run out)
-		if char_count > 0:
-			paths.append(character_paths[i % char_count])
-		
-		# Add background (loop if we've run out)
-		if env_count > 0:
-			paths.append(environment_paths[i % env_count])
+		# Always append Character then Background
+		paths.append(character_paths[i % char_count])
+		paths.append(environment_paths[i % env_count])
+	
+	print("[VenetianBlinds] Built texture loop: %d strict pairs (Chars: %d, Bgs: %d). Total loop size: %d" % [total_pairs, char_count, env_count, paths.size()])
 	
 	_default_texture_paths_cache = paths.duplicate()
 	return paths
+
+
+func _scan_characters_fallback() -> Array[String]:
+	# Fallback manual scan of assets/characters
+	# Useful if ResourceManifest is stale or buggy
+	var bursts: Array[String] = []
+	var path := "res://assets/characters"
+	var dir := DirAccess.open(path)
+	if dir:
+		dir.list_dir_begin()
+		var entry := dir.get_next()
+		while entry != "":
+			if dir.current_is_dir() and not entry.begins_with("."):
+				var burst_path := "%s/%s/burst.png" % [path, entry]
+				if ResourceLoader.exists(burst_path):
+					bursts.append(burst_path)
+			entry = dir.get_next()
+		dir.list_dir_end()
+	return bursts

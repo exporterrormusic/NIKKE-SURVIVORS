@@ -6,7 +6,7 @@ uniform vec4 night_glow_color : source_color = vec4(0.2, 0.4, 1.0, 1.0); // Stro
 uniform float night_glow_intensity : hint_range(0.0, 5.0) = 1.5; // High intensity
 
 // Day brightness compensation (since unshaded doesn't receive scene lighting)
-uniform float day_brightness : hint_range(0.8, 1.5) = 1.0;
+uniform float day_brightness : hint_range(0.8, 1.5) = 1.25;
 
 uniform bool enable_outline = false;
 uniform vec4 outline_color : source_color = vec4(1.0, 0.0, 0.0, 1.0);
@@ -42,8 +42,8 @@ void fragment() {
 		// Interpolate between Day (Original) and Night (Tinted) based on night_boost
 		body_rgb = mix(body_rgb, body_rgb * night_tint, night_boost);
 		
-		// Global dimming to 40% brightness at full night boost
-		body_rgb *= mix(1.0, 0.4, night_boost);
+		// Global dimming to 75% brightness at full night boost (was 40%)
+		body_rgb *= mix(1.0, 0.75, night_boost);
 	}
 
 	// 3. Radius Glow (Outer Soft Outline)

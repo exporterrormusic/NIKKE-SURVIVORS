@@ -65,7 +65,7 @@ func apply_character_shop_upgrades(all_ids: Array, selected_indices: Array, swap
 			
 		var char_id: String = all_ids[char_idx]
 		_check_and_activate_upgrade(char_id)
-
+	
 ## Apply upgrade for a newly unlocked character (during gameplay)
 func apply_upgrade_for_character(char_id: String) -> void:
 	_check_and_activate_upgrade(char_id)
@@ -95,9 +95,12 @@ func _check_and_activate_upgrade(char_id: String) -> void:
 				print("[UpgradeManager] Cecil 'Three Wishes' active")
 			if ShopMenuScript.has_character_upgrade("cecil", "eden_shield"):
 				has_cecil_eden_shield = true
+				# CRITICAL: Configure shield for ALL squad members, not just current!
+				if _player._health:
+					_player._health.configure_shield_for_squad(0.5) # 50% of max HP
 				if _player.has_method("_update_shield_display"):
 					_player.call_deferred("_update_shield_display")
-				print("[UpgradeManager] Cecil 'Noah's Defiance' active")
+				print("[UpgradeManager] Cecil 'Noah's Defiance' active - Shield for ALL squad")
 		"kilo":
 			if ShopMenuScript.has_character_upgrade("kilo", "talos_ammo"):
 				has_kilo_ammo_upgrade = true

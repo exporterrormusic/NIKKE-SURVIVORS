@@ -11,6 +11,7 @@ var current_hp: int: set = _set_current_hp
 var _is_dead: bool = false
 var _pending_overkill: int = 0
 var _processing_death: bool = false # Prevent auto-revive during death cleanup
+var _last_damage_source: String = "unknown" # Track source for kill attribution
 
 func _ready() -> void:
 	current_hp = max_hp
@@ -65,6 +66,7 @@ func damage(amount: int, source: String = "unknown") -> void:
 	else:
 		_pending_overkill = 0
 		
+	_last_damage_source = source # Store for death attribution
 	current_hp -= amount
 	damaged.emit(amount, source)
 
@@ -84,8 +86,9 @@ func die(overkill: int = 0) -> void:
 	died.emit(overkill)
 	
 	# Emit global event for achievement tracking
+	# Use tracked damage source instead of hardcoded "player"
 	if EventBus and owner:
-		EventBus.enemy_killed.emit(owner, "player")
+		EventBus.enemy_killed.emit(owner, _last_damage_source)
 	
 	# Reset processing flag after death signal handlers complete
 	call_deferred("_clear_processing_death")
@@ -97,6 +100,7 @@ func reset() -> void:
 	# print("[Health] Reset called. Clearing dead flags.")
 	_is_dead = false
 	_processing_death = false
+	_last_damage_source = "unknown" # Reset for pool reuse
 	# HP restoration must be done by owner (set_max_hp/current_hp)
 	_pending_overkill = 0
 

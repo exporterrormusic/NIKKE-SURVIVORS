@@ -72,38 +72,5 @@ layer = 100
 
 [node name="ScreenFlash" parent="ScreenFlashLayer" instance=ExtResource("7")]
 
-[node name="Boundary0" type="StaticBody2D" parent="."]
-collision_layer = 4
-collision_mask = 0
-position = Vector2(-2020, -1080)
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Boundary0"]
-shape = SubResource("RectangleShape2D_boundary")
-
-
-[node name="Boundary1" type="StaticBody2D" parent="."]
-collision_layer = 4
-collision_mask = 0
-position = Vector2(2020, -1080)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Boundary1"]
-shape = SubResource("RectangleShape2D_boundary")
-
-
-[node name="Boundary2" type="StaticBody2D" parent="."]
-collision_layer = 4
-collision_mask = 0
-position = Vector2(-2020, 1080)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Boundary2"]
-shape = SubResource("RectangleShape2D_boundary")
-
-
-[node name="Boundary3" type="StaticBody2D" parent="."]
-collision_layer = 4
-collision_mask = 0
-position = Vector2(2020, 1080)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Boundary3"]
-shape = SubResource("RectangleShape2D_boundary")
 

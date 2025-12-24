@@ -42,7 +42,7 @@ func update_grass_field(biome: BiomeDefinition, parent: Node2D) -> void:
 	var grass_biomes = [&"grasslands", &"sakura_grove", &"rain_forest"]
 	if biome and biome.biome_id in grass_biomes:
 		_grass_field = PhysicalGrassFieldScript.new()
-		_grass_field.world_bounds = _world_bounds  # Set bounds directly
+		_grass_field.world_bounds = _world_bounds # Set bounds directly
 		parent.add_child(_grass_field)
 		print("[TerrainFeatures] Created grass field for biome: ", biome.biome_id)
 
@@ -79,8 +79,8 @@ func spawn_boulders(_biome: BiomeDefinition, parent: Node2D, count: int = 40) ->
 		
 		while not valid_pos and attempts < 20:
 			attempts += 1
-			# Margin from edges (400px)
-			var margin = 400.0
+			# Margin from edges (increased to 600px to prevent invisible wall issues near borders)
+			var margin = 600.0
 			var safe_rect = _world_bounds.grow(-margin)
 			
 			pos = Vector2(

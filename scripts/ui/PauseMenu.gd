@@ -23,6 +23,7 @@ var _button_container: VBoxContainer = null
 var _title_label: Label = null
 var _buttons: Dictionary = {}
 var _stats_panel: Node = null # StatsPanel instance
+var _damage_log_panel: Node = null # DamageLogPanel instance
 
 func _ready() -> void:
 	layer = 125 # Higher than Queen Explosion (120)
@@ -96,6 +97,20 @@ func _build_ui() -> void:
 		_stats_panel.offset_top = -260
 		_stats_panel.offset_bottom = 260
 		_container.add_child(_stats_panel)
+	
+	# Damage log panel (positioned to the left of center, mirroring stats panel)
+	if ResourceLoader.exists("res://scripts/ui/DamageLogPanel.gd"):
+		var log_script = load("res://scripts/ui/DamageLogPanel.gd")
+		_damage_log_panel = Panel.new()
+		_damage_log_panel.set_script(log_script)
+		_damage_log_panel.custom_minimum_size = Vector2(400, 520)
+		# Position damage log panel to the left of center
+		_damage_log_panel.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+		_damage_log_panel.offset_left = 20
+		_damage_log_panel.offset_right = 420
+		_damage_log_panel.offset_top = -260
+		_damage_log_panel.offset_bottom = 260
+		_container.add_child(_damage_log_panel)
 
 	
 func _apply_panel_style(panel: Panel) -> void:
@@ -280,11 +295,13 @@ func show_pause() -> void:
 	_menu_mode = MenuMode.PAUSE
 	_rebuild_buttons()
 	_refresh_stats_panel()
+	_refresh_damage_log()
 	visible = true
 	get_tree().paused = true
 	
 	if _panel: _panel.visible = true
 	if _stats_panel: _stats_panel.visible = true
+	if _damage_log_panel: _damage_log_panel.visible = true
 	
 	# Auto-focus first button
 	call_deferred("_grab_initial_focus")
@@ -293,8 +310,11 @@ func show_defeat() -> void:
 	_menu_mode = MenuMode.DEFEAT
 	_rebuild_buttons()
 	_refresh_stats_panel()
+	_refresh_damage_log()
 	visible = true
 	get_tree().paused = true
+	
+	if _damage_log_panel: _damage_log_panel.visible = true
 	
 	# Auto-focus first button
 	call_deferred("_grab_initial_focus")
@@ -303,8 +323,11 @@ func show_victory() -> void:
 	_menu_mode = MenuMode.VICTORY
 	_rebuild_buttons()
 	_refresh_stats_panel()
+	_refresh_damage_log()
 	visible = true
 	get_tree().paused = true
+	
+	if _damage_log_panel: _damage_log_panel.visible = true
 	
 	# Auto-focus first button
 	call_deferred("_grab_initial_focus")
@@ -312,6 +335,10 @@ func show_victory() -> void:
 func _refresh_stats_panel() -> void:
 	if _stats_panel and _stats_panel.has_method("set_live_stats"):
 		_stats_panel.set_live_stats()
+
+func _refresh_damage_log() -> void:
+	if _damage_log_panel and _damage_log_panel.has_method("refresh"):
+		_damage_log_panel.refresh()
 
 func hide_menu() -> void:
 	visible = false
@@ -342,7 +369,8 @@ func _on_resume_pressed() -> void:
 	resume_requested.emit()
 
 func _on_settings_pressed() -> void:
-	# No sound for pause menu options - they have their own transitions
+	# Hide pause menu so it doesn't show behind settings
+	visible = false
 	settings_requested.emit()
 
 func _on_character_select_pressed() -> void:

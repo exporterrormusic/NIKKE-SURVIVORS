@@ -25,7 +25,7 @@ var xp_to_next: int = 100
 var level: int = 1
 
 ## XP scaling per level (multiplier)
-@export var xp_scaling: float = 1.2
+@export var xp_scaling: float = 1.5
 
 ## Skill points available to spend
 var _skill_points: int = 0
@@ -39,6 +39,12 @@ func configure(initial_level: int = 1, initial_xp: int = 0, initial_xp_to_next: 
 	level = initial_level
 	xp = initial_xp
 	xp_to_next = initial_xp_to_next
+	
+	# Goddess Fall mode: Start with 3 skill points
+	var game_manager = get_node_or_null("/root/GameManager")
+	if game_manager and game_manager.goddess_fall_mode:
+		_skill_points = 3
+		skill_point_added.emit(_skill_points)
 
 
 ## Add XP with optional multiplier override
@@ -71,7 +77,6 @@ func add_xp(amount: int, bonus_multiplier: float = 1.0) -> bool:
 		leveled_up = true
 	
 	return leveled_up
-
 
 
 ## Set skill points (for sync)

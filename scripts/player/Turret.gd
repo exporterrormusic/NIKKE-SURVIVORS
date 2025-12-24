@@ -33,8 +33,14 @@ const MUZZLE_FLASH_COLOR := Color(1.0, 0.9, 0.7, 1.0) # Warm flash
 const ROTATION_SPEED := 8.0
 const DEPLOY_TIME := 0.4
 
-func _ready():
+var _enemy_cache: Array = []
+var _target_update_timer := 0.0
+
+func _ready() -> void:
 	_rng.randomize()
+	# Randomize initial update timer to desync expensive logic
+	_target_update_timer = _rng.randf_range(0.0, 0.2)
+	
 	# max_ammo may have been set before adding to scene
 	if max_ammo < ammo:
 		max_ammo = ammo
@@ -72,7 +78,10 @@ func _ready():
 	if fire_delay > 0.0:
 		get_tree().create_timer(fire_delay).timeout.connect(func(): _fire_timer.start())
 	else:
-		_fire_timer.start()
+		# Randomize start time slightly to prevent all turrets firing on the exact same frame
+		# This spreads instancing/audio load over 0.4 seconds
+		var random_delay = _rng.randf_range(0.0, 0.4)
+		get_tree().create_timer(random_delay).timeout.connect(func(): _fire_timer.start())
 	
 	# Make turret unshaded (bright) to match other summons
 	var mat := CanvasItemMaterial.new()
@@ -96,7 +105,7 @@ func _process(delta: float) -> void:
 		if _deploy_progress >= 1.0:
 			_is_deployed = true
 	
-	# Track target
+	# Update targeting logic (scanning is throttled, rotation is smooth)
 	_update_targeting(delta)
 	
 	# Muzzle flash decay
@@ -111,36 +120,41 @@ func _process(delta: float) -> void:
 	if Engine.get_process_frames() % 2 == 0:
 		queue_redraw()
 
-var _enemy_cache: Array = []
-var _enemy_cache_timer := 0.0
-const ENEMY_CACHE_INTERVAL := 0.1 # Update enemy list every 100ms instead of every frame
-
 func _update_targeting(delta: float) -> void:
-	# Update enemy cache periodically instead of every frame
-	_enemy_cache_timer += delta
-	if _enemy_cache_timer >= ENEMY_CACHE_INTERVAL:
-		_enemy_cache_timer = 0.0
-		_enemy_cache = get_tree().get_nodes_in_group("enemies")
+	# Only scan for new targets periodically (approx 4 times/sec)
+	# This drastically reduces CPU load when many turrets are active (Rapunzel Ultra Burst)
+	_target_update_timer -= delta
+	if _target_update_timer <= 0:
+		_target_update_timer = _rng.randf_range(0.2, 0.3) # Randomize to prevent frame spikes
+		_scan_for_target()
 	
-	# Find closest enemy to track using cached list
+	# Rotate towards current target if valid
+	if is_instance_valid(_current_target):
+		var to_target = _current_target.global_position - global_position
+		_target_angle = to_target.angle()
+	
+	# Smooth rotation toward target (runs every frame for smoothness)
+	var angle_diff = wrapf(_target_angle - _current_angle, -PI, PI)
+	_current_angle += angle_diff * ROTATION_SPEED * delta
+
+func _scan_for_target() -> void:
+	# Get all potential targets
+	var enemies = TargetCache.get_enemies()
+	
+	# Find closest
 	var closest_enemy: Node2D = null
-	var min_dist := INF
-	for enemy in _enemy_cache:
-		if is_instance_valid(enemy) and enemy is Node2D and enemy.has_method("take_damage"):
-			var dist = global_position.distance_to(enemy.global_position)
-			if dist < min_dist:
-				min_dist = dist
+	var min_dist_sq := INF
+	var my_pos := global_position
+	
+	for enemy in enemies:
+		if is_instance_valid(enemy) and enemy is Node2D:
+			# Simple distance check - using squared distance avoids sqrt() for speed
+			var dist_sq = my_pos.distance_squared_to(enemy.global_position)
+			if dist_sq < min_dist_sq:
+				min_dist_sq = dist_sq
 				closest_enemy = enemy
 	
 	_current_target = closest_enemy
-	
-	if closest_enemy:
-		var to_target = closest_enemy.global_position - global_position
-		_target_angle = to_target.angle()
-	
-	# Smooth rotation toward target
-	var angle_diff = wrapf(_target_angle - _current_angle, -PI, PI)
-	_current_angle += angle_diff * ROTATION_SPEED * delta
 
 func _draw() -> void:
 	var deploy := _ease_out_back(_deploy_progress)

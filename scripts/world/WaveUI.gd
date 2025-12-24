@@ -26,7 +26,7 @@ const TOTAL_WAVES := 11
 
 const EVENT_DISPLAY_TIME := 3.0
 const BOSS_WARNING_PULSE_SPEED := 6.0
-const BOSS_WARNING_DURATION := 1.2
+const BOSS_WARNING_DURATION := 2.4
 const BAR_WIDTH := 400.0
 const BAR_HEIGHT := 28.0
 
@@ -45,7 +45,7 @@ func set_goddess_mode(enabled: bool) -> void:
 	if enabled:
 		# Force redraw/update immediately
 		if _wave_label:
-			_wave_label.text = "ENDGAME"
+			_wave_label.text = "DEFEAT THE QUEEN"
 			_wave_label.add_theme_color_override("font_color", Color(1.0, 0.2, 0.2))
 		if _timer_label:
 			_timer_label.text = "2:55"
@@ -77,7 +77,7 @@ func _setup_ui() -> void:
 	_progress_container.add_child(_progress_bar)
 	_progress_bar.draw.connect(_draw_progress_bar)
 	
-	# Timer label (Centered)
+	# Timer label (Centered inside the bar)
 	_timer_label = Label.new()
 	_timer_label.name = "TimerLabel"
 	_timer_label.set_anchors_preset(Control.PRESET_FULL_RECT) # Cover whole bar
@@ -175,8 +175,8 @@ func _process(delta: float) -> void:
 		is_goddess = true
 		
 	if is_goddess:
-		if _wave_label and _wave_label.text != "ENDGAME":
-			_wave_label.text = "ENDGAME"
+		if _wave_label and _wave_label.text != "DEFEAT THE QUEEN":
+			_wave_label.text = "DEFEAT THE QUEEN"
 			
 	# Smooth progress bar
 	_current_progress = lerp(_current_progress, _target_progress, delta * 8.0)
@@ -217,58 +217,33 @@ func update_time(elapsed: float, remaining: float) -> void:
 		
 		if _timer_label:
 			_timer_label.text = "%d:%02d" % [mins, secs]
-			_timer_label.add_theme_color_override("font_color", Color.WHITE) # White timer
+			_timer_label.add_theme_color_override("font_color", Color.WHITE)
 			
 		# Bar empties as time runs out (visual countdown)
-		# 175s total duration. Starts at 1.0, goes to 0.0.
 		_target_progress = time_left / total_duration
 		_current_progress = _target_progress
 		if _progress_bar:
 			_progress_bar.queue_redraw()
-		
-	else:
-		# Standard Mode: Count UP using elapsed or DOWN using remaining if defined
-		# Default WaveDirector uses remaining for wave timer.
-		var t_val: float = remaining if remaining > 0 else elapsed
-		
-		@warning_ignore("integer_division")
-		var mins := int(t_val) / 60
-		var secs := int(t_val) % 60
-		
-		if _timer_label:
-			_timer_label.text = "%d:%02d" % [mins, secs]
-			_timer_label.remove_theme_color_override("font_color")
-	if GameManager and (GameManager.she_descends_mode or GameManager.goddess_fall_mode):
-		var total_duration := 175.0
-		var time_left := clampf(total_duration - elapsed, 0.0, total_duration)
-		
-		@warning_ignore("integer_division")
-		var mins := int(time_left) / 60
-		var secs := int(time_left) % 60
-		
-		if _timer_label:
-			_timer_label.text = "%d:%02d" % [mins, secs]
-			_timer_label.add_theme_color_override("font_color", Color.WHITE) # White timer (User Request)
-			
-		# Bar empties as time runs out (visual countdown)
-		# 175s total duration. Starts at 1.0, goes to 0.0.
-		_target_progress = clampf(1.0 - (elapsed / total_duration), 0.0, 1.0)
 		return
-
-	# Standard Logic
+	
+	# Wave 12 boss fight: remaining = -1 means endless, show blank timer with full red bar
+	if remaining < 0:
+		if _timer_label:
+			_timer_label.text = "" # Blank timer during boss fight
+		# Full red bar (will be colored via is_boss_wave flag)
+		_target_progress = 1.0
+		return
+	
+	# Standard Mode: Count UP using elapsed
+	@warning_ignore("integer_division")
+	var mins := int(elapsed) / 60
+	var secs := int(elapsed) % 60
+	
 	if _timer_label:
-		_timer_label.remove_theme_color_override("font_color") # Reset color
-		@warning_ignore("integer_division")
-		var mins := int(elapsed) / 60
-		var secs := int(elapsed) % 60
-		# In endless mode (remaining == -1), just show elapsed time
-		if remaining < 0:
-			_timer_label.text = "%d:%02d ∞" % [mins, secs]
-		else:
-			_timer_label.text = "%d:%02d" % [mins, secs]
+		_timer_label.text = "%d:%02d" % [mins, secs]
+		_timer_label.remove_theme_color_override("font_color")
 	
 	# Calculate progress within current wave (0.0 to 1.0)
-	# Use modulo to ensure it loops correctly regardless of wave index drift
 	var time_in_wave := fmod(elapsed, WAVE_DURATION)
 	_target_progress = clampf(time_in_wave / WAVE_DURATION, 0.0, 1.0)
 	
@@ -291,8 +266,9 @@ func update_wave(wave_number: int) -> void:
 		if GameManager and (GameManager.she_descends_mode or GameManager.goddess_fall_mode):
 			is_goddess = true
 			
-		if is_goddess:
-			_wave_label.text = "ENDGAME"
+		if is_goddess or wave_number == 12:
+			# Goddess Fall mode or Wave 12 N01 boss fight
+			_wave_label.text = "DEFEAT THE QUEEN"
 			_wave_label.add_theme_color_override("font_color", Color(1.0, 0.2, 0.2)) # Red text
 		else:
 			_wave_label.text = "WAVE %d" % wave_number

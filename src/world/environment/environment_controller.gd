@@ -13,7 +13,7 @@ var time_of_day_definitions: Array = []
 @export_range(0, 2147483647, 1) var environment_seed: int = 0
 @export var auto_initialize: bool = true
 @export var use_fixed_seed: bool = false
-@export var enable_physical_grass: bool = true  # Toggle grass system on/off
+@export var enable_physical_grass: bool = true # Toggle grass system on/off
 
 const GROUND_SHADER_PATH := "res://resources/shaders/procedural_ground.gdshader"
 const SNOW_SHADER_PATH := "res://resources/shaders/falling_snow.gdshader"
@@ -27,7 +27,7 @@ const SNOW_PATH_RADIUS := 120.0
 const SNOW_PARTICLE_LIFETIME := 0.55
 const SNOW_PARTICLE_GRAVITY := 480.0
 const WORLD_BORDER_THICKNESS := 60.0
-const WORLD_BORDER_COLOR := Color(0.08, 0.08, 0.1, 0.0)  # make border overlay fully transparent (keep collisions)
+const WORLD_BORDER_COLOR := Color(0.08, 0.08, 0.1, 0.0) # make border overlay fully transparent (keep collisions)
 const VIGNETTE_SHADER_PATH := "res://resources/shaders/environment_vignette.gdshader"
 const PhysicalGrassFieldScript := preload("res://src/world/physical_grass_field.gd")
 const ProceduralBoulderScript := preload("res://src/world/environment/procedural_boulder.gd")
@@ -46,14 +46,14 @@ var _snow_imprint_enabled: bool = false
 var _snow_particle_texture: Texture2D = null
 var _current_ambient_path: String = ""
 var _world_bounds: Rect2 = Rect2()
-var _grass_field: Node2D = null  # PhysicalGrassField instance
-var _player_ref: Node2D = null  # Track player for grass interaction
+var _grass_field: Node2D = null # PhysicalGrassField instance
+var _player_ref: Node2D = null # Track player for grass interaction
 
 var current_modulate: Color = Color(1.0, 1.0, 1.0, 1.0)
 var _lightning_timer: float = 0.0
-var _weather_system: WeatherSystem = null  # Delegated weather effects
-var _biome_manager: BiomeManager = null  # Delegated biome management
-var _terrain_features: TerrainFeatures = null  # Delegated terrain (grass, boulders)
+var _weather_system: WeatherSystem = null # Delegated weather effects
+var _biome_manager: BiomeManager = null # Delegated biome management
+var _terrain_features: TerrainFeatures = null # Delegated terrain (grass, boulders)
 
 # Legacy boulder references (still used by _ensure_boulder_container)
 var _boulder_container: Node2D = null
@@ -272,7 +272,7 @@ func initialize_environment(seed_override: int = 0, biome_id: StringName = &"", 
 	_configure_rng(seed_override)
 	_active_biome = _select_biome(biome_id)
 	_active_time = _select_time_of_day(time_id)
-	_lightning_timer = 0.0  # Reset lightning timer for new biome
+	_lightning_timer = 0.0 # Reset lightning timer for new biome
 	
 	# Remove fog overlay for storm map
 	if _active_biome and _active_biome.biome_id == &"rain_forest" and _fog_overlay:
@@ -301,7 +301,7 @@ func initialize_environment(seed_override: int = 0, biome_id: StringName = &"", 
 
 func _delegate_boulder_spawn(biome: BiomeDefinition) -> void:
 	if _terrain_features:
-		_terrain_features.spawn_boulders(biome, self, 5)  # Reduced to 5 (Rare)
+		_terrain_features.spawn_boulders(biome, self, 5) # Reduced to 5 (Rare)
 
 func set_environment(biome_id: StringName, time_id: StringName, seed_override: int = 0) -> void:
 	initialize_environment(seed_override, biome_id, time_id)
@@ -456,8 +456,8 @@ func _ensure_fog_overlay() -> ColorRect:
 	var fog_overlay := ColorRect.new()
 	fog_overlay.name = "FogOverlay"
 	fog_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	fog_overlay.color = Color(0.0, 0.0, 0.0, 0.0)  # Start transparent
-	fog_overlay.visible = false  # Hidden until explicitly enabled
+	fog_overlay.color = Color(0.0, 0.0, 0.0, 0.0) # Start transparent
+	fog_overlay.visible = false # Hidden until explicitly enabled
 	fog_overlay.size = Vector2(1920, 1080)
 	fog_overlay.position = Vector2(0, 0)
 	fog_overlay.z_index = 50
@@ -493,9 +493,9 @@ func _ensure_lightning_overlay() -> ColorRect:
 	var lightning_overlay := ColorRect.new()
 	lightning_overlay.name = "LightningOverlay"
 	lightning_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	lightning_overlay.color = Color(1.0, 1.0, 1.0, 0.0)  # White flash, initially transparent
+	lightning_overlay.color = Color(1.0, 1.0, 1.0, 0.0) # White flash, initially transparent
 	lightning_overlay.size = Vector2.ONE * _get_effective_ground_extent()
-	lightning_overlay.position = -lightning_overlay.size * 0.5
+	lightning_overlay.position = - lightning_overlay.size * 0.5
 	add_child(lightning_overlay)
 	if Engine.is_editor_hint():
 		lightning_overlay.owner = get_tree().edited_scene_root
@@ -533,7 +533,7 @@ func _ensure_vignette_overlay() -> ColorRect:
 	if vignette_layer == null:
 		vignette_layer = CanvasLayer.new()
 		vignette_layer.name = "VignetteLayer"
-		vignette_layer.layer = 90  # Above game world, below HUD at 99
+		vignette_layer.layer = 90 # Above game world, below HUD at 99
 		add_child(vignette_layer)
 		if Engine.is_editor_hint():
 			vignette_layer.owner = get_tree().edited_scene_root
@@ -554,7 +554,7 @@ func _ensure_vignette_overlay() -> ColorRect:
 	vignette_overlay.color = Color(0.0, 0.0, 0.0, 0.0)
 	vignette_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	# Explicitly set size to viewport for proper coverage
-	var viewport_size := Vector2(1920, 1080)  # Default fallback
+	var viewport_size := Vector2(1920, 1080) # Default fallback
 	if Engine.get_main_loop() and Engine.get_main_loop() is SceneTree:
 		var tree := Engine.get_main_loop() as SceneTree
 		if tree.root:
@@ -664,7 +664,7 @@ func _ensure_flower_overlay() -> Polygon2D:
 	var node := _overlay_canvas.get_node_or_null("FlowerOverlay")
 	if node and node is Polygon2D:
 		var flowers := node as Polygon2D
-		flowers.color = Color(1.0, 1.0, 1.0, 0.0)  # Ensure transparent base
+		flowers.color = Color(1.0, 1.0, 1.0, 0.0) # Ensure transparent base
 		if flowers.material == null or not (flowers.material is ShaderMaterial):
 			if flower_shader:
 				var flower_material := ShaderMaterial.new()
@@ -673,8 +673,8 @@ func _ensure_flower_overlay() -> Polygon2D:
 		return flowers
 	var flower_overlay := Polygon2D.new()
 	flower_overlay.name = "FlowerOverlay"
-	flower_overlay.z_index = -48  # Below ground level, so flowers appear on the ground
-	flower_overlay.color = Color(1.0, 1.0, 1.0, 0.0)  # Transparent base - shader handles all colors
+	flower_overlay.z_index = -48 # Below ground level, so flowers appear on the ground
+	flower_overlay.color = Color(1.0, 1.0, 1.0, 0.0) # Transparent base - shader handles all colors
 	var view_size := _get_view_size()
 	flower_overlay.polygon = _build_overlay_polygon(view_size)
 	if flower_shader:
@@ -682,7 +682,7 @@ func _ensure_flower_overlay() -> Polygon2D:
 		flower_material.shader = flower_shader
 		flower_overlay.material = flower_material
 		(flower_overlay.material as ShaderMaterial).set_shader_parameter("view_size", view_size)
-	flower_overlay.visible = false  # Start hidden, enable when biome has flowers
+	flower_overlay.visible = false # Start hidden, enable when biome has flowers
 	_overlay_canvas.add_child(flower_overlay)
 	if Engine.is_editor_hint():
 		flower_overlay.owner = get_tree().edited_scene_root
@@ -740,7 +740,7 @@ func _ensure_effects_layer() -> CanvasLayer:
 	var effects_layer := CanvasLayer.new()
 	effects_layer.name = "EffectsLayer"
 	effects_layer.layer = 1
-	effects_layer.follow_viewport_enabled = true  # CRITICAL: Must follow camera or projectiles drift!
+	effects_layer.follow_viewport_enabled = true # CRITICAL: Must follow camera or projectiles drift!
 	effects_layer.set("modulate", Color(1.0, 1.0, 1.0, 1.0))
 	add_child(effects_layer)
 	if Engine.is_editor_hint():
@@ -758,7 +758,6 @@ func _ensure_ui_layer() -> CanvasLayer:
 	if Engine.is_editor_hint():
 		ui_layer.owner = get_tree().edited_scene_root
 	return ui_layer
-
 
 
 func _ensure_sun_light() -> DirectionalLight2D:
@@ -847,7 +846,7 @@ func _update_ground_geometry() -> void:
 			_fog_overlay.position = _world_bounds.position
 		else:
 			_fog_overlay.size = Vector2.ONE * _effective_ground_extent
-			_fog_overlay.position = -_fog_overlay.size * 0.5
+			_fog_overlay.position = - _fog_overlay.size * 0.5
 	_update_border_overlay()
 	_update_overlay_layout()
 
@@ -893,8 +892,9 @@ func _update_border_overlay() -> void:
 	]
 	for polygon_points in segments:
 		var body := StaticBody2D.new()
-		body.collision_layer = 1  # Default layer
-		body.collision_mask = 0   # Doesn't collide with anything, just blocks
+		body.collision_layer = 0 # Clear all layers first
+		body.set_collision_layer_value(16, true) # Set layer 16 properly (bit 15)
+		body.collision_mask = 0 # Doesn't need to detect anything, just blocks
 		var collision_shape := CollisionPolygon2D.new()
 		collision_shape.polygon = polygon_points
 		body.add_child(collision_shape)
@@ -1005,7 +1005,7 @@ func _apply_time_of_day_settings() -> void:
 	if is_default_day:
 		# Disable global CanvasModulate - we apply darkness to specific sprites only
 		if _canvas_modulate:
-			_canvas_modulate.color = Color(1.0, 1.0, 1.0, 1.0)  # Always white (no global effect)
+			_canvas_modulate.color = Color(1.0, 1.0, 1.0, 1.0) # Always white (no global effect)
 		var day_color := Color(0.95, 0.95, 0.95, 1.0)
 		current_modulate = day_color
 		modulate_changed.emit(day_color)
@@ -1080,7 +1080,7 @@ func _apply_time_of_day_settings() -> void:
 			_fog_overlay.color = fog_color
 			_fog_overlay.visible = true
 		else:
-			_fog_overlay.color = Color(0, 0, 0, 0)  # Fully transparent
+			_fog_overlay.color = Color(0, 0, 0, 0) # Fully transparent
 			_fog_overlay.visible = false
 	if _background and _active_time and _active_biome:
 		var tint_strength: float = clamp(_active_time.ambient_intensity, 0.0, 1.5)
@@ -1118,6 +1118,11 @@ func _apply_time_of_day_settings() -> void:
 	
 	BasicProjectileVisual.set_time_of_day(is_day_time())
 	# Adjust bloom for nighttime (more visible)
+	_update_bloom_for_time_of_day(not is_night)
+	
+	# Update sakura/firefly overlay since it depends on time of day
+	if _active_biome:
+		_apply_sakura_overlay_settings(_active_biome)
 	_update_bloom_for_time_of_day(is_day_time())
 
 func _update_bloom_for_time_of_day(is_daytime: bool) -> void:
@@ -1140,7 +1145,7 @@ func _update_bloom_for_time_of_day(is_daytime: bool) -> void:
 		env.glow_intensity = 0.2
 		env.glow_strength = 0.6
 		env.glow_bloom = 0.05
-		env.glow_hdr_threshold = 1.5  # Higher threshold = less glow
+		env.glow_hdr_threshold = 1.5 # Higher threshold = less glow
 		env.glow_hdr_scale = 1.0
 	else:
 		# Nighttime: Subtle bloom for glowy effect
@@ -1148,7 +1153,7 @@ func _update_bloom_for_time_of_day(is_daytime: bool) -> void:
 		env.glow_intensity = 0.15
 		env.glow_strength = 0.5
 		env.glow_bloom = 0.04
-		env.glow_hdr_threshold = 1.3  # High threshold to only glow very bright things
+		env.glow_hdr_threshold = 1.3 # High threshold to only glow very bright things
 		env.glow_hdr_scale = 1.2
 
 func _setup_smart_night_shader() -> void:
@@ -1187,7 +1192,7 @@ func _setup_smart_night_shader() -> void:
 	_night_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_night_overlay.size = get_viewport().get_visible_rect().size
 	# The ColorRect color doesn't matter - shader reads screen_texture
-	_night_overlay.color = Color(1, 1, 1, 0)  # Transparent base
+	_night_overlay.color = Color(1, 1, 1, 0) # Transparent base
 	
 	night_layer.add_child(_night_overlay)
 	
@@ -1334,7 +1339,7 @@ func _create_grass_field() -> void:
 		_grass_field.queue_free()
 	
 	_grass_field = PhysicalGrassFieldScript.new()
-	_grass_field.z_index = -1  # Background grass behind player
+	_grass_field.z_index = -1 # Background grass behind player
 	_grass_field.name = "PhysicalGrass"
 	
 	# Configure based on world bounds if available, otherwise use extent
@@ -1351,9 +1356,9 @@ func _create_grass_field() -> void:
 		_grass_field.field_size = Vector2(extent * 2.0, extent * 2.0)
 		_grass_field.position = Vector2.ZERO
 	
-	_grass_field.grass_density = 1.5  # Adjusted for new spacing
-	_grass_field.blade_height = 54.0  # Increased 35% from 40.0 for taller grass
-	_grass_field.sway_strength = 8.0  # Gentler sway
+	_grass_field.grass_density = 1.5 # Adjusted for new spacing
+	_grass_field.blade_height = 54.0 # Increased 35% from 40.0 for taller grass
+	_grass_field.sway_strength = 8.0 # Gentler sway
 	_grass_field.interaction_radius = 85.0
 	
 	# Apply biome-specific settingsd
@@ -1362,8 +1367,8 @@ func _create_grass_field() -> void:
 		
 		# Use biome's defined grass colors (from the biome definition)
 		# Most biomes define these, but fallback to green if not defined
-		var base_color = Color(0.3, 0.6, 0.2, 1.0)  # Default green
-		var tip_color = Color(0.5, 0.8, 0.4, 1.0)   # Default light green
+		var base_color = Color(0.3, 0.6, 0.2, 1.0) # Default green
+		var tip_color = Color(0.5, 0.8, 0.4, 1.0) # Default light green
 		
 		# If biome has custom grass colors, use them
 		if "grass_color_base" in _active_biome and _active_biome.grass_color_base != Color.BLACK:
@@ -1408,8 +1413,8 @@ func _update_grass_field_settings() -> void:
 	
 	# Update colors
 	if _grass_field.has_method("set_grass_colors"):
-		var base_color = Color(0.3, 0.6, 0.2, 1.0)  # Default green
-		var tip_color = Color(0.5, 0.8, 0.4, 1.0)   # Default light green
+		var base_color = Color(0.3, 0.6, 0.2, 1.0) # Default green
+		var tip_color = Color(0.5, 0.8, 0.4, 1.0) # Default light green
 		
 		# If biome has custom grass colors, use them
 		if "grass_color_base" in _active_biome and _active_biome.grass_color_base != Color.BLACK:
@@ -1426,7 +1431,7 @@ func _ensure_boulder_container() -> Node2D:
 	if _boulder_container == null:
 		_boulder_container = Node2D.new()
 		_boulder_container.name = "Boulders"
-		_boulder_container.z_index = 0  # Same as player for Y-sorting
+		_boulder_container.z_index = 0 # Same as player for Y-sorting
 		_boulder_container.y_sort_enabled = true
 		add_child(_boulder_container)
 	return _boulder_container
@@ -1436,7 +1441,7 @@ func _spawn_boulders() -> void:
 	_clear_boulders()
 	
 	if _world_bounds.size == Vector2.ZERO:
-		return  # No bounds set yet
+		return # No bounds set yet
 	
 	_ensure_boulder_container()
 	
@@ -1444,11 +1449,11 @@ func _spawn_boulders() -> void:
 	# Reduce density for objective mode's large map - fewer obstacles for better navigation
 	var map_area = _world_bounds.size.x * _world_bounds.size.y
 	var camera_area = 1920.0 * 1080.0
-	var num_boulders = max(3, int(map_area / camera_area * 0.4))  # Reduced from 1.2 to 0.4
+	var num_boulders = max(3, int(map_area / camera_area * 0.4)) # Reduced from 1.2 to 0.4
 	
-	var min_distance_between = 1500.0  # Increased from 800 for more spread
-	var edge_margin = 200.0  # Keep boulders away from edges
-	var min_distance_from_center = 2500.0  # Keep boulders away from player spawn area (EDEN at 0,0)
+	var min_distance_between = 1500.0 # Increased from 800 for more spread
+	var edge_margin = 200.0 # Keep boulders away from edges
+	var min_distance_from_center = 2500.0 # Keep boulders away from player spawn area (EDEN at 0,0)
 	
 	var spawn_area = Rect2(
 		_world_bounds.position + Vector2(edge_margin, edge_margin),
@@ -1485,7 +1490,7 @@ func _spawn_boulders() -> void:
 		# Spawn boulder
 		var boulder = ProceduralBoulderScript.new()
 		boulder.position = pos
-		boulder.boulder_size = _rng.randf_range(210.0, 330.0)  # Tripled: was 70-110, now 210-330
+		boulder.boulder_size = _rng.randf_range(210.0, 330.0) # Tripled: was 70-110, now 210-330
 		boulder.variation_seed = _rng.randi()
 		
 		_boulder_container.add_child(boulder)
@@ -1512,8 +1517,6 @@ func _apply_snow_overlay_settings(biome: BiomeDefinition) -> void:
 	if biome == null or biome.snowfall_density <= 0.0:
 		_snow_overlay.visible = false
 		snow_material.set_shader_parameter("density", 0.0)
-		snow_material.set_shader_parameter("flake_scale", 1.0)
-		snow_material.set_shader_parameter("view_size", _get_view_size())
 		return
 	_snow_overlay.visible = true
 	var base_density := biome.snowfall_density * 0.55 + 0.15
@@ -1548,6 +1551,23 @@ func _apply_sakura_overlay_settings(biome: BiomeDefinition) -> void:
 	sakura_material.set_shader_parameter("drift_amplitude", clampf(0.25 + wind * 0.25, 0.15, 0.85))
 	var primary := biome.sakura_primary_color
 	var secondary := biome.sakura_secondary_color
+	
+	print("DEBUG_ENV: Biome=", biome.biome_id, " Night=", is_night_time())
+	print("DEBUG_ENV: SakuraDensity=", biome.sakura_petal_density, " SnowDensity=", biome.snowfall_density)
+	
+	# Override for "Firefly" effect in Sakura Grove at Night
+	# Override for "Firefly" effect in Sakura Grove at Night
+	if is_night_time() and biome.biome_id == &"sakura_grove":
+		# Firefly Colors (Golden/Orange Glow)
+		primary = Color(1.0, 0.9, 0.4, 1.0)
+		secondary = Color(1.0, 0.6, 0.2, 0.8)
+		
+		# Make them float UP instead of falling
+		var firefly_drift := Vector2(wind * 0.2, 0.15) # Upward drift
+		sakura_material.set_shader_parameter("wind_direction", firefly_drift)
+		sakura_material.set_shader_parameter("twinkle_strength", 0.95) # Intense sparking
+		sakura_material.set_shader_parameter("petal_scale", clampf(biome.sakura_petal_scale * 0.6, 0.1, 2.0)) # Smaller points of light
+	
 	sakura_material.set_shader_parameter("primary_color", Vector4(primary.r, primary.g, primary.b, primary.a))
 	sakura_material.set_shader_parameter("secondary_color", Vector4(secondary.r, secondary.g, secondary.b, secondary.a))
 	sakura_material.set_shader_parameter("view_size", _get_camera_view_size())
@@ -1701,7 +1721,7 @@ func _update_overlay_layout() -> void:
 		pass
 	if _fog_overlay:
 		_fog_overlay.size = view_size
-		_fog_overlay.position = Vector2(0, 0)  # Top-left for top_level
+		_fog_overlay.position = Vector2(0, 0) # Top-left for top_level
 
 func _update_overlay_transform() -> void:
 	if _overlay_canvas == null:
@@ -1778,6 +1798,9 @@ func _update_snow_overlay_polygon(camera_position: Vector2) -> void:
 		Vector2(min_corner.x - camera_position.x, max_corner.y - camera_position.y)
 	])
 	_snow_overlay.polygon = polygon
+
+func get_world_bounds() -> Rect2:
+	return _world_bounds
 
 func _update_sakura_overlay_polygon(camera_position: Vector2) -> void:
 	if _sakura_overlay == null:
@@ -2013,7 +2036,7 @@ func _setup_screen_fog() -> void:
 	_screen_fog_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_screen_fog_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_screen_fog_overlay.size = get_viewport().get_visible_rect().size
-	_screen_fog_overlay.color = Color(1, 1, 1, 0)  # Transparent base
+	_screen_fog_overlay.color = Color(1, 1, 1, 0) # Transparent base
 	
 	_screen_fog_layer.add_child(_screen_fog_overlay)
 	

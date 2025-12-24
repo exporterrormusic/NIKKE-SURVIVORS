@@ -14,6 +14,12 @@ var _shake_offset: Vector2 = Vector2.ZERO
 var _punch_offset: Vector2 = Vector2.ZERO
 var _punch_velocity: Vector2 = Vector2.ZERO
 
+# Trauma Shake System (Vibration)
+var _trauma: float = 0.0
+var _noise: FastNoiseLite
+const TRAUMA_DECAY := 0.5 # Slower decay for longer rumble
+const MAX_SHAKE_OFFSET := Vector2(60.0, 60.0) # Much stronger offset
+
 # Chromatic aberration overlay
 var _chromatic_overlay: ColorRect = null
 var _chromatic_material: ShaderMaterial = null
@@ -29,26 +35,33 @@ var _base_zoom: Vector2 = Vector2.ONE
 var _kill_count: int = 0
 var _kill_momentum: float = 0.0
 var _kill_decay_timer: float = 0.0
-const KILL_MOMENTUM_PER_KILL := 0.02  # Zoom out per kill (MORE NOTICEABLE)
-const KILL_MOMENTUM_MAX := 0.25  # Max zoom out (25%)
-const KILL_MOMENTUM_DECAY_DELAY := 2.0  # Seconds before momentum starts decaying
-const KILL_MOMENTUM_DECAY_RATE := 0.03  # Per second (slower decay)
+const KILL_MOMENTUM_PER_KILL := 0.02 # Zoom out per kill (MORE NOTICEABLE)
+const KILL_MOMENTUM_MAX := 0.25 # Max zoom out (25%)
+const KILL_MOMENTUM_DECAY_DELAY := 2.0 # Seconds before momentum starts decaying
+const KILL_MOMENTUM_DECAY_RATE := 0.03 # Per second (slower decay)
 
 # Bullet rhythm
 var _rhythm_pulse: float = 0.0
-const RHYTHM_PULSE_STRENGTH := 0.03  # MORE NOTICEABLE rhythm
+const RHYTHM_PULSE_STRENGTH := 0.03 # MORE NOTICEABLE rhythm
 const RHYTHM_DECAY := 6.0
 
 # Hitstop queue (for burst effects)
 var _hitstop_remaining: float = 0.0
 
 # Safety: Maximum hitstop duration to prevent permanent freeze
-const MAX_HITSTOP_DURATION := 0.5  # Never freeze longer than 0.5 seconds
-const MIN_TIME_SCALE := 0.001  # Use near-zero instead of true zero for safety
+const MAX_HITSTOP_DURATION := 0.5 # Never freeze longer than 0.5 seconds
+const MIN_TIME_SCALE := 0.001 # Use near-zero instead of true zero for safety
 
 func _ready() -> void:
 	instance = self
-	process_mode = Node.PROCESS_MODE_ALWAYS  # Process even during hitstop
+	process_mode = Node.PROCESS_MODE_ALWAYS # Process even during hitstop
+	
+	# Init Noise
+	_noise = FastNoiseLite.new()
+	_noise.seed = randi()
+	_noise.frequency = 0.05
+	_noise.fractal_octaves = 2
+	
 	_setup_chromatic_overlay()
 	print("[CombatJuice] Initialized successfully!")
 
@@ -57,7 +70,7 @@ func _process(_delta: float) -> void:
 	var real_delta = get_process_delta_time()
 	# When time_scale is 0, delta becomes 0 too, so calculate from real time
 	if Engine.time_scale < 0.01:
-		real_delta = 1.0 / 60.0  # Assume 60 FPS during complete freeze
+		real_delta = 1.0 / 60.0 # Assume 60 FPS during complete freeze
 	
 	# Handle hitstop (freezes gameplay but not this node)
 	if _hitstop_remaining > 0:
@@ -147,7 +160,18 @@ func _update_camera(delta: float) -> void:
 	_punch_offset *= 0.9
 	
 	# Decay shake offset
+	# Decay shake offset (Kicks)
 	_shake_offset *= 0.85
+	
+	# Compute Trauma Shake (Noise Vibration)
+	var trauma_offset := Vector2.ZERO
+	if _trauma > 0:
+		_trauma = max(0.0, _trauma - delta * TRAUMA_DECAY)
+		var shake_pwr := _trauma * _trauma # Quadratic falloff
+		var time_seed := Time.get_ticks_msec()
+		var n_x = _noise.get_noise_2d(time_seed * 0.8, 0.0)
+		var n_y = _noise.get_noise_2d(time_seed * 0.8, 100.0)
+		trauma_offset = Vector2(n_x, n_y) * MAX_SHAKE_OFFSET * shake_pwr
 	
 	# Apply rhythm pulse to zoom
 	var rhythm_zoom = 1.0 + _rhythm_pulse * RHYTHM_PULSE_STRENGTH
@@ -156,8 +180,8 @@ func _update_camera(delta: float) -> void:
 	var momentum_zoom = 1.0 - _kill_momentum
 	var final_zoom = _base_zoom * momentum_zoom * rhythm_zoom
 	
-	# Apply all offsets
-	_camera.offset = _original_offset + _shake_offset + _punch_offset
+	# Apply all offsets (Original + Kicks + Punches + Trauma)
+	_camera.offset = _original_offset + _shake_offset + _punch_offset + trauma_offset
 	_camera.zoom = final_zoom
 
 func _update_kill_momentum(delta: float) -> void:
@@ -194,6 +218,14 @@ static func chromatic_pulse(strength: float = 0.02) -> void:
 	if instance:
 		instance._chromatic_target = strength
 		instance._chromatic_strength = strength
+
+## Trigger trauma shake (vibration) - good for continuous roaring effects
+static func add_trauma(amount: float) -> void:
+	if instance:
+		instance._do_add_trauma(amount)
+
+func _do_add_trauma(amount: float) -> void:
+	_trauma = clamp(_trauma + amount, 0.0, 1.0)
 
 ## Camera punch in a direction - good for hit feedback
 static func camera_punch(direction: Vector2, strength: float = 10.0) -> void:
@@ -251,7 +283,7 @@ func _do_running_sway(delta: float, move_direction: Vector2) -> void:
 		return
 	# Subtle camera sway perpendicular to movement direction
 	var time = Time.get_ticks_msec() / 1000.0
-	var sway_amount = sin(time * 8.0) * 1.5  # Gentle oscillation
+	var sway_amount = sin(time * 8.0) * 1.5 # Gentle oscillation
 	var perp = Vector2(-move_direction.y, move_direction.x).normalized()
 	_shake_offset = _shake_offset.lerp(perp * sway_amount, delta * 5.0)
 
@@ -268,7 +300,7 @@ func _do_burst_effect() -> void:
 	# Time dilation still okay? User said "pause", dilation is slow-mo.
 	# Let's keep dilation but remove the hard freeze.
 	_time_scale_target = 0.4
-	camera_shake(15.0)  # Stronger shake
+	camera_shake(15.0) # Stronger shake
 
 ## Reset all effects (call when level ends)
 static func reset() -> void:

@@ -13,6 +13,26 @@ signal sin_wish_triggered()
 signal cecil_revive_triggered()
 signal marian_beam_absorbed()
 signal death
+signal individual_death(char_id: String)
+
+# Health state tracking per character
+var character_states: Dictionary = {} # Map char_id -> {hp, max_hp, shield_current, shield_max}
+var squad_ids: Array = [] # List of character IDs in the current squad
+var _current_char_id: String = ""
+
+# Current character context (for character-specific blocks and state swapping)
+var current_character_id: String:
+	get: return _current_char_id
+	set(value):
+		if value == _current_char_id: return
+		# Save state for old character
+		if _current_char_id != "":
+			_save_state(_current_char_id)
+		
+		_current_char_id = value
+		
+		# Load state for new character
+		_load_state(_current_char_id)
 
 var hp: int = 10
 var max_hp: int = 10
@@ -26,18 +46,61 @@ var shield_max: int = 0
 var has_rapunzel_healer: bool = false
 var has_cecil_lives: bool = false
 var cecil_lives_remaining: int = 0
+var _processing_death: bool = false # Prevent auto-revive during death cleanup
+var _last_damage_source: String = "unknown" # Track source for kill attribution
 var has_sin_wish: bool = false
 var sin_wish_used: bool = false
 var has_marian_beam_absorb: bool = false
 
-# Current character context (for character-specific blocks)
-var current_character_id: String = ""
-
 # Invincibility timers
 var _invincibility_timer: float = 0.0
 var _cecil_revive_invincible_timer: float = 0.0
-var _invincibility_duration: float = 0.3 # Brief iframes only
+var _invincibility_duration: float = 0.15 # Brief iframes only
 
+func set_squad_ids(ids: Array) -> void:
+	"""Set the list of character IDs in the squad to track total party survival."""
+	squad_ids = ids
+
+func _save_state(id: String) -> void:
+	character_states[id] = {
+		"hp": hp,
+		"max_hp": max_hp,
+		"shield_current": shield_current,
+		"shield_max": shield_max
+	}
+
+func _load_state(id: String) -> void:
+	if id in character_states:
+		var data = character_states[id]
+		hp = data["hp"]
+		max_hp = data["max_hp"]
+		shield_current = data["shield_current"]
+		shield_max = data["shield_max"]
+	else:
+		# Fresh character state (PlayerCore will update max_hp shortly after switch)
+		# Initialize to default safe values
+		hp = 10
+		max_hp = 10
+		shield_current = 0
+		shield_max = 0
+	
+	# Notify UI of the switch immediately
+	health_changed.emit(hp, max_hp)
+	shield_changed.emit(shield_current, shield_max)
+
+func _check_all_dead() -> bool:
+	if squad_ids.is_empty():
+		return hp <= 0 # Fallback
+		
+	for id in squad_ids:
+		# If we have state, check HP. If no state, assume alive (fresh).
+		if id == _current_char_id:
+			if hp > 0: return false
+		elif id in character_states:
+			if character_states[id]["hp"] > 0: return false
+		else:
+			return false # Fresh character is alive
+	return true # All checked and dead
 
 func _process(delta: float) -> void:
 	# Update invincibility timers
@@ -72,9 +135,18 @@ func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector
 		return false
 	
 	# Marian "She'll Eat Anything" - absorb boss beam attacks
-	if source == "boss_beam" and has_marian_beam_absorb and current_character_id == "marian":
+	# Check for beam attack type (supports both old "boss_beam" and new "Name:beam" formats)
+	var is_beam_attack = source == "boss_beam" or source.ends_with(":beam") or (":beam" in source)
+	if is_beam_attack and has_marian_beam_absorb and current_character_id == "marian":
 		marian_beam_absorbed.emit()
 		return false
+	
+	# DEBUG: Track down mysterious "player" source
+	if source == "player" or source.begins_with("player"):
+		print("[DEBUG] PLAYER SELF-DAMAGE DETECTED!")
+		print("  Source: ", source)
+		print("  Amount: ", amount)
+		print("  Stack: ", get_stack())
 	
 	var actual_damage = amount
 	
@@ -85,12 +157,32 @@ func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector
 		actual_damage -= shield_absorbed
 		damage_blocked_by_shield.emit(shield_absorbed)
 		shield_changed.emit(shield_current, shield_max)
+		
+		# Log shield damage as requested
+		var damage_log = Engine.get_singleton("DamageLog") if Engine.has_singleton("DamageLog") else get_node_or_null("/root/DamageLog")
+		if damage_log:
+			var log_source := source
+			if ":" in source:
+				log_source = source.split(":")[0]
+			damage_log.log_damage(log_source, "shield", shield_absorbed)
 	
 	# Apply remaining damage to HP
 	if actual_damage > 0:
 		hp -= actual_damage
 		damage_taken.emit(actual_damage, is_crit, direction)
 		health_changed.emit(hp, max_hp)
+		
+		# Log damage for debugging UI (zero overhead - just array append)
+		var damage_log = Engine.get_singleton("DamageLog") if Engine.has_singleton("DamageLog") else get_node_or_null("/root/DamageLog")
+		if damage_log:
+			# Parse "Name:Type" format if present
+			var log_source := source
+			var log_type := "hit"
+			if ":" in source:
+				var parts = source.split(":")
+				log_source = parts[0]
+				log_type = parts[1] if parts.size() > 1 else "hit"
+			damage_log.log_damage(log_source, log_type, actual_damage)
 		
 		# Trigger brief invincibility
 		_trigger_invincibility(_invincibility_duration)
@@ -106,6 +198,13 @@ func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector
 func get_max_hp() -> int:
 	return max_hp
 
+## Check if a specific character is alive (for switching logic)
+func is_character_alive(id: String) -> bool:
+	if id == _current_char_id:
+		return hp > 0
+	if id in character_states:
+		return character_states[id]["hp"] > 0
+	return true # Default to alive (fresh)
 
 ## Heal HP
 func heal(amount: int) -> void:
@@ -137,15 +236,15 @@ func _handle_death() -> bool:
 	if has_cecil_lives and cecil_lives_remaining > 0:
 		cecil_lives_remaining -= 1
 		hp = max_hp
-		shield_current = shield_max
 		_cecil_revive_invincible_timer = 5.0
 		invincible = true
 		health_changed.emit(hp, max_hp)
-		shield_changed.emit(shield_current, shield_max)
 		cecil_revive_triggered.emit()
 		return false
 	
 	# Actually dead
+	hp = 0
+	_save_state(current_character_id)
 	death.emit()
 	return true
 
@@ -165,6 +264,43 @@ func configure_shield(max_shield: int) -> void:
 	# Actually, usually called during setup or upgrade.
 	shield_current = mini(shield_current, shield_max)
 	shield_changed.emit(shield_current, shield_max)
+
+
+## Configure shield for ALL squad members (not just current character)
+## This ensures support characters also have shield when switched to
+func configure_shield_for_squad(max_shield_percent: float = 0.5) -> void:
+	# Configure for current character - start EMPTY (requires kills to charge)
+	var current_shield_max = int(max_hp * max_shield_percent)
+	shield_max = current_shield_max
+	shield_current = 0 # Start empty, not full
+	shield_changed.emit(shield_current, shield_max)
+	
+	# Save current state with new shield
+	if _current_char_id != "":
+		_save_state(_current_char_id)
+	
+	# Configure for ALL other characters in squad
+	for char_id in squad_ids:
+		if char_id == _current_char_id:
+			continue # Already configured above
+		
+		# Get or create state for this character
+		if char_id in character_states:
+			var state = character_states[char_id]
+			var char_max_hp = state.get("max_hp", 10)
+			var char_shield_max = int(char_max_hp * max_shield_percent)
+			state["shield_max"] = char_shield_max
+			state["shield_current"] = 0 # Start empty
+		else:
+			# Create initial state with shield
+			character_states[char_id] = {
+				"hp": 10,
+				"max_hp": 10,
+				"shield_current": 0, # Start empty
+				"shield_max": int(10 * max_shield_percent)
+			}
+	
+	print("[PlayerHealth] Configured shield for squad: %d%% of max HP (starts empty)" % int(max_shield_percent * 100))
 
 
 ## Configure Cecil lives

@@ -108,16 +108,21 @@ func _process(delta: float) -> void:
 	_beam_timer -= delta
 	_spawn_beam_blocker -= delta
 	
+	# Get aggression cooldown multiplier from boss (if RaptureQueenN01)
+	var cooldown_mult := 1.0
+	if _boss.has_method("get_aggression_cooldown_mult"):
+		cooldown_mult = _boss.get_aggression_cooldown_mult()
+	
 	# Fire missiles
 	if _missile_timer <= 0:
 		_fire_missile_barrage()
-		_missile_timer = _missile_cooldown
+		_missile_timer = _missile_cooldown * cooldown_mult # Apply aggression
 	
 	# Fire beam (only true bosses fire beams, not tanks or elites)
 	# Must wait for spawn blocker (6s) to prevent instant spawn-killing
 	if _beam_timer <= 0 and _spawn_beam_blocker <= 0 and _is_boss:
 		_fire_beam()
-		_beam_timer = BEAM_COOLDOWN
+		_beam_timer = BEAM_COOLDOWN * cooldown_mult # Apply aggression
 
 func _fire_missile_barrage() -> void:
 	if not _boss or not _player:

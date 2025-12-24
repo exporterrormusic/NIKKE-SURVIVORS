@@ -27,6 +27,9 @@ var _base_scale := 1.0
 var _font_size := 20
 var _rng := RandomNumberGenerator.new()
 
+# Label based rendering for performance
+var _label: Label
+
 func _ready() -> void:
 	_rng.randomize()
 	z_index = 100
@@ -41,32 +44,29 @@ func _ready() -> void:
 	# Initial upward velocity with slight horizontal drift
 	_velocity = Vector2(_rng.randf_range(-20, 20), -FLOAT_SPEED)
 	
-	# Set scale and font size based on type - larger for better visibility
-	match _type:
-		NumberType.CRITICAL:
-			_base_scale = 1.8
-			_font_size = 34 # Larger for crits
-		NumberType.HEAL:
-			_base_scale = 1.4
-			_font_size = 26
-		_:
-			_base_scale = 1.2
-			_font_size = 24 # Larger base size
+	# Create optimized Label
+	_label = Label.new()
+	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# Center anchor
+	_label.anchors_preset = Control.PRESET_CENTER
+	_label.position = Vector2(-50, -15) # Centering offset approx
+	_label.custom_minimum_size = Vector2(100, 30)
+	
+	add_child(_label)
+	
+	_update_style()
 	
 	# Start with pop scale
 	scale = Vector2.ONE * _base_scale * POP_SCALE
-
-func setup(value: int, type: NumberType = NumberType.DAMAGE) -> void:
-	_value = value
-	_type = type
-
+	
 func _process(delta: float) -> void:
 	_elapsed += delta
 	
 	if _elapsed >= FLOAT_DURATION:
 		# Return to pool if pooled, otherwise free
-		if EffectPool._instance and self in EffectPool._instance._damage_number_pool:
-			EffectPool._instance.return_damage_number(self)
+		if ClassDB.class_exists("EffectPool") and EffectPool.get_instance():
+			EffectPool.get_instance().return_damage_number(self)
 		else:
 			queue_free()
 		return
@@ -86,11 +86,9 @@ func _process(delta: float) -> void:
 	var fade_progress := clampf((progress - FADE_START) / (1.0 - FADE_START), 0.0, 1.0)
 	modulate.a = 1.0 - fade_progress
 	
-	# Only redraw every 3rd frame for performance (was every 2nd)
-	if Engine.get_process_frames() % 3 == 0:
-		queue_redraw()
-
-func _draw() -> void:
+func _update_style() -> void:
+	if not _label: return
+	
 	var color: Color
 	var prefix := ""
 	
@@ -100,44 +98,33 @@ func _draw() -> void:
 		NumberType.CRITICAL:
 			color = CRITICAL_COLOR
 			prefix = ""
+			_base_scale = 1.8
+			_font_size = 34
 		NumberType.HEAL:
 			color = HEAL_COLOR
 			prefix = "+"
+			_base_scale = 1.4
+			_font_size = 26
+		_:
+			_base_scale = 1.2
+			_font_size = 24
+			color = DAMAGE_COLOR
+
+	_label.text = prefix + str(_value)
 	
-	var text := prefix + str(_value)
-	
-	# HoloCure-style outline for readability - tighter offset to prevent "double text" look
-	var shadow_color := Color(0, 0, 0, color.a * 0.95)
-	var outline_w := 1.5 # Tighter outline
-	
-	# Draw outline at 4 cardinal directions (up/down/left/right)
-	var outline_offsets := [
-		Vector2(outline_w, 0),
-		Vector2(-outline_w, 0),
-		Vector2(0, outline_w),
-		Vector2(0, -outline_w)
-	]
-	for offset in outline_offsets:
-		draw_string(
-			ThemeDB.fallback_font,
-			offset,
-			text,
-			HORIZONTAL_ALIGNMENT_CENTER,
-			-1,
-			_font_size,
-			shadow_color
-		)
-	
-	# Draw main text on top
-	draw_string(
-		ThemeDB.fallback_font,
-		Vector2.ZERO,
-		text,
-		HORIZONTAL_ALIGNMENT_CENTER,
-		-1,
-		_font_size,
-		color
-	)
+	# Use LabelSettings resource if we want outlines, but overrides are faster/easier for dynamic color
+	_label.add_theme_color_override("font_color", color)
+	_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, color.a * 0.95))
+	_label.add_theme_constant_override("outline_size", 4) # Thicker outline for readability
+	_label.add_theme_font_size_override("font_size", _font_size)
+
+func setup(value: int, type: NumberType = NumberType.DAMAGE) -> void:
+	_value = value
+	_type = type
+	_elapsed = 0.0
+	modulate.a = 1.0
+	if _label:
+		_update_style()
 
 func _ease_out_back(t: float) -> float:
 	var c1 := 1.70158

@@ -162,12 +162,17 @@ func _apply_cone_damage() -> void:
 		if "hp" in enemy:
 			enemy_hp_before = enemy.hp
 		
+		# Determine source
+		var damage_source: String = "SnowWhiteBurst"
+		if owner_node and (owner_node.is_in_group("summoned_allies") or owner_node.name.contains("SummonedAlly")):
+			damage_source = "summon"
+
 		if enemy.has_method("take_damage"):
-			enemy.take_damage(scaled_damage, false, hit_direction, true, "SnowWhiteBurst") # from_burst = true
+			enemy.take_damage(scaled_damage, false, hit_direction, true, damage_source) # from_burst = true
 		elif enemy.has_method("apply_damage_with_source"):
-			enemy.apply_damage_with_source(scaled_damage, "SnowWhiteBurst")
+			enemy.apply_damage_with_source(scaled_damage, damage_source)
 		elif enemy.has_method("apply_damage"):
-			enemy.apply_damage(scaled_damage, "SnowWhiteBurst")
+			enemy.apply_damage(scaled_damage, damage_source)
 			
 		# Check if enemy was killed
 		if "hp" in enemy and enemy.hp <= 0 and enemy_hp_before > 0:
@@ -265,7 +270,7 @@ func _apply_tick() -> void:
 		return
 	
 	if parent.has_method(\"take_damage\"):
-		parent.take_damage(tick_damage, false, Vector2.ZERO)
+		parent.take_damage(tick_damage, false, Vector2.ZERO, false, \"SnowWhiteBurst\")
 	elif \"hp\" in parent:
 		parent.hp -= tick_damage
 		if parent.hp <= 0 and parent.has_method(\"die\"):

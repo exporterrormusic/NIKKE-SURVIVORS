@@ -6,7 +6,7 @@ extends Node2D
 @export var heal_interval: float = 1.0
 @export var heal_percent: float = 0.03
 @export var lifespan: float = 9.0
-@export var heal_radius: float = 180.0  # Bigger healing area
+@export var heal_radius: float = 180.0 # Bigger healing area
 var burn_enabled: bool = false
 var burn_percent: float = 0.03 # Can be overridden by controller (uses heal_percent logic)
 
@@ -18,11 +18,11 @@ var _sparkles: Array = []
 var _rays: Array = []
 
 # Visual colors - heavenly golden theme
-var cross_color := Color(1.0, 0.9, 0.5, 1.0)  # Bright golden
-var glow_color := Color(1.0, 0.95, 0.7, 0.5)  # Warm heavenly glow
-var zone_color := Color(1.0, 0.98, 0.8, 0.12)  # Soft golden zone
-var sparkle_color := Color(1.0, 1.0, 0.9, 0.9)  # White-gold sparkles
-var ray_color := Color(1.0, 0.95, 0.6, 0.3)  # Radiating light rays
+var cross_color := Color(1.0, 0.9, 0.5, 1.0) # Bright golden
+var glow_color := Color(1.0, 0.95, 0.7, 0.5) # Warm heavenly glow
+var zone_color := Color(1.0, 0.98, 0.8, 0.12) # Soft golden zone
+var sparkle_color := Color(1.0, 1.0, 0.9, 0.9) # White-gold sparkles
+var ray_color := Color(1.0, 0.95, 0.6, 0.3) # Radiating light rays
 
 func _ready():
 	# Find the player in the scene
@@ -88,7 +88,7 @@ func _try_heal_player() -> void:
 
 func _try_burn_enemies() -> void:
 	# Burn enemies within radius
-	var enemies = get_tree().get_nodes_in_group("enemies")
+	var enemies = TargetCache.get_enemies()
 	for enemy in enemies:
 		if not is_instance_valid(enemy):
 			continue
@@ -143,7 +143,7 @@ func _try_burn_enemies() -> void:
 func _draw() -> void:
 	var pulse = 0.7 + 0.3 * sin(_lifetime * 2.5)
 	var pulse_fast = 0.8 + 0.2 * sin(_lifetime * 5.0)
-	var fade = 1.0 - (_lifetime / lifespan) * 0.25  # Slight fade near end
+	var fade = 1.0 - (_lifetime / lifespan) * 0.25 # Slight fade near end
 	
 	# Draw radiating light rays (heavenly beams)
 	_draw_light_rays(pulse, fade)
@@ -166,10 +166,10 @@ func _draw() -> void:
 	# Draw golden cross (Christian/Latin cross style - vertical longer than horizontal)
 	var cross_alpha = cross_color.a * fade
 	var cc = Color(cross_color.r, cross_color.g, cross_color.b, cross_alpha)
-	var vert_length = 32.0  # Vertical arm (longer)
-	var horiz_length = 22.0  # Horizontal arm (shorter)
+	var vert_length = 32.0 # Vertical arm (longer)
+	var horiz_length = 22.0 # Horizontal arm (shorter)
 	var arm_width = 8.0
-	var cross_offset_y = 4.0  # Offset so horizontal bar is higher (like a Latin cross)
+	var cross_offset_y = 4.0 # Offset so horizontal bar is higher (like a Latin cross)
 	
 	# Vertical bar with glow (full length)
 	draw_rect(Rect2(-arm_width / 2 - 2, -vert_length - 2, arm_width + 4, vert_length * 2 + 4), Color(1.0, 0.95, 0.7, 0.4 * fade))

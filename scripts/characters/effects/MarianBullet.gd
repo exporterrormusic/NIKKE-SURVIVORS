@@ -5,7 +5,7 @@ class_name MarianBullet
 
 var velocity: Vector2 = Vector2.ZERO
 var owner_node: Node = null
-var killer_source: String = "minigun"  # For ShielderShield collision detection
+var killer_source: String = "minigun" # For ShielderShield collision detection
 var base_damage: int = 2
 var lifespan: float = 3.0
 var _age: float = 0.0
@@ -20,8 +20,8 @@ var _shader_material: ShaderMaterial = null
 
 func _ready() -> void:
 	# Set up collision
-	collision_layer = 4  # Projectile layer
-	collision_mask = 2   # Enemy layer
+	collision_layer = 4 # Projectile layer
+	collision_mask = 2 # Enemy layer
 	
 	# Connect hit detection
 	body_entered.connect(_on_body_entered)
@@ -168,10 +168,9 @@ func _calculate_damage() -> int:
 	return base_damage
 
 
-
 func _draw() -> void:
 	# Draw the sphere - bigger and brighter with glowing effect
-	var size := 32.0  # Larger size to match other bullets
+	var size := 32.0 # Larger size to match other bullets
 	draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
 	
 	# Outer glow - bright purple bloom
@@ -215,7 +214,7 @@ func _hit_target(target: Node) -> void:
 	
 	# Apply damage
 	if target.has_method("take_damage"):
-		target.take_damage(base_damage, false, velocity.normalized())
+		target.take_damage(base_damage, false, velocity.normalized(), false, "minigun")
 	elif "hp" in target:
 		target.hp -= base_damage
 	

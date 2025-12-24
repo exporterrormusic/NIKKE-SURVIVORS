@@ -438,8 +438,8 @@ func _draw_rocket_exhaust(dir: Vector2, perp: Vector2) -> void:
 	var outer_right := tail - perp * outer_width
 	var outer_color := Color(0.6, 0.0, 0.0, 0.9) # Deep dark red for outer
 	draw_polygon(
-		PackedVector2Array([outer_tip, outer_right, tail, outer_left]),
-		PackedColorArray([outer_color, outer_color, outer_color, outer_color])
+		PackedVector2Array([outer_tip, outer_right, outer_left]),
+		PackedColorArray([outer_color, outer_color, outer_color])
 	)
 	
 	var inner_length := outer_length * 0.62
@@ -449,8 +449,8 @@ func _draw_rocket_exhaust(dir: Vector2, perp: Vector2) -> void:
 	var inner_right := tail - perp * inner_width
 	var inner_color := Color(0.8, 0.1, 0.0, 0.95) # Dark red for inner
 	draw_polygon(
-		PackedVector2Array([inner_tip, inner_right, tail, inner_left]),
-		PackedColorArray([inner_color, inner_color, inner_color, inner_color])
+		PackedVector2Array([inner_tip, inner_right, inner_left]),
+		PackedColorArray([inner_color, inner_color, inner_color])
 	)
 	
 	var core_length := inner_length * 0.55
@@ -460,8 +460,8 @@ func _draw_rocket_exhaust(dir: Vector2, perp: Vector2) -> void:
 	var core_right := tail - perp * core_width
 	var core_color := Color(0.4, 0.0, 0.0, 1.0) # Very dark core
 	draw_polygon(
-		PackedVector2Array([core_tip, core_right, tail, core_left]),
-		PackedColorArray([core_color, core_color, core_color, core_color])
+		PackedVector2Array([core_tip, core_right, core_left]),
+		PackedColorArray([core_color, core_color, core_color])
 	)
 	
 	# Exhaust glow
@@ -534,6 +534,9 @@ func _explode() -> void:
 		_ground_indicator = null
 	
 	# Create AOE explosion effect
+	# Add subtle screen shake for impact (Reduced to 0.15 per user request)
+	CombatJuice.add_trauma(0.15)
+	
 	var explosion := Node2D.new()
 	explosion.set_script(preload("res://scripts/enemies/BossMissileExplosion.gd"))
 	explosion.global_position = global_position

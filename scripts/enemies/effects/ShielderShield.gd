@@ -20,10 +20,9 @@ var color_theme: Color = Color(0.3, 0.6, 1.0)
 var auto_regen: bool = true
 var recharge_duration: float = 5.0
 var bar_offset_y: float = -75.0
-var bar_width: float = 90.0  # Configurable bar width
-var bar_height: float = 16.0  # Configurable bar height
+var bar_width: float = 90.0 # Configurable bar width
+var bar_height: float = 16.0 # Configurable bar height
 var draw_hp_bar: bool = true
-
 
 
 # Signals
@@ -85,7 +84,7 @@ func activate() -> void:
 func _ready() -> void:
 	z_index = 35
 	add_to_group("shielder_shields")
-	add_to_group("boss_shields")  # For explosion collision detection
+	add_to_group("boss_shields") # For explosion collision detection
 	
 	# Fix for Night Mode: Use unshaded material to ignore CanvasModulate darkening
 	var mat = CanvasItemMaterial.new()
@@ -98,7 +97,7 @@ func _ready() -> void:
 	# Layer 1 = World/Default (Guaranteed detection)
 	_collision_area.collision_layer = 1
 	# Mask 2 (Player Proj), 4 (Enemy Proj?), 8 (??). Broaden mask to ensure detection.
-	_collision_area.collision_mask = 2 | 4 | 8 
+	_collision_area.collision_mask = 2 | 4 | 8
 	add_child(_collision_area)
 	
 	print("DEBUG: Shield Created. Layer: ", _collision_area.collision_layer, " Mask: ", _collision_area.collision_mask)
@@ -418,7 +417,7 @@ func _draw() -> void:
 		if owner_enemy and is_instance_valid(owner_enemy):
 			parent_scale = max(abs(owner_enemy.scale.x), 0.1)
 		var font = ThemeDB.fallback_font
-		var font_size := int(8 * parent_scale)  # Scale font with parent
+		var font_size := int(8 * parent_scale) # Scale font with parent
 		var text := "%d/%d" % [shield_hp, max_shield_hp]
 		var text_size = font.get_string_size(text, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size)
 		# Divide by parent scale to counter-act the parent's scaling transform
@@ -427,11 +426,9 @@ func _draw() -> void:
 		# Apply inverse scale transform for text drawing
 		draw_set_transform(Vector2.ZERO, 0, Vector2.ONE / parent_scale)
 		# Text shadow
-		var scaled_text_pos = text_pos * parent_scale  # Adjust for inverse transform
+		var scaled_text_pos = text_pos * parent_scale # Adjust for inverse transform
 		draw_string(font, scaled_text_pos + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, Color(0.0, 0.0, 0.0, 0.8 * form))
 		# Text
 		draw_string(font, scaled_text_pos, text, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, Color(1.0, 1.0, 1.0, form))
 		# Reset transform
 		draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
-
-

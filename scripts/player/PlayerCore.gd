@@ -157,8 +157,10 @@ func _ready() -> void:
 	# Set collision layer/mask to prevent friendly fire
 	# Layer 1: Player projectile avoidance
 	# Layer 2: Player body (for item pickup detection like Pristine Cores)
+	# Layer 16: World walls/boundaries
 	collision_layer = 1 | 2 # Set both layer 1 and 2
 	set_collision_mask_value(1, false) # Don't collide with other players/allies on layer 1
+	set_collision_mask_value(16, true) # Collide with walls/boundaries
 	
 	_create_shadow()
 	
@@ -193,6 +195,11 @@ func _ready() -> void:
 	_level_up_sfx = load("res://assets/sounds/sfx/ui/level.wav")
 	# Connect to environment for sprite darkening during night
 	_setup_environment_modulate()
+	
+	# Connect to switcher signals if using component
+	if _char_switcher:
+		_char_switcher.character_switched.connect(_on_controller_switched)
+	
 	
 	print("[PlayerCore] Debug InputMap 'move_up': ", InputMap.action_get_events("move_up"))
 
@@ -361,6 +368,15 @@ func _init_character_system() -> void:
 			_controllers.append(null)
 			push_warning("[PlayerCore] Invalid character index: %d" % char_idx)
 	
+	# Register squad for health tracking
+	var squad_ids: Array = []
+	for idx in _selected_char_indices:
+		if idx >= 0 and idx < all_ids.size():
+			squad_ids.append(all_ids[idx])
+	
+	if _health:
+		_health.set_squad_ids(squad_ids)
+	
 	# Start with Main character (slot 0)
 	current_character = 0
 	# Load registry indices of characters unlocked in the shop/skill tree permanently
@@ -392,6 +408,11 @@ func _init_character_system() -> void:
 	# Set initial controller
 	if current_character < _controllers.size() and _controllers[current_character] != null:
 		_current_controller = _controllers[current_character]
+		# Sync ID to health system for character-specific defenses (Marian absorb)
+		if _health and _registry:
+			var char_idx = _selected_char_indices[current_character]
+			var start_id = _registry.get_character_id(char_idx)
+			_health.current_character_id = start_id
 	
 	# Load burst sounds for selected characters
 	_burst_sounds = []
@@ -415,6 +436,25 @@ func _apply_character_shop_upgrades(all_ids: Array) -> void:
 	if _upgrade_manager:
 		# PASS swappable_slots to ensure we only apply upgrades to characters active in the current run
 		_upgrade_manager.apply_character_shop_upgrades(all_ids, _selected_char_indices, swappable_slots)
+		
+		# Explicitly notify controllers of changes that require immediate stat updates
+		# (e.g. Snow White's ammo needs value update, not just a flag check)
+		if _upgrade_manager.has_snow_white_ammo_upgrade:
+			for controller in _controllers:
+				# Fix: Resource path is likely 'snowwhitecontroller.gd', so 'snow_white' usually fails.
+				# Check for 'snowwhite' (stripped) or rely on data.id if possible.
+				if controller:
+					var path = controller.get_script().resource_path.to_lower()
+					if "snowwhite" in path or "snow_white" in path:
+						# If controller has update_ammo_capacity method, use it
+						# Or manually set if exposed
+						if controller.has_method("apply_squad_upgrades"):
+							controller.apply_squad_upgrades() # This function checks the upgrade flag!
+							# Fix: Ensure ammo starts full if we just upgraded capacity
+							if "ammo" in controller and "max_ammo" in controller:
+								controller.ammo = controller.max_ammo
+								if controller.has_signal("ammo_changed"):
+									controller.ammo_changed.emit(controller.ammo, controller.max_ammo)
 		
 		# Handle local visual side effects
 		if _upgrade_manager.has_cecil_eden_shield:
@@ -504,27 +544,35 @@ func on_enemy_killed(_enemy: Node2D, killer_source: String = "player") -> void:
 	var valid_kill: bool = killer_source in ["player", "projectile", "cecil_drone", "summon"]
 	
 	# Rapunzel: "I'm a healer, but..." - Heal 2% HP on each kill (exclude clone kills)
-	var rapunzel_valid_kill: bool = killer_source in ["player", "projectile", "cecil_drone"]
-	if _upgrade_manager.has_rapunzel_healer and rapunzel_valid_kill:
+	# Valid sources: player, projectile, and all weapon types (rocket, sniper, etc.) + Character Bursts
+	# Note: "summon" (clones) are excluded from this healing
+	var is_direct_kill: bool = (killer_source in ["player", "projectile", "cecil_drone", "rocket", "sniper", "smg", "shotgun", "minigun", "assault", "sword", "blade", "kilo", "MarianBurst", "SnowWhiteBurst", "SinBurst", "NayutaBurst", "ScarletBurst", "ScarletWave"]) and killer_source != "summon" and killer_source != "clone"
+	if _upgrade_manager.has_rapunzel_healer and is_direct_kill:
 		var heal_amount: int = int(max_hp * 0.02)
 		if heal_amount < 1:
 			heal_amount = 1
 		heal(heal_amount)
 	
 	# Regen Eden Shield on kill (1% of max HP) - direct player kills only
-	if _upgrade_manager.has_cecil_eden_shield and _eden_shield_current < _eden_shield_max and rapunzel_valid_kill:
+	if _upgrade_manager.has_cecil_eden_shield and _eden_shield_current < _eden_shield_max and is_direct_kill:
 		var regen_amount: int = maxi(1, int(max_hp * 0.01))
 		gain_shield(regen_amount)
 	
 	# Nayuta: "Duplicity" - 10% chance to spawn a clone when player directly kills enemy
 	# Exclude summon/clone kills to prevent chain reactions
-	if _upgrade_manager.has_nayuta_duplicity_upgrade and rapunzel_valid_kill and randf() < 0.10:
+	if _upgrade_manager.has_nayuta_duplicity_upgrade and is_direct_kill and randf() < 0.10:
 		_spawn_duplicity_clone()
 
 func _spawn_duplicity_clone() -> void:
 	"""Spawn a clone at the player's position for Nayuta's Duplicity upgrade."""
 	var NayutaCloneScript = preload("res://scripts/characters/effects/NayutaClone.gd")
 	var clone: Node2D = NayutaCloneScript.new()
+	
+	# CRITICAL: Set collision layers BEFORE adding to scene tree
+	# This ensures proper physics collision detection with enemy projectiles
+	clone.collision_layer = 8 # Allies layer (detected by EnemyLaser mask)
+	clone.collision_mask = 5 # World (1) + Enemies (4)
+	
 	# Deferred add to avoid "parent busy" errors during physics callbacks
 	get_parent().call_deferred("add_child", clone)
 	clone.global_position = global_position + Vector2(randf_range(-30, 30), randf_range(-30, 30))
@@ -586,6 +634,9 @@ func update_sprite() -> void:
 		
 		# Apply character stats
 		_apply_character_stats(char_data)
+		
+		# Apply universal shader for night glow
+		_apply_universal_shader()
 	else:
 		push_warning("[PlayerCore] update_sprite: No char_data for index %d" % registry_idx)
 	
@@ -600,6 +651,20 @@ func _apply_character_stats(char_data: Resource) -> void:
 		var speed_bonus: float = ShopMenuScript.get_upgrade_bonus("speed")
 		speed = base_speed * (1.0 + speed_bonus)
 		print("[PlayerCore] Applied speed: %.1f (base: %.1f, +%.0f%% shop)" % [speed, base_speed, speed_bonus * 100])
+	
+	# Apply HP
+	if "base_hp" in char_data and char_data.base_hp > 0:
+		var base_hp_val: int = char_data.base_hp
+		var hp_bonus: int = int(ShopMenuScript.get_upgrade_bonus("hp"))
+		var new_max_hp: int = base_hp_val + hp_bonus
+		
+		# Only update if changed (prevents precision jitter if called repeatedly)
+		if max_hp != new_max_hp:
+			# Preserve HP percentage when switching/initializing
+			var hp_percent: float = float(hp) / float(max_hp) if max_hp > 0 else 1.0
+			max_hp = new_max_hp
+			hp = maxi(1, int(max_hp * hp_percent))
+			print("[PlayerCore] Applied HP: %d (base: %d, +%d shop)" % [max_hp, base_hp_val, hp_bonus])
 
 ## Calculate damage with level scaling and shop ATK bonus
 ## Base formula: base_damage * level_mult * (1 + shop_atk_bonus)
@@ -701,37 +766,61 @@ func _create_shadow() -> void:
 	ShadowHelper.create_player_shadow(self)
 
 func _apply_universal_shader() -> void:
-	# Apply the universal sprite shader for night glow support
-	var shader = load("res://resources/shaders/universal_sprite_shader.gdshader")
-	if shader and _animator:
-		print("[PlayerCore] Applying universal shader to animator. Shader loaded: ", shader != null)
-		var mat := ShaderMaterial.new()
-		mat.shader = shader
-		# Player doesn't need outlines usually, but needs night glow
-		mat.set_shader_parameter("enable_outline", false)
-		mat.set_shader_parameter("night_glow_color", Color(0.6, 0.6, 1.0, 1.0)) # slightly brighter/bluer for player
-		mat.set_shader_parameter("night_glow_intensity", 1.2) # Player should pop more
-		_animator.material = mat
+	# DISABLED: Don't apply any shader to the player sprite
+	# Instead, we create a PointLight2D for night glow effect (see _setup_environment_modulate)
+	pass
+
+# Night glow light reference
+var _night_glow_light: PointLight2D = null
 
 func _setup_environment_modulate() -> void:
-	# Connect to EnvironmentController to darken player sprite during night
+	# Create a subtle glow light for night visibility
+	_create_night_glow_light()
+	
+	# Connect to EnvironmentController to toggle night glow
 	var env_controller = get_tree().get_first_node_in_group("environment_controller")
 	if env_controller and env_controller is EnvironmentController:
 		if env_controller.has_signal("modulate_changed"):
 			env_controller.modulate_changed.connect(_on_environment_modulate_changed)
-			# Set initial modulate
+			# Set initial state
 			_on_environment_modulate_changed(env_controller.current_modulate)
 
+func _create_night_glow_light() -> void:
+	if _night_glow_light:
+		return
+	
+	_night_glow_light = PointLight2D.new()
+	_night_glow_light.name = "NightGlowLight"
+	_night_glow_light.color = Color(0.7, 0.85, 1.0, 1.0) # Soft blue-white glow
+	_night_glow_light.energy = 0.0 # Start hidden (will be enabled at night)
+	_night_glow_light.texture_scale = 12.0 # Large soft radius
+	_night_glow_light.blend_mode = Light2D.BLEND_MODE_ADD
+	_night_glow_light.z_index = -1 # Behind the sprite
+	
+	# Create a simple radial gradient texture for smooth falloff
+	var img := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+	var center := Vector2(32, 32)
+	for x in 64:
+		for y in 64:
+			var dist := Vector2(x, y).distance_to(center) / 32.0
+			var alpha := clampf(1.0 - dist, 0.0, 1.0) * 0.5 # Soft edges
+			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, alpha))
+	
+	var tex := ImageTexture.create_from_image(img)
+	_night_glow_light.texture = tex
+	
+	add_child(_night_glow_light)
+
 func _on_environment_modulate_changed(color: Color) -> void:
-	# Update the shader's night_boost parameter if available
-	if _animator and _animator.material is ShaderMaterial:
-		var mat = _animator.material
-		# EnvironmentController sends a color, but our shader needs a float 0-1
-		# We can derive an intensity or just subscribe to Level's night boost logic
-		# But wait, Level.gd only iterates over "enemies" group.
-		# Let's fix Level.gd to update players too, OR update here if we have access to night state.
-		# For now, let's allow Level.gd to drive this by adding player to a tracked group or handling it there.
-		pass
+	# Calculate night intensity from modulate color (darker = more night)
+	# Day modulate is ~Color(0.95, 0.95, 0.95), night is ~Color(0.32, 0.39, 0.53)
+	var avg_brightness: float = (color.r + color.g + color.b) / 3.0
+	# Map brightness to night_boost: 0.95 = day (0.0), 0.35 = night (1.0)
+	var night_boost: float = clampf((0.95 - avg_brightness) / 0.6, 0.0, 1.0)
+	
+	# Update glow light energy based on night intensity
+	if _night_glow_light:
+		_night_glow_light.energy = night_boost * 0.4 # Subtle glow at night, none during day
 
 # ============= DAMAGE / HEALING =============
 
@@ -793,6 +882,14 @@ func _on_health_death_final() -> void:
 		var root = get_tree().current_scene
 		if root and root.has_method("show_defeat_menu"):
 			root.show_defeat_menu()
+
+func _on_controller_switched(slot_idx: int, registry_idx: int) -> void:
+	"""Handle internal logic when controller changes."""
+	# Update health system context
+	if _health and _registry:
+		var char_id = _registry.get_character_id(registry_idx)
+		_health.current_character_id = char_id
+		print("[PlayerCore] Switched character context to: ", char_id)
 
 func _on_health_changed(current: int, maximum: int) -> void:
 	# Call directly when HUD is ready, defer only during initialization
@@ -1084,9 +1181,10 @@ func _spawn_level_up_glow() -> void:
 	glow.attach_to_player(self)
 
 func _spawn_revive_effect() -> void:
-	## Spawns a blue revive effect when Cecil's extra life is used
-	var ReviveEffectScript = preload("res://scripts/effects/ReviveEffect.gd")
-	var effect = ReviveEffectScript.new()
+	## Spawns Cecil's "Three Wishes" visual effect with pause and wish image
+	var CecilWishEffectScript = preload("res://scripts/characters/effects/CecilWishEffect.gd")
+	var effect = CecilWishEffectScript.new()
+	effect.player_ref = self
 	get_parent().add_child(effect)
 	effect.global_position = global_position
 
@@ -1278,9 +1376,19 @@ func is_character_in_squad(char_id: String) -> bool:
 		if slot_idx >= 0 and slot_idx < _controllers.size():
 			var controller = _controllers[slot_idx]
 			if controller:
-				# Check script path for name match (robust fallback)
+				# Robust check: Check controller data directly first
+				# Using get() is safer than direct access if property might confuse parser
+				var data = controller.get("data")
+				if data and "id" in data:
+					if data.id.to_lower() == char_id:
+						return true
+				
+				# Fallback: Check script path for name match
 				var path = controller.get_script().resource_path.to_lower()
-				if char_id in path: # e.g. "wellscontroller.gd" contains "wells"
+				# Fix: Snow White controller file is "SnowWhiteController.gd", no underscore. 
+				# Handle "snow_white" by checking for both "snow_white" and "snowwhite"
+				var search_term = char_id.replace("_", "")
+				if search_term in path.replace("_", ""):
 					return true
 	return false
 
@@ -1653,10 +1761,17 @@ func _handle_input() -> void:
 	
 	var input_dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	
-	# Dash input
+	# Dash input - only on press
 	if Input.is_action_just_pressed("dash"):
 		if _movement:
 			_movement.try_dash(input_dir if input_dir.length() > 0 else aim_direction)
+	
+	# Running - holding dash key while not dashing (will also start after dash ends while held)
+	if _movement:
+		if Input.is_action_pressed("dash") and not dashing:
+			_movement.set_running(true)
+		elif not Input.is_action_pressed("dash"):
+			_movement.set_running(false)
 	
 	# Character switching and Burst are now handled exclusively in _input(event) 
 	# to prevent duplicate triggers (which caused swap-and-swap-back bugs).
@@ -1789,12 +1904,29 @@ func _input(event: InputEvent) -> void:
 
 func _select_character_by_index(index: int) -> void:
 	if index in swappable_slots and index >= 0 and index < _controllers.size():
+		# Prevent switching to dead characters
+		if _health and _registry:
+			var registry_idx = _selected_char_indices[index] if index < _selected_char_indices.size() else 0
+			var char_id = _registry.get_character_id(registry_idx)
+			# Only blocking switch if explicitly dead
+			if not _health.is_character_alive(char_id):
+				print("[PlayerCore] Cannot switch to dead character: %s" % char_id)
+				# TODO: Play error sound?
+				return
+
 		# Cleanup previous controller (removes active effects like Bullet Time audio/visuals)
 		if _current_controller and _current_controller.has_method("cleanup"):
 			_current_controller.cleanup()
 			
 		current_character = index
 		_current_controller = _controllers[current_character]
+		
+		# Ensure current state is saved before switch (handled by setter of current_character_id)
+		# But we need to update the ID on the health component to trigger load
+		if _health and _registry:
+			var char_idx = _selected_char_indices[current_character]
+			var start_id = _registry.get_character_id(char_idx)
+			_health.current_character_id = start_id
 		
 		_trigger_swap_effect()
 		update_sprite()
@@ -1903,7 +2035,7 @@ func _apply_aim_assist(base_aim: Vector2) -> Vector2:
 	var best_score: float = 0.0
 	
 	# Find best target in cone
-	for enemy in get_tree().get_nodes_in_group("enemies"):
+	for enemy in TargetCache.get_enemies():
 		if not is_instance_valid(enemy):
 			continue
 		var to_enemy: Vector2 = enemy.global_position - global_position

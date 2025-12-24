@@ -46,6 +46,10 @@ var _hit_lengths: Array = [] # Length of each ray
 var _beam_color := Color(0.6, 0.0, 0.0, 1.0) # Darker opaque red
 var _preview_color := Color(0.8, 0.0, 0.0, 0.3)
 
+# Audio
+const BEAM_SFX = preload("res://assets/sounds/sfx/weapons/minigun/beam.wav")
+var _audio: AudioStreamPlayer2D = null
+
 # Oil Logic
 var _enable_oil_burn: bool = false
 
@@ -79,6 +83,15 @@ func _ready() -> void:
 	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_MIX # Solid mixing, not additive
 	mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED # Still ignores lighting
 	material = mat
+	
+	# Setup Audio
+	_audio = AudioStreamPlayer2D.new()
+	_audio.stream = BEAM_SFX
+	_audio.bus = "SFX" # Match Marian's beam bus
+	_audio.volume_db = 3.0 # Reduced from 6.0
+	_audio.max_distance = 2000.0 # Match Marian's distance
+	# Loop handling is done manually in _process_firing
+	add_child(_audio)
 
 func _physics_process(delta: float) -> void:
 	if not _boss or not is_instance_valid(_boss):
@@ -105,18 +118,26 @@ func _process_charging(delta: float) -> void:
 		_update_tracking(delta)
 	
 	if _timer >= _charge_time:
+		# Initial impact shake when beam starts
+		# Call via CombatJuice since Camera2D script lacks the method
+		print("[BossBeam] FIRING! Triggering Trauma Shake 1.0")
+		CombatJuice.add_trauma(1.0)
 		_state = BeamState.FIRING
 		_timer = 0.0
+		
+		# Play beam sound loop
+		if _audio: _audio.play()
 
 func _process_firing(delta: float) -> void:
 	if track_during_fire and _player and is_instance_valid(_player):
 		_update_tracking(delta)
 	
-	# Continuous Camera Shake while firing
-	var camera = get_viewport().get_camera_2d()
-	if camera and camera.has_method("add_trauma"):
-		# Maintain moderate shake (0.4 * delta ensures it stays active but not overwhelming)
-		camera.add_trauma(0.8 * delta)
+	# Manual loop check (Like Marian's beam)
+	if _audio and not _audio.playing:
+		_audio.play()
+	
+	# Continuous shake removed per user request ("Only when it first fires... not during the long firing")
+
 	
 	_damage_timer += delta
 	if _damage_timer >= DAMAGE_INTERVAL:
@@ -134,6 +155,12 @@ func _process_firing(delta: float) -> void:
 		_timer = 0.0
 
 func _process_fading(_delta: float) -> void:
+	# Fade out audio
+	if _audio and _audio.playing:
+		var fade_progress = clampf(_timer / _fade_time, 0.0, 1.0)
+		var vol = 1.0 - fade_progress
+		_audio.volume_db = linear_to_db(vol)
+		
 	if _timer >= _fade_time:
 		_finish()
 
@@ -205,7 +232,11 @@ func _check_fan_hit() -> void:
 		# Check Blockers (Line of Sight)
 		if _has_line_of_sight(global_position, p_pos):
 			if _player.has_method("take_damage"):
-				_player.take_damage(damage_per_tick, false, Vector2.ZERO, false, "boss_beam")
+				# Use boss's display name if available for specific damage log
+				var boss_name := "Boss"
+				if _boss and is_instance_valid(_boss) and _boss.has_meta("display_name"):
+					boss_name = _boss.get_meta("display_name")
+				_player.take_damage(damage_per_tick, false, Vector2.ZERO, false, boss_name + ":Beam")
 	
 	# Check Allies
 	for ally in get_tree().get_nodes_in_group("charmed_allies"):
@@ -307,6 +338,7 @@ func _draw() -> void:
 			draw_polygon(_poly_points, PackedColorArray([col]))
 
 func _finish() -> void:
+	if _audio: _audio.stop()
 	_state = BeamState.DONE
 	emit_signal("beam_finished")
 	queue_free()

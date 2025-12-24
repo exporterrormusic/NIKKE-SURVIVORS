@@ -39,13 +39,18 @@ func set_paused(state: bool) -> void:
 		if _actor is CharacterBody2D:
 			_actor.velocity = Vector2.ZERO
 
+# Static cache for performance
+static var _cached_game_manager: Node = null
+
 func _physics_process(delta: float) -> void:
 	if not _actor or paused:
 		return
 		
 	# Apply Global Enemy Time Scale (Bullet Time)
-	var game_manager = get_node_or_null("/root/GameManager")
-	var time_scale = game_manager.enemy_time_scale if game_manager else 1.0
+	if not _cached_game_manager:
+		_cached_game_manager = get_node_or_null("/root/GameManager")
+		
+	var time_scale = _cached_game_manager.enemy_time_scale if _cached_game_manager else 1.0
 	delta *= time_scale
 	
 	var direction := Vector2.ZERO

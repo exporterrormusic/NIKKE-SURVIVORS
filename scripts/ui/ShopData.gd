@@ -44,7 +44,7 @@ const CHARACTER_UPGRADES := {
 	],
 	"cecil": [
 		{"id": "basic_attack", "name": "Three Wishes...", "desc": "Gain 3 extra lives. Revive at full HP with 5s invincibility.", "max_level": 1, "base_cost": 10, "icon": "✨"},
-		{"id": "eden_shield", "name": "Noah's Defiance", "desc": "Kills generate shield HP. Max 50% of HP, +1% per kill.", "max_level": 1, "base_cost": 20, "icon": "🛡️"},
+		{"id": "eden_shield", "name": "Noah's Defiance", "desc": "Kills by player (not summons) generate shield. Max 50% of HP.", "max_level": 1, "base_cost": 20, "icon": "🛡️"},
 	],
 	"sin": [
 		{"id": "basic_attack", "name": "Magnetic Personality", "desc": "Passive aura permanently mind-controls nearby regular enemies.", "max_level": 1, "base_cost": 10, "icon": "🔮"},

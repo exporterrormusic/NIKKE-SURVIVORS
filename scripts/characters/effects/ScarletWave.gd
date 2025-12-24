@@ -10,17 +10,17 @@ var owner_node: Node = null
 @export var pierce_all: bool = true
 @export var pierce_count: int = 0
 @export var damage: int = 6
-@export var base_damage: int = 6  # Starting damage at spawn
-@export var min_damage: int = 1   # Minimum damage at max range
-@export var max_distance: float = 800.0  # Distance at which damage is minimum
+@export var base_damage: int = 6 # Starting damage at spawn
+@export var min_damage: int = 1 # Minimum damage at max range
+@export var max_distance: float = 800.0 # Distance at which damage is minimum
 
 # Vampiric Slash healing mode
-var heal_mode: bool = false  # When true, heals owner per hit instead of damaging enemies
-var heal_percent: float = 0.0  # Percent of owner's max HP to heal per enemy hit (e.g. 0.05 = 5%)
+var heal_mode: bool = false # When true, heals owner per hit instead of damaging enemies
+var heal_percent: float = 0.0 # Percent of owner's max HP to heal per enemy hit (e.g. 0.05 = 5%)
 
 # Critical hit settings
-const BASE_CRIT_CHANCE := 0.15  # 15% base chance to crit
-const CRIT_MULTIPLIER := 2.0  # 2x damage on crit
+const BASE_CRIT_CHANCE := 0.15 # 15% base chance to crit
+const CRIT_MULTIPLIER := 2.0 # 2x damage on crit
 
 var _hit_nodes: Array = []
 var _spawn_position: Vector2 = Vector2.ZERO
@@ -150,7 +150,7 @@ func _on_body_entered(body: Node) -> void:
 	var player = get_tree().get_first_node_in_group("player")
 	if player and player.has_method("get_crit_chance"):
 		crit_chance += player.get_crit_chance()
-	crit_chance = minf(crit_chance, 1.0)  # Cap at 100%
+	crit_chance = minf(crit_chance, 1.0) # Cap at 100%
 	var is_crit := randf() < crit_chance
 	var final_damage := damage
 	if is_crit:
@@ -158,7 +158,7 @@ func _on_body_entered(body: Node) -> void:
 	
 	# Determine killer source based on owner type
 	var hit_direction := velocity.normalized() if velocity.length() > 0 else Vector2.RIGHT
-	var killer_source := "sword"  # Scarlet weapon type for BurstConfig (5% per hit)
+	var killer_source := "sword" # Scarlet weapon type for BurstConfig (5% per hit)
 	if is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):
 		killer_source = "summon"
 	
@@ -167,7 +167,7 @@ func _on_body_entered(body: Node) -> void:
 	
 	# Vampiric Slash: also heal owner per enemy hit
 	if heal_mode and owner_node and owner_node.has_method("heal"):
-		var owner_max_hp := 10  # Default fallback
+		var owner_max_hp := 10 # Default fallback
 		if "max_hp" in owner_node:
 			owner_max_hp = owner_node.max_hp
 		# Use ceili to ensure at least 1 HP healed per hit

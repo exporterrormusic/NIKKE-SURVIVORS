@@ -110,28 +110,62 @@ func set_current_wave(wave: int) -> void:
 
 # --- Event Handlers (from RunStatsTracker) ---
 
+func _get_source_character_index(source: String) -> int:
+	# Default to current player if source is generic
+	if source in ["player", "projectile", "unknown", "burn_dot"]:
+		return player_character_index
+	
+	# Check if source matches a squad member's weapon ID
+	_ensure_registry()
+	if _character_registry:
+		for char_idx in selected_character_indices:
+			# Get character ID from index
+			var all_ids = _character_registry.get_all_character_ids()
+			if char_idx >= 0 and char_idx < all_ids.size():
+				var char_id = all_ids[char_idx]
+				var char_data = _character_registry.get_character(char_id)
+				if char_data:
+					# Check main weapon ID
+					if char_data.get("weapon_id") == source:
+						return char_idx
+					# Check character-specific sources (e.g. "scarlet_burn", "snow_white_trail")
+					if source.begins_with(char_id):
+						return char_idx
+	
+	# Fallback to current player
+	return player_character_index
+
 func _on_damage_dealt(target: Node, info: Variant) -> void:
 	if not target or not target.is_in_group("enemies"):
 		return
 		
 	var dmg := 0
+	var source := "unknown"
+	
 	if info is Dictionary:
 		dmg = info.get("amount", 0)
+		source = info.get("source", "unknown")
 	elif info != null and "amount" in info:
 		dmg = info.amount
+		# Try to get source from object property if available
+		if "source" in info:
+			source = info.source
 	
-	damage_by_character[player_character_index] = damage_by_character.get(player_character_index, 0) + dmg
+	var char_idx = _get_source_character_index(source)
+	damage_by_character[char_idx] = damage_by_character.get(char_idx, 0) + dmg
 
 
 func _on_enemy_killed(enemy: Node, killer_source: String) -> void:
-	if killer_source not in ["player", "projectile", "summon", "cecil_drone"]:
-		return
-		
+	# Allow custom sources now that we track them
+	# if killer_source not in ["player", "projectile", "summon", "cecil_drone"]:
+	# 	return
 	current_kills += 1
-	kills_by_character[player_character_index] = kills_by_character.get(player_character_index, 0) + 1
+	var char_idx = _get_source_character_index(killer_source)
+	
+	kills_by_character[char_idx] = kills_by_character.get(char_idx, 0) + 1
 	
 	if enemy and (enemy.is_in_group("boss") or enemy.is_in_group("super_boss")):
-		boss_kills_by_character[player_character_index] = boss_kills_by_character.get(player_character_index, 0) + 1
+		boss_kills_by_character[char_idx] = boss_kills_by_character.get(char_idx, 0) + 1
 
 
 func _on_character_switched(_slot: int, registry_index: int) -> void:

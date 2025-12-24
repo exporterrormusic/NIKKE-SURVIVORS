@@ -70,7 +70,7 @@ func _build_ui() -> void:
 	_portrait_container.custom_minimum_size = Vector2(180, 180)
 	_portrait_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_portrait_container.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_portrait_container.visible = false  # Hidden until character is hovered
+	_portrait_container.visible = false # Hidden until character is hovered
 	left.add_child(_portrait_container)
 	
 	# Clip panel for rounded corners
@@ -96,7 +96,7 @@ func _build_ui() -> void:
 	viewport_container.add_child(_sprite_viewport)
 	
 	_animated_sprite = AnimatedSprite2D.new()
-	_animated_sprite.position = Vector2(90, 105)  # Center in viewport, lowered
+	_animated_sprite.position = Vector2(90, 105) # Center in viewport, lowered
 	_animated_sprite.centered = true
 	_animated_sprite.z_index = 10
 	_sprite_viewport.add_child(_animated_sprite)
@@ -176,7 +176,7 @@ func _build_ui() -> void:
 	_special_desc.add_theme_font_size_override("font_size", 16)
 	_special_desc.add_theme_color_override("font_color", UI.TEXT_SECONDARY)
 	_special_desc.autowrap_mode = TextServer.AUTOWRAP_WORD
-	_special_desc.custom_minimum_size.y = 50  # Fixed height for alignment
+	_special_desc.custom_minimum_size.y = 50 # Fixed height for alignment
 	special_col.add_child(_special_desc)
 	
 	# Spacer before upgrades
@@ -189,7 +189,7 @@ func _build_ui() -> void:
 	_special_upgrades_title.text = "Upgrades:"
 	_special_upgrades_title.add_theme_font_size_override("font_size", 14)
 	_special_upgrades_title.add_theme_color_override("font_color", UI.ACCENT_SECONDARY_DIM)
-	_special_upgrades_title.visible = false  # Hidden until character selected
+	_special_upgrades_title.visible = false # Hidden until character selected
 	special_col.add_child(_special_upgrades_title)
 	
 	_special_upgrades_label = Label.new()
@@ -216,7 +216,7 @@ func _build_ui() -> void:
 	_burst_desc.add_theme_font_size_override("font_size", 16)
 	_burst_desc.add_theme_color_override("font_color", UI.TEXT_SECONDARY)
 	_burst_desc.autowrap_mode = TextServer.AUTOWRAP_WORD
-	_burst_desc.custom_minimum_size.y = 50  # Fixed height for alignment
+	_burst_desc.custom_minimum_size.y = 50 # Fixed height for alignment
 	burst_col.add_child(_burst_desc)
 	
 	# Spacer before upgrades
@@ -229,7 +229,7 @@ func _build_ui() -> void:
 	_burst_upgrades_title.text = "Upgrades:"
 	_burst_upgrades_title.add_theme_font_size_override("font_size", 14)
 	_burst_upgrades_title.add_theme_color_override("font_color", UI.COLOR_BURST)
-	_burst_upgrades_title.visible = false  # Hidden until character selected
+	_burst_upgrades_title.visible = false # Hidden until character selected
 	burst_col.add_child(_burst_upgrades_title)
 	
 	_burst_upgrades_label = Label.new()
@@ -257,7 +257,7 @@ func set_character(data: Resource) -> void:
 	
 	_add_stat("HP", data.base_hp, 20, UI.STAT_HP, "hp")
 	_add_stat("ATK", int(data.base_damage), 20, UI.STAT_ATK, "atk")
-	_add_stat("SPD", int(data.base_speed / 10), 50, UI.STAT_SPD, "speed")  # Divide by 10 for cleaner display
+	_add_stat("SPD", int(data.base_speed / 10), 50, UI.STAT_SPD, "speed") # Divide by 10 for cleaner display
 	var crit_val: int = int(data.crit_chance * 100) if data.get("crit_chance") else 5
 	_add_stat("CRIT", crit_val, 100, UI.STAT_CRIT, "crit")
 	

@@ -3,8 +3,8 @@ extends Node
 ## Centralized audio playback and bus management.
 ## Add to autoloads for global access.
 
-const MUSIC_BUS := "Music"  # Music bus for background music only
-const SFX_BUS := "SFX"      # SFX bus for all sound effects (weapons, UI, etc.)
+const MUSIC_BUS := "Music" # Music bus for background music only
+const SFX_BUS := "SFX" # SFX bus for all sound effects (weapons, UI, etc.)
 const BATTLE_MUSIC_DIR := "res://assets/sounds/music/bgm"
 
 const WEAPON_FILE_MAP := {
@@ -39,7 +39,7 @@ var _sfx_volume := 1.0
 var _current_music_path: String = ""
 var _ambient_player: AudioStreamPlayer = null
 var _current_ambient_path: String = ""
-var _explosion_player: AudioStreamPlayer = null  # Dedicated explosion player to prevent overlap
+var _explosion_player: AudioStreamPlayer = null # Dedicated explosion player to prevent overlap
 var _ambient_player_a: AudioStreamPlayer = null
 var _ambient_player_b: AudioStreamPlayer = null
 var _ambient_use_b: bool = false
@@ -50,30 +50,30 @@ var _ambient_crossfade_step_timer: Timer = null
 var _ambient_crossfade_progress: float = 0.0
 var _ambient_crossfade_step_dt: float = 0.05
 var _ambient_base_db: float = 6.0
-var _music_tween: Tween = null  # Track active music fade tween to prevent race conditions
+var _music_tween: Tween = null # Track active music fade tween to prevent race conditions
 
 # --- MUSIC PLAYER ADDITIONS ---
 # Name: [Display Name, Unlock Condition (Achievement ID or empty if unlocked)]
 const MUSIC_METADATA := {
-	"battle": { "name": "BATTLE", "unlock_id": "" },
-	"dark": { "name": "DARK", "unlock_id": "" },
-	"nayuta": { "name": "SEEN IT ALL (Nayuta's Theme)", "unlock_id": "" },
-	"racer": { "name": "FAST", "unlock_id": "" },
-	"rapunzel": { "name": "YET STILL I BELIEVE (Rapunzel's Theme)", "unlock_id": "" },
-	"sin": { "name": "TASTE MY SILVER TONGUE (Sin's Theme)", "unlock_id": "" },
-	"snow": { "name": "UNYIELDING (Snow White's Theme)", "unlock_id": "" },
-	"western": { "name": "WESTERN", "unlock_id": "" },
-	"wishes": { "name": "ABANDON YOUR WISHES (Scheherezade's Theme)", "unlock_id": "abandoned_wishes", "event_only": true },
-	"main-menu": { "name": "MAIN MENU", "unlock_id": "" },
-	"timer": { "name": "TIMER", "unlock_id": "she_descends", "event_only": true },
+	"battle": {"name": "BATTLE", "unlock_id": ""},
+	"dark": {"name": "DARK", "unlock_id": ""},
+	"nayuta": {"name": "SEEN IT ALL (Nayuta's Theme)", "unlock_id": ""},
+	"racer": {"name": "FAST", "unlock_id": ""},
+	"rapunzel": {"name": "YET STILL I BELIEVE (Rapunzel's Theme)", "unlock_id": ""},
+	"sin": {"name": "TASTE MY SILVER TONGUE (Sin's Theme)", "unlock_id": ""},
+	"snow": {"name": "UNYIELDING (Snow White's Theme)", "unlock_id": ""},
+	"western": {"name": "WESTERN", "unlock_id": ""},
+	"wishes": {"name": "ABANDON YOUR WISHES (Scheherezade's Theme)", "unlock_id": "abandoned_wishes", "event_only": true},
+	"main-menu": {"name": "MAIN MENU", "unlock_id": ""},
+	"timer": {"name": "TIMER", "unlock_id": "she_descends", "event_only": true},
 }
 
 signal music_track_changed(track_name: String)
 signal music_playback_state_changed(is_playing: bool)
 
-var _playlist: Array[String] = []  # List of confirmed unlocked file paths
-var _shuffled_queue: Array[String] = []  # Shuffled queue - depletes then reshuffles
-var _history: Array[String] = []   # Paths of previously played songs
+var _playlist: Array[String] = [] # List of confirmed unlocked file paths
+var _shuffled_queue: Array[String] = [] # Shuffled queue - depletes then reshuffles
+var _history: Array[String] = [] # Paths of previously played songs
 var _current_track_path: String = ""
 var _is_paused_by_user: bool = false
 
@@ -128,7 +128,7 @@ func _preload_weapon_sounds() -> void:
 					var stream := _load_stream(full_path)
 					if stream:
 						count += 1
-					break  # Found this pattern, move to next
+					break # Found this pattern, move to next
 	
 	var elapsed := Time.get_ticks_msec() - start_time
 	print("[AudioDirector] Preloaded %d weapon sounds in %d ms" % [count, elapsed])
@@ -145,7 +145,7 @@ func play_random_battle_track(fade_time: float = 0.5) -> void:
 		if MUSIC_METADATA.has(file_id):
 			var data = MUSIC_METADATA[file_id]
 			if data.get("event_only", false):
-				continue  # Skip event-only songs from random selection
+				continue # Skip event-only songs from random selection
 		candidates.append(path)
 	if candidates.is_empty():
 		push_warning("AudioDirector: No battle music files in manifest")
@@ -188,7 +188,7 @@ func play_music_by_path(path: String, loop: bool = true, fade_time: float = 0.5)
 			_music_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS) # Run even if paused
 			_music_tween.tween_property(_music_player, "volume_db", 0.0, fade_time)
 	_current_music_path = path
-	_current_track_path = path  # Sync for Music Player UI
+	_current_track_path = path # Sync for Music Player UI
 	
 	# Add to history if this is a new track (enables "Previous" button for first song)
 	if _history.is_empty() or _history[_history.size() - 1] != path:
@@ -248,23 +248,43 @@ func play_sfx_by_path(path: String, pitch_scale: float = 1.0, volume_db: float =
 	player.volume_db = volume_db
 	player.play()
 
+var _current_burst_player: AudioStreamPlayer = null
+
 ## Play burst voice with dedicated player at scene root
 ## Ensures voice plays to completion regardless of game state
+## ENFORCED MONOPHONY: Stops any previous burst voice to prevent overlapping lines.
 func play_burst_voice(sound: AudioStream) -> void:
 	if sound == null:
 		return
 	
+	# Stop/Clear previous burst player if it's still running
+	if is_instance_valid(_current_burst_player):
+		_current_burst_player.stop()
+		_current_burst_player.queue_free()
+		_current_burst_player = null
+	
 	# Create a fresh player at scene root for complete independence
 	var burst_player = AudioStreamPlayer.new()
 	burst_player.name = "BurstVoice_%d" % Time.get_ticks_msec()
-	burst_player.bus = SFX_BUS  # Use SFX bus for voice lines
+	burst_player.bus = SFX_BUS # Use SFX bus for voice lines
 	burst_player.process_mode = Node.PROCESS_MODE_ALWAYS
 	burst_player.stream = sound
 	burst_player.volume_db = 6.0
 	burst_player.pitch_scale = 1.0
+	
 	get_tree().root.add_child(burst_player)
 	burst_player.play()
-	burst_player.finished.connect(burst_player.queue_free)
+	
+	# Track current player
+	_current_burst_player = burst_player
+	
+	# Cleanup on finish
+	burst_player.finished.connect(func():
+		if is_instance_valid(burst_player):
+			burst_player.queue_free()
+		if _current_burst_player == burst_player:
+			_current_burst_player = null
+	)
 
 func play_weapon_fire_sound(weapon_name: String, is_special_attack: bool = false) -> void:
 	var key := _resolve_weapon_key(weapon_name)
@@ -273,7 +293,7 @@ func play_weapon_fire_sound(weapon_name: String, is_special_attack: bool = false
 		return
 	var volume_db := 0.0
 	if key == "sniper":
-		volume_db = 6.0  # Increased volume for sniper
+		volume_db = 6.0 # Increased volume for sniper
 	var directory := "res://assets/sounds/sfx/weapons/%s" % key
 	if is_special_attack:
 		var fire_special_path := "%s/fire_special.mp3" % directory
@@ -326,7 +346,7 @@ func play_rocket_explosion_sound() -> void:
 		return
 	
 	_explosion_player.pitch_scale = 1.0
-	_explosion_player.volume_db = -12.0  # Reduced volume (was -6.02)
+	_explosion_player.volume_db = -12.0 # Reduced volume (was -6.02)
 	_explosion_player.play()
 
 func play_weapon_reload_sound(weapon_name: String) -> void:
@@ -359,11 +379,11 @@ func play_looping_sfx(path: String, pitch_scale: float = 1.0, volume_db: float =
 	var ensured := _ensure_loop_state(stream, true)
 	player.stream = ensured
 	if ensured is AudioStreamWAV:
-		var w:= ensured as AudioStreamWAV
+		var w := ensured as AudioStreamWAV
 		print("AudioDirector: WAV stream loop_mode=", w.loop_mode, " loop_begin=", w.loop_begin, " loop_end=", w.loop_end)
 	add_child(player)
 	player.play()
-	player.finished.connect(func(): 
+	player.finished.connect(func():
 		if not is_instance_valid(self):
 			return
 		if is_instance_valid(player):
@@ -408,91 +428,58 @@ func is_music_playing() -> bool:
 	return _music_player != null and _music_player.playing
 
 func play_ambient_loop(path: String, fade_time: float = 0.5) -> void:
-	# Always restart ambient audio when called
+	# If already playing this stream, just ensure it's playing and return
+	if _current_ambient_path == path:
+		if _ambient_player and _ambient_player.playing:
+			return
+		# If player exists but stopped, we'll let it restart below
+	
 	print("AudioDirector: play_ambient_loop requested for: ", path)
-	var stream := ResourceLoader.load(path)
-	if stream:
-		print("AudioDirector: play_ambient_loop loaded stream class=", stream.get_class(), " typeof=", typeof(stream))
+	var stream := _load_stream(path)
 	if stream == null:
 		push_warning("AudioDirector: Failed to load ambient stream %s" % path)
 		return
-	# If the stream is WAV, prefer to let the engine handle loop points if present.
-	if stream is AudioStreamWAV:
-		var wav_stream := stream as AudioStreamWAV
-		wav_stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
-		wav_stream.loop_begin = 0
-		wav_stream.loop_end = -1
-	# Try to obtain stream length to schedule crossfade. If not available, fall back to single-player loop.
-	var length := 0.0
-	if stream.has_method("get_length"):
-		length = float(stream.get_length())
-	# If stream length is reasonable, use two-player crossfade loop to hide endpoints
-	if length > AMBIENT_CROSSFADE + 0.05:
-		# Prepare timer
-		if _ambient_loop_timer == null:
-			_ambient_loop_timer = Timer.new()
-			_ambient_loop_timer.one_shot = false
-			add_child(_ambient_loop_timer)
-			_ambient_loop_timer.timeout.connect(func(): _ambient_crossfade_tick())
-		# Prepare players
-		if _ambient_player_a == null:
-			_ambient_player_a = AudioStreamPlayer.new()
-			_ambient_player_a.name = "AmbientPlayerA"
-			_ambient_player_a.bus = SFX_BUS
-			_ambient_player_a.process_mode = Node.PROCESS_MODE_ALWAYS
-			get_tree().root.add_child(_ambient_player_a)
-		if _ambient_player_b == null:
-			_ambient_player_b = AudioStreamPlayer.new()
-			_ambient_player_b.name = "AmbientPlayerB"
-			_ambient_player_b.bus = SFX_BUS
-			_ambient_player_b.process_mode = Node.PROCESS_MODE_ALWAYS
-			get_tree().root.add_child(_ambient_player_b)
-		# Stop any existing players/timer then configure
-		if _ambient_loop_timer != null and not _ambient_loop_timer.is_stopped():
-			_ambient_loop_timer.stop()
-		if _ambient_player_a.playing:
-			_ambient_player_a.stop()
-		if _ambient_player_b.playing:
-			_ambient_player_b.stop()
-		# Use independent non-looping stream instances for precise control
-		var playback_stream_a := _ensure_loop_state(stream, false)
-		var playback_stream_b := playback_stream_a.duplicate()
-		_ambient_player_a.stream = playback_stream_a
-		_ambient_player_b.stream = playback_stream_b
-		# Start A and schedule crossfade at length - crossfade
-		_ambient_player_a.volume_db = 6.0
-		_ambient_player_a.play()
-		_ambient_use_b = false
-		_ambient_stream_length = length
-		_ambient_loop_timer.wait_time = max(0.05, _ambient_stream_length - AMBIENT_CROSSFADE)
-		_ambient_loop_timer.start()
-		_current_ambient_path = path
-		return
-	# Fallback: single player behavior (previous behavior)
+		
+	# FORCE native engine looping for stable volume
+	# This fixes the "fade out then in" artifact from the manual crossfader
+	_ensure_loop_state(stream, true)
+	
 	if _ambient_player == null:
 		_ambient_player = AudioStreamPlayer.new()
 		_ambient_player.name = "AmbientPlayer"
 		_ambient_player.bus = SFX_BUS
 		_ambient_player.process_mode = Node.PROCESS_MODE_ALWAYS
 		get_tree().root.add_child(_ambient_player)
-	# Always restart
+	
 	_current_ambient_path = path
+	
+	# Clean up legacy crossfade system if active
+	if _ambient_loop_timer and not _ambient_loop_timer.is_stopped():
+		_ambient_loop_timer.stop()
+	if _ambient_player_a and _ambient_player_a.playing:
+		_ambient_player_a.stop()
+	if _ambient_player_b and _ambient_player_b.playing:
+		_ambient_player_b.stop()
+		
+	# Play with simple crossfade for track transition (not loop)
 	if _ambient_player.playing and fade_time > 0.05:
 		var fade_out := create_tween()
-		var ambient_ref := _ambient_player
-		fade_out.tween_property(ambient_ref, "volume_db", -48.0, fade_time * 0.5)
+		var player_ref := _ambient_player
+		# Fade out old
+		fade_out.tween_property(player_ref, "volume_db", -80.0, fade_time * 0.5)
 		fade_out.finished.connect(func():
-			if not is_instance_valid(self):
+			if not is_instance_valid(self) or not is_instance_valid(player_ref):
 				return
-			if is_instance_valid(ambient_ref):
-				ambient_ref.stop()
-				ambient_ref.stream = stream
-				ambient_ref.volume_db = 6.0
-				ambient_ref.play()
-				var fade_in := create_tween()
-				fade_in.tween_property(ambient_ref, "volume_db", 6.0, fade_time * 0.5)
+			# Switch and fade in
+			player_ref.stop()
+			player_ref.stream = stream
+			player_ref.volume_db = -80.0
+			player_ref.play()
+			var fade_in := create_tween()
+			fade_in.tween_property(player_ref, "volume_db", 6.0, fade_time * 0.5)
 		)
 	else:
+		# Immediate start
 		_ambient_player.stop()
 		_ambient_player.stream = stream
 		_ambient_player.volume_db = 6.0
@@ -825,7 +812,7 @@ func get_playback_progress() -> float:
 	return 0.0
 
 func get_current_song_name() -> String:
-	if _current_track_path == "": 
+	if _current_track_path == "":
 		# Also check _current_music_path as fallback
 		if _current_music_path != "":
 			var file_id = _current_music_path.get_file().get_basename().to_lower()

@@ -15,7 +15,7 @@ const FUSE_DURATION := 10.0
 const FINAL_COUNTDOWN := 1.0
 
 # State
-enum State { WAITING, BURNING, COUNTDOWN, EXPLODING }
+enum State {WAITING, BURNING, COUNTDOWN, EXPLODING}
 var _state: State = State.WAITING
 var _fuse_timer: float = 0.0
 var _countdown_timer: float = 0.0
@@ -156,12 +156,15 @@ func _is_on_screen() -> bool:
 
 
 func _explode() -> void:
+	# Add subtle screen shake for impact
+	CombatJuice.add_trauma(0.4)
+	
 	var player = get_tree().get_first_node_in_group("player")
 	if player and is_instance_valid(player):
 		var dist = global_position.distance_to(player.global_position)
 		if dist <= explosion_radius:
 			if player.has_method("take_damage"):
-				player.take_damage(explosion_damage)
+				player.take_damage(explosion_damage, false, Vector2.ZERO, false, "Exploder:Explosion")
 	
 	# Trigger normal death animation by calling the death handler
 	if owner_enemy and is_instance_valid(owner_enemy):
@@ -263,7 +266,7 @@ func _update_sparkles(delta: float) -> void:
 				"vel": Vector2(randf_range(-20, 20), randf_range(-50, -20)),
 				"life": randf_range(0.3, 0.6),
 				"size": randf_range(2.0, 4.0),
-				"color": Color(1.0, randf_range(0.1, 0.3), 0.0, 1.0)  # Deep red
+				"color": Color(1.0, randf_range(0.1, 0.3), 0.0, 1.0) # Deep red
 			})
 
 
@@ -334,7 +337,7 @@ func _draw_hp_bar_fire_overlay() -> void:
 		# remaining goes 1.0 -> 0.0. burn_progress goes 0.0 -> 1.0.
 		# Angle: -90 degrees (up) to start.
 		
-		var start_angle = -PI / 2
+		var start_angle = - PI / 2
 		var end_angle = start_angle + (burn_progress * TAU)
 		
 		# Create polygon for radial fill
@@ -351,5 +354,3 @@ func _draw_hp_bar_fire_overlay() -> void:
 		
 		# Border
 		draw_rect(Rect2(square_pos, Vector2(square_size, square_size)), Color(1.0, 1.0, 1.0, 0.5), false, 1.0)
-
-

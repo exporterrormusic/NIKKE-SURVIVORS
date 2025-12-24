@@ -510,7 +510,7 @@ func _deal_damage() -> void:
 				if time_left < 1.0:
 					dmg = int(4.0 * time_left)
 				if dmg > 0 and enemy.has_method("take_damage"):
-					enemy.take_damage(dmg, false, Vector2.ZERO)
+					enemy.take_damage(dmg, false, Vector2.ZERO, false, "MarianBurst")
 				break
 
 func _point_in_rect(p: Vector2, corners: Array) -> bool:

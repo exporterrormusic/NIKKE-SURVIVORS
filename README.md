@@ -24,8 +24,8 @@ A Vampire Survivors-style roguelite fan game featuring characters from **Goddess
 | Special Attack | Right Click |
 | Burst (Ultimate) | E (when gauge is full) |
 | Dash | Shift (costs stamina) |
-| Run | Hold Shift (drains stamina) |
-| Talent Tree | Tab |
+| Switch Character | Mouse Wheel / Q |
+| Talent Tree | T |
 | Pause | Escape |
 
 ---
@@ -33,14 +33,14 @@ A Vampire Survivors-style roguelite fan game featuring characters from **Goddess
 ## 🎯 Gameplay Overview
 
 ### Objective
-Survive 11 waves of Rapture enemies and defeat the final boss to complete a run.
+Survive waves of Rapture enemies and defeat the final boss to complete a run.
 
 ### Core Loop
 1. **Select your squad** – Choose 3 characters (1 Main + 2 Support)
 2. **Fight waves** – Enemies spawn in increasing intensity
 3. **Collect XP orbs** – Level up to earn skill points
-4. **Spend skill points** – Open the Talent Tree (Tab) to unlock abilities and support characters
-5. **Defeat bosses** – Bosses appear on waves 5, 7, 9, and 11
+4. **Spend skill points** – Open the Talent Tree to unlock abilities and support characters
+5. **Defeat bosses** – Bosses appear on certain waves
 6. **Earn Pristine Cores** – Spend them in the Shop for permanent upgrades
 
 ### Wave Structure
@@ -53,12 +53,12 @@ Survive 11 waves of Rapture enemies and defeat the final boss to complete a run.
 
 ## 👥 Characters
 
-10 playable NIKKEs, each with unique weapons and abilities:
+11 playable NIKKEs, each with unique weapons and abilities:
 
 | Character | Weapon | Playstyle |
 |-----------|--------|-----------|
-| Snow White | Rifle | Precision sniper with auto-turret |
-| Scarlet | Sword | Fast melee with dash attacks |
+| Snow White | Rifle | Precision sniper with auto-turrets |
+| Scarlet | Sword | Fast melee with dash attacks and HP sacrifice |
 | Rapunzel | Launcher | Support healer with rockets |
 | Nayuta | SMG | Clone summoner |
 | Commander | Assault Rifle | Leader with ally summons |
@@ -66,7 +66,8 @@ Survive 11 waves of Rapture enemies and defeat the final boss to complete a run.
 | Crown | Minigun | Cavalry with mount summon |
 | Kilo | Shotgun | Explosive shells & shield generation |
 | Cecil | SMG | Hacker with drone support |
-| Sin | SMG | Manipulator with DOT effects |
+| Sin | SMG | Manipulator with charm and DOT effects |
+| Wells | Sniper | Time manipulator with bullet-time abilities |
 
 **Starting Characters**: Snow White, Scarlet, Rapunzel  
 **Unlock Others**: Purchase in Shop with Pristine Rapture Cores
@@ -91,11 +92,11 @@ Survive 11 waves of Rapture enemies and defeat the final boss to complete a run.
 
 | Mode | Description |
 |------|-------------|
-| **Standard** | 11 waves, defeat the final boss to win |
-| **Elite Hunt** | All enemies spawn one tier stronger |
+| **Normal** | 11 waves, defeat the final boss to win |
 | **Endless** | No wave limit – survive as long as possible |
+| **Goddess Fall** | Survive the Rapture Queen |
 
-**Difficulty**: Adjustable 1-100 slider (higher = tougher enemies, more rewards)
+**Difficulty**: Adjustable slider (higher = tougher enemies, more rewards)
 
 ---
 
@@ -110,6 +111,15 @@ Survive 11 waves of Rapture enemies and defeat the final boss to complete a run.
 | **Elite** | Mini-bosses with red aura, high stats, drop chests |
 | **Boss** | Large unique enemies with special attacks (lasers, missiles) |
 | **Super Boss** | Extremely powerful versions with purple shields and regeneration |
+
+---
+
+## 🌙 Day/Night Cycle
+
+The game features a dynamic time-of-day system:
+- **Day**: Normal visibility
+- **Night**: Darker environment with the player having a subtle glow for visibility
+- **Storm**: Special weather effects on certain maps
 
 ---
 
@@ -136,6 +146,8 @@ scripts/         # GDScript source code
   ├── player/      # Player core mechanics
   ├── systems/     # Game managers (saves, achievements, etc.)
   └── ui/          # Menu and HUD scripts
+src/             # Additional source modules
+  └── world/       # Environment and weather systems
 assets/          # Art, sounds, fonts
 resources/       # Godot resources (.tres)
 ```
@@ -154,4 +166,4 @@ This is a non-commercial fan project. All NIKKE characters and related IP belong
 
 ---
 
-*Snow White is best girl.  Accept the truth of the poncho cult.* 💜
+*Snow White is best girl. Accept the truth of the poncho cult.* 💜

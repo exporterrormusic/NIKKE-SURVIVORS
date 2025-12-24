@@ -28,16 +28,52 @@ var shield_label: Label = null
 var _generic_boss_shield: Node2D = null
 var _generic_shield_ready: bool = false
 var _generation_id: int = 0 # pooling safety
+var _flash_intensity: float = 0.0
 
 # PERFORMANCE: Static cached reference to GameManager (avoids per-frame node lookup)
 static var _cached_game_manager: Node = null
 static var _gm_cache_checked: bool = false
+
+# PERFORMANCE: Static StyleBox pool (shared across all enemies to avoid per-enemy allocation)
+static var _style_green: StyleBoxFlat = null
+static var _style_red: StyleBoxFlat = null
+static var _style_yellow: StyleBoxFlat = null
+static var _style_boss_red: StyleBoxFlat = null
+static var _style_elite_red: StyleBoxFlat = null
+static var _style_bg: StyleBoxFlat = null
+
+static func _ensure_styles_initialized() -> void:
+	if _style_green == null:
+		_style_green = StyleBoxFlat.new()
+		_style_green.bg_color = Color(0, 1, 0)
+	if _style_red == null:
+		_style_red = StyleBoxFlat.new()
+		_style_red.bg_color = Color(1.0, 0.2, 0.2)
+	if _style_yellow == null:
+		_style_yellow = StyleBoxFlat.new()
+		_style_yellow.bg_color = Color(0.95, 0.85, 0.2)
+	if _style_boss_red == null:
+		_style_boss_red = StyleBoxFlat.new()
+		_style_boss_red.bg_color = Color(0.9, 0.0, 0.0)
+	if _style_elite_red == null:
+		_style_elite_red = StyleBoxFlat.new()
+		_style_elite_red.bg_color = Color(0.8, 0.1, 0.1)
+	if _style_bg == null:
+		_style_bg = StyleBoxFlat.new()
+		_style_bg.bg_color = Color(0.2, 0.2, 0.2)
 
 static func _get_game_manager() -> Node:
 	if not _gm_cache_checked:
 		_cached_game_manager = Engine.get_main_loop().root.get_node_or_null("/root/GameManager")
 		_gm_cache_checked = true
 	return _cached_game_manager
+
+# PERFORMANCE: Cached group membership (checked once in _ready, not per-frame)
+var _is_boss: bool = false
+var _is_super_boss: bool = false
+var _is_tank: bool = false
+var _is_elite: bool = false
+var _is_exploder: bool = false
 
 
 # Compatibility variables (so existing systems can read them)
@@ -146,7 +182,10 @@ func _ready() -> void:
 	# if visuals:
 	# 	NightGlowManager.register_sprite(visuals)
 	
-	# Setup HP bar styling (Green)
+	# Apply universal shader for night visibility - DISABLED (causes visual issues during day)
+	# _ensure_universal_shader()
+	
+	# Setup HP bar styling using shared static StyleBox pool
 	# Hide initially - will be shown after first position sync to prevent flicker at origin
 	hp_bar.visible = false
 	hp_label.visible = false
@@ -171,39 +210,28 @@ func _ready() -> void:
 	# HP bars stay as children and use z_index for layering
 	# call_deferred("_reparent_hp_bars_to_effects_layer")
 
-	var style_box = StyleBoxFlat.new()
-	style_box.bg_color = Color(0, 1, 0) # Green
-	hp_bar.add_theme_stylebox_override("fill", style_box)
+	# PERFORMANCE: Use shared static StyleBox pool instead of per-enemy allocation
+	_ensure_styles_initialized()
+	hp_bar.add_theme_stylebox_override("background", _style_bg)
 	
-	# Background style (Grey)
-	var bg_style = StyleBoxFlat.new()
-	bg_style.bg_color = Color(0.2, 0.2, 0.2)
-	hp_bar.add_theme_stylebox_override("background", bg_style)
+	# Cache group membership for faster per-frame checks
+	_is_exploder = is_in_group("exploder")
+	_is_tank = is_in_group("tank")
+	_is_boss = is_in_group("boss")
+	_is_super_boss = is_in_group("super_boss")
+	_is_elite = is_in_group("elite")
 
-	# DEBUG LABEL REMOVED
-	
-	# Update HP Bar color based on tier
-	
-	# Update HP Bar color based on tier
-	if is_in_group("exploder"):
-		var style = StyleBoxFlat.new()
-		style.bg_color = Color(1.0, 0.2, 0.2) # Deep red for exploders
-		hp_bar.add_theme_stylebox_override("fill", style)
-	elif is_in_group("tank"):
-		var style = StyleBoxFlat.new()
-		style.bg_color = Color(0.95, 0.85, 0.2) # Yellow for tanks
-		hp_bar.add_theme_stylebox_override("fill", style)
-	elif is_in_group("boss") or is_in_group("super_boss"):
-		var style = StyleBoxFlat.new()
-		style.bg_color = Color(0.9, 0.0, 0.0) # Deep Red for bosses (User Requested)
-		hp_bar.add_theme_stylebox_override("fill", style)
-	elif is_in_group("elite"):
-		var style = StyleBoxFlat.new()
-		style.bg_color = Color(0.8, 0.1, 0.1) # Red for elites
-		hp_bar.add_theme_stylebox_override("fill", style)
+	# Set HP bar fill style based on cached group membership
+	if _is_exploder:
+		hp_bar.add_theme_stylebox_override("fill", _style_red)
+	elif _is_tank:
+		hp_bar.add_theme_stylebox_override("fill", _style_yellow)
+	elif _is_boss or _is_super_boss:
+		hp_bar.add_theme_stylebox_override("fill", _style_boss_red)
+	elif _is_elite:
+		hp_bar.add_theme_stylebox_override("fill", _style_elite_red)
 	else:
-		# KEEP GREEN (Already set above)
-		pass
+		hp_bar.add_theme_stylebox_override("fill", _style_green)
 	
 	if hp_label:
 		hp_label.z_index = 101 # Above bar
@@ -229,11 +257,8 @@ func _on_health_changed(current: int, _max: int) -> void:
 			hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			hp_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		
-		# VISUAL FEEDBACK: Flash Red
-		if visuals:
-			visuals.modulate = Color(3.0, 0.5, 0.5) # Bright Red
-			var tw = create_tween()
-			tw.tween_property(visuals, "modulate", Color.WHITE, 0.2)
+		# VISUAL FEEDBACK: Flash Red - OPTIMIZED
+		_flash_intensity = 1.0
 
 
 var base_damage: int = 1
@@ -253,10 +278,10 @@ const RobotDeathEffectScript = preload("res://scripts/effects/RobotDeathEffect.g
 
 # Shooting Logic
 const LASER_RANGE := 500.0
-const LASER_FIRE_INTERVAL := 3.0
+const LASER_FIRE_INTERVAL := 5.0
 const LASER_SPEED := 500.0
 var _laser_cooldown := 0.0
-const CHARGE_DURATION := 1.0
+const CHARGE_DURATION := 1.4
 var _is_charging := false
 var _charge_timer := 0.0
 var _charge_effect: Node2D = null
@@ -264,6 +289,7 @@ var _glow_texture: Texture2D = null
 # Default to true (Standard enemies shoot), Spawner can disable
 var _can_shoot := true
 const EnemyLaserScene = preload("res://scenes/projectiles/EnemyLaser.tscn")
+const ChargeEffectScript = preload("res://scripts/enemies/EnemyChargeEffect.gd")
 
 const DAMAGE_DISTANCE := 50.0
 const DAMAGE_COOLDOWN := 1.0
@@ -294,11 +320,14 @@ var _original_material: Material = null
 var _wells_effect_age: float = 0.0
 static var _time_freeze_shader: Shader = null
 static var _dot_ripple_shader: Shader = null
+static var _universal_shader: Shader = null
+var _universal_material: ShaderMaterial = null
 
 func set_charmed(charm_owner: Node, charmed: bool = true, force: bool = false) -> void:
 	# Validation: Don't charm Elites/Tanks/Bosses unless forced
 	if not force:
-		if is_in_group("elite") or is_in_group("tank") or is_in_group("boss") or is_in_group("super_boss"):
+		# PERFORMANCE: Use cached group flags instead of is_in_group()
+		if _is_elite or _is_tank or _is_boss or _is_super_boss:
 			return
 	
 	_is_charmed = charmed
@@ -501,10 +530,13 @@ func _process(delta: float) -> void:
 	_target_check_timer -= delta
 	_shield_check_timer -= delta
 	
+	# OFF-SCREEN OPTIMIZATION: Throttle expensive checks heavily if off-screen
+	var effective_shield_interval = SHIELD_CHECK_INTERVAL if on_screen else SHIELD_CHECK_INTERVAL * 4.0
+	
 	# Shield Check Logic (Throttled)
 	if _shield_check_timer <= 0:
 		_update_shield_status()
-		_shield_check_timer = SHIELD_CHECK_INTERVAL
+		_shield_check_timer = effective_shield_interval
 	
 	# Wells Bullet Time Visual Effect - Time Freeze Shader
 	_wells_effect_age += delta
@@ -533,6 +565,9 @@ func _process(delta: float) -> void:
 	
 	# Targeting Logic (Throttled)
 	if _target_check_timer <= 0:
+		# OFF-SCREEN OPTIMIZATION: Run targeting less frequently if off-screen
+		var effective_target_interval = TARGET_CHECK_INTERVAL if on_screen else TARGET_CHECK_INTERVAL * 2.0
+		
 		# Update logic for Charmed enemies (find new target if current dies OR becomes friend)
 		if _is_charmed:
 			var need_new_target := false
@@ -552,14 +587,20 @@ func _process(delta: float) -> void:
 			# Normal behavior: Find best target (Player OR Charmed Enemy)
 			_find_best_target()
 			
-		_target_check_timer = TARGET_CHECK_INTERVAL
+		_target_check_timer = effective_target_interval
+	
+	# Hit Flash Decay - OPTIMIZED
+	if _flash_intensity > 0.0:
+		_flash_intensity = maxf(0.0, _flash_intensity - delta * 5.0) # Fade over 0.2s
+		if visuals:
+			visuals.modulate = Color.WHITE.lerp(Color(3.0, 0.5, 0.5), _flash_intensity)
 	
 	# Super Boss Shield Deployment (random chance to deploy when ready)
-	if is_in_group("super_boss") and _generic_boss_shield:
+	# PERFORMANCE: Use cached group flag instead of is_in_group()
+	if _is_super_boss and _generic_boss_shield:
 		_process_shield_deployment()
 	
-	if visuals and visuals.has_method("update_state"):
-		visuals.update_state(movement_component.velocity, movement_component.velocity)
+	# PERFORMANCE: update_state() call moved below after charging state check (was duplicate)
 		
 	# Dynamic Text Scaling: Keep text physically large but rendered sharply
 	# PERFORMANCE: Skip HP label updates for off-screen enemies
@@ -599,11 +640,8 @@ func _process(delta: float) -> void:
 		# Reset scale to 1.0 for sharp rendering (Cheap operation, keep per-frame)
 		hp_label.scale = Vector2.ONE
 		
-		# Text update (Every 10 frames)
-		if visible and Engine.get_process_frames() % 10 == 0:
-			var current = health_component.current_hp if health_component else -1
-			var _max = health_component.max_hp if health_component else -1
-			hp_label.text = str(current) + "/" + str(_max)
+		# PERFORMANCE: HP value/text updates are now FULLY EVENT-DRIVEN via _on_health_changed signal
+		# No per-frame polling needed - the signal fires only when HP actually changes
 		
 		# NOTE: HP label position sync moved to _physics_process for consolidation
 			
@@ -616,8 +654,23 @@ func _process(delta: float) -> void:
 				var source = "charmed_enemy" if _is_charmed else "enemy"
 				
 				if _current_target.is_in_group("player"):
-					# PlayerCore only accepts 1 argument
-					_current_target.take_damage(base_damage)
+					# Get descriptive enemy name for damage log
+					var enemy_tier = get_meta("enemy_tier", "Normal") if has_meta("enemy_tier") else "Normal"
+					var enemy_name = enemy_tier.capitalize()
+					if _is_boss or is_in_group("boss"):
+						enemy_name = "Boss"
+					elif _is_super_boss or is_in_group("super_boss"):
+						enemy_name = "Super Boss"
+					elif _is_tank or is_in_group("tank"):
+						enemy_name = "Tank"
+					elif _is_elite or is_in_group("elite"):
+						enemy_name = "Elite"
+					elif _is_exploder or is_in_group("exploder"):
+						enemy_name = "Exploder"
+					elif is_in_group("shielder"):
+						enemy_name = "Shielder"
+					# Pass source as "EnemyName:collision"
+					_current_target.take_damage(base_damage, false, Vector2.ZERO, false, enemy_name + ":Collision")
 				else:
 					# Enemies/Others support extended arguments
 					_current_target.take_damage(base_damage, false, Vector2.ZERO, false, source)
@@ -687,7 +740,8 @@ func _process(delta: float) -> void:
 				hp_bar.visible = true
 			
 			# Sync Shield Bar (skip for bosses - they use ShielderShield's own bar)
-			if shield_bar and is_instance_valid(shield_bar) and not is_in_group("boss") and not is_in_group("super_boss"):
+			# PERFORMANCE: Use cached group flags instead of is_in_group()
+			if shield_bar and is_instance_valid(shield_bar) and not _is_boss and not _is_super_boss:
 				shield_bar.scale = scale
 				shield_bar.size.x = hp_bar.size.x
 				var sb_offset = offset + Vector2(0, -9.0 * scale.y)
@@ -760,14 +814,20 @@ func _start_charging() -> void:
 		dir = global_position.direction_to(_current_target.global_position)
 	
 	# Create visual effect (Legacy Style)
-	var ChargeEffectScript = load("res://scripts/enemies/EnemyChargeEffect.gd")
+	# Use preloaded script
 	if ChargeEffectScript:
 		_charge_effect = Node2D.new() # It's a Node2D with a script, not necessarily a Sprite
 		_charge_effect.set_script(ChargeEffectScript)
 		_charge_effect.z_index = 15
 		add_child(_charge_effect)
-		# Position slightly in front like legacy
-		_charge_effect.position = dir * 25.0
+		
+		# Make unshaded (Bright at night) - NOTE: This makes it top_level = true
+		_make_unshaded(_charge_effect)
+		
+		# Position slightly in front like legacy (Sync initial pos)
+		# Update: specific offest now scales with enemy size
+		_charge_effect.scale = global_scale
+		_charge_effect.global_position = global_position + dir * 25.0 * global_scale.x
 		
 		# Start effect
 		if _charge_effect.has_method("start_charge"):
@@ -775,6 +835,13 @@ func _start_charging() -> void:
 
 func _update_charge_effect() -> void:
 	if _charge_effect and is_instance_valid(_charge_effect):
+		# Sync position (since unshaded makes it top_level)
+		var dir = Vector2.RIGHT
+		if is_instance_valid(_current_target):
+			dir = global_position.direction_to(_current_target.global_position)
+		_charge_effect.scale = global_scale
+		_charge_effect.global_position = global_position + dir * 25.0 * global_scale.x
+		
 		# Legacy Enemy.gd used set_progress
 		if _charge_effect.has_method("set_progress"):
 			var progress = 1.0 - (_charge_timer / CHARGE_DURATION)
@@ -802,12 +869,15 @@ func apply_stun(duration: float) -> void:
 	
 	set_stunned(true)
 	
+	if not is_inside_tree():
+		return
+		
 	# Create timer to un-stun
 	var timer = get_tree().create_timer(duration)
 	timer.timeout.connect(func(): if is_instance_valid(self): set_stunned(false))
 
 func _fire_laser(direction: Vector2) -> void:
-	var laser = EnemyLaserScene.instantiate()
+	var laser = ProjectileCache.create_enemy_laser()
 	if laser == null: return
 	
 	# Configure laser direction
@@ -817,26 +887,43 @@ func _fire_laser(direction: Vector2) -> void:
 		laser.rotation = direction.angle()
 		
 	laser.speed = LASER_SPEED
-	laser.max_range = LASER_RANGE * 1.5
+	# Bosses and super bosses get unlimited range (until map border)
+	if is_in_group("boss") or is_in_group("super_boss"):
+		laser.max_range = 9999.0
+		laser.lifetime = 30.0 # Long lifetime for traversing entire map
+	else:
+		laser.max_range = LASER_RANGE * 1.5
 	laser.damage = base_damage
 	
 	# Scale laser projectile to match enemy size (Boss > Elite > Tank > Normal)
-	laser.scale = scale
-	laser.damage = int(base_damage * scale.x) # Optional: Scale damage slightly with size? Or is that already handled by stats?
-	# User asked for visual scaling ("normal attacks are bigger"), but damage scaling often accompanies it. 
-	# User said "normal attacks scale up the same amount as they scale up". Strict reading = visual scale.
-	# I will stick to visual scale mostly, but damage is already set to `base_damage` which is usually 1. 
-	# Elites/Bosses set `base_damage` higher via stats/spawner logic usually. 
-	# Let's just scale the visual for now as requested.
-	laser.scale = scale
+	# Scale laser projectile to match enemy size (Boss > Elite > Tank > Normal)
+	var final_scale := scale
+	# N01 Specific: 1.5x larger laser (Visual override per user request)
+	if has_meta("display_name") and get_meta("display_name") == "RAPTURE QUEEN - N01":
+		final_scale *= 1.5
+		
+	laser.scale = final_scale
+	laser.damage = int(base_damage * scale.x) # Use base scale for damage logic
 	
-	# Boss Projectile Size Enforcement
-	# Ensure boss projectiles are physically large (matching 4.5x scale expectation)
-	# even if the boss entity itself is scaled differently (e.g. 2.25x)
-	if is_in_group("boss") or is_in_group("super_boss"):
-		var min_boss_scale = Vector2(4.5, 4.5)
-		if laser.scale.x < min_boss_scale.x:
-			laser.scale = min_boss_scale
+	# Set owner name for damage log (shows Tank, Elite, Boss, etc. instead of generic "Enemy")
+	if has_meta("display_name"):
+		laser.owner_name = get_meta("display_name")
+	elif has_meta("enemy_tier"):
+		laser.owner_name = get_meta("enemy_tier").capitalize() # "tank" -> "Tank"
+	elif is_in_group("super_boss"):
+		laser.owner_name = "Super Boss"
+	elif is_in_group("boss"):
+		laser.owner_name = "Boss"
+	elif is_in_group("elite"):
+		laser.owner_name = "Elite"
+	elif is_in_group("tank"):
+		laser.owner_name = "Tank"
+	else:
+		laser.owner_name = "Enemy"
+	
+	# NOTE: Boss projectile size enforcement REMOVED
+	# Previously forced 4.5x scale for bosses which made hitboxes invisible/too large
+	# Now visual scale matches entity scale, and collision is capped in EnemyLaser at 1.2x max
 	
 	# Configure Faction Logic (Friendly Fire)
 	if _is_charmed:
@@ -848,7 +935,14 @@ func _fire_laser(direction: Vector2) -> void:
 		# (Script logic prevents hurting allies, but we need collision)
 		laser.collision_mask = 3 # Player (1) + Enemies (2)
 	
-	laser.global_position = global_position + direction * 20.0
+	# Spawn laser OUTSIDE the enemy - scale offset by laser size to prevent instant hits
+	# Update: Offset adjusted so only the TIP emerges from the charge spot
+	# Calculation: ChargeSpot(25*Scale) - HalfLength(55*LaserScale)
+	# This generic formula handles N01's extra laser scaling correctly (spawning deeper)
+	var charge_dist: float = 25.0 * global_scale.x
+	var laser_half_len: float = 55.0 * laser.scale.x
+	var spawn_offset: float = charge_dist - laser_half_len
+	laser.global_position = global_position + direction * spawn_offset
 	get_parent().add_child(laser)
 
 
@@ -858,7 +952,9 @@ func _on_damaged(_amount: int, source: String) -> void:
 	if source in ["player", "projectile", "summon", "cecil_drone"]:
 		var player = get_tree().get_first_node_in_group("player")
 		if player and player.has_method("register_burst_hit"):
-			player.register_burst_hit(self)
+			# Summons should not generate burst (is_summon = true sets rate to 0)
+			var is_summon := source == "summon"
+			player.register_burst_hit(self, false, "", is_summon)
 	# Charmed enemies generate burst at reduced rate (0.5% per hit)
 	elif source == "charmed_enemy":
 		var player = get_tree().get_first_node_in_group("player")
@@ -904,27 +1000,33 @@ func _finalize_death(overkill: int, death_gen_id: int = -1) -> void:
 			pass
 
 	# Spawn visual effect
-	if RobotDeathEffectScript:
-		var death_effect := Node2D.new()
-		death_effect.set_script(RobotDeathEffectScript)
+	var death_effect = ProjectileCache.create_robot_death_effect()
+	if death_effect:
 		death_effect.global_position = global_position
 		if death_effect.has_method("set_overkill"):
 			death_effect.set_overkill(overkill)
 		get_parent().add_child(death_effect)
 	
 	# POOLING: Return to spawner pool instead of freeing
-	var spawner = get_tree().get_first_node_in_group("enemy_spawners")
+	var spawner = _get_cached_spawner()
 	if spawner and spawner.has_method("return_enemy"):
 		spawner.return_enemy(self)
 	else:
 		queue_free()
 
 
+static var _cached_spawner_ref: Node = null
+static func _get_cached_spawner() -> Node:
+	if not is_instance_valid(_cached_spawner_ref):
+		_cached_spawner_ref = Engine.get_main_loop().root.get_tree().get_first_node_in_group("enemy_spawners")
+	return _cached_spawner_ref
+
+
 # XP value for this enemy (scales with tier)
 var xp_value: int = 5
 
 func _spawn_xp_orbs() -> void:
-	"""Spawn XP orb(s) at enemy position using ProjectileCache."""
+	"""Directly grant XP to the player system (XP orbs removed for performance)."""
 	# Get XP value from stats resource if available
 	var drop_xp := xp_value
 	if stats and "xp_value" in stats:
@@ -955,31 +1057,13 @@ func _spawn_xp_orbs() -> void:
 	# Ensure minimum XP
 	drop_xp = maxi(1, drop_xp)
 	
-	# Spawn multiple orbs for larger XP values
-	var orb_count := clampi(drop_xp / 5, 1, 5) # 1-5 orbs
-	var xp_per_orb := drop_xp / orb_count
-	
-	for i in range(orb_count):
-		var orb = ProjectileCache.create_xp_orb()
-		if orb:
-			var spawn_pos = global_position + Vector2(randf_range(-20, 20), randf_range(-20, 20))
-			if orb.has_method("initialize"):
-				orb.initialize(xp_per_orb, spawn_pos)
-			else:
-				orb.global_position = spawn_pos
-				if "xp_value" in orb:
-					orb.xp_value = xp_per_orb
-			
-			# Add to scene
-			var parent = get_parent()
-			if parent:
-				parent.add_child(orb)
-			else:
-				get_tree().current_scene.add_child(orb)
-		else:
-			# Fallback: Emit XP gained directly
-			if EventBus.has_signal("xp_orb_collected"):
-				EventBus.xp_orb_collected.emit(xp_per_orb)
+	# DIRECT GRANT: No nodes spawned, call player directly for performance
+	var player = TargetCache.get_player()
+	if player and player.has_method("add_xp"):
+		player.add_xp(drop_xp)
+	elif EventBus.has_signal("xp_orb_collected"):
+		# Fallback if player not cached yet
+		EventBus.xp_orb_collected.emit(drop_xp)
 
 
 func _spawn_pristine_core_orb(value: int) -> void:
@@ -988,32 +1072,64 @@ func _spawn_pristine_core_orb(value: int) -> void:
 		orb.set_script(load("res://scripts/world/PristineCoreOrb.gd"))
 		orb.set("cores_value", value)
 		
-		var spawn_pos = global_position
-		
-		# Ensure minimum distance from player to prevent instant pickup
-		# User requested at least 1/4 screen (~450px)
 		var player = get_tree().get_first_node_in_group("player")
-		if player:
-			var dist = spawn_pos.distance_to(player.global_position)
-			if dist < 450.0:
-				var dir = (spawn_pos - player.global_position).normalized()
-				if dir == Vector2.ZERO: dir = Vector2.RIGHT.rotated(randf() * TAU)
-				spawn_pos = player.global_position + dir * 450.0
-		
-		# Clamp spawn position to map boundaries
-		# Use default map size if no camera/viewport info available
-		var map_min := Vector2(-1000, -1000)
-		var map_max := Vector2(3000, 2000)
-		
-		# Try to get actual boundaries from camera or level
 		var camera := get_viewport().get_camera_2d() if get_viewport() else null
-		if camera and camera.limit_left != -10000000:
-			# Use camera limits if they're set
-			map_min.x = camera.limit_left + 100
-			map_min.y = camera.limit_top + 100
-			map_max.x = camera.limit_right - 100
-			map_max.y = camera.limit_bottom - 100
 		
+		# Map bounds (Safe Zone: 1700x1700 to ensure reachable)
+		# Reduced from 2000 to 1800 and increased margin to ensure strict in-bounds
+		var map_half_size := 1800.0
+		var map_margin := 400.0 # Result: [-1400, 1400] range
+		var map_min := Vector2(-map_half_size + map_margin, -map_half_size + map_margin)
+		var map_max := Vector2(map_half_size - map_margin, map_half_size - map_margin)
+		
+		# Calculate spawn position
+		var spawn_pos := global_position # Default: enemy death position
+		
+		if player and camera:
+			# Get camera viewport bounds
+			var viewport_size := get_viewport().get_visible_rect().size
+			var cam_pos := camera.global_position
+			var cam_zoom := camera.zoom
+			var half_view := viewport_size / (2.0 * cam_zoom)
+			
+			# Visible screen bounds
+			var view_min := cam_pos - half_view
+			var view_max := cam_pos + half_view
+			
+			# Clamp view bounds to map bounds
+			view_min.x = maxf(view_min.x, map_min.x)
+			view_min.y = maxf(view_min.y, map_min.y)
+			view_max.x = minf(view_max.x, map_max.x)
+			view_max.y = minf(view_max.y, map_max.y)
+			
+			# Minimum distance from player (they need to walk to it)
+			var min_dist_from_player := 150.0
+			var max_dist_from_player := 400.0
+			
+			# If enemy death pos is on screen and far enough from player, use it
+			var death_in_view := spawn_pos.x >= view_min.x and spawn_pos.x <= view_max.x and spawn_pos.y >= view_min.y and spawn_pos.y <= view_max.y
+			var death_dist := spawn_pos.distance_to(player.global_position)
+			
+			if death_in_view and death_dist >= min_dist_from_player:
+				# Use enemy death position - already good
+				pass
+			else:
+				# Pick a random position within view, at good distance from player
+				var best_pos := spawn_pos
+				for _attempt in range(10):
+					var test_pos := Vector2(
+						randf_range(view_min.x, view_max.x),
+						randf_range(view_min.y, view_max.y)
+					)
+					var test_dist := test_pos.distance_to(player.global_position)
+					if test_dist >= min_dist_from_player and test_dist <= max_dist_from_player:
+						best_pos = test_pos
+						break
+					elif test_dist >= min_dist_from_player:
+						best_pos = test_pos # Accept but keep trying for better
+				spawn_pos = best_pos
+		
+		# Final clamp to map bounds
 		spawn_pos.x = clampf(spawn_pos.x, map_min.x, map_max.x)
 		spawn_pos.y = clampf(spawn_pos.y, map_min.y, map_max.y)
 		
@@ -1031,12 +1147,25 @@ func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector
 	# Check if protected by a Shielder's shield
 	if _check_shielder_protection(amount, source):
 		return # Damage absorbed by shield
-	hitbox_component.take_damage(amount, is_crit, direction, is_burst, source)
+		
+	# LOD OPTIMIZATION: Check if we should skip floating text
+	# Skip if off-screen OR if zoomed out significantly (e.g. Rapunzel burst)
+	# This prevents spawning 500+ labels in one frame
+	var skip_floating_text := not _is_on_screen()
+	if not skip_floating_text:
+		var vp = get_viewport()
+		if vp:
+			var camera = vp.get_camera_2d()
+			if camera and camera.zoom.length_squared() < 0.4: # Approx < 0.63 zoom
+				skip_floating_text = true
+
+	hitbox_component.take_damage(amount, is_crit, direction, is_burst, source, skip_floating_text)
 
 func _check_shielder_protection(damage_amount: int, source: String = "unknown") -> bool:
 	# Check protection status and get the shield instance
 	var shielding_unit = _get_protecting_shield()
 	# 2. Check for Chrono-Intangibility upgrade (Wells)
+	if not is_inside_tree(): return false
 	var player = get_tree().get_first_node_in_group("player")
 	var wells_in_squad = player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells")
 	if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and wells_in_squad:
@@ -1255,16 +1384,23 @@ func reset() -> void:
 	for node_name in nodes_to_clean:
 		var node = get_node_or_null(node_name)
 		if node:
+			# CRITICAL: Remove from tree immediately so name is free for next spawn
+			remove_child(node)
 			node.queue_free()
 			
 	# Remove Shields
 	if _generic_boss_shield:
+		if _generic_boss_shield.get_parent() == self:
+			remove_child(_generic_boss_shield)
 		_generic_boss_shield.queue_free()
 		_generic_boss_shield = null
 	
 	# Remove BurnDOTs (scan children by script path to be safe)
-	for child in get_children():
+	# Iterate backwards to safely remove
+	for i in range(get_child_count() - 1, -1, -1):
+		var child = get_child(i)
 		if child.get_script() and child.get_script().resource_path.contains("BurnDOT.gd"):
+			remove_child(child)
 			child.queue_free()
 			
 	# 7. Reset Visuals
@@ -1279,7 +1415,7 @@ func reset() -> void:
 			# Fallback for old animator script
 			visuals.visible = true
 			visuals.modulate = Color.WHITE
-			if visuals.has_method("play"):
+			if visuals.has_method("play") and visuals.sprite_frames and visuals.sprite_frames.has_animation("down"):
 				visuals.play("down")
 		
 		# Reset any other visual overrides?
@@ -1392,6 +1528,25 @@ func _process_shield_deployment() -> void:
 			_generic_shield_ready = false
 
 # ============= Wells Visual Effects =============
+
+func _ensure_universal_shader() -> void:
+	"""Apply universal sprite shader for night glow."""
+	if not visuals: return
+	
+	if not _universal_shader:
+		_universal_shader = load("res://resources/shaders/universal_sprite_shader.gdshader")
+	if not _universal_shader: return
+		
+	if not _universal_material:
+		_universal_material = ShaderMaterial.new()
+		_universal_material.shader = _universal_shader
+		_universal_material.set_shader_parameter("enable_outline", false)
+		_universal_material.set_shader_parameter("night_glow_color", Color(0.6, 0.6, 1.0, 1.0))
+		_universal_material.set_shader_parameter("night_glow_intensity", 1.2)
+		_universal_material.set_shader_parameter("day_brightness", 1.25)
+	
+	if visuals.material != _universal_material:
+		visuals.material = _universal_material
 
 func _ensure_time_freeze_shader() -> void:
 	"""Lazy-load and apply time freeze shader to visuals."""

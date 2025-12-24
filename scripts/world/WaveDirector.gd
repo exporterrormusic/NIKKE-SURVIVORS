@@ -24,18 +24,18 @@ const RUN_DURATION := WAVE_DURATION * TOTAL_WAVES
 # rate: Spawns per second (Target: ~4.0 for 120/wave)
 # max: Max concurrent enemies
 var WAVE_SCRIPT := {
-	1:  { "rate": 2.5, "max": 40, "event_type": "", "event_count": 0, "unlocks": ["basic", "elite"] },
-	2:  { "rate": 2.7, "max": 45, "event_type": "spawn_tanks", "event_count": 3, "unlocks": ["basic", "tank", "elite"] },
-	3:  { "rate": 2.9, "max": 50, "event_type": "spawn_exploders", "event_count": 3, "unlocks": ["basic", "tank", "exploder", "elite"] },
-	4:  { "rate": 3.1, "max": 55, "event_type": "spawn_shielders", "event_count": 2, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] },
-	5:  { "rate": 3.5, "max": 55, "event_type": "boss", "event_count": 1, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] },
-	6:  { "rate": 3.0, "max": 50, "event_type": "", "event_count": 0, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] }, # Breather
-	7:  { "rate": 3.8, "max": 65, "event_type": "boss", "event_count": 2, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] },
-	8:  { "rate": 3.7, "max": 65, "event_type": "boost_shielders", "event_count": 0, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] },
-	9:  { "rate": 4.0, "max": 70, "event_type": "boss", "event_count": 1, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] },
-	10: { "rate": 4.5, "max": 75, "event_type": "super_boss_plus", "event_count": 1, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] },
-	11: { "rate": 3.5, "max": 60, "event_type": "gate_super_bosses", "event_count": 3, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"] }, # FINAL WAVE gate
-	12: { "rate": 0.0, "max": 0,  "event_type": "n01", "event_count": 1, "unlocks": [] }, # N01 Solo
+	1: {"rate": 2.5, "max": 40, "event_type": "", "event_count": 0, "unlocks": ["basic", "elite"]},
+	2: {"rate": 2.7, "max": 45, "event_type": "spawn_tanks", "event_count": 3, "unlocks": ["basic", "tank", "elite"]},
+	3: {"rate": 2.9, "max": 50, "event_type": "spawn_exploders", "event_count": 3, "unlocks": ["basic", "tank", "exploder", "elite"]},
+	4: {"rate": 3.1, "max": 55, "event_type": "spawn_shielders", "event_count": 2, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"]},
+	5: {"rate": 3.5, "max": 55, "event_type": "boss", "event_count": 1, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"]},
+	6: {"rate": 3.0, "max": 50, "event_type": "", "event_count": 0, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"]}, # Breather
+	7: {"rate": 3.8, "max": 65, "event_type": "boss", "event_count": 2, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"]},
+	8: {"rate": 3.7, "max": 65, "event_type": "boost_shielders", "event_count": 0, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"]},
+	9: {"rate": 4.0, "max": 70, "event_type": "boss", "event_count": 1, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"]},
+	10: {"rate": 4.5, "max": 75, "event_type": "super_boss_plus", "event_count": 1, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"]},
+	11: {"rate": 3.5, "max": 60, "event_type": "gate_super_bosses", "event_count": 3, "unlocks": ["basic", "tank", "exploder", "shielder", "elite"]}, # FINAL WAVE gate
+	12: {"rate": 0.0, "max": 0, "event_type": "n01", "event_count": 1, "unlocks": []}, # N01 Solo
 }
 
 # Unit Weights (Ratios)
@@ -93,19 +93,21 @@ func stop() -> void:
 func set_enemy_count(count: int) -> void:
 	_current_enemy_count = count
 
-func notify_boss_defeated(is_super: bool = false) -> void:
+func notify_boss_defeated(is_super: bool = false, boss_id: String = "") -> void:
 	if _bosses_remaining > 0:
 		_bosses_remaining -= 1
 	
-	# Check Wave 11 Gate
+	# Check Wave 11 Gate - when all 3 super bosses are down, proceed to N01
 	if _gate_active and _bosses_remaining <= 0:
 		_gate_active = false
 		_start_wave_12() # Proceed to N01
-
-	# Check Game Win (N01)
-	if _n01_active:
+	
+	# NOTE: Victory during N01 (wave 12) is handled by notify_rapture_queen_defeated()
+	# OR by notify_boss_defeated with specific ID from Level.gd
+	if boss_id == "n01_queen":
+		print("[WaveDirector] Rapture Queen defeated ID verified. VICTORY!")
 		_win_game()
-
+	
 func notify_rapture_queen_defeated() -> void:
 	_win_game()
 
@@ -165,7 +167,6 @@ func _calculate_dda() -> void:
 	# < 5: Crushing (1.5x)
 	# 5-40: On Pace (1.0x)
 	# > 40: Struggling (0.5x)
-	
 	if _current_enemy_count <= 5:
 		_intensity_multiplier = 1.5
 		print("[Director] CRUSHING! Intensity -> 1.5x")
@@ -217,19 +218,9 @@ func _start_wave_12() -> void:
 	
 	# Spawn N01
 	emit_signal("rapture_event_started") # Trigger legacy event/music if needed
-	# Actually spawn the queen
-	# Assuming EnemySpawner handles "n01" request or we use the specific signal
-	# But WaveDirector usually requests spawns. 
-	# EnemySpawner has `spawn_rapture_queen()`. Let's assume we can request it or strict bind.
 	
-	# For now, use a special signal or type "rapture_queen"
-	# EnemySpawner logic might need a tweak if "rapture_queen" isn't a standard str
-	# Checking EnemySpawner... it has `spawn_rapture_queen()`.
-	# We'll rely on `rapture_event_started` signal potentially OR allow "rapture_queen" type.
-	# Let's emit a specific intent.
-	var spawner = get_tree().get_first_node_in_group("enemy_spawners")
-	if spawner and spawner.has_method("spawn_rapture_queen"):
-		spawner.spawn_rapture_queen()
+	# REFACTOR: Request spawn via Level signal so Level.gd tracks the Queen's death
+	emit_signal("enemy_spawn_requested", "n01_queen", 1, "center")
 
 func _process_spawning(delta: float) -> void:
 	# Wave 12: No stream
@@ -292,7 +283,6 @@ func _calculate_and_emit_reward(completed_wave: int) -> void:
 	# Waves 1-4: 1 Core
 	# Waves 5-9: 2 Cores
 	# Waves 10+: 3 Cores
-	
 	var count := 1
 	if completed_wave >= 10:
 		count = 3

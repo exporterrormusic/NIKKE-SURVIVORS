@@ -12,7 +12,7 @@ uniform vec4 secondary_color : source_color = vec4(1.0, 0.62, 0.8, 1.0);
 uniform float twinkle_strength = 0.35;
 uniform float drift_amplitude = 0.55;
 
-const float TAU = 6.283185307179586;
+const float TWO_PI = 6.283185307179586;
 
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
@@ -25,7 +25,7 @@ vec2 hash2(vec2 p) {
 mat2 rotation(float angle) {
 	float c = cos(angle);
 	float s = sin(angle);
-	return mat2(c, -s, s, c);
+	return mat2(vec2(c, s), vec2(-s, c));
 }
 
 float petal_mask(vec2 p, float aspect, float radius, float softness) {
@@ -40,7 +40,7 @@ vec4 petal_layer(vec2 uv, float scale, float seed, float radius, float softness,
 	vec2 cell = floor(grid);
 	vec2 local = fract(grid);
 	vec2 random_offset = hash2(cell + seed * 1.37);
-	float angle = random_offset.x * TAU;
+	float angle = random_offset.x * TWO_PI;
 	float aspect = mix(0.55, 0.82, random_offset.y);
 	vec2 center = random_offset;
 	float swirl = sin(time_flow * 0.65 + dot(cell, vec2(0.27, 0.19))) * drift_amplitude;

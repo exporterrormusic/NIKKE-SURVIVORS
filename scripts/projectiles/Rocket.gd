@@ -38,6 +38,14 @@ var is_intangible: bool = false
 var _intangibility_checked: bool = false
 
 
+# Performance flags
+var homing_enabled: bool = true
+var target_node: Node = null # Compatibility with Turret.gd
+var exhaust_enabled: bool = true
+var trail_enabled: bool = true
+var smoke_enabled: bool = true
+var lightweight_mode: bool = false
+
 ## Reset rocket state for pooling reuse
 func reset() -> void:
 	velocity = Vector2.ZERO
@@ -53,11 +61,20 @@ func reset() -> void:
 	reduced_smoke = false
 	_intangibility_checked = false
 	is_intangible = false
+	
+	# Reset flags to defaults
+	homing_enabled = true
+	target_node = null
+	exhaust_enabled = true
+	trail_enabled = true
+	smoke_enabled = true
+	lightweight_mode = false
 		
 	visible = true
 	set_process(true)
 	set_physics_process(true)
 	set_deferred("monitoring", true)
+	
 	collision_mask = 15 # Layers 1,2,3,4 (includes enemy hitbox layer 4)
 	monitorable = false
 
@@ -70,13 +87,13 @@ func _check_intangibility() -> void:
 		in_squad = p.is_character_in_squad("wells") or p.is_character_in_squad("Wells")
 	
 	# DIAGNOSTIC: Always print to help debug
-	print("[Rocket] Intangibility Check: has_upgrade=", has_upgrade, " in_squad=", in_squad, " player=", p)
+	# print("[Rocket] Intangibility Check: has_upgrade=", has_upgrade, " in_squad=", in_squad, " player=", p)
 	
 	if has_upgrade and in_squad:
-		print("[Rocket] Intangibility ACTIVE - will phase through boulders")
+		# print("[Rocket] Intangibility ACTIVE - will phase through boulders")
 		is_intangible = true
 	else:
-		print("[Rocket] Intangibility INACTIVE - will hit boulders")
+		# print("[Rocket] Intangibility INACTIVE - will hit boulders")
 		is_intangible = false
 
 func _ready():
@@ -94,25 +111,13 @@ func _ready():
 	
 	add_to_group("projectiles")
 	connect("body_entered", Callable(self, "_on_body_entered"))
-	player = get_parent().get_node("Player")
-	# Select initial target - only target enemies, not friendly units
-	var closest_enemy = null
-	var min_dist = INF
-	var enemies = TargetCache.get_enemies()
-	for enemy in enemies:
-		if not is_instance_valid(enemy):
-			continue
-		if not (enemy is Node2D):
-			continue
-		var dist = global_position.distance_to(enemy.global_position)
-		if dist < min_dist:
-			min_dist = dist
-			closest_enemy = enemy
-	if closest_enemy:
-		target_enemy = closest_enemy
-		last_target_pos = closest_enemy.global_position
-	else:
-		last_target_pos = player.global_position # fallback
+	player = get_parent().get_node_or_null("Player")
+	
+	# Select initial target - MOVED TO _process to allow lazy loading and property overrides
+	# This prevents wasted CPU when homing_enabled is set to false externally immediately after spawn
+	if player:
+		last_target_pos = player.global_position # default fallback
+	
 	set_process(true)
 	
 	# Dynamic lights are expensive - disabled by default
@@ -140,7 +145,9 @@ func _process(delta):
 	var smoke_interval := SMOKE_INTERVAL * (4.0 if reduced_smoke else 1.0)
 	if _smoke_timer >= smoke_interval:
 		_smoke_timer = 0.0
-		_spawn_smoke_particle()
+		# Respect smoke_enabled flag
+		if smoke_enabled:
+			_spawn_smoke_particle()
 	
 	# Update existing smoke particles
 	var i := 0
@@ -155,8 +162,9 @@ func _process(delta):
 		_smoke_particles[i] = p
 		i += 1
 	
-	# Only redraw every other frame for performance
-	if Engine.get_process_frames() % 2 == 0:
+	# Only redraw every other frame for performance, or less often in lightweight mode
+	var frame_mod = 3 if lightweight_mode else 2
+	if Engine.get_process_frames() % frame_mod == 0:
 		queue_redraw()
 
 func _spawn_smoke_particle():
@@ -167,22 +175,26 @@ func _spawn_smoke_particle():
 	})
 
 func _draw():
+	if not visible:
+		return
+		
 	# Draw smoke trail (in local space)
-	for p in _smoke_particles:
-		var life_ratio: float = p["age"] / SMOKE_LIFETIME
-		var alpha := (1.0 - life_ratio) * 0.6
-		var size: float = lerp(SMOKE_START_SIZE, SMOKE_END_SIZE, life_ratio) + p["size_offset"]
-		var local_pos: Vector2 = p["pos"] - global_position
-		
-		# Bright fire core (fades quickly)
-		if life_ratio < 0.35:
-			var fire_alpha := (1.0 - life_ratio / 0.35) * 0.8
-			var fire_col := Color(_fire_color.r * 1.5, _fire_color.g * 1.5, _fire_color.b, fire_alpha)
-			draw_circle(local_pos, size * 0.6, fire_col)
-		
-		# Smoke puff
-		var smoke_col := Color(_trail_color.r, _trail_color.g, _trail_color.b, alpha)
-		draw_circle(local_pos, size, smoke_col)
+	if trail_enabled:
+		for p in _smoke_particles:
+			var life_ratio: float = p["age"] / SMOKE_LIFETIME
+			var alpha := (1.0 - life_ratio) * 0.6
+			var size: float = lerp(SMOKE_START_SIZE, SMOKE_END_SIZE, life_ratio) + p["size_offset"]
+			var local_pos: Vector2 = p["pos"] - global_position
+			
+			# Bright fire core (fades quickly)
+			if life_ratio < 0.35:
+				var fire_alpha := (1.0 - life_ratio / 0.35) * 0.8
+				var fire_col := Color(_fire_color.r * 1.5, _fire_color.g * 1.5, _fire_color.b, fire_alpha)
+				draw_circle(local_pos, size * 0.6, fire_col)
+			
+			# Smoke puff
+			var smoke_col := Color(_trail_color.r, _trail_color.g, _trail_color.b, alpha)
+			draw_circle(local_pos, size, smoke_col)
 
 func _physics_process(delta):
 	# Apply Global Enemy Time Scale (Bullet Time) - ONLY for non-player projectiles
@@ -197,12 +209,23 @@ func _physics_process(delta):
 	if not _intangibility_checked:
 		_check_intangibility()
 		_intangibility_checked = true
+		
+		# Perform initial targeting ONLY if homing is enabled and no explicit target set
+		# This respects flags set by Turret.gd immediately after spawn
+		if homing_enabled and (target_enemy == null) and (target_node == null):
+			_find_initial_target()
 
 	time += dt
 	var target_pos = last_target_pos
-	if target_enemy and is_instance_valid(target_enemy):
+	
+	# Priority to target_node (set by optimizations) then target_enemy (legacy)
+	if target_node and is_instance_valid(target_node):
+		target_pos = target_node.global_position
+		last_target_pos = target_pos
+	elif target_enemy and is_instance_valid(target_enemy):
 		target_pos = target_enemy.global_position
 		last_target_pos = target_pos
+		
 	# Move towards target_pos
 	acceleration = min(acceleration + 6000 * dt, 8000)
 	var dir = (target_pos - global_position).normalized()
@@ -225,13 +248,33 @@ func _physics_process(delta):
 	if position.x < -100 or position.x > 2000 or position.y < -100 or position.y > 1200:
 		ProjectileCache.return_to_pool(self)
 
+func _find_initial_target() -> void:
+	var closest_enemy = null
+	var min_dist = INF
+	# Optimize: TargetCache avoids expensive tree traversal
+	var enemies = TargetCache.get_enemies()
+	for enemy in enemies:
+		if not is_instance_valid(enemy):
+			continue
+		if not (enemy is Node2D):
+			continue
+		var dist = global_position.distance_to(enemy.global_position)
+		if dist < min_dist:
+			min_dist = dist
+			closest_enemy = enemy
+	if closest_enemy:
+		target_enemy = closest_enemy
+		last_target_pos = closest_enemy.global_position
+	elif player:
+		last_target_pos = player.global_position # fallback
+
 func _check_boulder_collision() -> bool:
 	"""Check if rocket hit a boulder."""
 	# Skip if Chrono-Intangibility upgrade is active
 	if is_intangible:
 		return false
 	
-	var boulders := get_tree().get_nodes_in_group("boulders")
+	var boulders := TargetCache.get_boulders()
 	for boulder in boulders:
 		if not is_instance_valid(boulder):
 			continue
@@ -239,9 +282,10 @@ func _check_boulder_collision() -> bool:
 		var boulder_radius: float = 150.0 # Default
 		if boulder.get("boulder_size") != null:
 			boulder_radius = boulder.boulder_size * 0.5
-		var dist: float = global_position.distance_to(boulder_pos)
-		if dist < boulder_radius:
-			print("[Rocket] Boulder collision! Dist: ", dist, " Radius: ", boulder_radius)
+		
+		# Optimization: Squared distance check
+		var dist_sq = global_position.distance_squared_to(boulder_pos)
+		if dist_sq < boulder_radius * boulder_radius:
 			return true
 	return false
 

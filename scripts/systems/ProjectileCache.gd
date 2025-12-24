@@ -10,6 +10,7 @@ const BulletScene: PackedScene = preload("res://scenes/effects/Bullet.tscn")
 const AssaultBulletScene: PackedScene = preload("res://scenes/effects/AssaultBullet.tscn")
 const SMGBulletScene: PackedScene = preload("res://scenes/effects/SMGBullet.tscn")
 const SnowWhiteBulletScene: PackedScene = preload("res://scenes/effects/SnowWhiteBullet.tscn")
+const EnemyLaserScene: PackedScene = preload("res://scenes/projectiles/EnemyLaser.tscn")
 
 # =============================================================================
 # EXPLOSIVE/MISSILE SCENES
@@ -32,7 +33,6 @@ const KiloPelletScene: PackedScene = preload("res://scenes/effects/KiloPellet.ts
 # =============================================================================
 const TurretScene: PackedScene = preload("res://scenes/effects/Turret.tscn")
 const HealingCrossScene: PackedScene = preload("res://scenes/effects/HealingCross.tscn")
-const XPOrbScene: PackedScene = preload("res://scenes/effects/XPOrb.tscn")
 
 # Pooling System
 static var _pools: Dictionary = {}
@@ -126,6 +126,9 @@ static func create_smg_bullet() -> Node:
 static func create_snow_white_bullet() -> Node:
 	return _get_from_pool("snow_white_bullet", SnowWhiteBulletScene)
 
+static func create_enemy_laser() -> Node:
+	return _get_from_pool("enemy_laser", EnemyLaserScene)
+
 # =============================================================================
 # EXPLOSIVE FACTORY METHODS
 # =============================================================================
@@ -134,6 +137,23 @@ static func create_missile() -> Node:
 
 static func create_rocket() -> Node:
 	return _get_from_pool("rocket", RocketScene)
+
+static func create_robot_death_effect() -> Node:
+	# Script-only node, no scene
+	if _pools.has("robot_death") and not _pools["robot_death"].is_empty():
+		var node = _pools["robot_death"].pop_back()
+		if is_instance_valid(node):
+			node.set_process(true)
+			node.visible = true
+			if node.has_method("reset"):
+				node.reset()
+			return node
+	
+	var script = load("res://scripts/effects/RobotDeathEffect.gd")
+	var new_node = Node2D.new()
+	new_node.set_script(script)
+	new_node.set_meta("pool_type", "robot_death")
+	return new_node
 
 static func create_explosion() -> Node:
 	# DEBUG: User reports "Purple Explosion" during Scarlet Burst.
@@ -167,8 +187,6 @@ static func create_turret() -> Node:
 static func create_healing_cross() -> Node:
 	return HealingCrossScene.instantiate()
 
-static func create_xp_orb() -> Node:
-	return _get_from_pool("xp_orb", XPOrbScene)
 
 # =============================================================================
 # CACHE WARMING
@@ -186,7 +204,6 @@ static func warm_up_cache(parent: Node) -> void:
 	# List of common projectiles to warm up
 	var items_to_warm = [
 		{"factory": Callable(ProjectileCache, "create_bullet"), "count": 10},
-		{"factory": Callable(ProjectileCache, "create_xp_orb"), "count": 20},
 		{"factory": Callable(ProjectileCache, "create_assault_bullet"), "count": 5},
 		{"factory": Callable(ProjectileCache, "create_smg_bullet"), "count": 5},
 		{"factory": Callable(ProjectileCache, "create_slash"), "count": 2},

@@ -70,6 +70,9 @@ func _fire_bullet(direction: Vector2) -> void:
 	# Use character's base damage with level scaling
 	bullet.base_damage = player.calc_damage()
 	
+	# Scale up by 25% as requested
+	bullet.scale = Vector2.ONE * 1.25
+	
 	_play_sound("assault")
 
 func _can_use_special() -> bool:

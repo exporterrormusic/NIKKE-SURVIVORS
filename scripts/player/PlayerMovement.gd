@@ -128,11 +128,19 @@ func end_dash() -> void:
 	dash_ended.emit()
 
 
+const MIN_RUN_STAMINA = 15.0 # Minimum stamina required to START running
+
 ## Toggle running
 func set_running(is_running: bool) -> void:
 	wants_running = is_running
-	if is_running and stamina > 0.0:
-		running = true
+	if is_running:
+		# If we are already running, we can continue until 0
+		if running:
+			if stamina <= 0.0:
+				running = false
+		# If we are NOT running, we need a minimum amount to start
+		elif stamina > MIN_RUN_STAMINA:
+			running = true
 	else:
 		running = false
 

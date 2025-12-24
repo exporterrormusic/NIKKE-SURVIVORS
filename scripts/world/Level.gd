@@ -27,6 +27,11 @@ func _ready():
 	if GameManager:
 		GameManager.reset_run_stats()
 	
+	# Clear damage log for new run
+	var damage_log = get_node_or_null("/root/DamageLog")
+	if damage_log:
+		damage_log.clear()
+	
 	# Reset achievement session tracking
 	if has_node("/root/AchievementManager"):
 		get_node("/root/AchievementManager").reset_session()
@@ -257,6 +262,10 @@ func _on_settings_closed(canvas_layer: CanvasLayer) -> void:
 	# Remove the settings menu and its canvas layer
 	if canvas_layer and is_instance_valid(canvas_layer):
 		canvas_layer.queue_free()
+	
+	# Re-show the pause menu
+	if _pause_menu and is_instance_valid(_pause_menu):
+		_pause_menu.visible = true
 
 func _on_character_select_requested() -> void:
 	get_tree().paused = false
@@ -701,9 +710,18 @@ func _setup_wave_system() -> void:
 	add_child(_enemy_spawner)
 	_enemy_spawner.initialize(player, _enemy_container)
 	
+	# Connect queen spawn signal for weather trigger (works for ALL spawn methods including dev commands)
+	if _enemy_spawner.has_signal("rapture_queen_spawned"):
+		_enemy_spawner.rapture_queen_spawned.connect(_on_rapture_queen_spawned)
+	
 	# Set map bounds for spawning
 	var world_size := 4000.0
-	_enemy_spawner.set_map_bounds(Rect2(-world_size / 2, -world_size / 2, world_size, world_size))
+	var bounds := Rect2(-world_size / 2, -world_size / 2, world_size, world_size)
+	_enemy_spawner.set_map_bounds(bounds)
+	
+	# Set environment bounds for particle restrictions
+	if environment and environment.has_method("set_world_bounds"):
+		environment.set_world_bounds(bounds)
 	
 	# Create wave UI
 	_wave_ui = CanvasLayer.new()
@@ -722,6 +740,10 @@ func _setup_wave_system() -> void:
 	
 	if _wave_director.has_signal("wave_reward_earned"):
 		_wave_director.wave_reward_earned.connect(_on_wave_reward_earned)
+	
+	# Connect queen spawn event for weather trigger
+	if _wave_director.has_signal("rapture_event_started"):
+		_wave_director.rapture_event_started.connect(_on_rapture_queen_spawned)
 	
 	_wave_director.start()
 	
@@ -876,11 +898,23 @@ func _process(delta: float) -> void:
 			_wave_ui.update_time(_goddess_elapsed, 175.0)
 
 func _on_enemy_spawn_requested(enemy_type: String, count: int, pattern: String) -> void:
-	# print("[Level] _on_enemy_spawn_requested: type=", enemy_type, " count=", count, " pattern=", pattern)
 	if not _enemy_spawner:
 		print("[Level] ERROR: No enemy spawner!")
 		return
 	
+	if enemy_type == "n01_queen":
+		# Special handling for Rapture Queen
+		if _enemy_spawner.has_method("spawn_rapture_queen"):
+			var queen = _enemy_spawner.spawn_rapture_queen()
+			if queen:
+				print("[Level] Rapture Queen spawned via signal request.")
+				# Track death for victory condition
+				# Bind "n01_queen" as the boss_id
+				var callable = _on_boss_died.bind(true, "n01_queen")
+				if not queen.tree_exiting.is_connected(callable):
+					queen.tree_exiting.connect(callable)
+		return
+
 	# Set random horde direction at start of horde
 	if pattern == "horde":
 		_enemy_spawner.start_random_horde_direction()
@@ -888,7 +922,6 @@ func _on_enemy_spawn_requested(enemy_type: String, count: int, pattern: String) 
 	for i in range(count):
 		var enemy: Node2D = _enemy_spawner.spawn_enemy(enemy_type, pattern)
 		if enemy:
-			# print("[Level] Enemy spawned successfully: ", enemy.name, " groups=", enemy.get_groups())
 			# Apply night boost
 			if _current_night_boost > 0.0:
 				call_deferred("_set_enemy_night_boost", enemy, _current_night_boost)
@@ -897,11 +930,10 @@ func _on_enemy_spawn_requested(enemy_type: String, count: int, pattern: String) 
 			if enemy.is_in_group("boss"):
 				var is_super := enemy.is_in_group("super_boss")
 				# Prevent duplicate signal connection (causes crash on return to menu)
-				var callable = _on_boss_died.bind(is_super)
+				# Pass empty string for ID, or derive from metadata if needed
+				var callable = _on_boss_died.bind(is_super, "")
 				if not enemy.tree_exiting.is_connected(callable):
-					enemy.tree_exiting.connect(callable)
-		else:
-			print("[Level] ERROR: spawn_enemy returned null!")
+					enemy.tree_exiting.connect(callable) # Generic boss
 
 func _on_event_started(event_type: String, event_data: Dictionary) -> void:
 	if _wave_ui:
@@ -915,7 +947,7 @@ func _on_boss_incoming(_boss_type: String, time_until: float) -> void:
 	if _wave_ui:
 		_wave_ui.show_boss_warning(time_until)
 
-func _on_boss_died(is_super_boss: bool = false) -> void:
+func _on_boss_died(is_super_boss: bool = false, boss_id: String = "") -> void:
 	# Don't award core if boss died from enrage (player loses)
 	if GameManager and GameManager.has_meta("killed_by_enrage") and GameManager.get_meta("killed_by_enrage"):
 		print("[Level] Boss died from enrage - no core awarded")
@@ -924,7 +956,7 @@ func _on_boss_died(is_super_boss: bool = false) -> void:
 		_spawn_pristine_core_orb_at_boss()
 	
 	if _wave_director:
-		_wave_director.notify_boss_defeated(is_super_boss)
+		_wave_director.notify_boss_defeated(is_super_boss, boss_id)
 
 func _spawn_pristine_core_orb_at_boss() -> void:
 	# Spawn a core orb at the center of the screen (boss death location approximation)
@@ -994,13 +1026,6 @@ func _on_rapture_event_started() -> void:
 	# Weather is handled by _on_rapture_queen_spawned (emitted by spawner), 
 	# but we call it here explicitly just in case spawner fails or we want redundancy.
 	_trigger_rapture_weather()
-	
-	# Update HUD Text
-	var canvas = get_node_or_null("CanvasLayer")
-	if canvas:
-		var wave_display = canvas.get_node_or_null("WaveDisplay")
-		if wave_display:
-			wave_display.text = "ENDGAME"
 
 func _on_rapture_queen_defeated() -> void:
 	# Called when Queen node is freed (tree_exiting)
@@ -1036,24 +1061,25 @@ func _on_rapture_queen_spawned() -> void:
 			tween.tween_property(camera, "zoom", Vector2(0.7, 0.7), 2.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
 func _trigger_rapture_weather() -> void:
-	# 1. Force Night
+	# 1. Force Night - this triggers night mode for ALL systems
 	if environment and environment.has_method("set_time_of_day"):
 		environment.set_time_of_day("night")
 		_update_ambient_systems(_get_current_biome(), "night")
 		
-	# 2. Force Rain (unless Snow)
-	var current_biome = _get_current_biome()
-	
-	# If snowfield, keep snow (particles are snow already).
-	# If NOT snowfield, force "rain_forest" particle config to get Rain.
-	if current_biome != "snowfield":
-		if _ambient_particles:
-			# Configure for rain forest (heavy rain) but keep "night" flag
-			_ambient_particles.configure("rain_forest", true)
-			print("[Level] Weather changed to RAIN")
-			
+	# 2. Force Rain on ALL biomes (override current biome effects)
+	# This stops fireflies, sakura blossoms, pollen, etc. and replaces with rain
+	if _ambient_particles:
+		# Rain forest config provides rain particles
+		# configure() clears existing particles and starts fresh with new config
+		_ambient_particles.configure(&"rain_forest", true) # StringName for biome ID
+		print("[Level] Weather changed to RAIN (overriding biome effects)")
+		
 	# 3. Start Lightning
 	_start_lightning_system()
+	
+	# 4. Play rain audio if not already playing
+	if AudioDirector and AudioDirector.has_method("play_rain_ambience"):
+		AudioDirector.play_rain_ambience()
 
 
 # --- SHE DESCENDS EASTER EGG MODE ---
@@ -1075,6 +1101,13 @@ func _start_she_descends_mode() -> void:
 	# This ensures HUD says ENDGAME even if GameManager flags are flaky
 	if _wave_ui and _wave_ui.has_method("set_goddess_mode"):
 		_wave_ui.set_goddess_mode(true)
+	
+	# Update HUD Text IMMEDIATELY (CanvasLayer is from scene file, already exists)
+	var canvas = get_node_or_null("CanvasLayer")
+	if canvas:
+		var wave_display = canvas.get_node_or_null("WaveDisplay")
+		if wave_display:
+			wave_display.text = "DEFEAT THE QUEEN"
 	
 	# Spawn N01 immediately (with short delay for dramatic effect)
 	await get_tree().create_timer(1.5).timeout
@@ -1149,12 +1182,14 @@ func _on_she_descends_queen_defeated() -> void:
 	
 	# Show victory screen after brief delay
 	await get_tree().create_timer(2.0).timeout
-	if _wave_director == null and player and is_instance_valid(player) and player.hp > 0:
+	if player and is_instance_valid(player) and player.hp > 0:
 		# Player won this special mode
 		if GameManager:
 			GameManager.record_run_result("")
-		# Trigger victory/end (show defeat menu which can show victory state)
-		show_defeat_menu()
+		# Show victory screen
+		if not _pause_menu:
+			_setup_pause_menu()
+		_pause_menu.show_victory()
 
 func _start_lightning_system() -> void:
 	# Check if already running
@@ -1236,7 +1271,11 @@ func _on_wave_changed(wave_number: int) -> void:
 	if canvas:
 		var wave_display := canvas.get_node_or_null("WaveDisplay") as Label
 		if wave_display:
-			wave_display.text = "WAVE %d" % wave_number
+			# Wave 12 is N01 boss fight
+			if wave_number == 12:
+				wave_display.text = "DEFEAT THE QUEEN"
+			else:
+				wave_display.text = "WAVE %d" % wave_number
 
 func _on_enemy_died(enemy: Node2D, killer_source: String = "player") -> void:
 	# Handle charmed enemy deaths specially for Sin's Captivating talent

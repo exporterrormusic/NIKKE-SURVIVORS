@@ -332,6 +332,10 @@ func apply_talent(talent_id: String) -> void:
 		"burst_invuln":
 			burst_invuln_unlocked = true
 
+## Is this weapon automatic? (Hold to fire)
+func get_is_automatic() -> bool:
+	return true
+
 ## Get attack cooldown (faster during burst - automatic fire)
 func get_attack_cooldown() -> float:
 	if burst_active:

@@ -6,22 +6,22 @@ class_name MarianBeamCannon
 ## Has wind-up time, wavy/shaking effect, pierces all enemies
 
 const BEAM_RANGE := 1500.0
-const BEAM_WIDTH := 96.0  # Twice as wide
-const WINDUP_TIME := 0.4  # Wind-up before firing
-const DAMAGE_INTERVAL := 0.05  # Faster damage tick rate
+const BEAM_WIDTH := 96.0 # Twice as wide
+const WINDUP_TIME := 0.4 # Wind-up before firing
+const DAMAGE_INTERVAL := 0.05 # Faster damage tick rate
 
 # Visual shake/wave parameters
-const WAVE_AMPLITUDE := 8.0  # How much the beam waves
-const WAVE_FREQUENCY := 15.0  # Wave speed
-const SHAKE_AMOUNT := 3.0  # Random shake intensity
+const WAVE_AMPLITUDE := 8.0 # How much the beam waves
+const WAVE_FREQUENCY := 15.0 # Wave speed
+const SHAKE_AMOUNT := 3.0 # Random shake intensity
 
 # Sparkle particle settings
-const SPARKLE_SPAWN_RATE := 0.4  # Chance per frame to spawn sparkle
-const SPARKLE_COUNT := 6  # Max sparkles per spawn
-const SPARKLE_LIFETIME := 0.25  # How long sparkles last
+const SPARKLE_SPAWN_RATE := 0.4 # Chance per frame to spawn sparkle
+const SPARKLE_COUNT := 6 # Max sparkles per spawn
+const SPARKLE_LIFETIME := 0.25 # How long sparkles last
 
 # Sound settings
-const SOUND_FADE_TIME := 0.2  # Fade in/out duration for beam sound
+const SOUND_FADE_TIME := 0.2 # Fade in/out duration for beam sound
 const BEAM_SOUND_PATH := "res://assets/sounds/sfx/weapons/minigun/beam.wav"
 const BEAM_RELOAD_SOUND_PATH := "res://assets/sounds/sfx/weapons/minigun/beam_reload.wav"
 
@@ -35,7 +35,7 @@ var owner_node: Node = null
 var player: Node2D = null
 var _damage: int = 5
 var _is_firing: bool = false
-var _windup_progress: float = 0.0  # 0 to 1
+var _windup_progress: float = 0.0 # 0 to 1
 var _time: float = 0.0
 var _damage_timer: float = 0.0
 var _shake_offset: Vector2 = Vector2.ZERO
@@ -55,14 +55,14 @@ var _base_beam_width: float = BEAM_WIDTH
 var _controller: RefCounted = null
 
 # Offset from player (beam starts outside player)
-const BEAM_OFFSET := 35.0
+const BEAM_OFFSET := 65.0
 
 # Sound players
 var _beam_sound: AudioStreamPlayer2D = null
-var _beam_target_volume: float = 0.0  # Target volume for fade
-var _beam_current_volume: float = -80.0  # Current volume (starts silent)
-var _was_firing_beam: bool = false  # Track if beam was active last frame
-var _played_reload_sound: bool = false  # Track if we played reload sound this reload cycle
+var _beam_target_volume: float = 0.0 # Target volume for fade
+var _beam_current_volume: float = -80.0 # Current volume (starts silent)
+var _was_firing_beam: bool = false # Track if beam was active last frame
+var _played_reload_sound: bool = false # Track if we played reload sound this reload cycle
 
 func _ready() -> void:
 	z_index = 50
@@ -77,7 +77,7 @@ func _ready() -> void:
 	_beam_sound = AudioStreamPlayer2D.new()
 	_beam_sound.bus = "SFX"
 	_beam_sound.max_distance = 2000.0
-	_beam_sound.volume_db = -80.0  # Start silent
+	_beam_sound.volume_db = -80.0 # Start silent
 	add_child(_beam_sound)
 	
 	# Load and configure looping beam sound
@@ -204,7 +204,7 @@ func _update_sparkles(delta: float) -> void:
 	# Spawn new sparkles along the beam
 	if randf() < SPARKLE_SPAWN_RATE:
 		for i in range(randi_range(2, SPARKLE_COUNT)):
-			var beam_t: float = randf()  # Position along beam (0-1)
+			var beam_t: float = randf() # Position along beam (0-1)
 			var x_pos: float = beam_t * BEAM_RANGE
 			# Calculate wave offset at this position
 			var wave_strength: float = beam_t * beam_t
@@ -237,7 +237,7 @@ func _update_beam_sound(delta: float) -> void:
 	_beam_target_volume = 6.0 if beam_active else -80.0
 	
 	# Fade volume toward target (0.2s fade time)
-	var fade_speed: float = 80.0 / SOUND_FADE_TIME  # dB per second
+	var fade_speed: float = 80.0 / SOUND_FADE_TIME # dB per second
 	if _beam_current_volume < _beam_target_volume:
 		_beam_current_volume = minf(_beam_current_volume + fade_speed * delta, _beam_target_volume)
 	elif _beam_current_volume > _beam_target_volume:
@@ -251,7 +251,7 @@ func _update_beam_sound(delta: float) -> void:
 		if beam_active and not _beam_sound.playing:
 			_beam_sound.play()
 			_was_firing_beam = true
-			_played_reload_sound = false  # Reset reload sound flag when firing
+			_played_reload_sound = false # Reset reload sound flag when firing
 		elif not beam_active and _beam_current_volume <= -79.0 and _beam_sound.playing:
 			_beam_sound.stop()
 	
@@ -416,7 +416,7 @@ func _is_boulder_blocking(distance_along_beam: float) -> bool:
 		if not is_instance_valid(boulder):
 			continue
 		var boulder_pos: Vector2 = boulder.global_position
-		var boulder_radius: float = 150.0  # Default
+		var boulder_radius: float = 150.0 # Default
 		if boulder.get("boulder_size") != null:
 			boulder_radius = boulder.boulder_size * 0.5
 		
@@ -431,7 +431,7 @@ func _is_boulder_blocking(distance_along_beam: float) -> bool:
 		# Check perpendicular distance to beam center line
 		var perp: float = abs(to_boulder.dot(beam_dir.orthogonal()))
 		if perp < boulder_radius + BEAM_WIDTH * 0.5:
-			return true  # Beam is blocked by this boulder
+			return true # Beam is blocked by this boulder
 	
 	return false
 
@@ -490,7 +490,7 @@ func _get_visible_beam_range(max_range: float) -> float:
 			
 			var perp_dist: float = abs(to_shield.dot(beam_dir.orthogonal()))
 			# Calculate actual radius including scale
-			var shield_radius: float = 120.0 
+			var shield_radius: float = 120.0
 			if "shield_radius" in shield:
 				shield_radius = shield.shield_radius
 			# Use global scale (assuming uniform scale)
@@ -508,7 +508,7 @@ func _get_visible_beam_range(max_range: float) -> float:
 			if not is_instance_valid(boulder):
 				continue
 			var boulder_pos: Vector2 = boulder.global_position
-			var boulder_radius: float = 150.0 
+			var boulder_radius: float = 150.0
 			if boulder.get("boulder_size") != null:
 				boulder_radius = boulder.boulder_size * 0.5
 			
@@ -595,7 +595,7 @@ func _draw_beam(beam_range: float, beam_width: float, alpha: float) -> void:
 		var x: float = t * beam_range
 		
 		# Calculate wave offset (gets stronger toward the end)
-		var wave_strength: float = t * t  # Quadratic falloff - more wave at end
+		var wave_strength: float = t * t # Quadratic falloff - more wave at end
 		var wave_y: float = sin(_time * WAVE_FREQUENCY + t * 8.0) * WAVE_AMPLITUDE * wave_strength
 		
 		# Add shake
@@ -606,7 +606,7 @@ func _draw_beam(beam_range: float, beam_width: float, alpha: float) -> void:
 		if i > 0:
 			# Draw outer glow
 			var outer := outer_color
-			outer.a *= alpha * (1.0 - t * 0.3)  # Fade toward end
+			outer.a *= alpha * (1.0 - t * 0.3) # Fade toward end
 			draw_line(prev_point, point, outer, beam_width, true)
 			
 			# Draw inner beam

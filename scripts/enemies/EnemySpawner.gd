@@ -816,8 +816,8 @@ func spawn_rapture_queen() -> Node2D:
 	# FORCE HP OVERRIDE for Goddess Fall (Critical Fix)
 	var game_manager = get_node_or_null("/root/GameManager")
 	if game_manager and game_manager.goddess_fall_mode:
-		queen.max_hp = 9999
-		queen.hp = 9999
+		queen.max_hp = 999
+		queen.hp = 999
 	
 	# Set boss-tier damage (super_boss = 8.0 multiplier)
 	queen.base_damage = int(8 * _get_atk_multiplier())

@@ -493,11 +493,16 @@ func _execute_pending_kills() -> void:
 		if vuln_talent:
 			_apply_vulnerability(enemy)
 			
+		# Determine source
+		var damage_source: String = "ScarletBurst"
+		if owner_node and (owner_node.is_in_group("summoned_allies") or owner_node.is_in_group("clones") or owner_node.name.contains("SummonedAlly") or owner_node.name.contains("NayutaClone")):
+			damage_source = "summon"
+			
 		# Apply Damage
 		if enemy.has_method("take_damage"):
-			enemy.take_damage(damage_amount, false, Vector2.ZERO, true, "ScarletBurst")
+			enemy.take_damage(damage_amount, false, Vector2.ZERO, true, damage_source)
 		elif enemy.has_method("apply_damage"):
-			enemy.apply_damage(damage_amount, "ScarletBurst")
+			enemy.apply_damage(damage_amount, damage_source)
 			
 		_killed_positions.append(enemy.global_position)
 		

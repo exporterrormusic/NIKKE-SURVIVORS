@@ -10,7 +10,7 @@ config_version=5
 
 [application]
 
-config/name="NIKKE-VIVORS"
+config/name="SURVIVORS OF VICTORY: A NIKKE FAN GAME"
 run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.5", "Forward Plus")
 config/icon="uid://biquhygoko83l"
@@ -31,6 +31,7 @@ SettingsManager="*res://scripts/systems/SettingsManager.gd"
 AchievementManager="*res://scripts/systems/AchievementManager.gd"
 AudioDirector="*res://scripts/systems/AudioDirector.gd"
 InputPrompts="*res://scripts/systems/InputPrompts.gd"
+DamageLog="*res://scripts/autoload/DamageLog.gd"
 
 [display]
 

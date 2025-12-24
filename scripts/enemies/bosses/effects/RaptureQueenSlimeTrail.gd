@@ -9,17 +9,17 @@ var _trail_segments: Array[PackedVector2Array] = []
 var _time: float = 0.0
 var _last_position: Vector2 = Vector2.ZERO
 var _boss: Node2D = null
-var _spawn_distance := 30.0  # Spawn new segment every 30 pixels
-var _trail_width := 120.0  # Width of slime trail
-var _segment_counter := 0  # For wave offset
+var _spawn_distance := 30.0 # Spawn new segment every 30 pixels
+var _trail_width := 120.0 # Width of slime trail
+var _segment_counter := 0 # For wave offset
 
 # Slime colors - dark purple/black liquid
-const SLIME_COLOR_BASE := Color(0.08, 0.0, 0.12, 0.85)  # Dark purple-black
-const SLIME_COLOR_EDGE := Color(0.15, 0.0, 0.2, 0.7)    # Lighter purple edge
-const SLIME_HIGHLIGHT := Color(0.2, 0.05, 0.25, 0.5)    # Purple sheen
+const SLIME_COLOR_BASE := Color(0.08, 0.0, 0.12, 0.85) # Dark purple-black
+const SLIME_COLOR_EDGE := Color(0.15, 0.0, 0.2, 0.7) # Lighter purple edge
+const SLIME_HIGHLIGHT := Color(0.2, 0.05, 0.25, 0.5) # Purple sheen
 
 # Damage settings (same as burn zones)
-const DAMAGE_RATE_PERCENT := 0.25  # 25% max HP per second
+const DAMAGE_RATE_PERCENT := 0.25 # 25% max HP per second
 var _damage_accum: Dictionary = {}
 
 # Optimization: Single Area2D for entire trail
@@ -36,7 +36,7 @@ func setup(boss: Node2D) -> void:
 		_last_position = _boss.global_position
 
 func _ready() -> void:
-	z_index = -5  # Below boss but above ground
+	z_index = -5 # Below boss but above ground
 	
 	# Create the single physics manager
 	_area = Area2D.new()
@@ -86,7 +86,7 @@ func _physics_process(delta: float) -> void:
 		if body.has_method("take_damage"):
 			# Calculate DPS
 			var max_hp = 100.0
-			if "max_hp" in body: 
+			if "max_hp" in body:
 				max_hp = float(body.max_hp)
 			
 			var dps = max_hp * DAMAGE_RATE_PERCENT
@@ -103,7 +103,7 @@ func _physics_process(delta: float) -> void:
 			if _damage_accum[bid] >= 1.0:
 				var dmg_to_apply = int(_damage_accum[bid])
 				_damage_accum[bid] -= dmg_to_apply
-				body.take_damage(dmg_to_apply)
+				body.take_damage(dmg_to_apply, false, Vector2.ZERO, false, "Rapture Queen:Slime Trail")
 
 func _spawn_trail_segment(from_pos: Vector2, to_pos: Vector2) -> void:
 	# Create a wavy rectangular polygon for the trail segment
@@ -114,7 +114,7 @@ func _spawn_trail_segment(from_pos: Vector2, to_pos: Vector2) -> void:
 	
 	# Create wavy edges instead of straight - more points for wave effect
 	var points = PackedVector2Array()
-	var num_edge_points = 5  # Points along each side for wave
+	var num_edge_points = 5 # Points along each side for wave
 	
 	# Top edge (wavy)
 	for i in range(num_edge_points):

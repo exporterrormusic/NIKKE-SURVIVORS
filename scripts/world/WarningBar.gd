@@ -10,7 +10,7 @@ var _time := 0.0
 var _warning_text := "WARNING"
 
 # Animation states
-var _anim_state := 0  # 0=hidden, 1=animating in, 2=showing, 3=animating out
+var _anim_state := 0 # 0=hidden, 1=animating in, 2=showing, 3=animating out
 var _anim_progress := 0.0
 const ANIM_DURATION := 0.4
 
@@ -44,10 +44,10 @@ func _draw() -> void:
 	var anim_alpha := 1.0
 	var scanline_intensity := 0.0
 	
-	if _anim_state == 1:  # Animating in
+	if _anim_state == 1: # Animating in
 		anim_alpha = _anim_progress
 		scanline_intensity = 1.0 - _anim_progress
-	elif _anim_state == 3:  # Animating out
+	elif _anim_state == 3: # Animating out
 		anim_alpha = 1.0 - _anim_progress
 		scanline_intensity = _anim_progress
 	
@@ -134,7 +134,7 @@ func _draw_animated_bar(bar_color: Color, anim_alpha: float, scanline_intensity:
 			# On animate out, reverse the direction
 			var from_left := (i % 2 == 0)
 			if is_animating_out:
-				from_left = not from_left  # Reverse direction on exit
+				from_left = not from_left # Reverse direction on exit
 			
 			var strip_width := size.x * strip_progress
 			var x := 0.0 if from_left else (size.x - strip_width)
@@ -152,14 +152,14 @@ func _draw_animated_bar(bar_color: Color, anim_alpha: float, scanline_intensity:
 func _draw_hex_pattern(alpha: float) -> void:
 	var hex_color := Color(1.0, 0.3, 0.2, alpha)
 	var hex_w := HEX_SIZE * 1.5
-	var hex_h := HEX_SIZE * 0.866  # sqrt(3)/2
+	var hex_h := HEX_SIZE * 0.866 # sqrt(3)/2
 	
 	# Calculate rows to stay within bar bounds with padding
 	var padding := 20.0
 	var usable_height := size.y - padding * 2
 	var rows := int(usable_height / (hex_h * 2))
 	var cols := int(size.x / hex_w) + 2
-	var start_y := padding + hex_h  # Start after top padding
+	var start_y := padding + hex_h # Start after top padding
 	
 	for row in range(rows):
 		for col in range(cols):
@@ -188,8 +188,20 @@ func _draw_hexagon(center: Vector2, radius: float, color: Color) -> void:
 func _draw_warning_text(pulse: float, alpha: float) -> void:
 	var text := "⚠ " + _warning_text + " ⚠"
 	var font := ThemeDB.fallback_font
-	var font_size := 90
+	
+	# Smart font size scaling based on text length and viewport width
+	var base_font_size := 60
+	var max_width := size.x * 0.9 # Leave 10% margin on each side
+	
+	# Start with base size, shrink if needed
+	var font_size := base_font_size
 	var text_size := font.get_string_size(text, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size)
+	
+	# Reduce font size until text fits (minimum 24)
+	while text_size.x > max_width and font_size > 24:
+		font_size -= 4
+		text_size = font.get_string_size(text, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size)
+	
 	var text_pos := Vector2((size.x - text_size.x) / 2.0, (size.y + text_size.y) / 2.0 - 20)
 	
 	# Glow behind text
@@ -209,20 +221,20 @@ func _process(delta: float) -> void:
 	_time += delta
 	
 	# Handle animation states
-	if _anim_state == 1:  # Animating in
+	if _anim_state == 1: # Animating in
 		_anim_progress += delta / ANIM_DURATION
 		if _anim_progress >= 1.0:
 			_anim_progress = 1.0
-			_anim_state = 2  # Now showing
+			_anim_state = 2 # Now showing
 		queue_redraw()
-	elif _anim_state == 2:  # Showing (pulsing)
+	elif _anim_state == 2: # Showing (pulsing)
 		_pulse_timer -= delta
 		queue_redraw()
 		if _pulse_timer <= ANIM_DURATION:
 			# Start animating out
 			_anim_state = 3
 			_anim_progress = 0.0
-	elif _anim_state == 3:  # Animating out
+	elif _anim_state == 3: # Animating out
 		_anim_progress += delta / ANIM_DURATION
 		if _anim_progress >= 1.0:
 			_anim_state = 0
@@ -233,7 +245,7 @@ func start_pulse(duration: float) -> void:
 	_pulse_duration = duration
 	_pulse_timer = duration
 	_time = 0.0
-	_anim_state = 1  # Start animating in
+	_anim_state = 1 # Start animating in
 	_anim_progress = 0.0
 	visible = true
 	queue_redraw()

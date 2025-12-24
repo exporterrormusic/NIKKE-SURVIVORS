@@ -1,6 +1,6 @@
 extends Area2D
 
-@export var damage:int = 999
+@export var damage: int = 999
 @export var lifespan: float = 0.5
 @export var owner_node: Node = null
 
@@ -24,4 +24,4 @@ func _on_body_entered(body: Node) -> void:
 	if not body.has_method("take_damage"):
 		return
 	# Inflict damage
-	body.take_damage(damage)
+	body.take_damage(damage, false, Vector2.ZERO, false, "blade")

@@ -1,4 +1,4 @@
-extends Area2D
+extends Node2D
 
 # Mystical Soul Orb - Enhanced XP pickup with visual effects
 
@@ -106,56 +106,57 @@ func _physics_process(delta):
 	
 	_age += delta
 	# PERFORMANCE: Only update visuals every 4th frame (was 2nd)
-	if Engine.get_process_frames() % 4 == 0:
+	# Use instance id to interlace updates so not all orbs update on same frame
+	if (Engine.get_process_frames() + get_instance_id()) % 4 == 0:
 		_update_visuals(delta * 4.0) # Compensate delta for skipped frames
 	# _update_trail(delta) # Disabled for performance
 	
-	var progress = float(player.xp) / player.xp_to_next
-	var bar_rect = xp_bar.get_global_rect()
-	var target_x = bar_rect.position.x + progress * bar_rect.size.x
-	var target_pos_screen = Vector2(target_x, bar_rect.get_center().y)
-	
-	# Convert screen position to world position
-	var camera = get_viewport().get_camera_2d()
-	var viewport_size = get_viewport_rect().size
-	var screen_center = viewport_size / 2
-	var offset = (target_pos_screen - screen_center) / camera.zoom
-	var target_pos_world = camera.global_position + offset
-	
 	_last_position = global_position
 	
-	var dir = (target_pos_world - global_position).normalized()
-	
-	# Calculate arc path that pushes toward screen edges
-	var to_target: Vector2 = target_pos_world - global_position
-	var distance_to_target: float = to_target.length()
-	var perp := Vector2(-dir.y, dir.x) # Perpendicular to movement
-	
-	# Determine which side of screen the orb is on and push outward
-	var orb_screen_pos: Vector2 = global_position - camera.global_position + screen_center
-	var side_bias := 1.0 if orb_screen_pos.x > screen_center.x else -1.0
-	
-	# Arc strength peaks in the middle of the journey, fades near start/end
-	var journey_progress := 1.0 - clampf(distance_to_target / 400.0, 0.0, 1.0)
-	var arc_strength := sin(journey_progress * PI) * 120.0 # Strong outward arc
-	
-	# Apply arc force pushing toward screen edge
-	var arc_offset: Vector2 = perp * side_bias * arc_strength * delta
-	
-	position += dir * speed * delta
-	position += arc_offset
-	
-	# Add bobbing motion perpendicular to movement
-	var bob := sin(_age * BOB_SPEED + _bob_offset) * BOB_AMPLITUDE
-	position += perp * bob * delta * 10
-	
-	if global_position.distance_to(target_pos_world) < 20:
+	# PERFORMANCE: Throttled update
+	var current_frame := Engine.get_process_frames()
+	if (current_frame + get_instance_id()) % 2 == 0:
+		var target_pos_world = TargetCache.get_xp_target_pos()
+		if target_pos_world == Vector2.ZERO:
+			ProjectileCache.return_to_pool(self)
+			return
+			
+		var dir = (target_pos_world - global_position).normalized()
+		
+		# Calculate arc path that pushes toward screen edges
+		var to_target: Vector2 = target_pos_world - global_position
+		var distance_to_target: float = to_target.length()
+		var perp := Vector2(-dir.y, dir.x) # Perpendicular to movement
+		
+		# Determine which side of screen the orb is on and push outward
+		var camera_pos = TargetCache.get_player().global_position if TargetCache.get_player() else global_position
+		var side_bias := 1.0 if global_position.x > camera_pos.x else -1.0
+		
+		# Arc strength peaks in the middle of the journey, fades near start/end
+		var journey_progress := 1.0 - clampf(distance_to_target / 400.0, 0.0, 1.0)
+		var arc_strength := sin(journey_progress * PI) * 120.0 # Strong outward arc
+		
+		# Apply arc force pushing toward screen edge
+		var arc_offset: Vector2 = perp * side_bias * arc_strength * delta * 2.0 # Mult by 2 because update is half-rate
+		
+		position += dir * speed * delta * 2.0
+		position += arc_offset
+		
+		# Add bobbing motion perpendicular to movement
+		var bob := sin(_age * BOB_SPEED + _bob_offset) * BOB_AMPLITUDE
+		position += perp * bob * delta * 20
+		
+		if distance_to_target < 30:
+			_spawn_collection_burst()
+			if player:
+				player.add_xp(xp_value)
+			ProjectileCache.return_to_pool(self)
 		_spawn_collection_burst()
 		if player:
 			player.add_xp(xp_value)
 		ProjectileCache.return_to_pool(self)
 
-func _update_visuals(delta: float) -> void:
+func _update_visuals(_delta: float) -> void:
 	# SIMPLIFIED for performance - just basic pulsing, no color shifts or rotations
 	var pulse := sin(_age * PULSE_SPEED) * 0.5 + 0.5
 	

@@ -39,7 +39,7 @@ var _hit_nodes: Array = []
 func _ready() -> void:
 	# CRITICAL: Force detection of World (1), Bodies (2), Hitboxes (4)
 	# Default to 7 (1|2|4)
-	collision_mask = 1 | 2 | 4 
+	collision_mask = 1 | 2 | 4
 	
 	# Check for Wells' Chrono-Intangibility upgrade
 	# If active, REMOVE Layer 1 (World) from mask
@@ -66,7 +66,7 @@ func _ready() -> void:
 		is_intangible = true
 		# We CANNOT remove Layer 4 (Value 4) because Boulders share it with Hitboxes
 		# So we only remove Layer 1 (World) if they use it, and rely on logic for Layer 4
-		collision_mask = 2 | 4 
+		collision_mask = 2 | 4
 	
 	monitoring = true
 	
@@ -96,7 +96,21 @@ func _physics_process(delta: float) -> void:
 		start_position = global_position
 		_start_position_set = true
 	
-	position += velocity * delta
+	# Tunneling Prevention (RayCast ahead)
+	var space_state = get_world_2d().direct_space_state
+	var motion = velocity * delta
+	var query = PhysicsRayQueryParameters2D.create(global_position, global_position + motion, collision_mask)
+	query.collide_with_areas = true
+	query.collide_with_bodies = true
+	query.exclude = [self]
+	
+	var result = space_state.intersect_ray(query)
+	if result:
+		_on_body_entered(result.collider)
+		if not is_instance_valid(self) or is_queued_for_deletion():
+			return
+
+	position += motion
 	lifetime += delta
 	
 	if lifetime > 3.0 or global_position.distance_to(start_position) >= MAX_RANGE:
@@ -108,7 +122,7 @@ func _physics_process(delta: float) -> void:
 
 func _on_body_entered(body: Node) -> void:
 	# Robust Player filtering
-	if body == owner_node or body.name == "Player" or body.is_in_group("player"): 
+	if body == owner_node or body.name == "Player" or body.is_in_group("player"):
 		return
 	# Ignore other projectiles (and self)
 	if body.is_in_group("projectiles") or body is KiloPellet:
@@ -161,8 +175,8 @@ func _on_body_entered(body: Node) -> void:
 	if body.has_method("take_damage"):
 		var is_crit = randf() < 0.15
 		var dmg = base_damage * (2.0 if is_crit else 1.0)
-		# Pass is_burst
-		body.take_damage(int(dmg), is_crit, hit_dir, is_burst)
+		# Pass is_burst and "kilo" source
+		body.take_damage(int(dmg), is_crit, hit_dir, is_burst, "kilo")
 	
 	if not pierce_all:
 		queue_free()
@@ -199,7 +213,7 @@ func _apply_burn(body: Node) -> void:
 	# Check if already has burn
 	if body.has_node("KiloBurn"):
 		var existing = body.get_node("KiloBurn")
-		existing.set("duration", burn_duration)  # Refresh duration
+		existing.set("duration", burn_duration) # Refresh duration
 		return
 	
 	# Create burn effect
@@ -245,14 +259,14 @@ func _apply_tick() -> void:
 		return
 	
 	if parent.has_method(\"take_damage\"):
-		parent.take_damage(tick_damage, false, Vector2.ZERO)
+		parent.take_damage(tick_damage, false, Vector2.ZERO, false, "kilo")
 	elif \"hp\" in parent:
 		parent.hp -= tick_damage
 		if parent.hp <= 0 and parent.has_method(\"die\"):
 			parent.die()
 """
 	script.reload()
-	return script 
+	return script
 
 # === DRAWING LOGIC (Preserved from original as user liked visuals) ===
 func _draw() -> void:

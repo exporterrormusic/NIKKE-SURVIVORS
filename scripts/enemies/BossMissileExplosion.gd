@@ -4,7 +4,7 @@ class_name BossMissileExplosion
 ## AOE explosion from boss missile - damages player if in radius
 
 const EXPLOSION_DURATION := 0.5
-const RING_COUNT := 2  # Reduced from 3
+const RING_COUNT := 2 # Reduced from 3
 
 var _radius := 150.0
 var _damage := 2
@@ -17,17 +17,34 @@ static var _cached_flash_texture: Texture2D = null
 # Visual elements
 var _rings: Array[Node2D] = []
 
+# Audio
+const EXPLOSION_SFX = preload("res://assets/sounds/sfx/weapons/rocket/rocket_explosion.mp3")
+
 func initialize(radius: float, damage: int, player: Node2D) -> void:
 	_radius = radius
 	_damage = damage
 	_player = player
 
 func _ready() -> void:
+	# AUDIO PLAYBACK
+	var audio = AudioStreamPlayer2D.new()
+	audio.stream = EXPLOSION_SFX
+	audio.bus = "Master" # Ensure audibility (SFX bus might be muted/missing?)
+	audio.volume_db = -16.0 # Reduced from -12.0
+	audio.max_distance = 6000.0 # Ensure it's heard
+	add_child(audio)
+	audio.play()
+	
 	_create_explosion_visuals()
 	_check_damage()
 	
 	# Add to tree for cleanup
-	var timer := get_tree().create_timer(EXPLOSION_DURATION)
+	# Wait for audio to finish
+	var duration := EXPLOSION_DURATION
+	if audio.stream:
+		duration = max(duration, audio.stream.get_length())
+	
+	var timer := get_tree().create_timer(duration)
 	timer.timeout.connect(queue_free)
 
 func _create_explosion_visuals() -> void:
@@ -87,7 +104,7 @@ func _check_damage() -> void:
 		var dist := global_position.distance_to(_player.global_position)
 		if dist <= _radius:
 			if _player.has_method("take_damage"):
-				_player.take_damage(_damage)
+				_player.take_damage(_damage, false, Vector2.ZERO, false, "Boss:Missile")
 	
 	# Damage charmed allies if in radius (they're fighting for the player)
 	var tree := get_tree()

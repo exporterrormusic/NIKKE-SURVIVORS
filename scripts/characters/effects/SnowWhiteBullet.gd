@@ -13,8 +13,8 @@ const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
 var velocity := Vector2.ZERO
 var lifetime: float = 0.0
 var owner_node: Node = null
-var killer_source: String = "sniper"  # For ShielderShield and other collision handlers
-var killer_source_override: String = ""  # For manual override (e.g., summons)
+var killer_source: String = "sniper" # For ShielderShield and other collision handlers
+var killer_source_override: String = "" # For manual override (e.g., summons)
 var start_position: Vector2 = Vector2.ZERO
 var _start_position_set: bool = false
 
@@ -24,8 +24,8 @@ var _start_position_set: bool = false
 
 # Trail settings - creates ONE trail that follows bullet path
 var leave_burn_trail: bool = false
-var _trail_node: Node2D = null  # Single trail that tracks all positions
-var _trail_record_interval: float = 0.03  # Record position every 30ms (was 15ms)
+var _trail_node: Node2D = null # Single trail that tracks all positions
+var _trail_record_interval: float = 0.03 # Record position every 30ms (was 15ms)
 var _trail_timer: float = 0.0
 
 # Critical hit settings
@@ -179,7 +179,7 @@ func _handle_hit(target: Node, is_shield: bool = false) -> void:
 				protected = true
 			
 		# Determine killer source for burst tracking and Goddess Fall XP
-		var effective_source := killer_source  # Use class property (defaults to "sniper")
+		var effective_source := killer_source # Use class property (defaults to "sniper")
 		if killer_source_override != "":
 			effective_source = killer_source_override
 		elif is_instance_valid(owner_node) and (owner_node is NayutaClone or owner_node is SummonedAlly):

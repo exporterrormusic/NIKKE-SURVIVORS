@@ -100,12 +100,17 @@ func _physics_process(delta: float) -> void:
 			continue
 			
 		if body.has_method("take_damage") or body.has_method("take_shield_damage"):
-			# calculate dps
-			var max_hp = 100.0
-			if "max_hp" in body: 
+			# Get max HP - try property access, then get method, then default
+			var max_hp := 100.0
+			if "max_hp" in body:
 				max_hp = float(body.max_hp)
+			elif body.get("max_hp") != null:
+				max_hp = float(body.get("max_hp"))
+			elif body.has_method("get_max_hp"):
+				max_hp = float(body.get_max_hp())
 			
-			var dps = max_hp * damage_rate_percent
+			# 25% HP per 0.25s = 100% per second
+			var dps = max_hp * damage_rate_percent * 4.0
 			var frame_damage = dps * process_delta
 			
 			# Accumulate
@@ -121,6 +126,6 @@ func _physics_process(delta: float) -> void:
 				_damage_accum[bid] -= dmg_to_apply
 				
 				if body.has_method("take_damage"):
-					body.take_damage(dmg_to_apply)
+					body.take_damage(dmg_to_apply, false, Vector2.ZERO, false, "Boss:Burning Ground")
 				elif body.has_method("take_shield_damage"):
 					body.take_shield_damage(dmg_to_apply)

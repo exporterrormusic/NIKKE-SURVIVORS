@@ -14,7 +14,7 @@ func _ready() -> void:
 	# Standard setup for enemy hitboxes
 	if team == "enemy":
 		collision_layer = 4 # Enemy layer usually
-		collision_mask = 2  # Projectiles
+		collision_mask = 2 # Projectiles
 	
 	# Auto-find health component if not assigned
 	if not health_component:
@@ -29,13 +29,12 @@ func _ready() -> void:
 
 
 # The method projectiles call (polymorphic compatibility with existing system)
-func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector2.ZERO, is_burst: bool = false, source: String = "unknown") -> void:
+func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector2.ZERO, is_burst: bool = false, source: String = "unknown", skip_floating_text: bool = false) -> void:
 	# DebugLog.log("[Hitbox] take_damage: " + str(amount) + " from " + source)
 	hit_received.emit(amount, null) # For visuals
 	
 	# Spawn Damage Number (Restored)
-	# Spawn Damage Number (Restored)
-	if FloatingDamageNumber and is_inside_tree():
+	if not skip_floating_text and FloatingDamageNumber and is_inside_tree():
 		var tree = get_tree()
 		if tree and tree.current_scene:
 			var parent = tree.current_scene
@@ -78,7 +77,8 @@ func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector
 	if team == "enemy" and is_inside_tree():
 		var tree = get_tree()
 		if tree:
-			var player = tree.get_first_node_in_group("player")
+			# PERFORMANCE: Use TargetCache instead of tree traversal per hit
+			var player = TargetCache.get_player()
 			if player and player.has_method("add_burst_charge"):
 				# Determine rate based on source
 				var burst_rate := BurstConfig.get_rate(source)
@@ -86,12 +86,11 @@ func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector
 				# Normal hits (not from burst) generate full amount
 				if not is_burst:
 					# Skip specific burst sources if they somehow weren't flagged as is_burst
-					if not BurstConfig.is_burst_source(source):
+					if not BurstConfig.is_burst_source(source) and source != "summon":
 						player.add_burst_charge(burst_rate)
 				
 				# Burst hits usually generate 0, UNLESS player has a modifier active (e.g. Sin talent)
-				elif player.get("burst_gen_on_burst_hit_modifier") > 0.0:
-					# Apply modifier (e.g. 0.3 for 30%)
+				elif player.get("burst_gen_on_burst_hit_modifier") > 0.0 and source != "summon":
 					# Apply modifier (e.g. 0.3 for 30%)
 					var mod: float = player.get("burst_gen_on_burst_hit_modifier")
 					var modified_rate: float = burst_rate * mod
@@ -115,4 +114,3 @@ func reset() -> void:
 	if team == "enemy":
 		collision_layer = 4
 		collision_mask = 2
-

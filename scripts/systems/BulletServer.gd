@@ -5,6 +5,12 @@ class_name BulletServer
 static var _instance: BulletServer = null
 static var _creating_instance: bool = false # Prevent race condition
 
+# PERFORMANCE: Cached player reference (avoids per-collision get_first_node_in_group)
+static var _cached_player: Node = null
+static var _cached_player_frame: int = -1
+static var _cached_chrono_intangibility: bool = false
+static var _cached_chrono_frame: int = -1
+
 # Cached ShopMenu reference to avoid load() in hot collision path
 const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
 const SMG_BULLET_TEXTURE = preload("res://assets/projectiles/smg_bullet.png")
@@ -36,6 +42,7 @@ class SimpleBullet:
 	var start_position: Vector2
 	var damage: int
 	var owner: Node
+	var is_player_owned: bool = false
 	var visual_rid: RID
 	var hit_uids: Dictionary = {} # Use instance ID to track hits
 	var source_id: String = "smg" # Source weapon type for burst/XP tracking
@@ -164,14 +171,20 @@ func _physics_process(delta: float) -> void:
 		_query.collide_with_areas = true
 		_query.collide_with_bodies = true
 	
+	# PRE-CALCULATION: Get global time scale once per frame
+	var enemy_time_scale := 1.0
+	var game_manager = get_node_or_null("/root/GameManager")
+	if game_manager:
+		enemy_time_scale = game_manager.enemy_time_scale
+		
 	while i >= 0:
 		var b = _bullets[i]
 		
 		# Move
 		var time_scale = 1.0
-		var game_manager = get_node_or_null("/root/GameManager")
-		if not (b.owner and b.owner.is_in_group("player")):
-			time_scale = game_manager.enemy_time_scale if game_manager else 1.0
+		# Optimization: Use cached boolean instead of group check + get_node every iteration
+		if not b.is_player_owned:
+			time_scale = enemy_time_scale
 			
 		var move_vec = b.velocity * (delta * time_scale)
 		var next_pos = b.position + move_vec
@@ -232,6 +245,18 @@ func _handle_collision(b: SimpleBullet, collider: Object) -> bool:
 	var id = collider.get_instance_id()
 	if id in b.hit_uids:
 		return false
+	
+	# PERFORMANCE: Get cached player reference (once per frame instead of per collision)
+	var current_frame := Engine.get_process_frames()
+	if current_frame != _cached_player_frame:
+		_cached_player_frame = current_frame
+		_cached_player = get_tree().get_first_node_in_group("player")
+		# Also cache Chrono-Intangibility check once per frame
+		if _cached_player and _cached_player.has_method("is_character_in_squad"):
+			_cached_chrono_intangibility = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and _cached_player.is_character_in_squad("wells")
+		else:
+			_cached_chrono_intangibility = false
+		_cached_chrono_frame = current_frame
 		
 	# Handle Shield (Shielder Enemy)
 	# Check for Area2D parent or direct method
@@ -243,9 +268,7 @@ func _handle_collision(b: SimpleBullet, collider: Object) -> bool:
 		
 	if shield_root and shield_root.has_method("take_shield_damage"):
 		# Check if Chrono-Intangibility upgrade allows phasing through shields
-		# Must check if PlayerCore has Wells in squad
-		var player = get_tree().get_first_node_in_group("player")
-		if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+		if _cached_chrono_intangibility:
 			# Bullet phases through shield - don't damage or destroy
 			return false
 		
@@ -255,8 +278,7 @@ func _handle_collision(b: SimpleBullet, collider: Object) -> bool:
 	# Determine if protected by shield
 	if collider.has_method("is_protected_by_shield") and collider.is_protected_by_shield():
 		# Check if Chrono-Intangibility allows phasing through protected enemies
-		var player = get_tree().get_first_node_in_group("player")
-		if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+		if _cached_chrono_intangibility:
 			# Bullet phases through - continue to damage enemy normally below
 			pass
 		else:
@@ -267,9 +289,9 @@ func _handle_collision(b: SimpleBullet, collider: Object) -> bool:
 	if not collider.has_method("take_damage"):
 		# Wall/Obstacle -> Destroy (unless it's a boulder and we can phase through)
 		if collider is TileMap or collider is StaticBody2D:
-			# Check if this is a boulder and we have Chrono-Intangibility
+			# PERFORMANCE: Use TargetCache instead of get_nodes_in_group per collision
 			var is_boulder = false
-			var boulders = get_tree().get_nodes_in_group("boulders")
+			var boulders = TargetCache.get_boulders()
 			for boulder in boulders:
 				if is_instance_valid(boulder) and (boulder == collider or boulder.is_ancestor_of(collider)):
 					is_boulder = true
@@ -283,8 +305,7 @@ func _handle_collision(b: SimpleBullet, collider: Object) -> bool:
 						break
 			
 			if is_boulder:
-				var player = get_tree().get_first_node_in_group("player")
-				if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+				if _cached_chrono_intangibility:
 					return false # Phase through boulder
 			
 			return true
@@ -292,10 +313,8 @@ func _handle_collision(b: SimpleBullet, collider: Object) -> bool:
 		
 	# Apply damage
 	var crit_chance = 0.15 # Base
-	# Fetch player crit (simplified: assumed singleton or group)
-	var player = get_tree().get_first_node_in_group("player")
-	if player and player.has_method("get_crit_chance"):
-		crit_chance += player.get_crit_chance()
+	if _cached_player and _cached_player.has_method("get_crit_chance"):
+		crit_chance += _cached_player.get_crit_chance()
 	
 	var is_crit = randf() < crit_chance
 	var final_damage = b.damage * 2 if is_crit else b.damage

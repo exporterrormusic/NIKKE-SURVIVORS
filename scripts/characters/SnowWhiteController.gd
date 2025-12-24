@@ -105,8 +105,8 @@ func _perform_special(_direction: Vector2) -> void:
 			turret_timer = turret_cooldown
 
 func _on_burst_start() -> void:
-	# Get aim direction from player
-	var aim_dir = player._get_aim_direction()
+	# Get aim direction from player (use public variable, not method)
+	var aim_dir = player.aim_direction
 	
 	var beam = SnowWhiteBurstBeamScript.new()
 	beam.owner_node = player

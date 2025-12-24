@@ -25,9 +25,10 @@ const MENU_OPTIONS: Array[Dictionary] = [
 
 const TITLE_TEXT := "KINGDOM CLEANUP"
 const SUBTITLE_TEXT := "A NIKKE FAN GAME"
-const VERSION_TEXT := "v0.1B"
+const VERSION_TEXT := "v0.1J"
 
 @onready var _button_row: HBoxContainer = get_node_or_null("%ButtonRow")
+@onready var _menu_bar: Panel = get_node_or_null("%MenuBar") # Added reference to parent panel
 @onready var _title_label: Label = get_node_or_null("%TitleLabel")
 @onready var _subtitle_label: Label = get_node_or_null("%SubtitleLabel")
 @onready var _version_label: Label = get_node_or_null("%VersionLabel")
@@ -35,6 +36,15 @@ const VERSION_TEXT := "v0.1B"
 
 var _buttons: Array[Button] = []
 var _selected_index: int = 3 # Default to PLAY (center button)
+
+# Clean Mode / UI Toggle State
+# 0 = All Visible (Default)
+# 1 = Hide Menu + Patch (Logo Visible)
+# 2 = Hide Patch + Logo (Menu Visible)
+# 3 = Hide All (Blinds Only)
+var _clean_mode_state: int = 0
+var _logo_node: Control = null
+var _patch_notes_panel: PanelContainer = null
 
 func _ready() -> void:
 	_setup_title()
@@ -77,6 +87,9 @@ func _setup_title() -> void:
 	logo.custom_minimum_size = Vector2(600, 200)
 	logo.name = "GameLogo"
 	
+	# Store reference for Clean Mode toggle
+	_logo_node = logo
+	
 	if _title_label:
 		print("[MainMenu] Found TitleLabel, replacing with logo.")
 		_title_label.visible = false
@@ -95,20 +108,19 @@ func _setup_title() -> void:
 		# Fallback: Add to MainMenu directly at top center
 		add_child(logo)
 		logo.set_anchors_preset(Control.PRESET_CENTER_TOP)
-		logo.position.y = 50 # Add some margin from top
+		logo.position.y = 40 # Add some margin from top
 
 
 func _setup_patch_notes() -> void:
 	"""Create a patch notes box directly beneath the logo."""
 	var patch_path := ScenePaths.PATCH_NOTES
 	
-	# Try to load patch notes
+	# Load patch notes from file
 	var patch_text := ""
-	if ResourceLoader.exists(patch_path):
-		var file := FileAccess.open(patch_path, FileAccess.READ)
-		if file:
-			patch_text = file.get_as_text()
-			file.close()
+	var file := FileAccess.open(patch_path, FileAccess.READ)
+	if file:
+		patch_text = file.get_as_text()
+		file.close()
 	
 	if patch_text.is_empty():
 		print("[MainMenu] No patch notes found at ", patch_path)
@@ -117,6 +129,9 @@ func _setup_patch_notes() -> void:
 	# Create the patch notes panel
 	var panel := PanelContainer.new()
 	panel.name = "PatchNotesPanel"
+	
+	# Store reference for Clean Mode toggle
+	_patch_notes_panel = panel
 	
 	# Position will be set after logo is laid out
 	# First add to scene, then position using deferred call
@@ -300,6 +315,12 @@ var _outpost_dialog: Control = null
 var _input_consumed_this_frame: bool = false
 
 func _unhandled_input(event: InputEvent) -> void:
+	# Clean Mode Shortcut (Shift + Q)
+	if event is InputEventKey and event.pressed and event.keycode == KEY_Q and event.shift_pressed:
+		_cycle_clean_mode()
+		get_viewport().set_input_as_handled()
+		return
+
 	# If outpost dialog is open, handle its input first
 	if _outpost_dialog and _outpost_dialog.visible:
 		if event.is_action_pressed("ui_cancel") or event.is_action_pressed("ui_accept"):
@@ -323,6 +344,60 @@ func _unhandled_input(event: InputEvent) -> void:
 		_show_quit_confirmation()
 		get_viewport().set_input_as_handled()
 
+func _cycle_clean_mode() -> void:
+	"""
+	Cycles through visibility states for UI elements.
+	State 0: Menu(V) Patch(V) Logo(V) [Default]
+	State 1: Menu(H) Patch(H) Logo(V)
+	State 2: Menu(V) Patch(H) Logo(H)
+	State 3: Menu(H) Patch(H) Logo(H) [Only Blinds]
+	"""
+	_clean_mode_state = (_clean_mode_state + 1) % 4
+	
+	print("[MainMenu] UI Clean Mode -> %d" % _clean_mode_state)
+	
+	# Defaults
+	var show_menu := true
+	var show_patch := true
+	var show_logo := true
+	
+	match _clean_mode_state:
+		1:
+			show_menu = false
+			show_patch = false
+			show_logo = true
+		2:
+			show_menu = true
+			show_patch = false
+			show_logo = false
+		3:
+			show_menu = false
+			show_patch = false
+			show_logo = false
+		_:
+			# State 0 (Reset)
+			show_menu = true
+			show_patch = true
+			show_logo = true
+	
+	# Apply to the CONTAINER PANEL (MenuBar), not just the button row
+	if _menu_bar:
+		_menu_bar.visible = show_menu
+	elif _button_row:
+		# Fallback if _menu_bar missing for some reason
+		_button_row.visible = show_menu
+		
+	if _patch_notes_panel:
+		_patch_notes_panel.visible = show_patch
+	if _logo_node:
+		_logo_node.visible = show_logo
+		
+	# Also update version label if present (often part of menu overlay)
+	if _version_label:
+		# If Menu is hidden, usually version is too? Or maybe keep it?
+		# User didn't specify, but hiding all "UI" usually implies version too.
+		# Let's link it to menu visibility.
+		_version_label.visible = show_menu
 
 func _show_quit_confirmation() -> void:
 	AudioManager.play_ui_back()

@@ -26,6 +26,7 @@ var _age: float = 0.0
 var _is_active: bool = true
 var _filter_rect: ColorRect = null
 var _image_sprite: Sprite2D = null
+var _base_scale: Vector2 = Vector2.ONE
 var _audio_player: AudioStreamPlayer = null
 var _enemies_to_destroy: Array = []
 var _destruction_index: int = 0
@@ -113,6 +114,10 @@ func _process(delta: float) -> void:
 			
 			# Apply progress to target alpha
 			_image_sprite.modulate.a = target_alpha * progress
+			
+			# Apply zoom
+			var zoom_mult = 1.0 + (flash_age / IMAGE_FLASH_DURATION) * 0.1
+			_image_sprite.scale = _base_scale * zoom_mult
 		else:
 			_image_sprite.queue_free()
 			_image_sprite = null
@@ -266,6 +271,7 @@ func _show_wish_image() -> void:
 	var tex_size = texture.get_size()
 	var scale_factor = max(viewport_size.x / tex_size.x, viewport_size.y / tex_size.y)
 	var final_scale = Vector2(scale_factor, scale_factor) * 1.1 # Slight overscale
+	_base_scale = final_scale
 	
 	# Single image at 90% opacity, normal blend mode
 	_image_sprite = Sprite2D.new()

@@ -5,7 +5,7 @@ class_name SnowWhiteBurnTrail
 
 const BurnDOTScript = preload("res://scripts/effects/BurnDOT.gd")
 
-@export var trail_width: float = 24.0  # Half-width of the trail
+@export var trail_width: float = 24.0 # Half-width of the trail
 @export var segment_lifetime: float = 1.5
 @export var fade_duration: float = 0.5
 @export var damage_per_tick: int = 2
@@ -48,6 +48,13 @@ func _exit_tree() -> void:
 		_mask_proxy.queue_free()
 
 func add_point(global_pos: Vector2) -> void:
+	# Prevent adding points too close to the last one (prevents degenerate polygons/triangulation crashes)
+	if not _points.is_empty():
+		var last_pt = _points[_points.size() - 1]
+		# Minimum 8px distance squared (64) to ensure valid geometry
+		if global_pos.distance_squared_to(last_pt) < 64.0:
+			return
+
 	# Limit points for performance
 	if _points.size() >= MAX_POINTS:
 		_points.remove_at(0)
@@ -129,9 +136,9 @@ func _draw() -> void:
 	# Build the trail polygon manually for the icy fire effect
 	
 	# We'll draw 3 layers: outer glow, mid, and core
-	_draw_trail_layer(lengths, total_length, 1.0, Color(0.2, 0.5, 1.0, 0.4 * flicker) * inverse)   # Outer blue
-	_draw_trail_layer(lengths, total_length, 0.65, Color(0.4, 0.8, 1.0, 0.7 * flicker) * inverse)  # Mid cyan  
-	_draw_trail_layer(lengths, total_length, 0.3, Color(0.9, 1.0, 1.0, 0.9) * inverse)              # Core white
+	_draw_trail_layer(lengths, total_length, 1.0, Color(0.2, 0.5, 1.0, 0.4 * flicker) * inverse) # Outer blue
+	_draw_trail_layer(lengths, total_length, 0.65, Color(0.4, 0.8, 1.0, 0.7 * flicker) * inverse) # Mid cyan
+	_draw_trail_layer(lengths, total_length, 0.3, Color(0.9, 1.0, 1.0, 0.9) * inverse) # Core white
 
 	# Update Grass Mask Proxy
 	if _mask_proxy and is_instance_valid(_mask_proxy):
@@ -278,7 +285,7 @@ func _check_enemies() -> void:
 		for pt in active_points:
 			if enemy_pos.distance_squared_to(pt) < threshold_sq:
 				_process_enemy(enemy)
-				break  # Only damage once per tick
+				break # Only damage once per tick
 
 func _process_enemy(body: Node2D) -> void:
 	if not is_instance_valid(body):

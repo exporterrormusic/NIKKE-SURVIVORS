@@ -13,11 +13,8 @@ static var intro_rendered: bool = false
 # Signal emitted when intro has rendered and other systems can start loading
 signal intro_ready
 
-# Inline colors for intro screen (avoids UITheme preload cascade)
-const _COLOR_TEXT_MUTED := Color(0.592, 0.6, 0.694, 1.0)
-const _COLOR_TEXT_SECONDARY := Color(0.784, 0.792, 0.878, 1.0)
-const _COLOR_TEXT_DISABLED := Color(0.4, 0.42, 0.45, 1.0)
-const _COLOR_CHAR_PORTRAIT := Color(1, 1, 1, 0.95)
+# Intro screen instance (visuals delegated to IntroScreen.gd)
+var _intro_screen_instance: IntroScreen = null
 
 signal game_started(squad: Array[int], stage_id: String)
 
@@ -38,6 +35,7 @@ const SCENE_PATHS := {
 	"achievements": ScenePaths.ACHIEVEMENTS,
 	"leaderboard": ScenePaths.LEADERBOARD,
 	"shop": ScenePaths.SHOP,
+	"mode_select": ScenePaths.MODE_SELECT,
 }
 
 # Current menu stack (for back navigation)
@@ -55,26 +53,12 @@ var _debug_menu: CanvasLayer = null
 # var _music_player: AudioStreamPlayer = null
 const MENU_MUSIC_PATH := ScenePaths.MUSIC_MAIN_MENU
 
-# Intro screen
-var _intro_screen: Control = null
-var _intro_shown: bool = false
-var _intro_start_time: int = 0
-var _intro_canvas_layer: CanvasLayer = null
 var _loading_main_menu: bool = false # Prevents re-entry during async load
 var _resources_ready: bool = false # True when all resources are loaded
-var _continue_label: Label = null # Reference to "Click to continue" label
 var _preinstantiated_main_menu: Control = null # Pre-instantiated main menu (hidden until ready)
 var _preinstantiation_scheduled: bool = false # Prevent multiple deferred calls
 var _loading_delay_timer: Timer = null # Timer to delay heavy loading until after first frames render
-const INTRO_MIN_DISPLAY_TIME_MS := 3000 # Minimum 3 seconds before user can dismiss intro
 
-# Walking character animation (process-based, not tween-based)
-var _loading_character: AnimatedSprite2D = null
-var _placeholder_node: Control = null # Simple placeholder while sprite loads
-var _walk_speed: float = 150.0 # Pixels per second
-var _walk_end_x: float = 0.0
-var _bob_time: float = 0.0
-var _bob_base_y: float = 0.0
 const LOADING_CHARACTER_SPRITES := [
 	ScenePaths.CHAR_SPRITE_KILO,
 	ScenePaths.CHAR_SPRITE_MARIAN,
@@ -88,8 +72,11 @@ func _ready() -> void:
 	# Pick a random character sprite for the walking animation
 	_selected_sprite_path = LOADING_CHARACTER_SPRITES[randi() % LOADING_CHARACTER_SPRITES.size()]
 	
-	# Show the intro/disclaimer screen immediately
-	_show_intro_screen()
+	# Create IntroScreen instance (visuals delegated to IntroScreen.gd)
+	_intro_screen_instance = IntroScreen.new()
+	_intro_screen_instance.dismissed.connect(_on_intro_dismissed)
+	add_child(_intro_screen_instance)
+	_intro_screen_instance.start(_selected_sprite_path)
 	
 	# Create a delay timer - this ensures the intro screen renders for a bit
 	# before we start the heavy loading work
@@ -100,15 +87,8 @@ func _ready() -> void:
 	add_child(_loading_delay_timer)
 	_loading_delay_timer.start()
 	
-	# Setup input handling
-	# Input.joy_connection_changed.connect(_on_joy_connection_changed) # Removed controller support
-	# _setup_controller_map()
-	
 	# Start loading resources in background
 	call_deferred("_start_background_loading")
-
-
-	pass # Controller logic removed
 
 
 func _on_loading_delay_timeout() -> void:
@@ -119,9 +99,8 @@ func _on_loading_delay_timeout() -> void:
 
 
 func _input(event: InputEvent) -> void:
-	# Handle Intro Input first
-	_handle_intro_input(event)
-	if _intro_screen and is_instance_valid(_intro_screen):
+	# If intro is still active, don't process menu navigation
+	if _intro_screen_instance and is_instance_valid(_intro_screen_instance):
 		return
 
 	# Input Switching Logic:
@@ -161,38 +140,9 @@ func _process(delta: float) -> void:
 			print("[MenuManager] FRAME FREEZE: %dms gap detected" % frame_delta)
 	_last_frame_time = now
 	
-	# Animate the walking character using _process (survives main thread hiccups)
-	# Works for both the placeholder (Control) and the real animated sprite (Node2D)
-	
-	# Animate the real animated sprite if it exists
-	if _loading_character and is_instance_valid(_loading_character):
-		# Move right
-		_loading_character.position.x += _walk_speed * delta
-		
-		# Bobbing motion
-		_bob_time += delta * 8.0 # Bob frequency
-		_loading_character.position.y = _bob_base_y + sin(_bob_time) * 3.0
-		
-		# Reset when off screen
-		if _loading_character.position.x > _walk_end_x:
-			_loading_character.position.x = -50.0
-	elif _placeholder_node and is_instance_valid(_placeholder_node):
-		# Animate the placeholder (Control uses position too)
-		_placeholder_node.position.x += _walk_speed * delta
-		
-		# Bobbing motion
-		_bob_time += delta * 8.0
-		_placeholder_node.position.y = _bob_base_y - 24 + sin(_bob_time) * 3.0
-		
-		# Reset when off screen
-		if _placeholder_node.position.x > _walk_end_x:
-			_placeholder_node.position.x = -50.0
-	
 	# Check if resources are ready (only while intro is showing)
-	if _intro_screen and is_instance_valid(_intro_screen) and not _resources_ready:
+	if _intro_screen_instance and is_instance_valid(_intro_screen_instance) and not _resources_ready:
 		_check_resources_loaded()
-	
-	# Cooldown for stick navigation removed
 
 
 func _start_background_loading() -> void:
@@ -228,185 +178,6 @@ func _start_background_loading() -> void:
 	_menu_container.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_menu_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	menu_layer.add_child(_menu_container)
-	
-	# Try to add walking character (will defer if sprite not ready)
-	_try_add_walking_character()
-
-
-func _try_add_walking_character() -> void:
-	# Check if sprite is loaded
-	var status := ResourceLoader.load_threaded_get_status(_selected_sprite_path)
-	if status == ResourceLoader.THREAD_LOAD_LOADED:
-		_upgrade_to_animated_character()
-	elif status == ResourceLoader.THREAD_LOAD_IN_PROGRESS or status == ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
-		# Not ready yet, try again next frame
-		call_deferred("_try_add_walking_character")
-
-
-func _add_placeholder_character() -> void:
-	# Create a simple colored rectangle as placeholder while real sprite loads
-	# This shows immediately without any loading
-	if not _intro_screen or not is_instance_valid(_intro_screen):
-		return
-	
-	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	_bob_base_y = viewport_size.y - 60
-	_walk_end_x = viewport_size.x + 100.0
-	
-	# Create a simple ColorRect as placeholder
-	var placeholder := ColorRect.new()
-	placeholder.size = Vector2(32, 48)
-	placeholder.color = _COLOR_CHAR_PORTRAIT
-	placeholder.position = Vector2(-50.0, _bob_base_y - 24)
-	placeholder.name = "PlaceholderCharacter"
-	_intro_screen.add_child(placeholder)
-	
-	# We'll use _loading_character to track the placeholder for animation
-	# (It's not an AnimatedSprite2D but we can still move it in _process)
-	# Store the placeholder in a temporary node reference
-	_placeholder_node = placeholder
-
-
-func _upgrade_to_animated_character() -> void:
-	# Called when the real sprite is loaded - replace placeholder with animated sprite
-	if not _intro_screen or not is_instance_valid(_intro_screen):
-		return
-	
-	# Preserve current position from placeholder
-	var current_x: float = -50.0
-	if _placeholder_node and is_instance_valid(_placeholder_node):
-		current_x = _placeholder_node.position.x
-		_placeholder_node.queue_free()
-		_placeholder_node = null
-	
-	var sprite_sheet: Texture2D = ResourceLoader.load_threaded_get(_selected_sprite_path) as Texture2D
-	if not sprite_sheet:
-		return
-	
-	# Sprite sheet config: 3 columns, 4 rows (down/left/right/up), row 2 = walking right
-	var columns: int = 3
-	var rows: int = 4
-	var fps: float = 6.0
-	
-	var texture_size: Vector2 = sprite_sheet.get_size()
-	var frame_width := int(texture_size.x / columns)
-	var frame_height := int(texture_size.y / rows)
-	
-	# Create SpriteFrames with "right" animation
-	var frames := SpriteFrames.new()
-	frames.add_animation("right")
-	frames.set_animation_speed("right", fps)
-	frames.set_animation_loop("right", true)
-	
-	# Add frames for the right direction (row 2, each column is a frame)
-	for col in range(columns):
-		var atlas := AtlasTexture.new()
-		atlas.atlas = sprite_sheet
-		atlas.region = Rect2(col * frame_width, 2 * frame_height, frame_width, frame_height)
-		frames.add_frame("right", atlas)
-	
-	# Create the animated sprite
-	_loading_character = AnimatedSprite2D.new()
-	_loading_character.sprite_frames = frames
-	_loading_character.scale = Vector2(0.25, 0.25)
-	_loading_character.animation = "right"
-	_loading_character.play("right")
-	_loading_character.modulate = _COLOR_CHAR_PORTRAIT
-	
-	# Position at bottom of screen (preserve X position from placeholder)
-	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	_bob_base_y = viewport_size.y - 60
-	_walk_end_x = viewport_size.x + 100.0
-	_loading_character.position = Vector2(current_x, _bob_base_y)
-	_intro_screen.add_child(_loading_character)
-
-
-func _show_intro_screen() -> void:
-	# Create intro screen with disclaimer
-	_intro_canvas_layer = CanvasLayer.new()
-	_intro_canvas_layer.layer = 100
-	_intro_canvas_layer.name = "IntroLayer"
-	add_child(_intro_canvas_layer)
-	
-	_intro_screen = Control.new()
-	_intro_screen.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_intro_screen.name = "IntroScreen"
-	_intro_screen.mouse_filter = Control.MOUSE_FILTER_STOP
-	_intro_canvas_layer.add_child(_intro_screen)
-	
-	# Black background that receives input
-	var bg := ColorRect.new()
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.color = Color.BLACK
-	bg.mouse_filter = Control.MOUSE_FILTER_STOP
-	bg.gui_input.connect(_on_intro_input)
-	_intro_screen.add_child(bg)
-	
-	# Center container for text
-	var center := VBoxContainer.new()
-	center.set_anchors_preset(Control.PRESET_CENTER)
-	center.offset_left = -500
-	center.offset_right = 500
-	center.offset_top = -150
-	center.offset_bottom = 150
-	center.add_theme_constant_override("separation", 20)
-	center.alignment = BoxContainer.ALIGNMENT_CENTER
-	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_intro_screen.add_child(center)
-	
-	# Title
-	var title := Label.new()
-	title.text = "DISCLAIMER"
-	title.add_theme_font_size_override("font_size", 32)
-	title.add_theme_color_override("font_color", _COLOR_TEXT_MUTED)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	center.add_child(title)
-	
-	# Spacer
-	var spacer := Control.new()
-	spacer.custom_minimum_size.y = 16
-	center.add_child(spacer)
-	
-	# Disclaimer lines
-	var lines := [
-		"This is an unofficial, fan-made game based on Goddess of Victory: NIKKE.",
-		"It is not affiliated with, endorsed by, or sponsored by ShiftUp or any official partners.",
-		"All trademarks and characters belong to their respective owners."
-	]
-	
-	for line_text in lines:
-		var line := Label.new()
-		line.text = line_text
-		line.add_theme_font_size_override("font_size", 22)
-		line.add_theme_color_override("font_color", _COLOR_TEXT_SECONDARY)
-		line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		center.add_child(line)
-	
-	# Spacer
-	var spacer2 := Control.new()
-	spacer2.custom_minimum_size.y = 30
-	center.add_child(spacer2)
-	
-	# Continue instruction - starts as "Loading..."
-	_continue_label = Label.new()
-	_continue_label.text = "Loading..."
-	_continue_label.add_theme_font_size_override("font_size", 16)
-	_continue_label.add_theme_color_override("font_color", _COLOR_TEXT_DISABLED)
-	_continue_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_continue_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	center.add_child(_continue_label)
-	
-	# Record start time
-	_intro_start_time = Time.get_ticks_msec()
-	_intro_shown = false
-	_resources_ready = false
-	
-	# Add a simple walking placeholder immediately (upgraded later when sprite loads)
-	_add_placeholder_character()
 
 
 func _check_resources_loaded() -> void:
@@ -446,8 +217,6 @@ func _check_resources_loaded() -> void:
 	# All resources are loaded - schedule pre-instantiation for next frame
 	# This allows at least one more frame for the walking animation
 	_preinstantiation_scheduled = true
-	if _continue_label and is_instance_valid(_continue_label):
-		_continue_label.text = "Preparing..."
 	print("[MenuManager] Resources loaded - scheduling pre-instantiation...")
 	call_deferred("_do_preinstantiate_main_menu")
 
@@ -483,103 +252,23 @@ func _do_preinstantiate_main_menu() -> void:
 	# Now we're truly ready!
 	_resources_ready = true
 	print("[MenuManager] Ready for input - main menu is pre-instantiated")
-	if _continue_label and is_instance_valid(_continue_label):
-		_continue_label.text = "Click anywhere to continue"
-		_continue_label.add_theme_color_override("font_color", _COLOR_TEXT_SECONDARY)
+	if _intro_screen_instance and is_instance_valid(_intro_screen_instance):
+		_intro_screen_instance.set_resources_ready()
 
 
-func _on_intro_input(event: InputEvent) -> void:
-	# Only handle mouse button events to avoid spam from motion events
-	if not event is InputEventMouseButton:
-		return
-	
-	# Always consume mouse button input to prevent propagation
-	get_viewport().set_input_as_handled()
-	
-	if not _resources_ready:
-		print("[MenuManager] Click blocked - resources not ready")
-		return
-	
-	# Check minimum display time (2 seconds to read disclaimer)
-	var elapsed := Time.get_ticks_msec() - _intro_start_time
-	if elapsed < INTRO_MIN_DISPLAY_TIME_MS:
-		print("[MenuManager] Click blocked - please wait %.1fs" % [(INTRO_MIN_DISPLAY_TIME_MS - elapsed) / 1000.0])
-		return
-	
-	if event.pressed:
-		print("[MenuManager] Click accepted - dismissing intro")
-		_dismiss_intro()
-
-
-func _handle_intro_input(event: InputEvent) -> void:
-	# Handle intro screen dismissal with any key/button
-	if _intro_screen and is_instance_valid(_intro_screen):
-		# Check if this is a dismissal-eligible input type
-		var is_key: bool = event is InputEventKey
-		var is_mouse: bool = event is InputEventMouseButton
-		var is_joypad: bool = event is InputEventJoypadButton
-		
-		if is_key or is_mouse: # Removed is_joypad
-			get_viewport().set_input_as_handled()
-			
-			if not _resources_ready:
-				return # Don't allow input until resources are loaded
-			
-			# Check minimum display time (3 seconds to read disclaimer)
-			var elapsed: int = Time.get_ticks_msec() - _intro_start_time
-			if elapsed < INTRO_MIN_DISPLAY_TIME_MS:
-				return
-			
-			# Dismiss on key press, mouse click, or controller button press
-			var is_pressed: bool = false
-			if is_key:
-				is_pressed = (event as InputEventKey).pressed
-			elif is_mouse:
-				is_pressed = (event as InputEventMouseButton).pressed
-			# elif is_joypad:
-			# 	is_pressed = (event as InputEventJoypadButton).pressed
-			
-			if is_pressed:
-				print("[MenuManager] Input accepted - dismissing intro")
-				_dismiss_intro()
-		return # Don't process controller nav while intro showing
-	
-	# Analog stick navigation removed
-	pass
-
-## Simulate a ui_* action press for analog stick navigation
-func _simulate_ui_action(action: String) -> void:
-	pass
-
-
-func _dismiss_intro() -> void:
-	if not _intro_screen or not is_instance_valid(_intro_screen):
-		return
+func _on_intro_dismissed() -> void:
+	## Called when IntroScreen emits dismissed signal.
 	if _loading_main_menu:
-		return # Already loading, don't re-trigger
-	
-	_intro_shown = true
+		return
 	_loading_main_menu = true
-	
-	# Don't remove the intro screen yet - keep the walking animation going
-	# while we load the main menu in the background
-	_start_main_menu_load()
-
-
-func _start_main_menu_load() -> void:
-	# Main menu is already pre-instantiated and hidden by _check_resources_loaded()
-	# Just transition to it immediately
 	_finish_intro_transition()
 
 
 func _finish_intro_transition() -> void:
-	# Now we can remove the intro screen
-	if _intro_canvas_layer and is_instance_valid(_intro_canvas_layer):
-		_intro_canvas_layer.queue_free()
-		_intro_canvas_layer = null
-	_intro_screen = null
-	_loading_character = null
-	_placeholder_node = null
+	# Remove the intro screen
+	if _intro_screen_instance and is_instance_valid(_intro_screen_instance):
+		_intro_screen_instance.queue_free()
+		_intro_screen_instance = null
 	
 	# Setup music now that intro is done
 	start_menu_music()
@@ -758,6 +447,39 @@ func show_shop_menu() -> void:
 		menu.back_requested.connect(_on_back_requested)
 
 
+func show_mode_select() -> void:
+	var scene := _get_or_load_scene("mode_select")
+	if not scene:
+		# Fallback: go directly to character select if mode select fails
+		show_character_select()
+		return
+	var menu := scene.instantiate() as Control
+	_push_menu(menu)
+	
+	if menu.has_signal("standard_selected"):
+		menu.standard_selected.connect(_on_standard_mode_selected)
+	if menu.has_signal("back_requested"):
+		menu.back_requested.connect(_on_back_requested)
+
+
+func _on_standard_mode_selected() -> void:
+	# Standard mode selected
+	print("[MenuManager] Standard mode selected")
+	
+	# Pop mode select and show character select
+	if _current_menu:
+		_current_menu.queue_free()
+		_current_menu = null
+	# Don't pop from stack, just replace with character select
+	if _menu_stack.size() > 0:
+		_current_menu = _menu_stack.pop_back()
+		_current_menu.visible = true
+	# Now push character select
+	show_character_select()
+
+
+
+
 func _show_menu(menu: Control) -> void:
 	if _current_menu:
 		_current_menu.queue_free()
@@ -798,7 +520,7 @@ func _clear_stack() -> void:
 
 func _on_play_selected() -> void:
 	print("[MenuManager] _on_play_selected")
-	show_character_select()
+	show_mode_select()
 
 
 func _on_settings_selected() -> void:

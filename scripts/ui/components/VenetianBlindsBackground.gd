@@ -32,6 +32,11 @@ var _textures: Array[Texture2D] = []
 var _prepared_textures: Array[Dictionary] = []
 var _hex_overlay: ColorRect = null
 
+# OPTIMIZATION: Cache computed values to avoid recalculation each frame
+var _cached_texture_entries: Array = []
+var _cached_blind_width: float = 0.0
+var _cache_size: Vector2 = Vector2.ZERO
+
 
 ## Clear the static texture cache (call when changing visual settings)
 static func clear_cache() -> void:
@@ -129,46 +134,46 @@ func _setup_hex_overlay() -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
-		# Only update shader, skip heavy texture preparation
+		# Invalidate cache on resize
+		_cached_texture_entries.clear()
+		_cache_size = Vector2.ZERO
 		if _hex_overlay and _hex_overlay.material:
 			_hex_overlay.material.set_shader_parameter("screen_size", size)
 		queue_redraw()
 
 
 func _process(delta: float) -> void:
-	# Skip processing if this control is not visible (hidden menus shouldn't block animation)
 	if not is_visible_in_tree():
 		return
 	
-	# Only update animation once per frame, even if multiple instances exist
 	var current_frame = Engine.get_process_frames()
 	if _last_process_frame == current_frame:
-		return # Skip duplicate processing (removed redundant queue_redraw)
+		return
 	_last_process_frame = current_frame
 	
-	var textures = _get_active_textures()
+	# Use cached values
+	var textures = _get_cached_entries()
 	if textures.is_empty():
 		return
-	var total_width = _get_blind_width() * textures.size()
+	var total_width = _get_cached_blind_width() * textures.size()
 	if total_width <= 0.0:
 		return
 	_shared_animation_offset = fposmod(_shared_animation_offset + carousel_speed * delta, total_width)
 	
-	# PERFORMANCE: Only redraw every 3rd frame for background animation
-	if current_frame % 3 == 0:
+	# PERFORMANCE: Redraw every 4th frame (was 3rd)
+	if current_frame % 4 == 0:
 		queue_redraw()
 
 
 func _draw() -> void:
-	var textures = _get_active_textures()
+	# Use cached entries
+	var textures = _get_cached_entries()
 	if textures.is_empty():
-		# Dark blue base when no textures
 		draw_rect(Rect2(Vector2.ZERO, size), UI.VFX_VENETIAN_BASE)
 		draw_rect(Rect2(Vector2.ZERO, size), overlay_color)
 		return
 
-	var blind_width = _get_blind_width()
-	# Always use angle offset - tilted effect is achieved via UV coordinates
+	var blind_width = _get_cached_blind_width()
 	var angle_offset = size.y * tan(deg_to_rad(blind_angle_degrees))
 	var total_width = blind_width * textures.size()
 	if total_width <= 0.0:
@@ -183,7 +188,6 @@ func _draw() -> void:
 		var texture_entry = textures[texture_index]
 		_draw_blind(texture_entry, blind_x, blind_width, angle_offset)
 
-	# Semi-transparent overlay for unified look
 	draw_rect(Rect2(Vector2.ZERO, size), overlay_color)
 
 
@@ -392,6 +396,24 @@ func _get_blind_width() -> float:
 		return blind_base_width
 	var scale_factor = size.y / 1080.0
 	return blind_base_width * max(scale_factor, 0.25)
+
+
+func _get_cached_blind_width() -> float:
+	"""Return cached blind width, recalculating if size changed."""
+	if _cache_size != size or _cached_blind_width <= 0.0:
+		_cached_blind_width = _get_blind_width()
+		_cache_size = size
+	return _cached_blind_width
+
+
+func _get_cached_entries() -> Array:
+	"""Return cached texture entries, rebuilding if needed."""
+	if _cache_size == size and not _cached_texture_entries.is_empty():
+		return _cached_texture_entries
+	
+	_cached_texture_entries = _get_active_textures()
+	_cache_size = size
+	return _cached_texture_entries
 
 
 func _get_active_textures() -> Array:

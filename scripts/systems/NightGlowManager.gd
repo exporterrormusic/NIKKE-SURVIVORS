@@ -8,6 +8,7 @@ class_name NightGlowManager
 static var is_night_mode: bool = false
 static var glow_intensity: float = 0.3
 static var glow_shader: Shader = null
+static var _shared_glow_material: ShaderMaterial = null
 static var registered_sprites: Array[CanvasItem] = []
 
 const SHADER_PATH := "res://resources/shaders/sprite_night_glow.gdshader"
@@ -56,27 +57,27 @@ static func _apply_glow_to_sprite(sprite: CanvasItem, enabled: bool) -> void:
 		
 		if glow_shader == null:
 			return
+			
+		# Create shared material once, reuse for all sprites
+		if _shared_glow_material == null:
+			_shared_glow_material = ShaderMaterial.new()
+			_shared_glow_material.shader = glow_shader
+			_shared_glow_material.set_shader_parameter("glow_color", Color(1.0, 0.95, 0.85, 1.0))
+			_shared_glow_material.set_shader_parameter("glow_size", 2.0)
 		
-		# Check if already has our shader
-		var current_mat := sprite.material
-		if current_mat is ShaderMaterial and current_mat.shader == glow_shader:
-			# Just update intensity
-			current_mat.set_shader_parameter("enabled_float", 1.0)
-			current_mat.set_shader_parameter("glow_intensity", glow_intensity)
+		# Update parameters for current global state
+		_shared_glow_material.set_shader_parameter("enabled_float", 1.0)
+		_shared_glow_material.set_shader_parameter("glow_intensity", glow_intensity)
+		
+		# Check if already has our shared material
+		if sprite.material == _shared_glow_material:
 			return
 		
-		# Store original material if any
-		if current_mat:
-			sprite.set_meta("_original_material", current_mat)
+		# Store original material if any (for restoration)
+		if sprite.material and sprite.material != _shared_glow_material:
+			sprite.set_meta("_original_material", sprite.material)
 		
-		# Create and apply glow shader
-		var glow_mat := ShaderMaterial.new()
-		glow_mat.shader = glow_shader
-		glow_mat.set_shader_parameter("enabled_float", 1.0)
-		glow_mat.set_shader_parameter("glow_intensity", glow_intensity)
-		glow_mat.set_shader_parameter("glow_color", Color(1.0, 0.95, 0.85, 1.0))
-		glow_mat.set_shader_parameter("glow_size", 2.0)
-		sprite.material = glow_mat
+		sprite.material = _shared_glow_material
 	else:
 		# Restore original material
 		if sprite.has_meta("_original_material"):
@@ -94,4 +95,6 @@ static func cleanup() -> void:
 		if is_instance_valid(sprite):
 			_apply_glow_to_sprite(sprite, false)
 	registered_sprites.clear()
+	_shared_glow_material = null
 	is_night_mode = false
+	glow_shader = null

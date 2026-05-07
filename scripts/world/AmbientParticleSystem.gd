@@ -16,7 +16,7 @@ var _camera: Camera2D = null
 var _spawn_timer := 0.0
 var _ambient_compensation: float = 1.0
 
-const MAX_PARTICLES := 180 # Reduced for performance
+const MAX_PARTICLES := 280 # Increased for richer atmosphere
 const SPAWN_INTERVAL := 0.08
 
 # Particle type configurations
@@ -48,7 +48,7 @@ func _setup_particle_configs() -> void:
 				"glow": false
 			}
 		],
-		"density": 1.2
+		"density": 1.8 # Increased for more atmospheric snow
 	}
 	
 	# Sakura grove particles - cherry blossom petals
@@ -82,7 +82,7 @@ func _setup_particle_configs() -> void:
 				"glow": false
 			}
 		],
-		"density": 2.0,
+		"density": 3.0, # Increased for denser petal coverage
 		"types_night": [
 			{
 				"color": Color(1.0, 0.9, 0.4, 0.9),
@@ -96,7 +96,7 @@ func _setup_particle_configs() -> void:
 				"move_angle": - 90.0 # Float UP
 			}
 		],
-		"density_night": 0.8
+		"density_night": 1.2 # Increased firefly density
 	}
 	
 	# Grasslands - pollen/seeds during day, fireflies at night
@@ -124,8 +124,8 @@ func _setup_particle_configs() -> void:
 				"pulse_speed": 1.5
 			}
 		],
-		"density": 0.8,
-		"density_night": 0.6
+		"density": 1.2, # Increased pollen density
+		"density_night": 1.0 # More fireflies
 	}
 	
 	# Dunes - dust and sand
@@ -150,7 +150,7 @@ func _setup_particle_configs() -> void:
 				"glow": false
 			}
 		],
-		"density": 1.5
+		"density": 2.2 # Increased dust density
 	}
 	
 	# Rain Forest - rain particles

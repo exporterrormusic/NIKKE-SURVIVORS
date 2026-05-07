@@ -13,9 +13,7 @@ var burst_stun_level: int = 0
 var burst_turrets_unlocked: bool = false # "6,000? Really?" talent - spawns 20 turrets
 
 # Scripts for effects
-# Scripts for effects
 const RapunzelBurstEffectScript = preload("res://scripts/characters/effects/RapunzelBurstEffect.gd")
-const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
 
 func _on_initialize() -> void:
 	# Ammo already set from CharacterRegistry by base class

@@ -1,0 +1,653 @@
+╔══════════════════════════════════════════════════════════════════╗
+║                  SURVIVORS OF VICTORY                          ║
+║                    ── REMAKE PLAN ──                            ║
+║                    "THE LIFT — CLIMB OR DIE"                   ║
+╚══════════════════════════════════════════════════════════════════╝
+
+
+══════════════════════════════════════════════════════════════════════
+THE CORE PHILOSOPHY
+══════════════════════════════════════════════════════════════════════
+
+  You are MEANT to die.
+
+  Each run, your squad ascends The Lift — a massive space elevator
+  infested with Raptures. You fight floor by floor, earning skill
+  points (spent during this run) and Pristine Cores (persistent
+  currency). You push as high as you can. Your squad will die.
+  Then you spend your cores, get stronger, and climb higher next
+  time.
+
+  The game is not about winning a single run. It's about how far
+  you can push before falling — and how much further you get on
+  the next attempt.
+
+  ┌─────────────────────────────────────────────────────────┐
+  │                                                         │
+  │         DIE → UPGRADE → CLIMB HIGHER → DIE AGAIN       │
+  │         ↳ Each loop makes you a little stronger         │
+  │                                                         │
+  └─────────────────────────────────────────────────────────┘
+
+
+══════════════════════════════════════════════════════════════════════
+THE LIFT — STRUCTURE
+══════════════════════════════════════════════════════════════════════
+
+  The Lift is INFINITE (or has a very high cap like 100+ floors).
+  It is divided into SECTORS of 20 floors each.
+
+  ┌─────────────────────────────────────────────────────────┐
+  │  SECTOR 5: THE THRONE (81-100)                          │
+  │    └─ Biome: Queen's chamber, golden corruption         │
+  │                                                         │
+  │  SECTOR 4: QUEEN'S DOMAIN (61-80)                       │
+  │    └─ Biome: Dark Gothic, red lighting, elite-heavy     │
+  │                                                         │
+  │  SECTOR 3: THE MAW (41-60)                              │
+  │    └─ Biome: Organic, alien, flesh-like walls           │
+  │                                                         │
+  │  SECTOR 2: MID SHAFT (21-40)                            │
+  │    └─ Biome: Corrupted industrial, rust, vines          │
+  │                                                         │
+  │  SECTOR 1: LOWER SHAFT (1-20)                           │
+  │    └─ Biome: Cold steel, industrial, standard enemies   │
+  │                    ↕                                    │
+  │              ENTRY POINT                                │
+  └─────────────────────────────────────────────────────────┘
+
+  EACH SECTOR HAS:
+  ─ A unique biome/visual theme (environment, color palette,
+    enemy variations, hazards)
+  ─ 5x mini-boss floors (5, 10, 15 — plus the Sector Boss at 20)
+  ─ Increasing difficulty that ends with a SECTOR BOSS
+    that tests everything you've learned
+
+  NEW PLAYER EXPERIENCE (First few runs):
+  ─ Die around floor 8-15. Earn ~6-13 SP + 0-2 cores.
+  ─ Spend cores on Starting HP upgrade. Next run push to floor 12-18.
+  ─ Keep climbing. First Sector Boss clear is a MAJOR milestone.
+  ─ Each full sector clear unlocks a CHECKPOINT for future runs.
+
+
+══════════════════════════════════════════════════════════════════════
+FLOOR DESIGN
+══════════════════════════════════════════════════════════════════════
+
+  Each floor is a SELF-CONTAINED ARENA (~3,000-4,000 units).
+  No walking. No exploration. Drop in. Fight. Clear. Ascend.
+
+  FLOOR TYPES:
+
+  ┌──────────┬────────────────────────────┬─────────────────┐
+  │ TYPE     │ WHAT HAPPENS               │ APPEARS         │
+  ├──────────┼────────────────────────────┼─────────────────┤
+  │ COMBAT   │ Standard enemy wave.       │ Default type    │
+  │          │ Kill all to clear.         │ (any floor)     │
+  ├──────────┼────────────────────────────┼─────────────────┤
+  │ AMBUSH   │ Starts empty. Enemies      │ Floors 3+       │
+  │          │ drop in from all sides     │ (occasional)    │
+  │          │ after 3 seconds.           │                 │
+  ├──────────┼────────────────────────────┼─────────────────┤
+  │ DEFENSE  │ Protect a point for 60s.   │ Floors 5+       │
+  │          │ Enemies swarm the point.   │ (rare)          │
+  ├──────────┼────────────────────────────┼─────────────────┤
+  │ GAUNTLET │ 3 consecutive waves with   │ Floors 10+      │
+  │          │ no break between them.     │ (rare)          │
+  │          │ High intensity.            │                 │
+  ├──────────┼────────────────────────────┼─────────────────┤
+  │ BOSS     │ Single super-boss enemy.   │ Floors 5, 10,   │
+  │          │ No trash mobs (or very     │ 15 (mini-boss), │
+  │          │ few). Pure boss fight.     │ 20 (sector boss)│
+  └──────────┴────────────────────────────┴─────────────────┘
+
+  FLOOR DIFFICULTY SCALING:
+  ─ Enemy HP:   +12% per floor (compounding)
+  ─ Enemy ATK:  +8% per floor (compounding)
+  ─ Enemy count: +2 per floor (linear)
+  ─ New types:  Tanks at floor 4+, Exploders at 6+,
+                Shielders at 8+, Elites at 10+
+  ─ Hazards:    Floor hazards start appearing at sector 2+
+  ─ Enrage:     At floor 10+ within a sector, if you take
+                more than 3 minutes on a floor, enemies get
+                +25% speed and +25% attack speed
+
+  The goal: difficulty ramps aggressively so you HIT A WALL.
+  Your first run you breeze through floors 1-5, struggle on
+  6-10, and die around 12-15. Each subsequent run you push
+  1-3 floors further.
+
+  TIME PER FLOOR:
+  ─ Combat floors: 1.5-3 minutes
+  ─ Boss floors:    2-4 minutes
+  ─ Full sector (20 floors): ~40-60 minutes
+  ─ Typical first death:      run ends ~15-25 minutes in
+
+
+══════════════════════════════════════════════════════════════════════
+REWARD SYSTEM
+══════════════════════════════════════════════════════════════════════
+
+═══ SKILL POINT CADENCE ═════════════════════════════════════════════
+
+  Skill points are awarded on specific floors only. All boss floors
+  (every 5th floor) grant 3 SP. Non-boss floors only grant SP if
+  they fall on the cadence.
+
+  FIRST 10 FLOORS (every other odd floor + floor 10 boss):
+  ┌────────┬──────────┬───────────┬────────────────────────┐
+  │ FLOOR  │ SP EARNED│ CUMULATIVE│ NOTES                  │
+  ├────────┼──────────┼───────────┼────────────────────────┤
+  │ 1      │ +1       │ 1         │ Non-boss cadence floor │
+  │ 2      │ +0       │ 1         │                        │
+  │ 3      │ +1       │ 2         │ Non-boss cadence floor │
+  │ 4      │ +0       │ 2         │                        │
+  │ 5      │ +3       │ 5         │ BOSS FLOOR             │
+  │ 6      │ +0       │ 5         │                        │
+  │ 7      │ +1       │ 6         │ Non-boss cadence floor │
+  │ 8      │ +0       │ 6         │                        │
+  │ 9      │ +1       │ 7         │ Non-boss cadence floor │
+  │ 10     │ +3       │ 10        │ BOSS FLOOR             │
+  └────────┴──────────┴───────────┴────────────────────────┘
+
+  FLOORS 11-50 (every 5th floor = boss):
+  ┌────────┬──────────┬───────────┐
+  │ FLOOR  │ SP EARNED│ CUMULATIVE│
+  ├────────┼──────────┼───────────┤
+  │ 15     │ +3       │ 13        │
+  │ 20     │ +3       │ 16        │
+  │ 25     │ +3       │ 19        │
+  │ 30     │ +3       │ 22        │
+  │ 35     │ +3       │ 25        │
+  │ 40     │ +3       │ 28        │
+  │ 45     │ +3       │ 31        │
+  │ 50     │ +3       │ 34        │
+  └────────┴──────────┴───────────┘
+
+  FLOORS 51+ (every 10th floor):
+  ┌────────┬──────────┬───────────┐
+  │ FLOOR  │ SP EARNED│ CUMULATIVE│
+  ├────────┼──────────┼───────────┤
+  │ 60     │ +3       │ 37        │
+  │ 70     │ +3       │ 40        │
+  │ 80     │ +3       │ 43        │
+  │ 90     │ +3       │ 46        │
+  │ 100    │ +3       │ 49        │
+  └────────┴──────────┴───────────┘
+
+  CHECKPOINT STARTING SP (start with this many skill points):
+  ┌─────────────────────┬────────────┐
+  │ STARTING FLOOR      │ SP GRANTED│
+  ├─────────────────────┼────────────┤
+  │ Floor 1 (fresh run) │ 0          │
+  │ Floor 21 (Sector 2) │ 16         │
+  │ Floor 41 (Sector 3) │ 28         │
+  │ Floor 61 (Sector 4) │ 37         │
+  │ Floor 81 (Sector 5) │ 43         │
+  │ Floor 101 (Endless) │ 49         │
+  └─────────────────────┴────────────┘
+
+═══ AFTER EVERY FLOOR ═══════════════════════════════════════════════
+
+  ┌──────────────────────────────────────────────────┐
+  │  FLOOR 7 CLEARED           SQUAD STATUS           │
+  │                           ┌─────┐ ┌─────┐ ┌────┐ │
+  │  REWARD: +1 SKILL POINT   │ S   │ │ C   │ │ R  │ │
+  │                           │ 80% │ │ DEAD│ │90% │ │
+  │  CHOOSE 1 BONUS:          └─────┘ └─────┘ └────┘ │
+  │  ┌──────────┐ ┌──────────┐ ┌──────────┐         │
+  │  │ HEAL ALL │ │ +2 MAX   │ │ +15% DMG │         │
+  │  │   30%    │ │ HP (run) │ │  (run)   │         │
+  │  └──────────┘ └──────────┘ └──────────┘         │
+  │                                                  │
+  │           [ ASCEND TO FLOOR 8 ]                  │
+  └──────────────────────────────────────────────────┘
+
+  GUARANTEED (every floor):  Choose 1 run-specific bonus
+  GUARANTEED (cadence floor): Skill Points (see table above)
+  GUARANTEED (boss floor):    Skill Points + Pristine Cores
+    ─ Mini-boss (5, 10, 15):  1-2 cores
+    ─ Sector Boss (20, 40, etc.): 3-5 cores
+
+═══ RUN-SPECIFIC BONUS POOL ════════════════════════════════════════
+
+  ┌──────────────────────────┬──────────────────────────┐
+  │ BONUS                    │ EFFECT                   │
+  ├──────────────────────────┼──────────────────────────┤
+  │ Heal All                 │ Restore 30% HP to all    │
+  │                          │ squad members            │
+  ├──────────────────────────┼──────────────────────────┤
+  │ Full Heal One            │ Restore 1 character to   │
+  │                          │ full HP                  │
+  ├──────────────────────────┼──────────────────────────┤
+  │ Max HP Up                │ +2 max HP to all squad   │
+  │                          │ members (for this run)   │
+  ├──────────────────────────┼──────────────────────────┤
+  │ Damage Up                │ +10% damage all squad    │
+  │                          │ (for this run)           │
+  ├──────────────────────────┼──────────────────────────┤
+  │ Speed Up                 │ +5% move speed all squad │
+  │                          │ (for this run)           │
+  ├──────────────────────────┼──────────────────────────┤
+  │ Spare Body               │ Revive 1 dead character  │
+  │                          │ with 25% HP. Can be     │
+  │                          │ SAVED and used later     │
+  ├──────────────────────────┼──────────────────────────┤
+  │ Shield All               │ All squad members gain   │
+  │                          │ +3 shield HP (for run)   │
+  ├──────────────────────────┼──────────────────────────┤
+  │ Fire Rate Up             │ +15% attack speed all    │
+  │                          │ squad (for this run)     │
+  ├──────────────────────────┼──────────────────────────┤
+  │ Rare Core (boss reward)  │ +5 Pristine Cores        │
+  │                          │ (persistent)             │
+  └──────────────────────────┴──────────────────────────┘
+
+  CHOICES GET BETTER ON HARDER FLOORS:
+  ─ Floors 1-5:    3 options from common pool
+  ─ Floors 6-10:   4 options (includes uncommon)
+  ─ Floors 11-15:  4 options (includes rare)
+  ─ Floors 16-20:  5 options (includes premium)
+  ─ Boss floors:   Always includes rare options
+
+  THE CORE TENSION:
+  ─ "I have 2 dead characters. There's a Spare Body in
+    the reward pool. But there's also Damage Up which I
+    need for the boss. Do I revive or power up?"
+  ─ "My Scarlet is at 20% HP. Heal All would help everyone
+    but Max HP Up is a permanent boost for the rest of
+    the run. Which is more valuable 3 floors from now?"
+
+
+══════════════════════════════════════════════════════════════════════
+DEATH & REVIVAL
+══════════════════════════════════════════════════════════════════════
+
+  WHEN A CHARACTER HITS 0 HP ON A FLOOR:
+  ─ They are DOWNED. They fall. They can't move or attack.
+  ─ You finish the floor without them.
+  ─ After the floor ends, they are DEAD for the rest of the
+    run — UNLESS you have a Spare Body item.
+
+  SPARE BODY ITEM:
+  ─ Acquired by choosing it as a floor reward bonus
+  ─ Stored in your inventory (visible on the reward screen)
+  ─ Can be SAVED — you don't have to use it immediately
+  ─ After clearing a floor, if you have a Spare Body,
+    a "Revive" button appears next to dead characters
+  ─ Using it revives 1 dead character with 25% HP
+  ─ The item is consumed on use
+  ─ You can hold up to 3 Spare Bodies at once
+
+  RUN ENDS WHEN: All 3 squad members are dead simultaneously.
+  ─ If you finish a floor with 2 dead and 1 alive, the run
+    continues. Next floor you fight with just 1 character
+    (you control them, no AI allies).
+  ─ If that last character dies on the next floor, run over.
+
+  STRATEGIC IMPLICATIONS:
+  ─ Sacrificing a weak character to preserve the strong ones
+    is a valid strategy
+  ─ Going into a boss floor with a dead character is risky
+    but might be worth it if the rewards are good
+  ─ Spare Bodies are PREMIUM rewards — choosing them over
+    a damage boost is a real trade-off
+
+
+══════════════════════════════════════════════════════════════════════
+SKILL POINTS & TALENT TREE (Run-Only)
+══════════════════════════════════════════════════════════════════════
+
+  Skill points are RUN-ONLY. They reset to 0 when the run ends.
+  This is the core of the roguelite loop — each run you rebuild
+  your characters from scratch.
+
+  HOW IT WORKS:
+  ─ Each floor clear gives 1 skill point (shown on reward screen)
+  ─ During a run, press TAB to open the Talent Tree (same UI)
+  ─ Spend skill points on the current 3 characters' talent trees
+  ─ You can distribute points however you want between the 3
+    characters
+  ─ Talent tree is IDENTICAL to what exists now — unlock burst,
+    special, passives per character
+
+  TYPICAL SKILL POINT BUDGET PER RUN:
+  ─ Die on floor 10:    10 SP (barely 1 char's burst)
+  ─ Die on floor 18:    13 SP (1 burst + 1 special)
+  ─ Clear sector 1 (20): 16 SP (2 chars with bursts)
+  ─ Clear sector 2 (40): 28 SP (full squad built out)
+
+  This means a run that ends early gives you barely enough
+  to unlock 1 character's burst. A deep run lets you build
+  out multiple characters with passives and upgrades.
+
+  STRATEGY:
+  ─ Do you dump all points into 1 character (strong carry)?
+  ─ Or spread them evenly (balanced squad, less depth)?
+  ─ Talent choices change based on which floor bonuses you
+    picked — damage-focused build vs survival-focused build
+
+
+══════════════════════════════════════════════════════════════════════
+PERSISTENT PROGRESSION (Pristine Cores)
+══════════════════════════════════════════════════════════════════════
+
+  Between runs, you spend Pristine Cores on permanent upgrades
+  that make future climbs easier. These NEVER reset.
+
+  ┌─────────────────────────────────────────────────────────┐
+  │  PRE-RUN UPGRADE SHOP (persistent across all runs)      │
+  ├─────────────────────────────────────────────────────────┤
+  │                                                         │
+  │  STARTING HP       Cost: 3 cores per level              │
+  │  └─ +1 max HP to all squad members at start of run      │
+  │  └─ Max level: 15 (+15 HP)                              │
+  │                                                         │
+  │  STARTING ATK      Cost: 4 cores per level              │
+  │  └─ +5% damage to all squad members at start of run     │
+  │  └─ Max level: 10 (+50% damage)                        │
+  │                                                         │
+  │  STARTING SUPPLY   Cost: 10 cores per level             │
+  │  └─ Begin each run with a random consumable             │
+  │    (Medkit, Adrenaline, Shield Battery, Spare Body)   │
+  │  └─ Max level: 3 (start with 3 consumables)            │
+  │                                                         │
+  │  REVIVE CHARGE     Cost: 15 cores per level             │
+  │  └─ Start each run with 1 free Spare Body              │
+  │  └─ Max level: 2 (start with 2 free revives)            │
+  │                                                         │
+  │  BETTER CHOICES    Cost: 20 cores per level             │
+  │  └─ +1 extra option in floor reward selections          │
+  │     (see 3 choices instead of 2, or 4 instead of 3)     │
+  │  └─ Max level: 2                                       │
+  │                                                         │
+  │  CORE BOOST        Cost: 15 cores per level             │
+  │  └─ +1 extra core per boss kill                        │
+  │  └─ Max level: 3                                       │
+  │                                                         │
+  │  SPARE BODY INVENTORY   Cost: 25 cores per level        │
+  │  └─ Can hold +1 extra Spare Body at once             │
+  │     (base cap: 3, max cap: 6)                          │
+  │  └─ Max level: 3                                       │
+  │                                                         │
+  └─────────────────────────────────────────────────────────┘
+
+  CORE EARNING RATE:
+  ─ Mini-boss (floors 5, 10, 15): 1-2 cores each
+  ─ Sector Boss (floor 20):        3-5 cores
+  ─ Rare Core reward pick:         5 cores (costs a bonus slot)
+  ─ Typical run (die floor 15):    ~3-8 cores
+  ─ Typical full sector clear:     ~10-20 cores
+
+
+══════════════════════════════════════════════════════════════════════
+CHECKPOINT SYSTEM
+══════════════════════════════════════════════════════════════════════
+
+  Every 20 floors = 1 CHECKPOINT unlocked at the COMMAND CENTER.
+
+  UNLOCKING A CHECKPOINT:
+  ─ Defeat the Sector Boss on floor 20 → "SECTOR 1 CLEARED"
+  ─ Command Center now shows "START FROM SECTOR 2 (Floor 21)"
+  ─ Same for floor 40, 60, 80, 100...
+
+  STARTING FROM A CHECKPOINT:
+  ─ Before a run, choose: START FROM FLOOR 1 or START FROM
+    the highest unlocked checkpoint
+  ─ No bonus rewards. No catch-up cores. The challenge IS
+    the reward — you're playing the hard part because you
+    proved you can handle it.
+  ─ Bragging rights: "I start from floor 41 now" is the flex
+
+  WHY START FROM A HIGHER FLOOR?
+  ─ Shorter path to the next checkpoint (20 floors vs 40+)
+  ─ More efficient core farming (bosses are denser)
+  ─ Skill points come faster relative to time spent
+  ─ You've already "beaten" the early sectors — replaying
+    them is just a time tax
+
+  "FIRST CLEAR" STATUS:
+  ─ The game tracks your HIGHEST FLOOR ever reached
+  ─ Displayed prominently on the main menu / start screen
+  ─ "HIGHEST: FLOOR 37 | CHECKPOINTS: SECTOR 1"
+  ─ This IS your progression bar. Each number is a trophy.
+
+  EXAMPLE PROGRESSION ARC:
+  Run  1: Die on floor 12.  (Highest: 12)
+  Run  2: Die on floor 16.  (Highest: 16)
+  Run  3: Die on floor 19.  (Highest: 19)
+  Run  4: CLEAR SECTOR 1!   (Highest: 20, Checkpoint: Sector 2)
+  Run  5: Start at 21, die on floor 26. (Highest: 26)
+  Run  6: Start at 21, die on floor 32. (Highest: 32)
+  Run  7: Start at 21, die on floor 38. (Highest: 38)
+  ...
+
+  Each run takes ~15-40 minutes depending on how far you get.
+  The climb is real. Every floor past your previous best feels
+  like an achievement.
+
+
+══════════════════════════════════════════════════════════════════════
+SQUAD SYSTEM ON THE FIELD
+══════════════════════════════════════════════════════════════════════
+
+  This is the same core mechanic from the earlier plan:
+  3 characters on the field simultaneously.
+
+  ┌─────────────────────────────────────────────────────────┐
+  │  ARCHITECTURE (New + Existing)                          │
+  │                                                         │
+  │  Level/LiftFloor.gd                                     │
+  │    ├── PlayerSquad (new)                                │
+  │    │   ├── PlayerMember (slot 0) — CharacterBody2D      │
+  │    │   │   ├── CharacterController (existing)           │
+  │    │   │   ├── Camera2D (active when CONTROLLED)        │
+  │    │   │   └── PlayerOverheadHud                       │
+  │    │   ├── PlayerMember (slot 1) — AI mode             │
+  │    │   └── PlayerMember (slot 2) — AI mode             │
+  │    ├── Enemies/                                         │
+  │    ├── CanvasLayer/                                     │
+  │    │   ├── SquadPortraitPanel (3 HP bars, portraits)   │
+  │    │   └── FloorUI (current floor #, sector name)      │
+  │    └── Environment/                                     │
+  └─────────────────────────────────────────────────────────┘
+
+  CONTROLS:
+  ─ WASD: Move currently CONTROLLED character
+  ─ Mouse: Aim (follows controlled character)
+  ─ Hold click: Auto-attack (same as now)
+  ─ 1/2/3: Tag-switch — that character becomes CONTROLLED,
+    previous one goes AI
+  ─ E: Burst (on currently controlled character)
+  ─ Space: Dash
+  ─ TAB: Talent Tree (spend skill points during run)
+
+  AI ALLIES:
+  ─ Follow in loose formation behind the CONTROLLED character
+  ─ During combat: spread out for flanking (150-250px apart)
+  ─ Auto-attack nearest enemies
+  ─ Use specials on cooldown when in range
+  ─ Use burst automatically when gauge is full (or manual
+    toggle in settings)
+  ─ Same existing ally behavior scripts with formation adapter
+
+  SQUAD PORTRAIT PANEL (bottom-left):
+  ┌────────────────────────┐
+  │ [S] ████████░░░ 80%    │  ← Glowing border = controlled
+  │ [C] ██░░░░░░░░░ DEAD   │  ← Greyed out, "DEAD" label
+  │ [R] ██████████░ 95%    │
+  └────────────────────────┘
+  ─ Click a portrait to tag-switch
+  ─ Shows current floor # + sector name above the panel
+  ─ Spare Body count shown if any are held
+
+
+══════════════════════════════════════════════════════════════════════
+FULL RUN FLOW (Step by Step)
+══════════════════════════════════════════════════════════════════════
+
+  ┌─────────────────────────────────────────────────────────┐
+  │ ① COMMAND CENTER (Menu Screen)                          │
+  │   ─ See: current cores, highest floor, unlocked         │
+  │     checkpoints, persistent upgrade levels              │
+  │   ─ Spend cores on persistent upgrades (optional)       │
+  │   ─ Choose starting floor: Floor 1 or checkpoint        │
+  │   ─ "DEPLOY" button                                     │
+  │                                                         │
+  │ ② CHARACTER SELECT                                      │
+  │   ─ Pick 3 characters from your unlocked roster         │
+  │   ─ See their base stats, weapons, specials             │
+  │   ─ "CONFIRM SQUAD"                                     │
+  │                                                         │
+  │ ③ DEPLOY → FLOOR N                                      │
+  │   ─ All 3 characters spawn in arena                     │
+  │   ─ Floor number + sector name displayed                │
+  │   ─ "FLOOR 7 — LOWER SHAFT"                             │
+  │   ─ Enemies begin spawning                              │
+  │                                                         │
+  │ ④ COMBAT PHASE                                          │
+  │   ─ Fight enemies. Tag-switch. Use bursts.              │
+  │   ─ Clear all enemies → "FLOOR CLEARED"                 │
+  │   ─ If a character dies: they stay dead (permanent      │
+  │     unless Spare Body is used on reward screen)       │
+  │                                                         │
+  │ ⑤ REWARD SCREEN                                         │
+  │   ─ "FLOOR 7 CLEARED"                                   │
+  │   ─ +1 Skill Point (added to your pool)                 │
+  │   ─ Choose 1 bonus from the available pool              │
+  │   ─ See squad status (HP, deaths)                      │
+  │   ─ Option to open Talent Tree (TAB) and spend points   │
+  │   ─ "ASCEND" button                                     │
+  │                                                         │
+  │ ⑥ Repeat steps ③-⑤ until:                              │
+  │   ─ All 3 characters dead → RUN OVER → results screen   │
+  │   ─ Sector Boss cleared → Checkpoint unlocked →         │
+  │     Option to EXTRACT (end run with rewards) or         │
+  │     CONTINUE (push into next sector)                    │
+  │                                                         │
+  │ ⑦ RUN RESULTS                                           │
+  │   ─ "REACHED FLOOR 23"                                  │
+  │   ─ Skill points earned: 23 (reset for next run)        │
+  │   ─ Cores earned: 6 (added to persistent total)         │
+  │   ─ New highest floor? Checkpoint unlocked?             │
+  │   ─ Stats: kills per character, damage dealt, time      │
+  │   ─ "BACK TO COMMAND CENTER"                            │
+  └─────────────────────────────────────────────────────────┘
+
+
+══════════════════════════════════════════════════════════════════════
+EXTRACTION OPTION
+══════════════════════════════════════════════════════════════════════
+
+  After defeating a SECTOR BOSS (floor 20, 40, 60, 80), you get
+  a choice:
+
+  ┌────────────────────────────────────────────┐
+  │  SECTOR 1 CLEARED!                          │
+  │                                             │
+  │  ┌──────────────┐  ┌──────────────────┐    │
+  │  │  EXTRACT     │  │  CONTINUE         │    │
+  │  │              │  │                   │    │
+  │  │ Keep all     │  │ Push into         │    │
+  │  │ cores +      │  │ Sector 2          │    │
+  │  │ checkpoints. │  │ (Floor 21).       │    │
+  │  │ Run ends.    │  │ Higher risk,      │    │
+  │  │              │  │ higher rewards.   │    │
+  │  └──────────────┘  └──────────────────┘    │
+  └────────────────────────────────────────────┘
+
+  EXTRACT: Safe. Keep everything. Unlock the checkpoint.
+  ─ Good for: first time clearing a sector, low squad HP,
+    no Spare Bodies left, want to bank cores safely.
+
+  CONTINUE: Risky. If you die in the next sector, you still
+  keep the checkpoint from the sector you cleared. But you
+  lose any unspent skill points and unbanked rewards.
+  ─ Good for: strong squad, full HP, multiple Spare Bodies,
+    want to push for the next checkpoint.
+
+  This creates a risk/reward decision at every sector boundary.
+
+
+══════════════════════════════════════════════════════════════════════
+SECTOR & BIOME THEMES
+══════════════════════════════════════════════════════════════════════
+
+  SECTOR 1 — LOWER SHAFT (Floors 1-20)
+  ─ Visual: Cold steel, industrial, fluorescent lights, pipes
+  ─ Enemies: Standard raptures only (basic, tank at 4+)
+  ─ Hazards: None
+  ─ Boss: Corrupted Security System (mechanical boss)
+  ─ Vibe: "This is the tutorial. Learn the game."
+
+  SECTOR 2 — MID SHAFT (Floors 21-40)
+  ─ Visual: Rusted metal, broken lights, vines, water leaks
+  ─ Enemies: All standard + exploders, first elites at 30+
+  ─ Hazards: Floor 28+ — sparking wires (damage if touched)
+  ─ Boss: Corrupted Commander (elite Nikke, humanoid)
+  ─ Vibe: "The elevator has been abandoned for a long time."
+
+  SECTOR 3 — THE MAW (Floors 41-60)
+  ─ Visual: Organic growth, flesh-like walls, bioluminescent
+  ─ Enemies: Heavily corrupted variants, elite-heavy
+  ─ Hazards: Floor 45+ — acid pools, moving crusher walls
+  ─ Boss: Rapture Breeder (biological horror)
+  ─ Vibe: "The Raptures have made this their nest."
+
+  SECTOR 4 — QUEEN'S DOMAIN (Floors 61-80)
+  ─ Visual: Dark Gothic, red and gold, religious iconography
+  ─ Enemies: All elite variants, new "Cultist" type
+  ─ Hazards: Floor 65+ — flame vents, collapsing platforms
+  ─ Boss: Queen's Herald (first direct servant of N01)
+  ─ Vibe: "You are in her territory now. She knows you're here."
+
+  SECTOR 5 — THE THRONE (Floors 81-100)
+  ─ Visual: Golden corruption, impossible geometry, floating
+  ─ Enemies: All types maxed, including new "Angel" variants
+  ─ Hazards: Every floor — reality-warping patterns
+  ─ Boss: N01 — The Rapture Queen (final challenge)
+  ─ Vibe: "This is the end. She is waiting."
+
+  Beyond 100: "ENDLESS MODE" unlocked. Random biome rotation.
+  No more checkpoints. Pure leaderboard chasing.
+
+
+══════════════════════════════════════════════════════════════════════
+WHAT ALREADY WORKS (No Changes Needed)
+══════════════════════════════════════════════════════════════════════
+
+  ┌────────────────────────────────────┬──────────────────┐
+  │ SYSTEM                             │ STATUS            │
+  ├────────────────────────────────────┼──────────────────┤
+  │ Character controllers (11 chars)   │ DONE              │
+  │ Character weapons, specials, bursts│ DONE              │
+  │ Talent tree per character          │ DONE              │
+  │ Burst gauge & system               │ DONE              │
+  │ Auto-attack, mouse aim, dash       │ DONE              │
+  │ Screen juice (shake, sparks, nums) │ DONE              │
+  │ Enemy types (basic-elite-boss)     │ DONE              │
+  │ XP orbs, drops                     │ DONE              │
+  │ Pristine Cores as currency         │ DONE              │
+  │ Shop/upgrade system (ShopMenu)     │ DONE              │
+  │ Hit effects, sound, audio          │ DONE              │
+  │ Minimap                            │ DONE (adapt)     │
+  │ PlayerOverheadHud                  │ DONE (adapt)     │
+  │ SmoothCamera                       │ DONE (adapt)     │
+  └────────────────────────────────────┴──────────────────┘
+
+  ┌────────────────────────────────────┬──────────────────┐
+  │ SYSTEM                             │ NEEDS BUILDING   │
+  ├────────────────────────────────────┼──────────────────┤
+  │ PlayerSquad (3 members on field)   │ NEW              │
+  │ PlayerMember + AI adapter          │ NEW              │
+  │ SquadPortraitPanel (HP bars)       │ NEW              │
+  │ Floor generation system            │ NEW              │
+  │ Reward selection screen            │ NEW              │
+  │ Command Center (pre-run menu)      │ NEW              │
+  │ Persistent upgrade shop            │ Adapt ShopMenu   │
+  │ Checkpoint system + save data      │ NEW              │
+  │ Boss variants for each sector      │ NEW              │
+  │ Sector biome themes (env configs)  │ NEW              │
+  │ Extraction mechanic                │ NEW              │
+  │ Run results screen                 │ NEW              │
+  └────────────────────────────────────┴──────────────────┘

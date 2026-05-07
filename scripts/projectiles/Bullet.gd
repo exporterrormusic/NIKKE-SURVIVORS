@@ -193,13 +193,20 @@ func _physics_process(delta):
 	if result:
 		# Check if this is a boulder we should phase through BEFORE setting position
 		var collider = result.collider
-		if collider is StaticBody2D and collider.is_in_group("boulders"):
+		
+		# PHASE THROUGH enemy projectiles - don't stop player bullets on other bullets
+		if collider.is_in_group("enemy_projectiles") and not collider.has_method("take_damage"):
+			global_position = next_pos
+		elif collider is StaticBody2D and collider.is_in_group("boulders"):
 			var player_ref = get_tree().get_first_node_in_group("player")
 			if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player_ref and player_ref.has_method("is_character_in_squad") and player_ref.is_character_in_squad("wells"):
 				# Phase through boulder - continue to next_pos, don't stop at collision point
 				global_position = next_pos
 				# Skip the rest of the collision handling
 			else:
+				# Trigger bump shake on SwayableBush if this is a player bullet
+				if collider.has_method("trigger_bump") and owner_node and owner_node.is_in_group("player"):
+					collider.trigger_bump(0.7, true)
 				# Not phasing - normal collision handling
 				global_position = result.position
 				_on_body_entered(collider)
@@ -263,6 +270,10 @@ func _check_boulder_collision() -> bool:
 		var boulder_pos: Vector2 = boulder.global_position
 		var boulder_radius: float = boulder.boulder_size * 0.5 if "boulder_size" in boulder else 150.0
 		if global_position.distance_squared_to(boulder_pos) < boulder_radius * boulder_radius:
+			# Trigger bump shake on SwayableBush if owner is player
+			if boulder.has_method("trigger_bump"):
+				if owner_node and owner_node.is_in_group("player"):
+					boulder.trigger_bump(0.7, true)
 			return true
 	return false
 
@@ -282,6 +293,10 @@ func _on_body_entered(body):
 	
 	# Don't damage charmed enemies (they're friendly now)
 	if body.is_in_group("charmed_allies"):
+		return
+	
+	# Ignore other projectiles - phase through enemy bullets
+	if body.is_in_group("enemy_projectiles") and not body.has_method("take_damage"):
 		return
 
 	# Check for Shield Hit (Area2D child of ShielderShield)

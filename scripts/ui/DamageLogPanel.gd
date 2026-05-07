@@ -5,6 +5,7 @@ class_name DamageLogPanel
 ## Only rebuilds when refresh() is called (no per-frame processing).
 
 const UI := preload("res://scripts/ui/UITheme.gd")
+const DamageLogScript := preload("res://scripts/autoload/DamageLog.gd")
 
 var _title_label: Label = null
 var _content: VBoxContainer = null
@@ -85,8 +86,8 @@ func refresh() -> void:
 		child.queue_free()
 	
 	# Get entries (newest first)
-	var damage_log = Engine.get_singleton("DamageLog") if Engine.has_singleton("DamageLog") else get_node_or_null("/root/DamageLog")
-	var entries: Array = damage_log.get_entries_reversed() if damage_log else []
+	var dl := DamageLogScript.get_instance()
+	var entries: Array = dl.get_entries_reversed() if dl else []
 	
 	if entries.is_empty():
 		var empty_label := Label.new()
@@ -117,9 +118,9 @@ func _create_damage_entry(entry: Dictionary) -> Control:
 	
 	# Time stamp
 	var time_label := Label.new()
-	var damage_log = Engine.get_singleton("DamageLog") if Engine.has_singleton("DamageLog") else get_node_or_null("/root/DamageLog")
-	if damage_log:
-		time_label.text = damage_log.format_time(entry)
+	var dl := DamageLogScript.get_instance()
+	if dl:
+		time_label.text = DamageLogScript.format_time(entry)
 	else:
 		time_label.text = "0:00"
 	time_label.add_theme_font_size_override("font_size", 14)

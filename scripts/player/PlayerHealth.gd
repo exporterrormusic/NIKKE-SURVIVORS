@@ -5,6 +5,8 @@ class_name PlayerHealth
 ## Handles HP, damage, shields, invincibility, and healing.
 ## Extracted from PlayerCore for better separation of concerns.
 
+const DamageLogScript := preload("res://scripts/autoload/DamageLog.gd")
+
 signal health_changed(current: int, maximum: int)
 signal damage_taken(amount: int, is_crit: bool, direction: Vector2)
 signal damage_blocked_by_shield(amount: int)
@@ -159,12 +161,12 @@ func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector
 		shield_changed.emit(shield_current, shield_max)
 		
 		# Log shield damage as requested
-		var damage_log = Engine.get_singleton("DamageLog") if Engine.has_singleton("DamageLog") else get_node_or_null("/root/DamageLog")
-		if damage_log:
+		var dl := DamageLogScript.get_instance()
+		if dl:
 			var log_source := source
 			if ":" in source:
 				log_source = source.split(":")[0]
-			damage_log.log_damage(log_source, "shield", shield_absorbed)
+			dl.log_damage(log_source, "shield", shield_absorbed)
 	
 	# Apply remaining damage to HP
 	if actual_damage > 0:
@@ -173,8 +175,8 @@ func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector
 		health_changed.emit(hp, max_hp)
 		
 		# Log damage for debugging UI (zero overhead - just array append)
-		var damage_log = Engine.get_singleton("DamageLog") if Engine.has_singleton("DamageLog") else get_node_or_null("/root/DamageLog")
-		if damage_log:
+		var dl := DamageLogScript.get_instance()
+		if dl:
 			# Parse "Name:Type" format if present
 			var log_source := source
 			var log_type := "hit"
@@ -182,7 +184,7 @@ func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector
 				var parts = source.split(":")
 				log_source = parts[0]
 				log_type = parts[1] if parts.size() > 1 else "hit"
-			damage_log.log_damage(log_source, log_type, actual_damage)
+			dl.log_damage(log_source, log_type, actual_damage)
 		
 		# Trigger brief invincibility
 		_trigger_invincibility(_invincibility_duration)

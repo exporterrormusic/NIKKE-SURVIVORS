@@ -38,9 +38,9 @@ void fragment() {
 	vec2 dir = normalize(vec2(wind_direction.x, clamp(wind_direction.y, -1.0, 1.0)));
 	float base_speed = 0.18;
 	vec2 flow_step = dir * time_flow * base_speed;
-	float layer1 = snow_layer(uv + flow_step * 1.15, 16.0, 13.37, 0.172, 0.08, 0.016, 0.62);
-	float layer2 = snow_layer(uv + flow_step * 0.9, 10.0, 37.91, 0.12, 0.056, 0.012, 0.44);
-	float layer3 = snow_layer(uv + flow_step * 0.7, 6.0, 71.25, 0.078, 0.042, 0.008, 0.32);
+	float layer1 = snow_layer(uv + flow_step * 1.15, 16.0, 13.37, 0.15, 0.08, 0.016, 0.62);
+	float layer2 = snow_layer(uv + flow_step * 0.9, 10.0, 37.91, 0.10, 0.056, 0.012, 0.44);
+	float layer3 = snow_layer(uv + flow_step * 0.7, 6.0, 71.25, 0.065, 0.042, 0.008, 0.32);
 	float near_weight = 0.68;
 	float mid_weight = 0.45;
 	float far_weight = 0.28;

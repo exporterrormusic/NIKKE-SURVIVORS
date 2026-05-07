@@ -37,3 +37,7 @@ flower_secondary_color = Color(1.0, 0.5, 0.6, 1.0)
 flower_tertiary_color = Color(0.9, 0.4, 0.9, 1.0)
 flower_wind_sway = 0.35
 flower_cluster_size = 0.5
+pebble_density = 0.0
+highlight_spots = 0.0
+ground_shadow_strength = 0.08
+shimmer_intensity = 0.02

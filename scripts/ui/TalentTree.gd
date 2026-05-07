@@ -31,189 +31,8 @@ var _game_state = null
 # This is now loaded from GameManager to sync with character selection
 var _shop_character_order: Array[int] = [8, 9, 4] # Default: Cecil, Nayuta, Marian
 
-# Talent definitions - Simplified: 3 main abilities + 4 upgrades (2 per special/burst)
-# Layout: UNLOCK (row 0) -> SPECIAL (row 1) -> BURST (row 2)
-# Side upgrades: 2 for special (row 1, cols 0,2), 2 for burst (row 2, cols 0,2)
-# IMPORTANT: Indices match CharacterRegistry order:
-# 0=snow_white, 1=scarlet, 2=rapunzel, 3=nayuta, 4=commander, 5=marian, 6=crown, 7=kilo, 8=cecil, 9=sin
-var TALENT_DATA := {
-	0: [ # Snow White - Sniper with Turret
-		{"id": "unlock", "name": "Unlock Snow White", "desc": "Add Snow White to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
-		 "tooltip": "Sniper with piercing shots. 7 ammo, 1.5s reload."},
-		{"id": "special", "name": "Auto-Turret", "desc": "Deploy auto-targeting turrets", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
-		 "tooltip": "Deploys turret with 4 missiles. 1 charge, 8s recharge."},
-		{"id": "special_capacity", "name": "Ammo Cache", "desc": "+2 turret missile capacity", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "+2 missiles per turret. Max: 10 missiles."},
-		{"id": "special_count", "name": "More Turrets", "desc": "+2 max turret charges", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "+2 charges per level. Max: 7 turrets."},
-		{"id": "burst", "name": "Seven Dwarves", "desc": "BURST: Freezing storm", "col": 1, "row": 2, "requires": ["special"], "max": 1, "cost": 1, "burst": true,
-		 "tooltip": "90° ice beam dealing 50 damage. Massive range."},
-		{"id": "burst_burn", "name": "Incendiary Rounds", "desc": "Burns enemies for 34% max HP/s", "col": 0, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
-		 "tooltip": "3s burn. Bosses take 12% max HP/s instead."},
-		{"id": "burst_gauge", "name": "Fully Active", "desc": "Kills during burst refill gauge", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
-		 "tooltip": "Burst kills generate burst gauge for chaining."},
-	],
-	1: [ # Scarlet - Melee DPS
-		{"id": "unlock", "name": "Unlock Scarlet", "desc": "Add Scarlet to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
-		 "tooltip": "Melee warrior who loses 3% max HP per attack but deals high damage."},
-		{"id": "special", "name": "Dash Slash", "desc": "Dash leaves a damaging wave", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
-		 "tooltip": "Dash releases a piercing wave dealing 8 damage. 4s cooldown."},
-		{"id": "special_cd", "name": "Quick Dash", "desc": "-1s special cooldown", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "-1s cooldown per level. At max: 1s cooldown."},
-		{"id": "special_heal", "name": "Vampiric Slash", "desc": "Heals 5/15/25% max HP per hit", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "Wave heals per enemy hit while still dealing damage."},
-		{"id": "burst", "name": "Scarlet Flash", "desc": "BURST: Devastating slash wave", "col": 1, "row": 2, "requires": ["special"], "max": 1, "cost": 1, "burst": true,
-		 "tooltip": "Costs 50% HP. Hits all enemies on screen. Teleports to last target."},
-		{"id": "burst_execute", "name": "Execution", "desc": "Instant kill + heals 15% max HP per kill", "col": 0, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
-		 "tooltip": "Regular enemies die instantly. Heals 15% max HP per kill. Elites/bosses take normal damage."},
-		{"id": "burst_vuln", "name": "Expose Weakness", "desc": "Surviving targets take 50% more damage", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
-		 "tooltip": "Marked enemies take +50% damage from all sources."},
-	],
-	2: [ # Rapunzel - Support Healer
-		{"id": "unlock", "name": "Unlock Rapunzel", "desc": "Add Rapunzel to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
-		 "tooltip": "Support with explosive missiles and healing abilities."},
-		{"id": "special", "name": "Divine Blessing", "desc": "Create a healing zone", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
-		 "tooltip": "Heals 3% max HP/s for 9s. 10s cooldown."},
-		{"id": "special_power", "name": "Rejuvenation", "desc": "Healing: 10/17.5/25% max HP/s", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "Increases healing power dramatically."},
-		{"id": "special_size", "name": "Expanding Aura", "desc": "Zone size +50/150/300%", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "Larger healing radius."},
-		{"id": "burst", "name": "Garden of Shangri-La", "desc": "BURST: Massive heal + stun", "col": 1, "row": 2, "requires": ["special"], "max": 1, "cost": 1, "burst": true,
-		 "tooltip": "Full heal + 4s stun on all enemies."},
-		{"id": "burst_stun", "name": "Blinding Radiance", "desc": "Stun duration increased to 8s", "col": 0, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
-		 "tooltip": "Doubles stun from 4s to 8s."},
-		{"id": "burst_turrets", "name": "6,000? Really?", "desc": "Spawn 20 turrets across the map", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
-		 "tooltip": "Summons 20 Snow White turrets spread across the entire map. Each has 4 ammo."},
-	],
-	3: [ # Nayuta - SMG with Clone Summoning & Galaxy Burst
-		{"id": "unlock", "name": "Unlock Nayuta", "desc": "Add Nayuta to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
-		 "tooltip": "SMG user. 30 ammo, high fire rate. Summons clones."},
-		{"id": "special", "name": "Summon Clone", "desc": "Summon a fighting clone", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
-		 "tooltip": "Summons clone with 1/2 HP/attack. Lives until killed. 8s cooldown."},
-		{"id": "special_heal", "name": "NIMPH Return", "desc": "Clone death heals 20/35/50%", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "When clone dies, gold sparkles travel to you and heal % max HP."},
-		{"id": "special_weapon", "name": "WEAPON MASTER", "desc": "Clones can use +sword/rocket/sniper", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "Adds new weapons to clone pool. Random selection on summon."},
-		{"id": "burst", "name": "Asceticism", "desc": "BURST: Massive space explosion", "col": 1, "row": 2, "requires": ["special"], "max": 1, "cost": 1, "burst": true,
-		 "tooltip": "Purple galaxy explosion damages all enemies on screen."},
-		{"id": "burst_stun", "name": "Nirvana", "desc": "Stun bosses/elites 8s", "col": 0, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
-		 "tooltip": "Bosses and elites hit by burst are stunned for 8 seconds."},
-		{"id": "burst_debuff", "name": "Impermanence", "desc": "Bosses/elites take 50% more damage", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
-		 "tooltip": "Marked enemies take +50% damage. Purple star effect shows debuff."},
-	],
-	4: [ # Commander - Assault Rifle with Time Freeze & Ally Summons
-		{"id": "unlock", "name": "Commander", "desc": "Already in your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 0, "unlock": true, "default": true,
-		 "tooltip": "Leader with assault rifle. Stuns enemies and summons allies."},
-		{"id": "special", "name": "I've Got a Meeting", "desc": "Stun all enemies in time", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
-		 "tooltip": "Stuns all enemies on screen for 3s. 12s cooldown."},
-		{"id": "special_duration", "name": "Hold That Thought", "desc": "+1s stun duration", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "+1s duration per level. Max: 6s stun."},
-		{"id": "special_cooldown", "name": "Enikk is Calling", "desc": "-2s special cooldown", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "-2s cooldown per level. Min: 6s cooldown."},
-		{"id": "burst", "name": "Goddess Squad", "desc": "BURST: Summon AI allies", "col": 1, "row": 2, "requires": ["special"], "max": 1, "cost": 1, "burst": true,
-		 "tooltip": "Summons 1 random ally (Scarlet/Snow White/Rapunzel) for 10s."},
-		{"id": "burst_left", "name": "Reinforcements I", "desc": "Summon +1 ally", "col": 0, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
-		 "tooltip": "Summons 2 allies instead of 1."},
-		{"id": "burst_right", "name": "Reinforcements II", "desc": "Summon +1 ally", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
-		 "tooltip": "Summons 3 allies instead of 2. All 3 types available."},
-	],
-	5: [ # Marian - Minigun with Charm & Epic Beam
-		{"id": "unlock", "name": "Unlock Marian", "desc": "Add Marian to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
-		 "tooltip": "Minigun user. 100 ammo, high fire rate. Charms enemies and fires epic beams."},
-		{"id": "special", "name": "Rapture Queen", "desc": "AoE charm converts enemies", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
-		 "tooltip": "Charms normal enemies in area to fight for you. 10s cooldown."},
-		{"id": "special_size", "name": "Queen Gene", "desc": "AoE + enemy types", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "AoE +50/100/200%. Lv1: Also affects Tanks. Lv2: Also affects Elites. Lv3: Stuns Bosses for 3s."},
-		{"id": "special_cooldown", "name": "Royal Dominion", "desc": "-2s special cooldown", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "-2s cooldown per level. At max: 4s cooldown."},
-		{"id": "burst", "name": "New World", "desc": "BURST: Epic 5s laser beam", "col": 1, "row": 2, "requires": ["special"], "max": 1, "cost": 1, "burst": true,
-		 "tooltip": "5 second aimable purple laser beam. Follow mouse to aim."},
-		{"id": "burst_left", "name": "Missile Barrage", "desc": "Fire 4 homing missiles every 2.5s", "col": 0, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
-		 "tooltip": "During burst, fires 4 homing missiles at random enemies twice."},
-		{"id": "burst_right", "name": "Queen Beam", "desc": "Beam leaves purple fire", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
-		 "tooltip": "Beam leaves a 5s burning trail that damages enemies."},
-	],
-	6: [ # Crown - Minigun with Cavalry Charge & Golden Nova
-		{"id": "unlock", "name": "Unlock Crown", "desc": "Add Crown to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
-		 "tooltip": "Minigun user. 100 ammo, high fire rate. Cavalry charge and golden nova."},
-		{"id": "special", "name": "Summon Trombe", "desc": "Summon Trombe, charge forward", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
-		 "tooltip": "Summon Trombe, charge forward with V-damage. Invincible. 2.5s duration, 10s cooldown."},
-		{"id": "special_cooldown", "name": "Swift Steed", "desc": "-1.5s charge cooldown", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "-1.5s cooldown per level. Min: 5.5s cooldown."},
-		{"id": "special_explosion", "name": "Royal Charge", "desc": "Survivors explode for 1x/2x/3x ATK", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "Enemies hit but not killed glow gold, explode for 1x/2x/3x ATK."},
-		{"id": "burst", "name": "Last Kingdom", "desc": "BURST: Screen-wide blast", "col": 1, "row": 2, "requires": ["special"], "max": 1, "cost": 1, "burst": true,
-		 "tooltip": "Massive golden AoE blast fills the screen for massive damage."},
-		{"id": "burst_charge", "name": "One for All", "desc": "Burst generates burst gauge", "col": 0, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
-		 "tooltip": "Burst damage now contributes to burst gauge charging."},
-		{"id": "burst_beam", "name": "Naked King", "desc": "Adds 3s forward beam", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
-		 "tooltip": "Adds massive golden frontal beam lasting 3s dealing huge damage."},
-	],
-	7: [ # Kilo - Shotgun DPS
-		{"id": "unlock", "name": "Unlock Kilo", "desc": "Add Kilo to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
-		 "tooltip": "Shotgun wielder. 8 ammo, 5 pellets per shot. Pilot of T.A.L.O.S."},
-		{"id": "special", "name": "Explosive Shells", "desc": "Pellets create explosive beams", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
-		 "tooltip": "Pellet hits trigger V-shaped explosions behind enemies. 3s cooldown."},
-		{"id": "special_burn", "name": "Searing Beams", "desc": "Beams burn for 15/25/35% HP/s", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "3s burn. Elites/bosses take 5/10/15% instead."},
-		{"id": "special_size", "name": "Amplified Blast", "desc": "Explosion +50/100/200% size & +30/60/100% dmg", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "Bigger and more damaging explosions."},
-		{"id": "burst", "name": "Assign Priority", "desc": "BURST: Rapid fire frenzy", "col": 1, "row": 2, "requires": ["special"], "max": 1, "cost": 1, "burst": true,
-		 "tooltip": "Infinite ammo, rapid fire, 2.2x damage for 5s."},
-		{"id": "burst_duration", "name": "Extended Assault", "desc": "Burst lasts 10 seconds", "col": 0, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
-		 "tooltip": "Doubles burst duration from 5s to 10s."},
-		{"id": "burst_invuln", "name": "T.A.L.O.S. Shield", "desc": "Invincible during burst", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
-		 "tooltip": "Grants invincibility for burst duration."},
-	],
-	8: [ # Cecil - SMG with Drones & Hacking Burst
-		{"id": "unlock", "name": "Unlock Cecil", "desc": "Add Cecil to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
-		 "tooltip": "SMG user. 30 ammo, high fire rate. Drone robots and hacking burst."},
-		{"id": "special", "name": "Drone Deploy", "desc": "Deploy 2 companion drones", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
-		 "tooltip": "Deploys 2 invincible drones. Right-click toggles Hunt/Shield modes."},
-		{"id": "special_speed", "name": "Overclock", "desc": "Drone speed +50/100/200%", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "Drones move and attack faster per level."},
-		{"id": "special_shield", "name": "Barrier Protocol", "desc": "Shield absorbs +1 hit", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "Shield mode absorbs +1 hit per level. Max: 4 hits."},
-		{"id": "burst", "name": "System Hack", "desc": "BURST: Freeze & convert enemies", "col": 1, "row": 2, "requires": ["special"], "max": 1, "cost": 1, "burst": true,
-		 "tooltip": "Freeze all enemies 1.5s. Non-elite/boss become permanent allies."},
-		{"id": "burst_damage", "name": "Malware", "desc": "Hacked allies +50% damage", "col": 0, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
-		 "tooltip": "Converted enemies deal 50% more damage."},
-		{"id": "burst_boss", "name": "Exploit", "desc": "25% max HP to elites/bosses", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
-		 "tooltip": "Elites and bosses take 25% of their max HP as damage after stun."},
-	],
-	9: [ # Sin - SMG with Charm & Life Drain
-		{"id": "unlock", "name": "Unlock Sin", "desc": "Add Sin to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
-		 "tooltip": "SMG user. 30 ammo, high fire rate. Charms enemies and drains life."},
-		{"id": "special", "name": "Heavy Talker", "desc": "AoE charm converts enemies", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
-		 "tooltip": "Charms normal enemies in area to fight for you. 10s cooldown."},
-		{"id": "special_size", "name": "Loud Talker", "desc": "Charm AoE +50/100/200%", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "Increases charm area of effect."},
-		{"id": "special_cooldown", "name": "Captivating", "desc": "Charmed deaths empower Sin", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "Lv1: Charmed enemy deaths explode. Lv2: Also heal 1 HP. Lv3: Can charm Tanks."},
-		{"id": "burst", "name": "Words Can Kill", "desc": "BURST: ATK DOT that heals", "col": 1, "row": 2, "requires": ["special"], "max": 1, "cost": 1, "burst": true,
-		 "tooltip": "4s DOT dealing 10x ATK damage every second. Heals 5% max HP per enemy hit per tick."},
-		{"id": "burst_charge", "name": "You'll Steal for Me", "desc": "Kills during burst charge gauge", "col": 0, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
-		 "tooltip": "Enemy kills during burst contribute to burst gauge."},
-		{"id": "burst_explode", "name": "You'll Die for Me", "desc": "Enemies explode on death", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
-		 "tooltip": "Enemies dying during burst explode for 4 damage. Scales with ATK."},
-	],
-	10: [ # Wells - Time Traveler Sniper
-		{"id": "unlock", "name": "Unlock Wells", "desc": "Add Wells to your squad", "col": 1, "row": 0, "requires": [], "max": 1, "cost": 1, "unlock": true,
-		 "tooltip": "Time Traveler Sniper. 7 ammo, 1.5s reload. Bullet Time specialist."},
-		{"id": "special", "name": "Mnemosyne Project", "desc": "Hold E for Bullet Time", "col": 1, "row": 1, "requires": ["unlock"], "max": 1, "cost": 1, "special": true,
-		 "tooltip": "Hold E to slow time (Bullet Time). Costs Fuel. fuel recharges over time."},
-		{"id": "special_upgrade1", "name": "Secrets of the Past", "desc": "Lv1: Heal. Lv2: Speed. Lv3: Inf Ammo.", "col": 0, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "Lvl 1: Heal 25% HP/s. Lvl 2: +100% Speed. Lvl 3: Infinite Ammo."},
-		{"id": "special_upgrade2", "name": "Dust to Dust", "desc": "DOT to all enemies", "col": 2, "row": 1, "requires": ["special"], "max": 3, "cost": 1,
-		 "tooltip": "Normal: 10/25/34%. Elites: 5/10/15%. Bosses: 1/2/3% HP/s."},
-		{"id": "burst", "name": "Echoes of Hope", "desc": "BURST: Summon Marian", "col": 1, "row": 2, "requires": ["special"], "max": 1, "cost": 1, "burst": true,
-		 "tooltip": "Summons Marian as an ally for 10s."},
-		{"id": "burst_upgrade1", "name": "A Great King", "desc": "Also summons Crown", "col": 0, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
-		 "tooltip": "\"Illiterate, but great.\""},
-		{"id": "burst_upgrade2", "name": "A Fellow Nerd", "desc": "Also summons Kilo", "col": 2, "row": 2, "requires": ["burst"], "max": 1, "cost": 1,
-		 "tooltip": "\"Smells bad, tastes worse.\""},
-	]
-}
+const TalentData = preload("res://scripts/ui/TalentData.gd")
+var TALENT_DATA := TalentData.TALENT_DATA
 
 # Tooltip UI reference
 var _tooltip: PanelContainer = null
@@ -266,6 +85,11 @@ func _ready() -> void:
 	_build_ui()
 	_build_scanline_overlay()
 	visible = false
+	
+	# Sync skill points with GameManager
+	if GameManager:
+		_skill_points = GameManager.get_skill_points()
+	
 	_apply_default_talents()
 	_refresh_character_cards() # Refresh after defaults are applied
 
@@ -645,17 +469,16 @@ func _update_stats_panel(char_id: int = -1) -> void:
 	var scaled_damage := int(display_damage * level_damage_mult)
 	
 	# Get shop bonuses for display (not applied, just shown)
-	var ShopMenuScript = load("res://scripts/ui/ShopMenu.gd")
 	var atk_bonus: float = 0.0
 	var hp_bonus: int = 0
 	var speed_bonus: float = 0.0
 	var crit_bonus: float = 0.0
 	
-	if ShopMenuScript and ShopMenuScript.has_method("get_upgrade_bonus"):
-		atk_bonus = ShopMenuScript.get_upgrade_bonus("atk") # +25% per level
-		hp_bonus = int(ShopMenuScript.get_upgrade_bonus("hp")) # +1 per level
-		speed_bonus = ShopMenuScript.get_upgrade_bonus("speed") # +5% per level
-		crit_bonus = ShopMenuScript.get_upgrade_bonus("crit") # +2% per level
+	if ShopMenu:
+		atk_bonus = ShopMenu.get_upgrade_bonus("atk") # +25% per level
+		hp_bonus = int(ShopMenu.get_upgrade_bonus("hp")) # +1 per level
+		speed_bonus = ShopMenu.get_upgrade_bonus("speed") # +5% per level
+		crit_bonus = ShopMenu.get_upgrade_bonus("crit") # +2% per level
 	
 	# Apply Scarlet's Low HP Bonus if applicable
 	if display_char == 1 and _player_ref and _player_ref.has_method("get_low_hp_damage_multiplier"):
@@ -782,7 +605,9 @@ func _build_character_panel() -> void:
 	cards_row.add_theme_constant_override("separation", 40)
 	_character_panel.add_child(cards_row)
 	
-	for i in range(3):
+	# Limit to available characters or 3 max
+	var card_count = min(3, _shop_character_order.size())
+	for i in range(card_count):
 		var char_id: int = _shop_character_order[i]
 		var card := _create_character_card(char_id)
 		cards_row.add_child(card)
@@ -1343,7 +1168,7 @@ func _on_talent_clicked(btn: Button) -> void:
 	
 	var current_level: int = _unlocked_talents[char_id].get(talent_id, 0)
 	_unlocked_talents[char_id][talent_id] = current_level + 1
-	_skill_points -= talent["cost"]
+	self._skill_points -= talent["cost"]
 	
 	# Play confirm sound for successful purchase
 	UISounds.play_confirm()
@@ -1512,7 +1337,7 @@ func show_tree(player: Node = null) -> void:
 	_update_stats_panel()
 
 func add_skill_points(amount: int) -> void:
-	_skill_points += amount
+	self.set_skill_points(_skill_points + amount)
 	_refresh_character_cards()
 
 func get_skill_points() -> int:
@@ -1570,6 +1395,8 @@ func _apply_default_talents() -> void:
 
 func set_skill_points(amount: int) -> void:
 	_skill_points = amount
+	if GameManager and GameManager.skill_points != amount:
+		GameManager.skill_points = amount
 	
 	# Update UI if valid
 	if _character_panel:

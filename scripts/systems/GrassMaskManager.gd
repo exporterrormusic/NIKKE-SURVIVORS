@@ -25,9 +25,11 @@ func _ready() -> void:
 func _setup_viewport() -> void:
 	_viewport = SubViewport.new()
 	_viewport.name = "SubViewport"
-	_viewport.size = Vector2(1024, 1024) # Default, will resize
+	_viewport.size = Vector2(1024, 1024) # Default, will resize on first sync
 	_viewport.transparent_bg = false
-	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	# Use UPDATE_ONCE — we manually trigger re-render when erasers move or are added.
+	# This avoids rendering the SubViewport every frame when nothing changes.
+	_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 	_viewport.render_target_clear_mode = SubViewport.CLEAR_MODE_ALWAYS
 	
 	# Black background (Grass visible) 
@@ -47,6 +49,8 @@ func _setup_viewport() -> void:
 	bg.z_index = -4096
 	_viewport.add_child(bg)
 
+var _last_screen_size: Vector2i = Vector2i.ZERO
+
 func _process(_delta: float) -> void:
 	# Sync with main camera
 	if not is_instance_valid(_main_camera):
@@ -59,22 +63,14 @@ func _process(_delta: float) -> void:
 		_camera.zoom = _main_camera.zoom
 		_camera.rotation = _main_camera.rotation
 		
-		# Resize viewport to match screen for pixel-perfect mapping?
-		# Actually, a fixed size texture mapped to world coords is easier for shader?
-		# No, sticking to Screen-Space mapping (SCREEN_UV) is standard but tricky with zoom.
-		# standard practice: Map consistent World Coordinates.
-		# Let's keep viewport size reasonable (e.g. 1024x1024 or 512x512) and map it to the camera view.
+		# Only resize viewport when screen size actually changes (avoid per-frame allocation)
+		var screen_cur_size = Vector2i(get_viewport().get_visible_rect().size)
+		if screen_cur_size != _last_screen_size:
+			_last_screen_size = screen_cur_size
+			_viewport.size = screen_cur_size
 		
-		# Better approach for Shader:
-		# The shader will project sample lookup based on world position.
-		# So the mask camera just needs to see the relevant world area.
-		# IF we sync camera exactly, the viewport texture = screen view.
-		# Then sampling is just `texture(mask_tex, SCREEN_UV)`. 
-		# This handles zoom automatically!
-		
-		var screen_cur_size = get_viewport().get_visible_rect().size
-		if _viewport.size != Vector2i(screen_cur_size):
-			_viewport.size = Vector2i(screen_cur_size)
+		# Manually trigger a re-render so the mask follows the camera
+		_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 
 func add_eraser(node: Node2D) -> void:
 	"""Add a visual node to the mask scene."""

@@ -393,7 +393,7 @@ func get_all_character_ids() -> Array[String]:
 	return _character_order.duplicate()
 
 ## Create a new controller instance for a character
-func create_controller(id: String, player: Node2D) -> RefCounted:  # CharacterController
+func create_controller(id: String, player: Node2D) -> Node:  # CharacterController
 	var data = get_character(id)
 	if data == null:
 		push_error("CharacterRegistry: Unknown character ID: %s" % id)
@@ -405,11 +405,13 @@ func create_controller(id: String, player: Node2D) -> RefCounted:  # CharacterCo
 		return null
 	
 	var controller = script.new()
+	controller.name = "%sController" % id.capitalize()
+	player.add_child(controller)
 	controller.initialize(player, data)
 	return controller
 
 ## Create controller by index
-func create_controller_by_index(index: int, player: Node2D) -> RefCounted:  # CharacterController
+func create_controller_by_index(index: int, player: Node2D) -> Node:  # CharacterController
 	if index >= 0 and index < _character_order.size():
 		return create_controller(_character_order[index], player)
 	return null

@@ -11,23 +11,11 @@ var biome_definitions: Array = []
 var time_of_day_definitions: Array = []
 @export_range(512.0, 8192.0, 16.0) var ground_extent: float = 4096.0
 @export_range(0, 2147483647, 1) var environment_seed: int = 0
-@export var auto_initialize: bool = true
+@export var auto_initialize: bool = false # Level.gd controls initialization timing
 @export var use_fixed_seed: bool = false
 @export var enable_physical_grass: bool = true # Toggle grass system on/off
 
 const GROUND_SHADER_PATH := "res://resources/shaders/procedural_ground.gdshader"
-const SNOW_SHADER_PATH := "res://resources/shaders/falling_snow.gdshader"
-const SAKURA_SHADER_PATH := "res://resources/shaders/falling_sakura.gdshader"
-const FLOWER_SHADER_PATH := "res://resources/shaders/flower_patches.gdshader"
-const ENABLE_SAKURA_OVERLAY := false
-const SNOW_IMPRINT_TEXTURE_SIZE := 1024
-const SNOW_IMPRINT_DEFAULT := 0.5
-const SNOW_FOOTPRINT_FADE := 0.8
-const SNOW_PATH_RADIUS := 120.0
-const SNOW_PARTICLE_LIFETIME := 0.55
-const SNOW_PARTICLE_GRAVITY := 480.0
-const WORLD_BORDER_THICKNESS := 60.0
-const WORLD_BORDER_COLOR := Color(0.08, 0.08, 0.1, 0.0) # make border overlay fully transparent (keep collisions)
 const VIGNETTE_SHADER_PATH := "res://resources/shaders/environment_vignette.gdshader"
 const PhysicalGrassFieldScript := preload("res://src/world/physical_grass_field.gd")
 const ProceduralBoulderScript := preload("res://src/world/environment/procedural_boulder.gd")
@@ -40,55 +28,37 @@ var _biome_lookup: Dictionary = {}
 var _time_lookup: Dictionary = {}
 var _decoration_entries: Array[Dictionary] = []
 var _effective_ground_extent: float = 0.0
-var _snow_imprint_image: Image = null
-var _snow_imprint_texture: ImageTexture = null
-var _snow_imprint_enabled: bool = false
-var _snow_particle_texture: Texture2D = null
 var _current_ambient_path: String = ""
 var _world_bounds: Rect2 = Rect2()
 var _grass_field: Node2D = null # PhysicalGrassField instance
 var _player_ref: Node2D = null # Track player for grass interaction
 
 var current_modulate: Color = Color(1.0, 1.0, 1.0, 1.0)
-var _lightning_timer: float = 0.0
 var _weather_system: WeatherSystem = null # Delegated weather effects
-var _biome_manager: BiomeManager = null # Delegated biome management
 var _terrain_features: TerrainFeatures = null # Delegated terrain (grass, boulders)
 
 # Legacy boulder references (still used by _ensure_boulder_container)
 var _boulder_container: Node2D = null
 var _boulders: Array[Node2D] = []
 
-# Smart night shader overlay
-const NIGHT_SHADER_PATH := "res://resources/shaders/visual_night_overlay.gdshader"
-var _night_overlay: ColorRect = null
-var _night_shader_material: ShaderMaterial = null
-
-# Screen-space fog overlay (Zelda-style)
-const SCREEN_FOG_SHADER_PATH := "res://resources/shaders/screen_fog.gdshader"
-var _screen_fog_overlay: ColorRect = null
-var _screen_fog_material: ShaderMaterial = null
-var _screen_fog_layer: CanvasLayer = null
-var _fog_time: float = 0.0
+# Modular manager references
+var _border_manager: BorderManager = null
+var _lightning_manager: LightningManager = null
+var _night_overlay_manager: NightOverlayManager = null
+var _screen_fog_manager: ScreenFogManager = null
+var _snow_imprint_manager: SnowImprintManager = null
+var _overlay_vfx: OverlayVFXManager = null
 
 @onready var _background: Polygon2D = _ensure_background()
 @onready var _ground: Polygon2D = _ensure_ground()
 @onready var _decor_container: Node2D = _ensure_decor_container()
 @onready var _fog_overlay: ColorRect = _ensure_fog_overlay()
 @onready var _lightning_overlay: ColorRect = _ensure_lightning_overlay()
-@onready var _overlay_canvas: Node2D = _ensure_overlay_canvas()
 @onready var _vignette_overlay: ColorRect = _ensure_vignette_overlay()
-@onready var _snow_overlay: Polygon2D = _ensure_snow_overlay()
-@onready var _sakura_overlay: Polygon2D = _ensure_sakura_overlay()
-@onready var _flower_overlay: Polygon2D = _ensure_flower_overlay()
-@onready var _snow_pile_container: Node2D = _ensure_snow_pile_container()
-@onready var _snow_particle_container: Node2D = _ensure_snow_particle_container()
 @onready var _canvas_modulate: CanvasModulate = _ensure_canvas_modulate()
 @onready var _sun_light: DirectionalLight2D = _ensure_sun_light()
 @onready var _audio_director = get_node_or_null("/root/AudioDirector")
-@onready var _border_overlay: Node2D = _ensure_border_overlay()
 @onready var _effects_layer: CanvasLayer = _ensure_effects_layer()
-@onready var _ui_layer: CanvasLayer = _ensure_ui_layer()
 
 func _ready() -> void:
 	add_to_group("environment_controller")
@@ -98,13 +68,53 @@ func _ready() -> void:
 	# _biome_manager = BiomeManager.new()
 	# add_child(_biome_manager)
 	# _biome_manager.load_biomes()
+
+	# Fix BulletServer canvas on map reload
+	if BulletServer.get_instance():
+		BulletServer.get_instance().update_parent_canvas(_effects_layer.get_canvas())
 	
 	_terrain_features = TerrainFeatures.new()
+	_terrain_features.name = "TerrainFeatures"
 	add_child(_terrain_features)
 	
 	_weather_system = WeatherSystem.new()
+	_weather_system.name = "WeatherSystem"
 	add_child(_weather_system)
 	_weather_system.set_audio_director(_audio_director)
+	
+	# Initialize modular managers
+	_border_manager = BorderManager.new()
+	_border_manager.name = "BorderManager"
+	add_child(_border_manager)
+	_border_manager.ensure_border_overlay(self)
+	
+	_lightning_manager = LightningManager.new()
+	_lightning_manager.name = "LightningManager"
+	add_child(_lightning_manager)
+	
+	_night_overlay_manager = NightOverlayManager.new()
+	_night_overlay_manager.name = "NightOverlayManager"
+	add_child(_night_overlay_manager)
+	_night_overlay_manager.setup(self)
+	
+	_screen_fog_manager = ScreenFogManager.new()
+	_screen_fog_manager.name = "ScreenFogManager"
+	add_child(_screen_fog_manager)
+	_screen_fog_manager.setup(self)
+	
+	_snow_imprint_manager = SnowImprintManager.new()
+	_snow_imprint_manager.name = "SnowImprintManager"
+	add_child(_snow_imprint_manager)
+	_snow_imprint_manager.setup(self, Callable(self, "_get_ground_for_snow"))
+	
+	_overlay_vfx = OverlayVFXManager.new()
+	_overlay_vfx.name = "OverlayVFX"
+	add_child(_overlay_vfx)
+	_overlay_vfx.setup(self, Callable(self, "get_active_biome"), Callable(self, "is_night_time"))
+	# Ensure overlay overlays are created
+	_overlay_vfx.ensure_snow_overlay()
+	_overlay_vfx.ensure_sakura_overlay()
+	_overlay_vfx.ensure_flower_overlay()
 	
 	# Legacy setup
 	_load_biome_definitions()
@@ -122,15 +132,16 @@ func _ready() -> void:
 	# Ensure any previously saved visual border polygons are removed from
 	# scenes. These could have been created earlier in-editor; proactively
 	# clear them so borders remain invisible at runtime.
-	_cleanup_saved_border_visuals()
+	_border_manager.cleanup_saved_border_visuals()
 	
 	# Remove any old vignette overlays
-	if _overlay_canvas:
-		var old_vignette = _overlay_canvas.get_node_or_null("VignetteOverlay")
+	var overlay_canvas: Node2D = _overlay_vfx.ensure_overlay_canvas() if _overlay_vfx else null
+	if overlay_canvas:
+		var old_vignette = overlay_canvas.get_node_or_null("VignetteOverlay")
 		if old_vignette:
-			_overlay_canvas.remove_child(old_vignette)
+			overlay_canvas.remove_child(old_vignette)
 			old_vignette.queue_free()
-	var vignette_layer = get_node_or_null("VignetteLayer")
+	var vignette_layer: CanvasLayer = get_node_or_null("VignetteLayer")
 	if vignette_layer:
 		remove_child(vignette_layer)
 		vignette_layer.queue_free()
@@ -159,34 +170,7 @@ func _ready() -> void:
 		BasicProjectileVisual.set_vignette_profile(0.85, 0.45, 0.35, view_size)
 
 
-func _cleanup_saved_border_visuals() -> void:
-	# Recursively find all nodes named BorderOverlay and free any Polygon2D
-	# children so no visible border squares remain if they were previously
-	# persisted in editor scenes.
-	var root := get_tree().root
-	var overlays := []
-	_collect_nodes_by_name(root, "BorderOverlay", overlays)
-	for overlay in overlays:
-		for child in overlay.get_children():
-			# Preserve physics/collision bodies — remove visual-only nodes that
-			# may have been saved into scenes earlier. This will remove the
-			# persistent colored squares (Polygon2D / ColorRect / Sprite2D)
-			# while keeping StaticBody2D + CollisionPolygon2D intact.
-			if child is StaticBody2D:
-				continue
-			if child is CollisionPolygon2D:
-				continue
-			# Remove common visual node types that could be used to draw borders
-			if child is Polygon2D or child is ColorRect or child is Sprite2D or child is CanvasItem:
-				child.queue_free()
-
-
-func _collect_nodes_by_name(node: Node, name_to_find: String, out_list: Array) -> void:
-	if node.name == name_to_find:
-		out_list.append(node)
-	for child in node.get_children():
-		if child is Node:
-			_collect_nodes_by_name(child, name_to_find, out_list)
+# Cleanup moved to BorderManager.cleanup_saved_border_visuals()
 
 func _load_biome_definitions() -> void:
 	biome_definitions.clear()
@@ -219,50 +203,27 @@ func _process(delta: float) -> void:
 		shader_material.set_shader_parameter("time_flow", _time_flow)
 		if _active_biome:
 			shader_material.set_shader_parameter("wind_strength", _active_biome.wind_strength)
-	if _snow_overlay and _snow_overlay.material and _snow_overlay.visible:
-		var snow_material := _snow_overlay.material as ShaderMaterial
-		if snow_material:
-			snow_material.set_shader_parameter("time_flow", _time_flow)
-			snow_material.set_shader_parameter("view_size", _get_camera_view_size())
-			var wind_power := _active_biome.wind_strength if _active_biome else 0.4
-			var wind_dir := Vector2(wind_power * 0.55, -0.65)
-			snow_material.set_shader_parameter("wind_direction", wind_dir)
-			snow_material.set_shader_parameter("world_offset", _compute_camera_world_offset())
-	if _sakura_overlay and _sakura_overlay.material and _sakura_overlay.visible:
-		var sakura_material := _sakura_overlay.material as ShaderMaterial
-		if sakura_material:
-			sakura_material.set_shader_parameter("time_flow", _time_flow)
-			sakura_material.set_shader_parameter("view_size", _get_camera_view_size())
-			sakura_material.set_shader_parameter("world_offset", _compute_camera_world_offset())
-			var fall_speed := 0.85
-			var wind_strength := 0.6
-			if _active_biome:
-				fall_speed = clampf(_active_biome.sakura_fall_speed, 0.1, 2.0)
-				wind_strength = clampf(_active_biome.wind_strength, 0.0, 5.0)
-			var wind_vector := Vector2(wind_strength * 0.35, -fall_speed)
-			sakura_material.set_shader_parameter("wind_direction", wind_vector)
-			sakura_material.set_shader_parameter("drift_amplitude", clampf(0.25 + wind_strength * 0.25, 0.15, 0.85))
-	# DISABLED: Flower overlay causing shader errors
-	#if _flower_overlay and _flower_overlay.material and _flower_overlay.visible:
-	#	var flower_material := _flower_overlay.material as ShaderMaterial
-	#	if flower_material:
-	#		flower_material.set_shader_parameter("time_flow", _time_flow)
-	#		flower_material.set_shader_parameter("view_size", _get_camera_view_size())
-	#		flower_material.set_shader_parameter("world_offset", _compute_camera_world_offset())
-	_update_overlay_transform()
+	
+	# Delegate overlay VFX animation to manager
+	var cam_pos := _get_camera_global_position()
+	var cam_view := _get_camera_view_size()
+	var world_off := _compute_camera_world_offset()
+	if _overlay_vfx:
+		_overlay_vfx.process(delta, cam_pos, cam_view, world_off)
+	
 	_update_decoration_animations(delta)
 	
 	# Update grass with player position
 	if _grass_field and _player_ref and is_instance_valid(_player_ref):
 		_grass_field.update_player_position(_player_ref.global_position)
 	
-	# Weather system handles lightning now
-	# (kept for backwards compat if _weather_system not present)
-	if not _weather_system:
-		_update_lightning(delta)
+	# Delegate lightning to manager (fallback when WeatherSystem not present)
+	if not _weather_system and _lightning_manager:
+		_lightning_manager.process(delta)
 	
-	# Animate screen fog
-	_update_screen_fog(delta)
+	# Delegate screen fog animation to manager
+	if _screen_fog_manager:
+		_screen_fog_manager.process(delta)
 
 func _exit_tree() -> void:
 	_stop_ambient_audio()
@@ -272,7 +233,9 @@ func initialize_environment(seed_override: int = 0, biome_id: StringName = &"", 
 	_configure_rng(seed_override)
 	_active_biome = _select_biome(biome_id)
 	_active_time = _select_time_of_day(time_id)
-	_lightning_timer = 0.0 # Reset lightning timer for new biome
+	if _lightning_manager:
+		_lightning_manager.set_biome(_active_biome)
+		_lightning_manager.setup(_rng, _lightning_overlay, _audio_director)
 	
 	# Remove fog overlay for storm map
 	if _active_biome and _active_biome.biome_id == &"rain_forest" and _fog_overlay:
@@ -339,10 +302,11 @@ func _configure_rng(seed_value: int) -> void:
 func set_world_bounds(bounds: Rect2) -> void:
 	_world_bounds = bounds
 	_update_ground_geometry()
-	_update_border_overlay()
-	_update_snow_overlay_polygon(_get_camera_global_position())
-	_update_sakura_overlay_polygon(_get_camera_global_position())
-	_update_flower_overlay_polygon(_get_camera_global_position())
+	if _border_manager:
+		_border_manager.set_world_bounds(bounds)
+	if _overlay_vfx:
+		_overlay_vfx.set_world_bounds(bounds)
+		_overlay_vfx.update_layout(_get_camera_view_size(), _get_camera_global_position())
 	# Respawn boulders when bounds change (e.g., when entering a map)
 	if _active_biome != null:
 		_spawn_boulders()
@@ -435,17 +399,7 @@ func _ensure_decor_container() -> Node2D:
 		container.owner = get_tree().edited_scene_root
 	return container
 
-func _ensure_border_overlay() -> Node2D:
-	var node := get_node_or_null("BorderOverlay")
-	if node and node is Node2D:
-		return node
-	var border := Node2D.new()
-	border.name = "BorderOverlay"
-	border.z_index = -140
-	add_child(border)
-	if Engine.is_editor_hint():
-		border.owner = get_tree().edited_scene_root
-	return border
+# Border overlay managed by BorderManager
 
 func _ensure_fog_overlay() -> ColorRect:
 	var node := get_node_or_null("FogOverlay")
@@ -501,30 +455,15 @@ func _ensure_lightning_overlay() -> ColorRect:
 		lightning_overlay.owner = get_tree().edited_scene_root
 	return lightning_overlay
 
-func _ensure_overlay_canvas() -> Node2D:
-	var node := get_node_or_null("EnvironmentOverlay")
-	if node and node is Node2D:
-		var overlay := node as Node2D
-		overlay.top_level = true
-		overlay.z_index = 60
-		overlay.z_as_relative = false
-		return overlay
-	var environment_overlay := Node2D.new()
-	environment_overlay.name = "EnvironmentOverlay"
-	environment_overlay.z_index = 60
-	environment_overlay.top_level = true
-	environment_overlay.z_as_relative = false
-	add_child(environment_overlay)
-	if Engine.is_editor_hint():
-		environment_overlay.owner = get_tree().edited_scene_root
-	return environment_overlay
+# Overlay canvas managed by OverlayVFXManager
 
 func _ensure_vignette_overlay() -> ColorRect:
 	# Remove old vignette from overlay canvas if it exists
-	if _overlay_canvas:
-		var old_node = _overlay_canvas.get_node_or_null("VignetteOverlay")
+	var overlay_canvas: Node2D = _overlay_vfx.ensure_overlay_canvas() if _overlay_vfx else null
+	if overlay_canvas:
+		var old_node = overlay_canvas.get_node_or_null("VignetteOverlay")
 		if old_node:
-			_overlay_canvas.remove_child(old_node)
+			overlay_canvas.remove_child(old_node)
 			old_node.queue_free()
 	
 	var vignette_shader := load(VIGNETTE_SHADER_PATH)
@@ -597,129 +536,9 @@ func _configure_vignette_overlay(strength: float) -> void:
 	# Enable vignette compensation for projectiles
 	BasicProjectileVisual.set_vignette_profile(clamped_strength, inner_radius, softness, view_size)
 
-func _ensure_snow_overlay() -> Polygon2D:
-	if _overlay_canvas == null:
-		return null
-	var snow_shader := load(SNOW_SHADER_PATH)
-	var node := _overlay_canvas.get_node_or_null("SnowOverlay")
-	if node and node is Polygon2D:
-		var snow := node as Polygon2D
-		if snow.material == null or not (snow.material is ShaderMaterial):
-			if snow_shader:
-				var snow_shader_material := ShaderMaterial.new()
-				snow_shader_material.shader = snow_shader
-				snow.material = snow_shader_material
-		return snow
-	var snow_overlay := Polygon2D.new()
-	snow_overlay.name = "SnowOverlay"
-	snow_overlay.z_index = 50
-	var view_size := _get_view_size()
-	snow_overlay.polygon = _build_overlay_polygon(view_size)
-	if snow_shader:
-		var snow_material := ShaderMaterial.new()
-		snow_material.shader = snow_shader
-		snow_overlay.material = snow_material
-		(snow_overlay.material as ShaderMaterial).set_shader_parameter("view_size", view_size)
-	_overlay_canvas.add_child(snow_overlay)
-	if Engine.is_editor_hint():
-		snow_overlay.owner = get_tree().edited_scene_root
-	return snow_overlay
+# Snow/sakura/flower overlays managed by OverlayVFXManager
 
-func _ensure_sakura_overlay() -> Polygon2D:
-	if _overlay_canvas == null:
-		return null
-	var sakura_shader := load(SAKURA_SHADER_PATH)
-	var node := _overlay_canvas.get_node_or_null("SakuraOverlay")
-	if node and node is Polygon2D:
-		var sakura := node as Polygon2D
-		if ENABLE_SAKURA_OVERLAY:
-			if sakura.material == null or not (sakura.material is ShaderMaterial):
-				if sakura_shader:
-					var sakura_material := ShaderMaterial.new()
-					sakura_material.shader = sakura_shader
-					sakura.material = sakura_material
-			return sakura
-		sakura.visible = false
-		return null
-	if not ENABLE_SAKURA_OVERLAY:
-		return null
-	var sakura_overlay := Polygon2D.new()
-	sakura_overlay.name = "SakuraOverlay"
-	sakura_overlay.z_index = 48
-	var view_size := _get_view_size()
-	sakura_overlay.polygon = _build_overlay_polygon(view_size)
-	if sakura_shader:
-		var sakura_material := ShaderMaterial.new()
-		sakura_material.shader = sakura_shader
-		sakura_overlay.material = sakura_material
-	_overlay_canvas.add_child(sakura_overlay)
-	if Engine.is_editor_hint():
-		sakura_overlay.owner = get_tree().edited_scene_root
-	return sakura_overlay
-
-func _ensure_flower_overlay() -> Polygon2D:
-	if _overlay_canvas == null:
-		return null
-	var flower_shader := load(FLOWER_SHADER_PATH)
-	var node := _overlay_canvas.get_node_or_null("FlowerOverlay")
-	if node and node is Polygon2D:
-		var flowers := node as Polygon2D
-		flowers.color = Color(1.0, 1.0, 1.0, 0.0) # Ensure transparent base
-		if flowers.material == null or not (flowers.material is ShaderMaterial):
-			if flower_shader:
-				var flower_material := ShaderMaterial.new()
-				flower_material.shader = flower_shader
-				flowers.material = flower_material
-		return flowers
-	var flower_overlay := Polygon2D.new()
-	flower_overlay.name = "FlowerOverlay"
-	flower_overlay.z_index = -48 # Below ground level, so flowers appear on the ground
-	flower_overlay.color = Color(1.0, 1.0, 1.0, 0.0) # Transparent base - shader handles all colors
-	var view_size := _get_view_size()
-	flower_overlay.polygon = _build_overlay_polygon(view_size)
-	if flower_shader:
-		var flower_material := ShaderMaterial.new()
-		flower_material.shader = flower_shader
-		flower_overlay.material = flower_material
-		(flower_overlay.material as ShaderMaterial).set_shader_parameter("view_size", view_size)
-	flower_overlay.visible = false # Start hidden, enable when biome has flowers
-	_overlay_canvas.add_child(flower_overlay)
-	if Engine.is_editor_hint():
-		flower_overlay.owner = get_tree().edited_scene_root
-	return flower_overlay
-
-func _build_overlay_polygon(view_size: Vector2) -> PackedVector2Array:
-	var half := view_size * 0.5
-	return PackedVector2Array([
-		Vector2(-half.x, -half.y),
-		Vector2(half.x, -half.y),
-		Vector2(half.x, half.y),
-		Vector2(-half.x, half.y)
-	])
-
-func _ensure_snow_pile_container() -> Node2D:
-	var node := get_node_or_null("SnowPiles")
-	if node and node is Node2D:
-		return node
-	var container := Node2D.new()
-	container.name = "SnowPiles"
-	container.z_index = -45
-	add_child(container)
-	if Engine.is_editor_hint():
-		container.owner = get_tree().edited_scene_root
-	return container
-
-func _ensure_snow_particle_container() -> Node2D:
-	var node := get_node_or_null("SnowParticles")
-	if node and node is Node2D:
-		return node
-	var container := Node2D.new()
-	container.name = "SnowParticles"
-	container.z_index = -40
-	add_child(container)
-	if Engine.is_editor_hint():
-		container.owner = get_tree().edited_scene_root
-	return container
+# Snow piles/particles managed by SnowImprintManager
 
 func _ensure_canvas_modulate() -> CanvasModulate:
 	var node := get_node_or_null("CanvasModulate")
@@ -746,19 +565,6 @@ func _ensure_effects_layer() -> CanvasLayer:
 	if Engine.is_editor_hint():
 		effects_layer.owner = get_tree().edited_scene_root
 	return effects_layer
-
-func _ensure_ui_layer() -> CanvasLayer:
-	var node := get_node_or_null("UILayer")
-	if node and node is CanvasLayer:
-		return node
-	var ui_layer := CanvasLayer.new()
-	ui_layer.name = "UILayer"
-	ui_layer.layer = 2
-	add_child(ui_layer)
-	if Engine.is_editor_hint():
-		ui_layer.owner = get_tree().edited_scene_root
-	return ui_layer
-
 
 func _ensure_sun_light() -> DirectionalLight2D:
 	var node := get_node_or_null("SunLight")
@@ -820,7 +626,7 @@ func _update_ground_geometry() -> void:
 		_ground.offset = Vector2.ZERO
 	var sky_polygon := PackedVector2Array()
 	if use_world_bounds:
-		var expansion := Vector2(WORLD_BORDER_THICKNESS, WORLD_BORDER_THICKNESS)
+		var expansion := Vector2(60.0, 60.0)
 		var min_corner := _world_bounds.position - expansion
 		var max_corner := _world_bounds.position + _world_bounds.size + expansion
 		sky_polygon = PackedVector2Array([
@@ -847,68 +653,12 @@ func _update_ground_geometry() -> void:
 		else:
 			_fog_overlay.size = Vector2.ONE * _effective_ground_extent
 			_fog_overlay.position = - _fog_overlay.size * 0.5
-	_update_border_overlay()
+	if _border_manager:
+		_border_manager.set_world_bounds(_world_bounds)
 	_update_overlay_layout()
 
 
-func _update_border_overlay() -> void:
-	if _border_overlay == null:
-		return
-	for child in _border_overlay.get_children():
-		child.queue_free()
-	if _world_bounds.size == Vector2.ZERO:
-		_border_overlay.visible = false
-		return
-	_border_overlay.visible = true
-	var min_corner := _world_bounds.position
-	var size := _world_bounds.size
-	var max_corner := min_corner + size
-	var thickness := WORLD_BORDER_THICKNESS
-	var segments := [
-		PackedVector2Array([
-			Vector2(min_corner.x - thickness, min_corner.y - thickness),
-			Vector2(min_corner.x, min_corner.y - thickness),
-			Vector2(min_corner.x, max_corner.y + thickness),
-			Vector2(min_corner.x - thickness, max_corner.y + thickness)
-		]),
-		PackedVector2Array([
-			Vector2(max_corner.x, min_corner.y - thickness),
-			Vector2(max_corner.x + thickness, min_corner.y - thickness),
-			Vector2(max_corner.x + thickness, max_corner.y + thickness),
-			Vector2(max_corner.x, max_corner.y + thickness)
-		]),
-		PackedVector2Array([
-			Vector2(min_corner.x - thickness, min_corner.y - thickness),
-			Vector2(max_corner.x + thickness, min_corner.y - thickness),
-			Vector2(max_corner.x + thickness, min_corner.y),
-			Vector2(min_corner.x - thickness, min_corner.y)
-		]),
-		PackedVector2Array([
-			Vector2(min_corner.x - thickness, max_corner.y),
-			Vector2(max_corner.x + thickness, max_corner.y),
-			Vector2(max_corner.x + thickness, max_corner.y + thickness),
-			Vector2(min_corner.x - thickness, max_corner.y + thickness)
-		])
-	]
-	for polygon_points in segments:
-		var body := StaticBody2D.new()
-		body.collision_layer = 0 # Clear all layers first
-		body.set_collision_layer_value(16, true) # Set layer 16 properly (bit 15)
-		body.collision_mask = 0 # Doesn't need to detect anything, just blocks
-		var collision_shape := CollisionPolygon2D.new()
-		collision_shape.polygon = polygon_points
-		body.add_child(collision_shape)
-		
-		# We used to add a visible Polygon2D so the borders showed up as
-		# colored squares on the sides of the map. Keep the collision
-		# polygon only (CollisionPolygon2D) and do not add a visual Polygon2D
-		# so the border remains functionally present but invisible.
-		# (If you need editor-visible visuals later, re-enable Polygon2D under
-		# Engine.is_editor_hint() only.)
-		
-		_border_overlay.add_child(body)
-		if Engine.is_editor_hint():
-			body.owner = get_tree().edited_scene_root
+# Border physics managed by BorderManager
 
 func _get_shader_material() -> ShaderMaterial:
 	if not _ground:
@@ -956,10 +706,12 @@ func _apply_biome_to_ground() -> void:
 		shader_material.set_shader_parameter("snow_crust_strength", 0.0)
 		shader_material.set_shader_parameter("snow_ice_highlight", 0.0)
 		shader_material.set_shader_parameter("snow_sparkle_intensity", 0.0)
-		_apply_snow_overlay_settings(null)
-		_apply_sakura_overlay_settings(null)
-		_apply_flower_overlay_settings(null)
-		_configure_snow_imprint_state(null)
+		if _overlay_vfx:
+			_overlay_vfx.apply_snow_settings(null)
+			_overlay_vfx.apply_sakura_settings(null)
+			_overlay_vfx.apply_flower_settings(null)
+		if _snow_imprint_manager:
+			_snow_imprint_manager.configure(null)
 		
 	# Use biome's defined colors instead of hardcoded Spotify green
 	shader_material.set_shader_parameter("base_color", biome.base_color)
@@ -994,10 +746,12 @@ func _apply_biome_to_ground() -> void:
 	shader_material.set_shader_parameter("snow_sparkle_intensity", biome.snow_sparkle_intensity)
 	if _background:
 		_background.color = biome.sky_color
-	_apply_snow_overlay_settings(biome)
-	_apply_sakura_overlay_settings(biome)
-	_apply_flower_overlay_settings(biome)
-	_configure_snow_imprint_state(biome)
+	if _overlay_vfx:
+		_overlay_vfx.apply_snow_settings(biome)
+		_overlay_vfx.apply_sakura_settings(biome)
+		_overlay_vfx.apply_flower_settings(biome)
+	if _snow_imprint_manager:
+		_snow_imprint_manager.configure(biome)
 	_update_ambient_audio()
 
 func _apply_time_of_day_settings() -> void:
@@ -1029,20 +783,16 @@ func _apply_time_of_day_settings() -> void:
 		_update_bloom_for_time_of_day(true)
 		return
 	
-	# Check for smart night shader first (replaces CanvasModulate approach)
+	# Delegate to NightOverlayManager (smart night shader) or fall back to legacy CanvasModulate
 	if _active_time and _active_time.use_smart_night_shader:
-		_apply_smart_night_shader(_active_time)
+		_night_overlay_manager.apply(_active_time, _canvas_modulate)
 		# Still emit modulate signal for other systems, but use white
 		current_modulate = Color(1.0, 1.0, 1.0, 1.0)
 		modulate_changed.emit(current_modulate)
 	else:
-		# Completely remove smart shader overlay if it exists
-		if _night_overlay and is_instance_valid(_night_overlay):
-			var parent_layer = _night_overlay.get_parent()
-			_night_overlay.queue_free()
-			_night_overlay = null
-			if parent_layer and parent_layer.name == "NightShaderLayer":
-				parent_layer.queue_free()
+		# Disable smart shader overlay
+		if _night_overlay_manager:
+			_night_overlay_manager.disable()
 		
 		# Legacy: Global CanvasModulate handles the base darkening
 		var modulate_color := Color(1.0, 1.0, 1.0, 1.0)
@@ -1109,8 +859,9 @@ func _apply_time_of_day_settings() -> void:
 		vignette_strength = clampf(_active_time.vignette_strength, 0.0, 1.0)
 	_configure_vignette_overlay(vignette_strength)
 	
-	# Apply screen-space fog (Zelda-style)
-	_apply_screen_fog()
+	# Apply screen-space fog (Zelda-style) — delegated to ScreenFogManager
+	if _screen_fog_manager:
+		_screen_fog_manager.apply(_active_time)
 	
 	# Enable/disable night glow on sprites
 	var is_night := is_night_time()
@@ -1121,8 +872,8 @@ func _apply_time_of_day_settings() -> void:
 	_update_bloom_for_time_of_day(not is_night)
 	
 	# Update sakura/firefly overlay since it depends on time of day
-	if _active_biome:
-		_apply_sakura_overlay_settings(_active_biome)
+	if _active_biome and _overlay_vfx:
+		_overlay_vfx.apply_sakura_settings(_active_biome)
 	_update_bloom_for_time_of_day(is_day_time())
 
 func _update_bloom_for_time_of_day(is_daytime: bool) -> void:
@@ -1156,87 +907,7 @@ func _update_bloom_for_time_of_day(is_daytime: bool) -> void:
 		env.glow_hdr_threshold = 1.3 # High threshold to only glow very bright things
 		env.glow_hdr_scale = 1.2
 
-func _setup_smart_night_shader() -> void:
-	"""Create the smart night overlay if it doesn't exist."""
-	if _night_overlay != null:
-		return
-	
-	# Load the shader
-	if not ResourceLoader.exists(NIGHT_SHADER_PATH):
-		push_warning("[EnvironmentController] Smart night shader not found: ", NIGHT_SHADER_PATH)
-		return
-	
-	var shader := load(NIGHT_SHADER_PATH) as Shader
-	if shader == null:
-		push_warning("[EnvironmentController] Failed to load night shader")
-		return
-	
-	# Create material
-	_night_shader_material = ShaderMaterial.new()
-	_night_shader_material.shader = shader
-	
-	# Create a CanvasLayer for the overlay
-	# Layer 8: Above EffectsLayer (5), below HUD (99)
-	var night_layer := CanvasLayer.new()
-	night_layer.name = "NightShaderLayer"
-	night_layer.layer = 8
-	add_child(night_layer)
-	
-	# Create the full-screen ColorRect that reads the screen texture
-	_night_overlay = ColorRect.new()
-	_night_overlay.name = "NightOverlay"
-	_night_overlay.material = _night_shader_material
-	_night_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	
-	# Make it cover the full viewport using anchors
-	_night_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_night_overlay.size = get_viewport().get_visible_rect().size
-	# The ColorRect color doesn't matter - shader reads screen_texture
-	_night_overlay.color = Color(1, 1, 1, 0) # Transparent base
-	
-	night_layer.add_child(_night_overlay)
-	
-	# Connect to viewport resize to keep overlay sized correctly
-	get_viewport().size_changed.connect(_on_night_overlay_viewport_resize)
-	
-	# Initially hidden
-	_night_overlay.visible = false
-	print("[EnvironmentController] Smart night shader initialized")
-
-func _on_night_overlay_viewport_resize() -> void:
-	if _night_overlay and is_instance_valid(_night_overlay):
-		_night_overlay.size = get_viewport().get_visible_rect().size
-
-func _apply_smart_night_shader(time_def: TimeOfDayDefinition) -> void:
-	"""Apply smart night shader settings from the time definition."""
-	if time_def == null or not time_def.use_smart_night_shader:
-		# Disable shader overlay
-		if _night_overlay:
-			_night_overlay.visible = false
-		return
-	
-	# Ensure overlay exists
-	_setup_smart_night_shader()
-	
-	if _night_overlay == null or _night_shader_material == null:
-		return
-	
-	# Apply shader parameters from definition
-	_night_shader_material.set_shader_parameter("night_intensity", time_def.night_shader_intensity)
-	_night_shader_material.set_shader_parameter("desaturation", time_def.night_desaturation)
-	_night_shader_material.set_shader_parameter("darkness_factor", time_def.night_darkness)
-	
-	# Use vignette from time definition
-	_night_shader_material.set_shader_parameter("vignette_strength", time_def.vignette_strength)
-	
-	# Enable the overlay
-	_night_overlay.visible = true
-	
-	# Disable CanvasModulate when using shader (shader handles everything)
-	if _canvas_modulate:
-		_canvas_modulate.color = Color(1.0, 1.0, 1.0, 1.0)
-	
-	print("[EnvironmentController] Smart night shader applied with intensity: ", time_def.night_shader_intensity)
+# Smart night shader managed by NightOverlayManager
 
 func _update_projectile_ambient_compensation(modulate_color: Color) -> void:
 	# Calculate brightness of the environment
@@ -1507,238 +1178,48 @@ func _clear_boulders() -> void:
 	_boulders.clear()
 
 
-func _apply_snow_overlay_settings(biome: BiomeDefinition) -> void:
-	if _snow_overlay == null:
-		return
-	var snow_material := _snow_overlay.material as ShaderMaterial
-	if snow_material == null:
-		_snow_overlay.visible = false
-		return
-	if biome == null or biome.snowfall_density <= 0.0:
-		_snow_overlay.visible = false
-		snow_material.set_shader_parameter("density", 0.0)
-		return
-	_snow_overlay.visible = true
-	var base_density := biome.snowfall_density * 0.55 + 0.15
-	var density_scale := clampf(base_density * 0.42 + 0.06, 0.08, 0.95)
-	snow_material.set_shader_parameter("density", density_scale)
-	var flake_scale := clampf(biome.snowfall_scale * 0.36, 0.2, 1.0)
-	snow_material.set_shader_parameter("flake_scale", flake_scale)
-	snow_material.set_shader_parameter("view_size", _get_camera_view_size())
-	snow_material.set_shader_parameter("world_offset", _compute_camera_world_offset())
-	snow_material.set_shader_parameter("world_scale", 0.0025)
+# Snow overlay settings managed by OverlayVFXManager.apply_snow_settings()
 
-func _apply_sakura_overlay_settings(biome: BiomeDefinition) -> void:
-	if _sakura_overlay == null:
-		return
-	var sakura_material := _sakura_overlay.material as ShaderMaterial
-	if sakura_material == null:
-		_sakura_overlay.visible = false
-		return
-	if biome == null or biome.sakura_petal_density <= 0.01:
-		_sakura_overlay.visible = false
-		sakura_material.set_shader_parameter("density", 0.0)
-		return
-	_sakura_overlay.visible = true
-	var density := clampf(biome.sakura_petal_density, 0.0, 1.0)
-	var density_scale := clampf(lerpf(0.04, 0.32, density), 0.02, 0.42)
-	sakura_material.set_shader_parameter("density", density_scale)
-	sakura_material.set_shader_parameter("petal_scale", clampf(biome.sakura_petal_scale, 0.25, 3.0))
-	sakura_material.set_shader_parameter("twinkle_strength", clampf(biome.sakura_twinkle_strength, 0.0, 1.0))
-	var fall_speed := clampf(biome.sakura_fall_speed, 0.1, 2.0)
-	var wind := clampf(biome.wind_strength, 0.0, 5.0)
-	sakura_material.set_shader_parameter("wind_direction", Vector2(wind * 0.35, -fall_speed))
-	sakura_material.set_shader_parameter("drift_amplitude", clampf(0.25 + wind * 0.25, 0.15, 0.85))
-	var primary := biome.sakura_primary_color
-	var secondary := biome.sakura_secondary_color
-	
-	print("DEBUG_ENV: Biome=", biome.biome_id, " Night=", is_night_time())
-	print("DEBUG_ENV: SakuraDensity=", biome.sakura_petal_density, " SnowDensity=", biome.snowfall_density)
-	
-	# Override for "Firefly" effect in Sakura Grove at Night
-	# Override for "Firefly" effect in Sakura Grove at Night
-	if is_night_time() and biome.biome_id == &"sakura_grove":
-		# Firefly Colors (Golden/Orange Glow)
-		primary = Color(1.0, 0.9, 0.4, 1.0)
-		secondary = Color(1.0, 0.6, 0.2, 0.8)
-		
-		# Make them float UP instead of falling
-		var firefly_drift := Vector2(wind * 0.2, 0.15) # Upward drift
-		sakura_material.set_shader_parameter("wind_direction", firefly_drift)
-		sakura_material.set_shader_parameter("twinkle_strength", 0.95) # Intense sparking
-		sakura_material.set_shader_parameter("petal_scale", clampf(biome.sakura_petal_scale * 0.6, 0.1, 2.0)) # Smaller points of light
-	
-	sakura_material.set_shader_parameter("primary_color", Vector4(primary.r, primary.g, primary.b, primary.a))
-	sakura_material.set_shader_parameter("secondary_color", Vector4(secondary.r, secondary.g, secondary.b, secondary.a))
-	sakura_material.set_shader_parameter("view_size", _get_camera_view_size())
-	sakura_material.set_shader_parameter("world_offset", _compute_camera_world_offset())
-	sakura_material.set_shader_parameter("world_scale", 0.0021)
+# Sakura overlay settings managed by OverlayVFXManager.apply_sakura_settings()
 
-func _apply_flower_overlay_settings(_biome: BiomeDefinition) -> void:
-	# DISABLED: Flower overlay causing shader errors - hiding for now
-	if _flower_overlay != null:
-		_flower_overlay.visible = false
+# Flower overlay settings managed by OverlayVFXManager.apply_flower_settings()
+# Snow imprint state managed by SnowImprintManager.configure()
 
-func _configure_snow_imprint_state(biome: BiomeDefinition) -> void:
-	var shader_material := _get_shader_material()
-	if shader_material == null:
-		return
-	if biome == null or biome.snow_cover <= 0.05:
-		_snow_imprint_enabled = false
-		shader_material.set_shader_parameter("snow_imprint_strength", 0.0)
-		_clear_snow_imprint()
-		_clear_snow_piles()
-		return
-	_ensure_snow_imprint_resources()
-	_snow_imprint_enabled = true
-	shader_material.set_shader_parameter("snow_imprint_texture", _snow_imprint_texture)
-	shader_material.set_shader_parameter("snow_imprint_texel_size", Vector2(1.0 / SNOW_IMPRINT_TEXTURE_SIZE, 1.0 / SNOW_IMPRINT_TEXTURE_SIZE))
-	shader_material.set_shader_parameter("snow_imprint_strength", clampf(biome.snow_cover * 1.1, 0.2, 2.0))
-	_clear_snow_imprint()
-	_clear_snow_piles()
-
-func _ensure_snow_imprint_resources() -> void:
-	if _snow_imprint_image != null and _snow_imprint_texture != null:
-		return
-	_snow_imprint_image = Image.create(SNOW_IMPRINT_TEXTURE_SIZE, SNOW_IMPRINT_TEXTURE_SIZE, false, Image.FORMAT_RF)
-	_snow_imprint_image.fill(Color(SNOW_IMPRINT_DEFAULT, SNOW_IMPRINT_DEFAULT, SNOW_IMPRINT_DEFAULT, 1.0))
-	_snow_imprint_texture = ImageTexture.create_from_image(_snow_imprint_image)
-	var shader_material := _get_shader_material()
-	if shader_material:
-		shader_material.set_shader_parameter("snow_imprint_texture", _snow_imprint_texture)
-		shader_material.set_shader_parameter("snow_imprint_texel_size", Vector2(1.0 / SNOW_IMPRINT_TEXTURE_SIZE, 1.0 / SNOW_IMPRINT_TEXTURE_SIZE))
-
-func _clear_snow_imprint(value: float = SNOW_IMPRINT_DEFAULT) -> void:
-	if _snow_imprint_image == null:
-		return
-	_snow_imprint_image.fill(Color(value, value, value, 1.0))
-	if _snow_imprint_texture:
-		_snow_imprint_texture.update(_snow_imprint_image)
-
-func _clear_snow_piles() -> void:
-	if _snow_pile_container == null:
-		return
-	for child in _snow_pile_container.get_children():
-		child.queue_free()
-
-func _seed_snow_piles(_biome: BiomeDefinition) -> void:
-	# Small obstacles (snow piles) are disabled — keep obstacles limited to procedural boulders only
-	_clear_snow_piles()
-	return
-
-func _add_snow_stamp(local_position: Vector2, radius: float, delta: float) -> void:
-	if not _snow_imprint_enabled or _snow_imprint_image == null:
-		return
-	var extent := _get_effective_ground_extent()
-	var half_extent := extent * 0.5
-	var uv := Vector2(
-		(local_position.x + half_extent) / extent,
-		(local_position.y + half_extent) / extent
-	)
-	if uv.x < 0.0 or uv.x > 1.0 or uv.y < 0.0 or uv.y > 1.0:
-		return
-	var center_px := Vector2i(
-		int(round(clampf(uv.x, 0.0, 1.0) * float(SNOW_IMPRINT_TEXTURE_SIZE - 1))),
-		int(round(clampf(uv.y, 0.0, 1.0) * float(SNOW_IMPRINT_TEXTURE_SIZE - 1)))
-	)
-	var radius_px := int(max(1.0, round((radius / extent) * float(SNOW_IMPRINT_TEXTURE_SIZE))))
-	for y_offset in range(-radius_px, radius_px + 1):
-		var py := center_px.y + y_offset
-		if py < 0 or py >= SNOW_IMPRINT_TEXTURE_SIZE:
-			continue
-		for x_offset in range(-radius_px, radius_px + 1):
-			var px := center_px.x + x_offset
-			if px < 0 or px >= SNOW_IMPRINT_TEXTURE_SIZE:
-				continue
-			var dist := sqrt(float(x_offset * x_offset + y_offset * y_offset)) / float(radius_px)
-			if dist > 1.0:
-				continue
-			var falloff := pow(clampf(1.0 - dist, 0.0, 1.0), 2.2)
-			var current := _snow_imprint_image.get_pixel(px, py).r
-			var target := clampf(current + delta * falloff, 0.0, 1.0)
-			_snow_imprint_image.set_pixel(px, py, Color(target, target, target, 1.0))
-	if _snow_imprint_texture:
-		_snow_imprint_texture.update(_snow_imprint_image)
+# Snow imprint resources/clearing/stamping managed by SnowImprintManager
 
 func supports_snow_imprints() -> bool:
-	return _snow_imprint_enabled and _snow_imprint_image != null
+	if _snow_imprint_manager:
+		return _snow_imprint_manager.is_enabled()
+	return false
 
-func add_snow_footprint(world_position: Vector2, radius: float = 80.0, depth: float = SNOW_FOOTPRINT_FADE) -> void:
-	if not supports_snow_imprints():
-		return
-	var local := to_local(world_position)
-	_add_snow_stamp(local, radius, -abs(depth))
-	_add_snow_stamp(local, radius * 1.35, abs(depth) * 0.18)
-	_emit_snow_particles(world_position, abs(depth))
+func add_snow_footprint(world_position: Vector2, radius: float = 80.0, depth: float = 0.8) -> void:
+	if _snow_imprint_manager:
+		_snow_imprint_manager.add_footprint(world_position, self, radius, depth)
 
-func add_snow_path_sample(world_position: Vector2, radius: float = SNOW_PATH_RADIUS, depth: float = SNOW_FOOTPRINT_FADE) -> void:
-	if not supports_snow_imprints():
-		return
-	var local := to_local(world_position)
-	_add_snow_stamp(local, radius, -abs(depth))
-	_add_snow_stamp(local, radius * 1.5, abs(depth) * 0.22)
-	if depth > 0.3:
-		_emit_snow_particles(world_position, abs(depth) * 0.6)
+func add_snow_path_sample(world_position: Vector2, radius: float = 120.0, depth: float = 0.8) -> void:
+	if _snow_imprint_manager:
+		_snow_imprint_manager.add_path_sample(world_position, self, radius, depth)
+
 func add_snow_accumulation(world_position: Vector2, radius: float, height: float) -> void:
-	if not supports_snow_imprints():
-		return
-	var local := to_local(world_position)
-	_add_snow_stamp(local, radius, abs(height))
+	if _snow_imprint_manager:
+		_snow_imprint_manager.add_accumulation(world_position, self, radius, height)
 
 func emit_snow_kickup(world_position: Vector2, strength: float = 0.45) -> void:
-	if not supports_snow_imprints():
-		return
-	_emit_snow_particles(world_position, clampf(strength, 0.0, 1.0))
+	if _snow_imprint_manager:
+		_snow_imprint_manager.emit_kickup(world_position, self, strength)
 
 func _update_overlay_layout() -> void:
-	var view_size := _get_camera_view_size()
-	if _snow_overlay:
-		var snow_material := _snow_overlay.material as ShaderMaterial
-		if snow_material:
-			snow_material.set_shader_parameter("view_size", view_size)
-		if _world_bounds.size == Vector2.ZERO:
-			_snow_overlay.polygon = _build_overlay_polygon(view_size)
-		else:
-			_update_snow_overlay_polygon(_get_camera_global_position())
-	if _sakura_overlay:
-		var sakura_material := _sakura_overlay.material as ShaderMaterial
-		if sakura_material:
-			sakura_material.set_shader_parameter("view_size", view_size)
-		if _world_bounds.size == Vector2.ZERO:
-			_sakura_overlay.polygon = _build_overlay_polygon(view_size)
-		else:
-			_update_sakura_overlay_polygon(_get_camera_global_position())
-	if _flower_overlay:
-		var flower_material := _flower_overlay.material as ShaderMaterial
-		if flower_material:
-			flower_material.set_shader_parameter("view_size", view_size)
-		if _world_bounds.size == Vector2.ZERO:
-			_flower_overlay.polygon = _build_overlay_polygon(view_size)
-		else:
-			_update_flower_overlay_polygon(_get_camera_global_position())
+	var cam_view := _get_camera_view_size()
+	var cam_pos := _get_camera_global_position()
+	if _overlay_vfx:
+		_overlay_vfx.update_layout(cam_view, cam_pos)
 	if _vignette_overlay:
-		# No need to set size/position since it's full rect on CanvasLayer
 		pass
 	if _fog_overlay:
-		_fog_overlay.size = view_size
-		_fog_overlay.position = Vector2(0, 0) # Top-left for top_level
+		_fog_overlay.size = cam_view
+		_fog_overlay.position = Vector2(0, 0)
 
-func _update_overlay_transform() -> void:
-	if _overlay_canvas == null:
-		return
-	var viewport := get_viewport()
-	if viewport == null:
-		return
-	var camera := viewport.get_camera_2d()
-	if camera == null:
-		return
-	var camera_position := camera.global_position
-	_overlay_canvas.global_position = camera_position
-	_overlay_canvas.global_rotation = 0.0
-	_overlay_canvas.global_scale = Vector2.ONE
-	_update_snow_overlay_polygon(camera_position)
-	_update_sakura_overlay_polygon(camera_position)
-	_update_flower_overlay_polygon(camera_position)
+# Overlay transform managed by OverlayVFXManager.process()
 
 func _get_camera_view_size() -> Vector2:
 	var viewport := get_viewport()
@@ -1783,112 +1264,20 @@ func _compute_camera_world_offset() -> Vector2:
 func _get_effective_ground_extent() -> float:
 	return maxf(_effective_ground_extent, ground_extent)
 
-func _update_snow_overlay_polygon(camera_position: Vector2) -> void:
-	if _snow_overlay == null:
-		return
-	if _world_bounds.size == Vector2.ZERO:
-		_snow_overlay.polygon = _build_overlay_polygon(_get_camera_view_size())
-		return
-	var min_corner := _world_bounds.position
-	var max_corner := _world_bounds.position + _world_bounds.size
-	var polygon := PackedVector2Array([
-		Vector2(min_corner.x - camera_position.x, min_corner.y - camera_position.y),
-		Vector2(max_corner.x - camera_position.x, min_corner.y - camera_position.y),
-		Vector2(max_corner.x - camera_position.x, max_corner.y - camera_position.y),
-		Vector2(min_corner.x - camera_position.x, max_corner.y - camera_position.y)
-	])
-	_snow_overlay.polygon = polygon
+# Overlay polygon updates managed by OverlayVFXManager
 
 func get_world_bounds() -> Rect2:
+	if _border_manager:
+		return _border_manager.get_world_bounds()
 	return _world_bounds
 
-func _update_sakura_overlay_polygon(camera_position: Vector2) -> void:
-	if _sakura_overlay == null:
-		return
-	if _world_bounds.size == Vector2.ZERO:
-		_sakura_overlay.polygon = _build_overlay_polygon(_get_camera_view_size())
-		return
-	var min_corner := _world_bounds.position
-	var max_corner := _world_bounds.position + _world_bounds.size
-	var polygon := PackedVector2Array([
-		Vector2(min_corner.x - camera_position.x, min_corner.y - camera_position.y),
-		Vector2(max_corner.x - camera_position.x, min_corner.y - camera_position.y),
-		Vector2(max_corner.x - camera_position.x, max_corner.y - camera_position.y),
-		Vector2(min_corner.x - camera_position.x, max_corner.y - camera_position.y)
-	])
-	_sakura_overlay.polygon = polygon
+# Overlay polygon methods managed by OverlayVFXManager
 
-func _update_flower_overlay_polygon(_camera_position: Vector2) -> void:
-	if _flower_overlay == null:
-		return
-	# Flower overlay always covers the screen - shader uses world_offset for positioning
-	var view_size := _get_camera_view_size()
-	_flower_overlay.polygon = _build_overlay_polygon(view_size)
+# Snow particle emission managed by SnowImprintManager
 
-func _emit_snow_particles(world_position: Vector2, strength: float) -> void:
-	if _snow_particle_container == null:
-		return
-	var texture := _get_snow_particle_texture()
-	var particles := GPUParticles2D.new()
-	particles.one_shot = true
-	particles.amount = int(round(clampf(lerpf(10.0, 22.0, clampf(strength, 0.0, 1.0)), 6.0, 28.0)))
-	particles.lifetime = SNOW_PARTICLE_LIFETIME
-	particles.explosiveness = 0.6
-	particles.speed_scale = 1.0
-	particles.texture = texture
-	particles.process_material = _create_snow_particle_material(strength)
-	particles.global_position = world_position
-	_snow_particle_container.add_child(particles)
-	particles.finished.connect(Callable(particles, "queue_free"))
-	particles.emitting = true
-
-func _create_snow_particle_material(strength: float) -> ParticleProcessMaterial:
-	var particle_material := ParticleProcessMaterial.new()
-	particle_material.gravity = Vector3(0.0, SNOW_PARTICLE_GRAVITY, 0.0)
-	var intensity := clampf(strength, 0.0, 1.0)
-	var velocity := lerpf(55.0, 120.0, intensity)
-	particle_material.initial_velocity_min = velocity * 0.35
-	particle_material.initial_velocity_max = velocity * 0.9
-	particle_material.direction = Vector3(0.0, -0.75, 0.0)
-	particle_material.spread = 78.0
-	particle_material.angular_velocity_min = -8.0
-	particle_material.angular_velocity_max = 8.0
-	particle_material.scale_min = 0.32
-	particle_material.scale_max = 0.62
-	particle_material.damping_min = 1.6
-	particle_material.damping_max = 3.9
-	particle_material.color_ramp = _get_snow_particle_ramp()
-	return particle_material
-
-func _get_snow_particle_texture() -> Texture2D:
-	if _snow_particle_texture != null:
-		return _snow_particle_texture
-	var size := 16
-	var image := Image.create(size, size, false, Image.FORMAT_RGBA8)
-	for y in size:
-		for x in size:
-			var u := float(x) / float(size - 1)
-			var v := float(y) / float(size - 1)
-			var dx := u - 0.5
-			var dy := v - 0.5
-			var dist := sqrt(dx * dx + dy * dy) * 2.2
-			var alpha := clampf(1.0 - dist, 0.0, 1.0)
-			var color := Color(0.96, 0.99, 1.0, pow(alpha, 1.5) * 0.9)
-			image.set_pixel(x, y, color)
-	_snow_particle_texture = ImageTexture.create_from_image(image)
-	return _snow_particle_texture
-
-func _get_snow_particle_ramp() -> GradientTexture1D:
-	var gradient := Gradient.new()
-	gradient.colors = PackedColorArray([
-		Color(0.95, 0.98, 1.0, 0.75),
-		Color(0.95, 0.98, 1.0, 0.35),
-		Color(0.95, 0.98, 1.0, 0.0)
-	])
-	gradient.offsets = PackedFloat32Array([0.0, 0.6, 1.0])
-	var ramp := GradientTexture1D.new()
-	ramp.gradient = gradient
-	return ramp
+func _get_ground_for_snow() -> Polygon2D:
+	"""Return the ground Polygon2D for snow imprint shader access."""
+	return _ground
 
 func _get_audio_director():
 	if _audio_director == null or not is_instance_valid(_audio_director):
@@ -1943,41 +1332,7 @@ func _stop_ambient_audio() -> void:
 	if director:
 		director.stop_ambient()
 
-func _update_lightning(delta: float) -> void:
-	if not _active_biome or _active_biome.lightning_frequency <= 0.0 or not _lightning_overlay:
-		return
-	
-	_lightning_timer -= delta
-	if _lightning_timer <= 0.0:
-		# Increase thunder frequency by 30% and reset timer based on effective frequency
-		var effective_freq: float = _active_biome.lightning_frequency * 1.3
-		var interval: float = 1.0 / effective_freq
-		_lightning_timer = _rng.randf_range(interval * 0.5, interval * 1.5)
-		
-		# Trigger lightning flash
-		_trigger_lightning_flash()
-
-func _trigger_lightning_flash() -> void:
-	if not _lightning_overlay:
-		return
-	
-	# Play thunder sound
-	if _audio_director:
-		# Make thunder louder for storm effect
-		_audio_director.play_sfx_by_path("res://assets/sounds/sfx/environment/thunder.wav", 1.0, 6.0)
-	
-	# Create a tween for the flash
-	var tween := create_tween()
-	tween.set_trans(Tween.TRANS_LINEAR)
-	tween.set_ease(Tween.EASE_IN_OUT)
-	
-	# Flash to white with intensity
-	var flash_color := Color(1.0, 1.0, 1.0, _active_biome.lightning_intensity)
-	_lightning_overlay.color = flash_color
-	
-	# Fade out quickly
-	tween.tween_property(_lightning_overlay, "color:a", 0.0, 0.15)
-	tween.tween_callback(func(): _lightning_overlay.color = Color(1.0, 1.0, 1.0, 0.0))
+# Lightning managed by LightningManager
 
 func _on_modulate_changed(color: Color) -> void:
 	var effects_layer := _ensure_effects_layer()
@@ -1987,111 +1342,4 @@ func _on_modulate_changed(color: Color) -> void:
 		var inverse_color := Color(1.0 / color.r, 1.0 / color.g, 1.0 / color.b, 1.0)
 		effects_layer.set("modulate", inverse_color)
 
-# ============ SCREEN-SPACE FOG (ZELDA-STYLE) ============
-
-func _setup_screen_fog() -> void:
-	"""Create the screen-space fog overlay if it doesn't exist."""
-	if _screen_fog_overlay != null:
-		return
-	
-	# Load the fog shader
-	if not ResourceLoader.exists(SCREEN_FOG_SHADER_PATH):
-		push_warning("[EnvironmentController] Screen fog shader not found: ", SCREEN_FOG_SHADER_PATH)
-		return
-	
-	var shader := load(SCREEN_FOG_SHADER_PATH) as Shader
-	if shader == null:
-		push_warning("[EnvironmentController] Failed to load screen fog shader")
-		return
-	
-	# Create material
-	_screen_fog_material = ShaderMaterial.new()
-	_screen_fog_material.shader = shader
-	
-	# Load a noise texture for the fog
-	var noise := FastNoiseLite.new()
-	noise.noise_type = FastNoiseLite.TYPE_PERLIN
-	noise.frequency = 0.01
-	noise.fractal_octaves = 4
-	
-	var noise_tex := NoiseTexture2D.new()
-	noise_tex.width = 256
-	noise_tex.height = 256
-	noise_tex.noise = noise
-	noise_tex.seamless = true
-	
-	_screen_fog_material.set_shader_parameter("noise_texture", noise_tex)
-	
-	# Create a CanvasLayer for the overlay
-	# Layer 80: Above game world (5) and EffectsLayer, but below HUD (99)
-	_screen_fog_layer = CanvasLayer.new()
-	_screen_fog_layer.name = "ScreenFogLayer"
-	_screen_fog_layer.layer = 80
-	add_child(_screen_fog_layer)
-	
-	# Create the full-screen ColorRect
-	_screen_fog_overlay = ColorRect.new()
-	_screen_fog_overlay.name = "ScreenFogOverlay"
-	_screen_fog_overlay.material = _screen_fog_material
-	_screen_fog_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_screen_fog_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_screen_fog_overlay.size = get_viewport().get_visible_rect().size
-	_screen_fog_overlay.color = Color(1, 1, 1, 0) # Transparent base
-	
-	_screen_fog_layer.add_child(_screen_fog_overlay)
-	
-	# Connect to viewport resize
-	get_viewport().size_changed.connect(_on_screen_fog_viewport_resize)
-	
-	# Initially hidden
-	_screen_fog_overlay.visible = false
-	print("[EnvironmentController] Screen fog overlay initialized")
-
-func _on_screen_fog_viewport_resize() -> void:
-	if _screen_fog_overlay and is_instance_valid(_screen_fog_overlay):
-		_screen_fog_overlay.size = get_viewport().get_visible_rect().size
-
-func _apply_screen_fog() -> void:
-	"""Apply screen fog settings from the time definition."""
-	if _active_time == null or not _active_time.use_screen_fog:
-		# Disable fog overlay
-		if _screen_fog_overlay and is_instance_valid(_screen_fog_overlay):
-			_screen_fog_overlay.visible = false
-		return
-	
-	# Ensure overlay exists
-	_setup_screen_fog()
-	
-	if _screen_fog_overlay == null or _screen_fog_material == null:
-		return
-	
-	# Apply fog parameters from definition
-	_screen_fog_material.set_shader_parameter("fog_density", _active_time.screen_fog_density)
-	_screen_fog_material.set_shader_parameter("fog_color", _active_time.screen_fog_color)
-	
-	# Enable the overlay
-	_screen_fog_overlay.visible = true
-	print("[EnvironmentController] Screen fog applied with density: ", _active_time.screen_fog_density)
-
-func _update_screen_fog(delta: float) -> void:
-	"""Animate the screen fog and update world-space parameters."""
-	if _screen_fog_overlay == null or not _screen_fog_overlay.visible:
-		return
-	
-	if _screen_fog_material == null:
-		return
-	
-	# Update fog animation time
-	_fog_time += delta
-	_screen_fog_material.set_shader_parameter("time", _fog_time)
-	
-	# Update viewport size
-	var viewport := get_viewport()
-	if viewport:
-		var viewport_size := viewport.get_visible_rect().size
-		_screen_fog_material.set_shader_parameter("viewport_size", viewport_size)
-	
-	# Update camera position for world-space fog
-	var camera := get_viewport().get_camera_2d()
-	if camera:
-		_screen_fog_material.set_shader_parameter("camera_position", camera.global_position)
+# Screen-space fog managed by ScreenFogManager

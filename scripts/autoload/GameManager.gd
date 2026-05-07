@@ -28,6 +28,20 @@ var pristine_rapture_cores: int = 0
 var stages_cleared: Array[String] = []
 var _total_score_all_time: int = 0
 var _total_runs_all_time: int = 0
+var skill_points: int = 0 # Persistent skill points for Talent Tree
+
+func add_skill_points(amount: int) -> void:
+	skill_points += amount
+	print("[GameManager] Added %d skill points. Total: %d" % [amount, skill_points])
+
+func get_skill_points() -> int:
+	return skill_points
+
+func spend_skill_points(amount: int) -> bool:
+	if skill_points >= amount:
+		skill_points -= amount
+		return true
+	return false
 
 # --- Difficulty & Modes ---
 var difficulty_multiplier: float = 1.0
@@ -397,78 +411,48 @@ func get_current_stage() -> String:
 # --- Persistence ---
 
 func _load_data() -> void:
-	var data := SaveManager.load_config(SaveManager.LEADERBOARD_PATH)
+	# Migrate legacy saves on first run with consolidated file
+	SaveManager.migrate_from_legacy()
 	
-	if not data.is_empty():
-		var stats_data: Dictionary = data.get("stats", {})
-		pristine_rapture_cores = stats_data.get("pristine_rapture_cores", 0)
-		_total_score_all_time = stats_data.get("total_score", 0)
-		_total_runs_all_time = stats_data.get("total_runs", 0)
-		_load_leaderboard(data)
+	# Load from consolidated single file via sections
+	var lb_data := SaveManager.load_section("leaderboard")
+	if not lb_data.is_empty():
+		pristine_rapture_cores = lb_data.get("pristine_rapture_cores", 0)
+		_total_score_all_time = lb_data.get("total_score", 0)
+		_total_runs_all_time = lb_data.get("total_runs", 0)
+		_load_leaderboard(lb_data)
 	
-	# Load stage progress separately
-	var stage_data := SaveManager.load_config(SaveManager.STAGE_PROGRESS_PATH)
-	if not stage_data.is_empty():
-		stages_cleared = stage_data.get("progress", {}).get("stages_cleared", [])
+	var progress_data := SaveManager.load_section("progress")
+	var raw_stages = progress_data.get("stages_cleared", [])
+	stages_cleared.clear()
+	if typeof(raw_stages) == TYPE_ARRAY:
+		for stage in raw_stages:
+			stages_cleared.append(str(stage))
 	
 	print("[GameManager] Data loaded. Cores: %d" % pristine_rapture_cores)
 
 
 func _load_leaderboard(data: Dictionary) -> void:
 	_leaderboard_entries.clear()
-	var leaderboard_data: Dictionary = data.get("leaderboard", {})
-	var entries = leaderboard_data.get("entries", [])
-	
-	# Fallback: Migration from legacy prefixed keys format
-	if entries.is_empty():
-		var i := 0
-		while leaderboard_data.has("entry_%d_character_id" % i):
-			var prefix := "entry_%d_" % i
-			var entry := {
-				"character_id": leaderboard_data.get(prefix + "character_id", ""),
-				"score": int(leaderboard_data.get(prefix + "score", 0)),
-				"wave": int(leaderboard_data.get(prefix + "wave", 0)),
-				"difficulty": int(leaderboard_data.get(prefix + "difficulty", 1)),
-				"goddess_fall": bool(leaderboard_data.get(prefix + "goddess_fall", false)),
-				"timestamp": int(leaderboard_data.get(prefix + "timestamp", 0)),
-				"squad_indices": leaderboard_data.get(prefix + "squad_indices", []),
-				"run_stats": leaderboard_data.get(prefix + "run_stats", {})
-			}
-			entries.append(entry)
-			i += 1
-		
-		if i > 0:
-			print("[GameManager] Migrated %d legacy leaderboard entries" % entries.size())
-			# Save back in new format to complete migration
-			_leaderboard_entries = entries
-			save_game()
+	var entries = data.get("entries", [])
 	
 	if entries is Array:
 		_leaderboard_entries = entries
-	
-	_leaderboard_entries.sort_custom(func(a, b): return a["score"] > b["score"])
+		_leaderboard_entries.sort_custom(func(a, b): return a["score"] > b["score"])
 
 
 func save_game() -> void:
 	var data := {
-		"stats": {
-			"pristine_rapture_cores": pristine_rapture_cores,
-			"total_score": _total_score_all_time,
-			"total_runs": _total_runs_all_time,
-		},
-		"leaderboard": {
-			"entries": _leaderboard_entries
-		}
+		"pristine_rapture_cores": pristine_rapture_cores,
+		"total_score": _total_score_all_time,
+		"total_runs": _total_runs_all_time,
+		"entries": _leaderboard_entries,
 	}
+	SaveManager.save_section("leaderboard", data)
 	
-	SaveManager.save_config(data, SaveManager.LEADERBOARD_PATH)
-	
-	var progress_data := {
-		"progress": {
-			"stages_cleared": stages_cleared
-		}
-	}
-	SaveManager.save_config(progress_data, SaveManager.STAGE_PROGRESS_PATH)
+	SaveManager.save_section("progress", {
+		"stages_cleared": stages_cleared,
+	})
 
 
 # --- Currency Management ---

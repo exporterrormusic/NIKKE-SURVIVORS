@@ -16,6 +16,7 @@ const SHOP := "res://scenes/ui/ShopMenu.tscn"
 const SETTINGS := "res://scenes/ui/SettingsMenu.tscn"
 const ACHIEVEMENTS := "res://scenes/ui/AchievementsMenu.tscn"
 const LEADERBOARD := "res://scenes/ui/LeaderboardMenu.tscn"
+const MODE_SELECT := "res://scenes/ui/ModeSelectMenu.tscn"
 const MAP_SELECTOR := "res://scenes/ui/MapSelector.tscn"
 
 # =============================================================================
@@ -42,6 +43,9 @@ const CHAR_SPRITE_KILO := "res://assets/characters/kilo/kilo-sprite.png"
 const CHAR_SPRITE_MARIAN := "res://assets/characters/marian/marian-sprite.png"
 const CHAR_SPRITE_NAYUTA := "res://assets/characters/nayuta/nayuta-sprite.png"
 const CHAR_SPRITE_SCARLET := "res://assets/characters/scarlet/scarlet-sprite.png"
+
+# Scripts
+const SHOP_MENU_SCRIPT := "res://scripts/ui/ShopMenu.gd"
 
 # Shaders
 const SHADER_HEX_GRID := "res://resources/shaders/hexagon_grid_overlay.gdshader"

@@ -1,12 +1,13 @@
 extends Node2D
 
+const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
+const DamageLogScript = preload("res://scripts/autoload/DamageLog.gd")
+
 @onready var environment: Node2D = $Environment
 @onready var map_selector: Control = $CanvasLayer/MapSelector
 @onready var player: CharacterBody2D = $Player
 
-var _ambient_particles: Node2D = null
-var _night_glow: CanvasLayer = null
-var _rng := RandomNumberGenerator.new()
+var _env_director: LevelEnvironmentDirector = null
 
 # Wave system
 var _wave_director: Node = null
@@ -20,7 +21,6 @@ var _damage_layer: CanvasLayer = null
 var _minimap: Control = null
 
 func _ready():
-	_rng.randomize()
 	set_process_input(true) # Ensure we receive input events
 	
 	# Reset run stats for new game
@@ -28,9 +28,9 @@ func _ready():
 		GameManager.reset_run_stats()
 	
 	# Clear damage log for new run
-	var damage_log = get_node_or_null("/root/DamageLog")
-	if damage_log:
-		damage_log.clear()
+	var dl := DamageLogScript.get_instance()
+	if dl:
+		dl.clear()
 	
 	# Reset achievement session tracking
 	if has_node("/root/AchievementManager"):
@@ -54,8 +54,7 @@ func _ready():
 	_enemy_container.name = "Enemies"
 	add_child(_enemy_container)
 	
-	# Setup wave system
-	_setup_wave_system()
+	# Wave system is initialized in _initialize_stage_environment
 	
 	# Connect map selector signal (legacy, can be removed if MapSelector is no longer used)
 	if map_selector:
@@ -75,8 +74,8 @@ func _ready():
 		mask_mgr.name = "GrassMaskManager"
 		add_child(mask_mgr)
 	
-	# Initialize ambient particle system
-	_setup_ambient_particles()
+	# Setup environment director (handles biome, time, ambient, lightning)
+	_setup_environment_director()
 	
 	# Setup main HUD (Health, etc) and Music Player
 	_setup_hud()
@@ -106,6 +105,7 @@ func _exit_tree() -> void:
 	VenetianBlindsBackground.clear_cache()
 	print("[Level] Cleanup complete")
 
+
 func _setup_hud() -> void:
 	if not player:
 		return
@@ -121,15 +121,7 @@ func _setup_hud() -> void:
 		var mp = music_player_scene.instantiate()
 		mp_layer.add_child(mp)
 	
-	# Initialize night glow system
-	_setup_night_glow()
-	
-	# Set world bounds BEFORE initializing environment so grass field uses correct size
-	var world_size = 4000.0
-	environment.set_world_bounds(Rect2(-world_size / 2, -world_size / 2, world_size, world_size))
-	
-	# Initialize environment from stage (or random fallback)
-	# Initialize environment from stage (or random fallback)
+	# Initialize environment from stage
 	_initialize_stage_environment()
 	
 	# She Descends easter egg mode: spawn N01 immediately
@@ -141,7 +133,6 @@ func _setup_hud() -> void:
 	if GameManager and EventBus:
 		EventBus.run_started.emit(GameManager.current_stage_id)
 		
-	# Start background music based on character
 	# Start background music based on initial character
 	_play_character_bgm()
 
@@ -270,24 +261,23 @@ func _on_settings_closed(canvas_layer: CanvasLayer) -> void:
 func _on_character_select_requested() -> void:
 	get_tree().paused = false
 	
-	# Reset Engine time scale in case CombatJuice or other systems modified it
+	# Reset Engine logic first
 	Engine.time_scale = 1.0
 	if CombatJuice:
 		CombatJuice.reset()
-	
-	# Reset bullet time (Wells ability) in case it was active
 	if GameManager:
 		GameManager.enemy_time_scale = 1.0
-	
-	# Record the run result before leaving (save score even if player didn't die)
-	if GameManager:
+		# Record run result (as defeat/quit)
 		GameManager.record_run_result("")
-	
-	# Stop battle music and ambient sounds
+		
+	# Update Audio
 	if AudioDirector:
 		AudioDirector.stop_music(0.5)
 		AudioDirector.stop_ambient(0.5)
-		
+	
+	TargetCache.force_refresh()
+
+	# Standard Behavior
 	get_tree().change_scene_to_file("res://scenes/ui/CharacterSelectMenu.tscn")
 
 func _on_quit_requested() -> void:
@@ -311,6 +301,9 @@ func _on_quit_requested() -> void:
 		# Don't stop music here, let MenuManager handle the transition to menu music
 		AudioDirector.stop_ambient(0.5)
 	
+	# Clear target cache before scene change
+	TargetCache.force_refresh()
+	
 	# Use MenuManager to return to main menu so signals get connected properly
 	if MenuManager:
 		MenuManager.return_to_main_menu()
@@ -323,18 +316,13 @@ func show_defeat_menu() -> void:
 		_setup_pause_menu()
 	_pause_menu.show_defeat()
 
-func _setup_ambient_particles() -> void:
-	var AmbientParticleScript = load("res://scripts/world/AmbientParticleSystem.gd")
-	if AmbientParticleScript:
-		_ambient_particles = Node2D.new()
-		_ambient_particles.set_script(AmbientParticleScript)
-		_ambient_particles.name = "AmbientParticles"
-		add_child(_ambient_particles)
-
-func _setup_night_glow() -> void:
-	# Disabled - environment CanvasModulate handles night tinting already
-	# Adding extra overlays makes it too dark
-	pass
+func _setup_environment_director() -> void:
+	_env_director = LevelEnvironmentDirector.new()
+	_env_director.name = "EnvironmentDirector"
+	add_child(_env_director)
+	_env_director.environment_node = environment
+	_env_director.player_node = player
+	_env_director.setup_ambient_particles()
 
 func _setup_combat_juice() -> void:
 	# Create CombatJuice system for camera effects
@@ -371,330 +359,44 @@ func _initialize_stage_environment() -> void:
 	if not environment or not environment.has_method("initialize_environment"):
 		return
 	
-	# Get stage from registry using current_stage_id
+	# Delegate environment initialization to the director
+	if _env_director:
+		_env_director.initialize_stage_environment()
+	
+	# Get stage info for spawn rule handling
 	var stage_id: String = GameManager.current_stage_id if GameManager else "stage_1"
 	var StageRegistryClass := load("res://scripts/systems/StageRegistry.gd")
 	var stage: Dictionary = StageRegistryClass.get_stage(stage_id) if StageRegistryClass else {}
 	
-	var biome: StringName
-	var time: StringName
+	if stage.is_empty():
+		# Fallback standard mode
+		_setup_wave_system()
+		return
 	
-	# Use GameManager.selected_biome and selected_time (set by map selector in StageSelector)
-	# These override the stage's default biome/time
-	if GameManager.selected_biome != "" and GameManager.selected_time != "":
-		biome = StringName(GameManager.selected_biome)
-		time = StringName(GameManager.selected_time)
-		print("[Level] Using selected map: biome=", biome, " time=", time)
-	elif not stage.is_empty():
-		biome = StringName(stage.biome)
-		time = StringName(stage.time)
-		print("[Level] Using stage default: ", stage.name, " (biome=", biome, " time=", time, ")")
-	else:
-		# Fallback to random if no stage selected
-		var biomes := [&"snowfield", &"sakura_grove", &"grasslands", &"dunes"]
-		var times := [&"day", &"night"]
-		biome = biomes[_rng.randi() % biomes.size()]
-		time = times[_rng.randi() % times.size()]
-		print("[Level] No stage selected, using random: biome=", biome, " time=", time)
+	var spawn_rules: Dictionary = stage.get("spawn_rules", {})
 	
-	# Apply spawn rules from stage to spawner and wave director
-	if not stage.is_empty():
-		var spawn_rules: Dictionary = stage.get("spawn_rules", {})
-		
-		# Check for HUNT mode - this takes precedence
-		if spawn_rules.get("hunt_mode", false):
-			print("[Level] HUNT mode detected - setting up hunt system...")
-			_setup_hunt_mode()
-			# Initialize environment AFTER hunt setup for larger map
-			environment.initialize_environment(0, biome, time)
-			call_deferred("_cleanup_edge_boulders")
-			_update_ambient_systems(biome, time)
-			return # Skip wave system setup
-		
-		# Check for DEFENSE mode
-		if spawn_rules.get("defense_mode", false):
-			print("[Level] DEFENSE mode detected - setting up defense system...")
-			_setup_defense_mode()
-			environment.initialize_environment(0, biome, time)
-			call_deferred("_cleanup_edge_boulders")
-			_update_ambient_systems(biome, time)
-			return # Skip wave system setup
-		
-		# Standard mode - set up wave system and apply modifiers
-		if _enemy_spawner and spawn_rules.get("elite_only", false):
-			_enemy_spawner.set_elite_only_mode(true)
-			print("[Level] Elite-only mode enabled")
-		if _wave_director and spawn_rules.get("endless", false):
-			_wave_director.set_endless_mode(true)
-			print("[Level] Endless mode enabled")
+	# Standard mode — set up wave system (hunt mode removed; defense mode retired)
+	_setup_wave_system()
 	
-	# Initialize environment
-	environment.initialize_environment(0, biome, time)
-	
-	# Debug what script is on environment
-	if environment.get_script():
-		print("[Level] Environment script path: ", environment.get_script().resource_path)
-	
-	# Cleanup boulders near edges to prevent getting stuck
-	# Call deferred to ensure they are spawned
-	call_deferred("_cleanup_edge_boulders")
-	
-	# Update ambient particles
-	_update_ambient_systems(biome, time)
-
-func _initialize_random_environment() -> void:
-	# Legacy function - redirects to stage-based initialization
-	_initialize_stage_environment()
-
-func _cleanup_edge_boulders() -> void:
-	# World size is 4000 (-2000 to 2000)
-	# Keep boulders away from edges (margin of 300 units = 1700 limit)
-	var limit := 1700.0
-	
-	var boulders := get_tree().get_nodes_in_group("boulders")
-	var removed_count := 0
-	
-	for boulder in boulders:
-		if not is_instance_valid(boulder):
-			continue
-			
-		var pos: Vector2 = boulder.global_position
-		if abs(pos.x) > limit or abs(pos.y) > limit:
-			boulder.queue_free()
-			removed_count += 1
-	
-	if removed_count > 0:
-		print("[Level] Removed ", removed_count, " boulders near map edges to prevent stuck issues.")
-
-func _update_ambient_systems(biome_id: StringName, time_id: StringName) -> void:
-	var is_night := _is_night_time(time_id)
-	
-	# Emit biome change for achievements/systems
-	if EventBus:
-		EventBus.biome_changed.emit(biome_id)
-		EventBus.time_of_day_changed.emit(is_night)
-	
-	# Update ambient particles
-	if _ambient_particles and _ambient_particles.has_method("configure"):
-		_ambient_particles.configure(biome_id, is_night)
-	
-	# Update night glow
-	if _night_glow and _night_glow.has_method("set_night_mode"):
-		if is_night:
-			var intensity := 0.6
-			if time_id == &"midnight":
-				intensity = 0.8
-			elif time_id == &"twilight":
-				intensity = 0.4
-			_night_glow.set_night_mode(true, intensity)
-		else:
-			_night_glow.set_night_mode(false)
-	
-	# Update enemy glow for night time
-	_update_enemy_night_glow(is_night, time_id)
-
-func _is_night_time(time_id: StringName) -> bool:
-	return time_id == &"night"
-
-func _update_enemy_night_glow(is_night: bool, time_id: StringName) -> void:
-	# Calculate night boost value
-	var night_boost := 0.0
-	if is_night:
-		night_boost = 0.6
-		if time_id == &"midnight":
-			night_boost = 1.0
-		elif time_id == &"twilight":
-			night_boost = 0.4
-	
-	# Store for new enemies
-	_current_night_boost = night_boost
-	
-	# Update EnemySpawner for future spawns
-	if _enemy_spawner and _enemy_spawner.has_method("set_night_boost"):
-		_enemy_spawner.set_night_boost(night_boost)
-	
-	# Update all existing enemies AND players
-	var targets = get_tree().get_nodes_in_group("enemies") + get_tree().get_nodes_in_group("player")
-	for child in targets:
-		if child.has_method("set_night_boost"):
-			child.set_night_boost(night_boost)
-		else:
-			_set_enemy_night_boost(child, night_boost)
-
-func _set_enemy_night_boost(enemy: Node, night_boost: float) -> void:
-	# Find the sprite with the shader material
-	var sprite := enemy.get_node_or_null("Sprite2D") as CanvasItem
-	if not sprite:
-		sprite = enemy.get_node_or_null("AnimatedSprite2D") as CanvasItem
-	if not sprite:
-		# Try to find any sprite child
-		for child in enemy.get_children():
-			if child is Sprite2D or child is AnimatedSprite2D:
-				sprite = child
-				break
-	
-	if sprite and sprite.material is ShaderMaterial:
-		var mat := sprite.material as ShaderMaterial
-		if mat.shader:
-			# Check if shader has night_boost parameter
-			mat.set_shader_parameter("night_boost", night_boost)
-		# Debug prints removed for performance
-
-var _current_night_boost := 0.0
-
-func _initialize_environment() -> void:
-	if environment and environment.has_method("initialize_environment"):
-		# Load polar_front map definition to get biome and time
-		var map_def_path := "res://resources/maps/polar_front.tres"
-		var map_def = load(map_def_path)
-		if map_def:
-			environment.initialize_environment(map_def.environment_seed, map_def.biome_id, map_def.time_of_day_id)
-		else:
-			# Fallback if map definition fails to load
-			environment.initialize_environment(0, &"snowfield", &"night")
+	# Apply modifiers
+	if _enemy_spawner and spawn_rules.get("elite_only", false):
+		_enemy_spawner.set_elite_only_mode(true)
+		print("[Level] Elite-only mode enabled")
+	if _wave_director and spawn_rules.get("endless", false):
+		_wave_director.set_endless_mode(true)
+		print("[Level] Endless mode enabled")
 
 func _on_map_selected(map_id: StringName) -> void:
-	if environment and environment.has_method("set_environment"):
-		# Get the map definition to determine biome and time
-		var map_def_path := "res://resources/maps/%s.tres" % map_id
-		var map_def = load(map_def_path)
-		if map_def:
-			var time_id: StringName = map_def.time_of_day_id
-			environment.set_environment(map_def.biome_id, time_id)
-			_update_ambient_systems(map_def.biome_id, time_id)
-			print("[Level] Environment set to biome: ", map_def.biome_id, " time: ", time_id)
+	if _env_director:
+		_env_director.apply_map(map_id)
 
 func _on_time_selected(time_id: StringName) -> void:
-	if environment and environment.has_method("set_time_of_day"):
-		environment.set_time_of_day(time_id)
-		# Get current biome for ambient update
-		var current_biome := &""
-		if environment.has_method("get_active_biome"):
-			var biome = environment.get_active_biome()
-			if biome:
-				current_biome = biome.biome_id
-		_update_ambient_systems(current_biome, time_id)
-		print("[Level] Time of day changed to: ", time_id)
-	elif environment and environment.has_method("set_environment"):
-		# Fallback: get current biome and set with new time
-		var current_biome := &""
-		if environment.has_method("get_active_biome"):
-			var biome = environment.get_active_biome()
-			if biome:
-				current_biome = biome.biome_id
-		environment.set_environment(current_biome, time_id)
-		_update_ambient_systems(current_biome, time_id)
-		print("[Level] Time of day changed to: ", time_id)
+	if _env_director:
+		_env_director.apply_time_of_day(time_id)
 
 # ============================================================================
 # WAVE SYSTEM
 # ============================================================================
-
-var _hunt_director: Node = null
-var _defense_director: Node = null
-
-func _setup_defense_mode() -> void:
-	# DEFENSE mode: Square map, defend ARK at top from enemies spawning left/right/bottom
-	print("[Level] Setting up DEFENSE mode...")
-	
-	# Use square map (like standard mode)
-	var world_size := 4000.0
-	environment.set_world_bounds(Rect2(-world_size / 2, -world_size / 2, world_size, world_size))
-	
-	# Player spawns at center of map
-	if player:
-		player.global_position = Vector2(0, 0)
-		print("[Level] Player positioned at center")
-	
-	# Create enemy spawner with defense bounds
-	_enemy_spawner = Node2D.new()
-	_enemy_spawner.set_script(load("res://scripts/enemies/EnemySpawner.gd"))
-	_enemy_spawner.name = "EnemySpawner"
-	_enemy_spawner.add_to_group("enemy_spawners")
-	add_child(_enemy_spawner)
-	_enemy_spawner.initialize(player, _enemy_container)
-	_enemy_spawner.set_map_bounds(Rect2(-world_size / 2, -world_size / 2, world_size, world_size))
-	
-	# Create DefenseDirector
-	_defense_director = Node.new()
-	_defense_director.set_script(load("res://scripts/world/DefenseDirector.gd"))
-	_defense_director.name = "DefenseDirector"
-	add_child(_defense_director)
-	
-	# Connect DefenseDirector signals
-	if _defense_director.has_signal("base_destroyed"):
-		_defense_director.base_destroyed.connect(_on_base_destroyed)
-	if _defense_director.has_signal("defense_complete"):
-		_defense_director.defense_complete.connect(_on_defense_complete)
-	
-	# Start defense mode
-	_defense_director.start()
-	
-	# Setup score UI and minimap
-	_setup_score_ui()
-	_setup_minimap()
-	_setup_core_counter()
-	
-	print("[Level] DEFENSE mode started - Protect your base!")
-
-func _on_base_destroyed() -> void:
-	print("[Level] Base destroyed! Game over!")
-
-func _on_defense_complete(waves_survived: int) -> void:
-	print("[Level] Defense complete! Survived %d waves" % waves_survived)
-
-func _setup_hunt_mode() -> void:
-	# HUNT mode: Large map with INTEL objectives
-	print("[Level] Setting up HUNT mode...")
-	
-	# Create a larger map for Hunt mode
-	var world_size := 16000.0 # 16x larger than standard
-	environment.set_world_bounds(Rect2(-world_size / 2, -world_size / 2, world_size, world_size))
-	
-	# Create enemy spawner with larger bounds
-	_enemy_spawner = Node2D.new()
-	_enemy_spawner.set_script(load("res://scripts/enemies/EnemySpawner.gd"))
-	_enemy_spawner.name = "EnemySpawner"
-	_enemy_spawner.add_to_group("enemy_spawners")
-	add_child(_enemy_spawner)
-	_enemy_spawner.initialize(player, _enemy_container)
-	_enemy_spawner.set_map_bounds(Rect2(-world_size / 2, -world_size / 2, world_size, world_size))
-	
-	# Create HuntDirector instead of WaveDirector
-	_hunt_director = Node.new()
-	_hunt_director.set_script(load("res://scripts/world/HuntDirector.gd"))
-	_hunt_director.name = "HuntDirector"
-	add_child(_hunt_director)
-	
-	# Connect HuntDirector signals
-	if _hunt_director.has_signal("intel_collected"):
-		_hunt_director.intel_collected.connect(_on_intel_collected)
-	if _hunt_director.has_signal("all_intel_collected"):
-		_hunt_director.all_intel_collected.connect(_on_all_intel_collected)
-	if _hunt_director.has_signal("hunt_complete"):
-		_hunt_director.hunt_complete.connect(_on_hunt_complete)
-	
-	# Setup UI components FIRST (before starting hunt director!)
-	_setup_score_ui()
-	_setup_minimap()
-	_setup_core_counter()
-	
-	# NOW start the hunt (after minimap exists!)
-	_hunt_director.start()
-	
-	print("[Level] HUNT mode started - Find all INTEL boxes!")
-
-func _on_intel_collected(intel_index: int, total: int) -> void:
-	print("[Level] INTEL collected: %d/%d" % [intel_index + 1, total])
-
-func _on_all_intel_collected() -> void:
-	print("[Level] All INTEL collected! N01 has spawned...")
-
-func _on_hunt_complete(survived: bool, time_taken: float) -> void:
-	print("[Level] Hunt complete! Survived: %s, Time: %.1f seconds" % [survived, time_taken])
-	if survived:
-		# Victory - could trigger end screen here
-		print("[Level] HUNT mode victory!")
 
 func _setup_wave_system() -> void:
 	# Create wave director
@@ -723,7 +425,7 @@ func _setup_wave_system() -> void:
 	if environment and environment.has_method("set_world_bounds"):
 		environment.set_world_bounds(bounds)
 	
-	# Create wave UI
+	# Create wave UI (hidden in exploration mode - uses progress-based HUD instead)
 	_wave_ui = CanvasLayer.new()
 	_wave_ui.set_script(load("res://scripts/world/WaveUI.gd"))
 	_wave_ui.name = "WaveUI"
@@ -788,6 +490,8 @@ func _on_wave_reward_earned(count: int) -> void:
 		
 		add_child(orb)
 		
+	print("[Level] Spawned %d Pristine Core(s) as reward" % total_count)
+
 	print("[Level] Spawned %d Pristine Core(s) as reward" % total_count)
 
 func _setup_score_ui() -> void:
@@ -934,8 +638,9 @@ func _on_enemy_spawn_requested(enemy_type: String, count: int, pattern: String) 
 		var enemy: Node2D = _enemy_spawner.spawn_enemy(enemy_type, pattern)
 		if enemy:
 			# Apply night boost
-			if _current_night_boost > 0.0:
-				call_deferred("_set_enemy_night_boost", enemy, _current_night_boost)
+			var night_boost := _env_director.get_night_boost() if _env_director else 0.0
+			if night_boost > 0.0:
+				call_deferred("_apply_night_boost_to_enemy", enemy, night_boost)
 			
 			# Check for boss death to notify director
 			if enemy.is_in_group("boss"):
@@ -1009,8 +714,7 @@ func _has_kilo_core_boost() -> bool:
 	else:
 		return false
 	# Check if upgrade is purchased
-	var shop = load("res://scripts/ui/ShopMenu.gd")
-	if shop and shop.has_character_upgrade("kilo", "core_drop"):
+	if ShopMenuScript and ShopMenuScript.has_character_upgrade("kilo", "core_drop"):
 		return true
 	return false
 
@@ -1099,25 +803,8 @@ func _on_rapture_queen_spawned() -> void:
 			tween.tween_property(camera, "zoom", Vector2(0.7, 0.7), 2.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
 func _trigger_rapture_weather() -> void:
-	# 1. Force Night - this triggers night mode for ALL systems
-	if environment and environment.has_method("set_time_of_day"):
-		environment.set_time_of_day("night")
-		_update_ambient_systems(_get_current_biome(), "night")
-		
-	# 2. Force Rain on ALL biomes (override current biome effects)
-	# This stops fireflies, sakura blossoms, pollen, etc. and replaces with rain
-	if _ambient_particles:
-		# Rain forest config provides rain particles
-		# configure() clears existing particles and starts fresh with new config
-		_ambient_particles.configure(&"rain_forest", true) # StringName for biome ID
-		print("[Level] Weather changed to RAIN (overriding biome effects)")
-		
-	# 3. Start Lightning
-	_start_lightning_system()
-	
-	# 4. Play rain audio if not already playing
-	if AudioDirector and AudioDirector.has_method("play_rain_ambience"):
-		AudioDirector.play_rain_ambience()
+	if _env_director:
+		_env_director.trigger_rapture_weather()
 
 
 # --- SHE DESCENDS EASTER EGG MODE ---
@@ -1229,57 +916,23 @@ func _on_she_descends_queen_defeated() -> void:
 			_setup_pause_menu()
 		_pause_menu.show_victory()
 
-func _start_lightning_system() -> void:
-	# Check if already running
-	if has_node("LightningTimer"): return
-	
-	var timer = Timer.new()
-	timer.name = "LightningTimer"
-	timer.wait_time = 3.0 # Initial wait
-	timer.one_shot = true
-	timer.timeout.connect(_on_lightning_timer)
-	add_child(timer)
-	timer.start()
-	print("[Level] Lightning system activated")
-
-func _on_lightning_timer() -> void:
-	# Trigger Flash
-	_trigger_lightning_flash()
-	
-	# Schedule next flash (random interval 2-8 seconds)
-	var timer = get_node_or_null("LightningTimer")
-	if timer:
-		timer.wait_time = randf_range(2.0, 8.0)
-		timer.start()
-
-func _trigger_lightning_flash() -> void:
-	# Visual Flash
-	var flash = ColorRect.new()
-	flash.set_anchors_preset(Control.PRESET_FULL_RECT)
-	flash.color = Color(0.9, 0.9, 1.0, 0.3) # Bright white-blue
-	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	
-	# Add to a high-layer canvas
-	var canvas = CanvasLayer.new()
-	canvas.layer = 120 # Top top
-	add_child(canvas)
-	canvas.add_child(flash)
-	
-	# Twin: Flash fast then fade
-	var tween = create_tween()
-	tween.tween_property(flash, "modulate:a", 1.0, 0.05) # Instant max
-	tween.tween_property(flash, "modulate:a", 0.0, 0.4).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
-	tween.tween_callback(func(): canvas.queue_free())
-	
-	# Sound (Placeholder or actual if available)
-	# TODO: Play loud thunder sound
-	# AudioSystem.play_sfx("thunder") if exists
-
-func _get_current_biome() -> StringName:
-	if environment and environment.has_method("get_active_biome"):
-		var b = environment.get_active_biome()
-		if b: return b.biome_id
-	return &"grasslands" # Fallback
+## Apply night boost shader parameter to a newly spawned enemy.
+## Called via call_deferred from _on_enemy_spawn_requested.
+func _apply_night_boost_to_enemy(enemy: Node, night_boost: float) -> void:
+	if not is_instance_valid(enemy):
+		return
+	var sprite := enemy.get_node_or_null("Sprite2D") as CanvasItem
+	if not sprite:
+		sprite = enemy.get_node_or_null("AnimatedSprite2D") as CanvasItem
+	if not sprite:
+		for child in enemy.get_children():
+			if child is Sprite2D or child is AnimatedSprite2D:
+				sprite = child
+				break
+	if sprite and sprite.material is ShaderMaterial:
+		var mat := sprite.material as ShaderMaterial
+		if mat.shader:
+			mat.set_shader_parameter("night_boost", night_boost)
 
 func _on_wave_changed(wave_number: int) -> void:
 	# print("[Level] Wave changed to: ", wave_number)

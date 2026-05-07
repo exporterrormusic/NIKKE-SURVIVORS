@@ -25,7 +25,7 @@ const MENU_OPTIONS: Array[Dictionary] = [
 
 const TITLE_TEXT := "KINGDOM CLEANUP"
 const SUBTITLE_TEXT := "A NIKKE FAN GAME"
-const VERSION_TEXT := "v0.1J"
+const VERSION_TEXT := "v0.2B"
 
 @onready var _button_row: HBoxContainer = get_node_or_null("%ButtonRow")
 @onready var _menu_bar: Panel = get_node_or_null("%MenuBar") # Added reference to parent panel

@@ -44,6 +44,12 @@ static func cleanup() -> void:
 	print("[TargetCache] Cleanup complete")
 
 
+## Force a cache refresh on next access (call on scene transitions)
+static func force_refresh() -> void:
+	_last_cache_frame = -1
+	_last_xp_cache_frame = -1
+
+
 static func _ensure_tree() -> bool:
 	if _tree == null or not is_instance_valid(_tree):
 		if Engine.get_main_loop() is SceneTree:
@@ -145,7 +151,12 @@ static func get_boulders() -> Array:
 	return _boulders
 
 static func get_player() -> Node2D:
-	"""Returns cached player reference. Auto-refreshes if stale."""
+	"""Returns cached player reference. Auto-refreshes if stale or invalid."""
+	# Check validity first - handles scene transitions where player was freed
+	if _player != null and not is_instance_valid(_player):
+		_player = null
+		_last_cache_frame = -1 # Force refresh
+	
 	var current_frame := Engine.get_process_frames()
 	if current_frame != _last_cache_frame:
 		_refresh_cache_fast()

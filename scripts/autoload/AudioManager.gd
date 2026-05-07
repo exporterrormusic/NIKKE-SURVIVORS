@@ -257,3 +257,116 @@ func get_bus_volume(bus_name: String) -> float:
 	if bus_index != -1:
 		return db_to_linear(AudioServer.get_bus_volume_db(bus_index))
 	return 1.0
+
+
+# =============================================================================
+# AUDIO DIRECTOR FORWARDING
+# These methods delegate to AudioDirector (found on the player node during
+# gameplay) so that consumers can use AudioManager as the single entry point.
+# =============================================================================
+
+## Lazy-cached reference to AudioDirector
+static var _audio_director_ref: Node = null
+
+static func _find_audio_director() -> Node:
+	if not is_instance_valid(_audio_director_ref):
+		_audio_director_ref = null
+		var tree = Engine.get_main_loop()
+		if tree and tree is SceneTree:
+			var root = tree.root
+			if root:
+				var player = root.get_node_or_null("/root/Level/Player")
+				if player:
+					_audio_director_ref = player.get_node_or_null("AudioDirector")
+	return _audio_director_ref
+
+## Play a random battle track via AudioDirector
+static func play_random_battle_track() -> void:
+	var ad = _find_audio_director()
+	if ad and ad.has_method("play_random_battle_track"):
+		ad.play_random_battle_track()
+
+## Play music by explicit path via AudioDirector
+static func play_music_by_path(path: String, force: bool = false, fade_time: float = 0.5) -> void:
+	var ad = _find_audio_director()
+	if ad and ad.has_method("play_music_by_path"):
+		ad.play_music_by_path(path, force, fade_time)
+
+## Play the N01 queen timer music
+static func play_queen_timer_music() -> void:
+	var ad = _find_audio_director()
+	if ad and ad.has_method("play_queen_timer_music"):
+		ad.play_queen_timer_music()
+
+## Stop music via AudioDirector
+static func stop_music_director(fade_time: float = 0.5) -> void:
+	var ad = _find_audio_director()
+	if ad and ad.has_method("stop_music"):
+		ad.stop_music(fade_time)
+
+## Stop ambient audio via AudioDirector
+static func stop_ambient(fade_time: float = 0.5) -> void:
+	var ad = _find_audio_director()
+	if ad and ad.has_method("stop_ambient"):
+		ad.stop_ambient(fade_time)
+
+## Play rain ambience via AudioDirector
+static func play_rain_ambience() -> void:
+	var ad = _find_audio_director()
+	if ad and ad.has_method("play_rain_ambience"):
+		ad.play_rain_ambience()
+
+## Get current song name from AudioDirector
+static func get_current_song_name() -> String:
+	var ad = _find_audio_director()
+	if ad and ad.has_method("get_current_song_name"):
+		return ad.get_current_song_name()
+	return ""
+
+## Get playback progress from AudioDirector
+static func get_playback_progress() -> float:
+	var ad = _find_audio_director()
+	if ad and ad.has_method("get_playback_progress"):
+		return ad.get_playback_progress()
+	return 0.0
+
+## Toggle pause music via AudioDirector
+static func toggle_pause_music() -> void:
+	var ad = _find_audio_director()
+	if ad and ad.has_method("toggle_pause_music"):
+		ad.toggle_pause_music()
+
+## Play next random song via AudioDirector
+static func play_next_random_song() -> void:
+	var ad = _find_audio_director()
+	if ad and ad.has_method("play_next_random_song"):
+		ad.play_next_random_song()
+
+## Play previous song via AudioDirector
+static func play_prev_song() -> void:
+	var ad = _find_audio_director()
+	if ad and ad.has_method("play_prev_song"):
+		ad.play_prev_song()
+
+## Check if music is playing via AudioDirector
+static func is_music_playing() -> bool:
+	var ad = _find_audio_director()
+	if ad and ad.has_method("is_music_playing"):
+		return ad.is_music_playing()
+	return false
+
+## Play UI music via AudioDirector
+static func play_ui_music() -> void:
+	var ad = _find_audio_director()
+	if ad and ad.has_method("play_ui_music"):
+		ad.play_ui_music()
+
+## Update playlist via AudioDirector
+static func update_playlist() -> void:
+	var ad = _find_audio_director()
+	if ad and ad.has_method("_update_playlist"):
+		ad._update_playlist()
+
+## Reset AudioDirector cached reference (call on scene transition)
+static func reset_audio_director_ref() -> void:
+	_audio_director_ref = null

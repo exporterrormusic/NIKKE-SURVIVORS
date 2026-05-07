@@ -8,11 +8,15 @@
 
 config_version=5
 
+[animation]
+
+compatibility/default_parent_skeleton_in_mesh_instance_3d=true
+
 [application]
 
 config/name="SURVIVORS OF VICTORY: A NIKKE FAN GAME"
 run/main_scene="res://scenes/Main.tscn"
-config/features=PackedStringArray("4.5", "Forward Plus")
+config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="uid://biquhygoko83l"
 
 [autoload]
@@ -30,8 +34,6 @@ StageRegistry="*res://scripts/systems/StageRegistry.gd"
 SettingsManager="*res://scripts/systems/SettingsManager.gd"
 AchievementManager="*res://scripts/systems/AchievementManager.gd"
 AudioDirector="*res://scripts/systems/AudioDirector.gd"
-InputPrompts="*res://scripts/systems/InputPrompts.gd"
-DamageLog="*res://scripts/autoload/DamageLog.gd"
 
 [display]
 

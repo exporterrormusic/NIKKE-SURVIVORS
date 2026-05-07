@@ -49,30 +49,39 @@ static func get_shadow_ellipse(width: int = 48, height: int = 24) -> Texture2D:
 	return _create_ellipse_texture(width, height)
 
 static func _create_radial_gradient(size: int) -> Texture2D:
-	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
-	var center := Vector2(size * 0.5, size * 0.5)
-	var max_radius: float = size * 0.5
+	# Use built-in GradientTexture2D — GPU-side, no per-pixel CPU work
+	var grad := Gradient.new()
+	grad.colors = [Color(1, 1, 1, 1), Color(1, 1, 1, 0)]
+	grad.offsets = [0.0, 1.0]
 	
-	for y in size:
-		for x in size:
-			var dist := Vector2(x + 0.5, y + 0.5).distance_to(center) / max_radius
-			var alpha := clampf(1.0 - dist, 0.0, 1.0)
-			alpha = alpha * alpha  # Quadratic falloff
-			img.set_pixel(x, y, Color(1, 1, 1, alpha))
-	
-	return ImageTexture.create_from_image(img)
+	var tex := GradientTexture2D.new()
+	tex.gradient = grad
+	tex.width = size
+	tex.height = size
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)  # Center of texture
+	tex.fill_to = Vector2(1.0, 0.5)    # Edge point — defines the radius
+	# Default interpolation is linear — no explicit assignment needed
+	return tex
 
 static func _create_ellipse_texture(width: int, height: int) -> Texture2D:
 	var img := Image.create(width, height, false, Image.FORMAT_RGBA8)
-	var center := Vector2(width * 0.5, height * 0.5)
+	var half_w := width * 0.5
+	var half_h := height * 0.5
+	var inv_half_w_sq := 1.0 / (half_w * half_w)
+	var inv_half_h_sq := 1.0 / (half_h * half_h)
 	
 	for y in height:
+		var dy := (float(y) + 0.5 - half_h)
 		for x in width:
-			var nx := (float(x) - center.x) / (width * 0.5)
-			var ny := (float(y) - center.y) / (height * 0.5)
-			var dist := sqrt(nx * nx + ny * ny)
-			var alpha := clampf(1.0 - dist, 0.0, 1.0)
-			alpha = alpha * alpha  # Soft edge
-			img.set_pixel(x, y, Color(0, 0, 0, alpha * 0.5))
+			var dx := (float(x) + 0.5 - half_w)
+			# Squared distance using ellipse equation (avoids sqrt)
+			var dist_sq := dx * dx * inv_half_w_sq + dy * dy * inv_half_h_sq
+			if dist_sq >= 1.0:
+				img.set_pixel(x, y, Color(0, 0, 0, 0))
+			else:
+				var alpha := (1.0 - sqrt(dist_sq))
+				alpha = alpha * alpha  # Soft edge
+				img.set_pixel(x, y, Color(0, 0, 0, alpha * 0.5))
 	
 	return ImageTexture.create_from_image(img)

@@ -1,0 +1,53 @@
+MODULARIZATION TARGETS — Reviewed & Categorized
+================================================
+
+KEY
+---
+YES         — Should be modularized (too many responsibilities / god class)
+PARTIALLY   — Already has some modular structure but still too large
+NO          — Leave alone (single responsibility, coherent, or inherently complex)
+DATA        — Constants/config, leave as-is
+AUTO        — Auto-generated file, leave alone
+
+
+═══ MODULARIZE (HIGH PRIORITY) ════════════════════════════════════════════
+
+  1,183  scripts/world/Level.gd                                   PARTIALLY
+         └─ Modularized. Environment/biome/ambient/lightning extracted into
+            LevelEnvironmentDirector.gd (258 lines). Hunt mode fully removed.
+            Defense mode setup (dead code) removed. Remaining: wave system,
+            pause menu, achievements, HUD, BGM, score UI, minimap, combat
+            juice, damage layer, core counter, rapture events, easter egg.
+            ~1183 lines — still large but cleaner.
+
+  1,525  scripts/ui/ShopMenu.gd                                   YES
+         └─ Massive inline UI builder with character list, upgrade grid,
+            persistence, unlock panel. Some components extracted
+            (PristineCoreContainer, SciFiBackButton) but still too large.
+            Extract character list sidebar and upgrade grid builders.
+
+    505  scripts/player/PlayerOverheadHud.gd                      YES
+         └─ Hand-drawn _draw() HUD with HP, ammo, burst, shield bars and
+            special ability indicators all in one file. Split into separate
+            bar components (HealthBar, AmmoBar, BurstBar, ShieldBar).
+
+  1,057  scripts/ui/components/StageSelector.gd                  PARTIALLY
+         └─ Stage selection + easter egg "She Descends" mode with drip
+            overlay, red filter, zoom animation. Extract easter egg code.
+
+
+
+
+══════════════════════════════════════════════════════════════════════════
+SUMMARY
+══════════════════════════════════════════════════════════════════════════
+
+MODULARIZE (YES)     :  2 files  (ShopMenu, PlayerOverheadHud)
+MODULARIZE (PARTIAL) :  2 files  (Level, StageSelector)
+COMPLETED            :  5 files  (Level → Level + LevelEnvironmentDirector,
+                                  EnvironmentController → 6 managers,
+                                  PlayerCore → Phase 3 extraction,
+                                  ModularEnemy → EnemyHUD + ShieldController,
+                                  MenuManager → IntroScreen)
+
+Total: 9 files (5 completed, 4 remaining)

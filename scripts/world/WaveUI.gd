@@ -343,12 +343,6 @@ func show_boss_warning(_time_until: float) -> void:
 		_boss_warning.start_pulse(BOSS_WARNING_DURATION)
 
 
-func hide_all() -> void:
-	if _event_label:
-		_event_label.visible = false
-	if _boss_warning:
-		_boss_warning.visible = false
-
 
 func set_custom_timer_text(text: String) -> void:
 	if _timer_label:

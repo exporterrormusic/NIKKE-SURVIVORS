@@ -80,6 +80,18 @@ var _is_paused_by_user: bool = false
 func _ready() -> void:
 	initialize()
 	_update_playlist()
+	
+	# Defer weapon preloading until after intro screen renders
+	# This prevents blocking the main thread during startup
+	if MenuManager.intro_rendered:
+		_async_preload_weapons()
+	else:
+		MenuManager.intro_ready.connect(_on_intro_ready, CONNECT_ONE_SHOT)
+
+
+func _on_intro_ready() -> void:
+	_async_preload_weapons()
+
 
 func _exit_tree() -> void:
 	# Clean up all looping players to prevent lambda capture errors
@@ -94,13 +106,11 @@ func initialize() -> void:
 		_music_player.bus = MUSIC_BUS
 		_music_player.process_mode = Node.PROCESS_MODE_ALWAYS
 		add_child(_music_player)
-	
-	# Preload weapon sounds to prevent frame freezes during gameplay
-	_preload_weapon_sounds()
+	# Weapon sounds are now preloaded asynchronously after intro
 
-## Preload all weapon fire/reload sounds at startup to avoid frame freezes
-func _preload_weapon_sounds() -> void:
-	print("[AudioDirector] Preloading weapon sounds...")
+## Async preload weapon sounds after intro renders (prevents blocking startup)
+func _async_preload_weapons() -> void:
+	print("[AudioDirector] Starting async weapon sound preload...")
 	var start_time := Time.get_ticks_msec()
 	var count := 0
 	
@@ -129,9 +139,11 @@ func _preload_weapon_sounds() -> void:
 					if stream:
 						count += 1
 					break # Found this pattern, move to next
+		# Yield a frame every weapon type to keep intro smooth
+		await get_tree().process_frame
 	
 	var elapsed := Time.get_ticks_msec() - start_time
-	print("[AudioDirector] Preloaded %d weapon sounds in %d ms" % [count, elapsed])
+	print("[AudioDirector] Preloaded %d weapon sounds in %d ms (async)" % [count, elapsed])
 
 func play_random_battle_track(fade_time: float = 0.5) -> void:
 	# Use ResourceManifest for export-safe file listing

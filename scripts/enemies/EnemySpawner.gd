@@ -80,16 +80,19 @@ const EnemyTierConfigClass = preload("res://scripts/enemies/EnemyTierConfig.gd")
 # Health multiplier from wave system (doubles each wave)
 var _health_multiplier: float = 1.0
 
+# Cached autoload reference (avoid repeated get_node_or_null in hot paths)
+var _game_manager: Node = null
+
 func _ready() -> void:
 	add_to_group("enemy_spawners")
 	_rng.randomize()
+	_game_manager = get_node_or_null("/root/GameManager")
 	_setup_screen_effects()
 
 ## Calculate ATK multiplier based on difficulty
 ## At difficulty 1 = 1.0x, at difficulty 2 = 1.25x, at difficulty 3 = 1.5x, etc.
 func _get_atk_multiplier() -> float:
-	var game_manager = get_node_or_null("/root/GameManager")
-	var diff_mult = game_manager.difficulty_multiplier if game_manager else 1.0
+	var diff_mult = _game_manager.difficulty_multiplier if _game_manager else 1.0
 	return 1.0 + 0.25 * (diff_mult - 1)
 
 func _setup_screen_effects() -> void:
@@ -373,8 +376,7 @@ func _apply_outline_glow(enemy: Node2D, glow_color: Color, enhance_core: bool = 
 ## Replaces duplicate code in _apply_basic_stats, _apply_tank_stats, etc.
 func _apply_tier_stats(enemy: Node2D, tier_name: String) -> void:
 	var tier: Dictionary = EnemyTierConfigClass.get_tier(tier_name)
-	var game_manager = get_node_or_null("/root/GameManager")
-	var difficulty_mult: float = game_manager.difficulty_multiplier if game_manager else 1.0
+	var difficulty_mult: float = _game_manager.difficulty_multiplier if _game_manager else 1.0
 	var atk_mult: float = _get_atk_multiplier()
 	
 	# Apply scale
@@ -397,14 +399,14 @@ func _apply_tier_stats(enemy: Node2D, tier_name: String) -> void:
 	enemy.hp = enemy.max_hp
 
 	# FORCE HP OVERRIDE for N01 in Goddess Fall mode
-	if tier_name == "super_boss" and game_manager and game_manager.goddess_fall_mode:
+	if tier_name == "super_boss" and _game_manager and _game_manager.goddess_fall_mode:
 		enemy.max_hp = 9999
 		enemy.hp = 9999
 	
 	# Apply speed
 	var speed_mult: float = tier.speed_mult
 	# Only apply Goddess Fall speed modifier in that mode
-	if game_manager and game_manager.goddess_fall_mode:
+	if _game_manager and _game_manager.goddess_fall_mode:
 		speed_mult *= EnemyTierConfigClass.GODDESS_FALL_SPEED_MULT
 	enemy.speed = int(enemy.speed * speed_mult)
 	
@@ -676,9 +678,8 @@ func _on_boss_enrage_timeout(boss: Node2D) -> void:
 	var is_super_boss := boss.is_in_group("super_boss")
 	
 	# Mark that player is being killed by enrage (no core drop)
-	var game_manager = get_node_or_null("/root/GameManager")
-	if game_manager:
-		game_manager.set_meta("killed_by_enrage", true)
+	if _game_manager:
+		_game_manager.set_meta("killed_by_enrage", true)
 	
 	# Create screen-wide explosion effect
 	_create_enrage_explosion(boss.global_position, is_super_boss)
@@ -814,8 +815,7 @@ func spawn_rapture_queen() -> Node2D:
 	queen.global_position = spawn_pos
 	
 	# FORCE HP OVERRIDE for Goddess Fall (Critical Fix)
-	var game_manager = get_node_or_null("/root/GameManager")
-	if game_manager and game_manager.goddess_fall_mode:
+	if _game_manager and _game_manager.goddess_fall_mode:
 		queen.max_hp = 999
 		queen.hp = 999
 	

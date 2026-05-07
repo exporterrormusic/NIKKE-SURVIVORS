@@ -52,7 +52,7 @@ var audio_director = null
 # Character management
 var _registry: RefCounted = null # CharacterRegistry
 var _controllers: Array = [] # CharacterController instances
-var _current_controller: RefCounted = null # Current CharacterController
+var _current_controller: CharacterController = null
 var _selected_char_indices: Array[int] = [] # Selected characters from GameManager
 var current_character: int = 0 # Slot index (0=Main, 1=Support1, 2=Support2)
 var swappable_slots: Array[int] = [0] # Slots activated in Talent Tree (0=Main ALWAYS active)
@@ -104,6 +104,12 @@ var _burst_system: BurstSystem = null
 var _char_switcher: CharacterSwitcher = null
 var _talent_ui: TalentUIManager = null
 
+# Extracted modular components (Phase 3 refactor)
+var _visual_effects: PlayerVisualEffects = null
+var _night_glow: PlayerNightGlow = null
+var _clone_manager: PlayerCloneManager = null
+var _skill_points_notify: SkillPointsNotification = null
+
 # Movement state (delegated to PlayerMovement)
 var dashing: bool:
 	get: return _movement.dashing if _movement else false
@@ -122,7 +128,6 @@ const AIM_ASSIST_STRENGTH := 0.4 # how strongly to pull toward target
 
 # Visual effects
 var _swap_effect: Node2D = null
-var _skill_points_notify: Control = null
 
 # Character-specific shop upgrades manager
 var _upgrade_manager: PlayerUpgradeManager = null
@@ -136,17 +141,6 @@ var _shop_xp_bonus: float = 0.0
 var _cecil_revive_invincible_timer: float:
 	get: return _health._cecil_revive_invincible_timer if _health else 0.0
 	set(v): if _health: _health._cecil_revive_invincible_timer = v
-
-var _eden_shield_max: int:
-	get: return _health.shield_max if _health else 0
-	set(v): if _health: _health.shield_max = v
-
-var _eden_shield_current: int:
-	get: return _health.shield_current if _health else 0
-	set(v): if _health: _health.shield_current = v
-
-var _eden_shield_visual: Node2D = null
-var _marian_beam_buff_visual: Node2D = null
 
 # Flag to prevent deferred HUD updates after initialization
 var _hud_initialized: bool = false
@@ -193,18 +187,13 @@ func _ready() -> void:
 	update_sprite()
 	call_deferred("_update_hud")
 	_level_up_sfx = load("res://assets/sounds/sfx/ui/level.wav")
-	# Connect to environment for sprite darkening during night
-	_setup_environment_modulate()
+	# Deferred: connect to environment for night glow (delegated to PlayerNightGlow component)
+	if _night_glow:
+		_night_glow.call_deferred("setup_environment_modulate")
 	
 	# Connect to switcher signals if using component
 	if _char_switcher:
 		_char_switcher.character_switched.connect(_on_controller_switched)
-	
-	
-	print("[PlayerCore] Debug InputMap 'move_up': ", InputMap.action_get_events("move_up"))
-
-	
-	print("[PlayerCore] Debug InputMap 'move_up': ", InputMap.action_get_events("move_up"))
 
 
 func _setup_components() -> void:
@@ -224,7 +213,7 @@ func _setup_components() -> void:
 	_health.sin_wish_triggered.connect(_on_health_sin_wish_triggered)
 	_health.cecil_revive_triggered.connect(_on_health_cecil_revive_triggered)
 	_health.marian_beam_absorbed.connect(_on_health_marian_beam_absorbed)
-	_health.shield_changed.connect(func(_c, _m): _update_shield_display())
+	_health.shield_changed.connect(_on_shield_changed)
 	_health.death.connect(_on_health_death_final)
 	_health.initialize(hp, max_hp)
 	
@@ -276,6 +265,24 @@ func _setup_components() -> void:
 	movement_effects.name = "MovementEffects"
 	add_child(movement_effects)
 	
+	# 4. Visual Effects Module
+	_visual_effects = PlayerVisualEffects.new()
+	_visual_effects.name = "PlayerVisualEffects"
+	_visual_effects.player = self
+	add_child(_visual_effects)
+	
+	# 5. Night Glow Module
+	_night_glow = PlayerNightGlow.new()
+	_night_glow.name = "PlayerNightGlow"
+	_night_glow.player = self
+	add_child(_night_glow)
+	
+	# 6. Clone Manager (Nayuta Duplicity)
+	_clone_manager = PlayerCloneManager.new()
+	_clone_manager.name = "PlayerCloneManager"
+	_clone_manager.player = self
+	add_child(_clone_manager)
+	
 	print("[PlayerCore] Components setup complete")
 
 
@@ -289,18 +296,19 @@ func _on_burst_changed(current: float, maximum: float) -> void:
 
 
 func _on_shield_changed(current: int, maximum: int) -> void:
-	"""Handle shield updates from CharacterUpgrades component."""
-	_eden_shield_current = current
-	_eden_shield_max = maximum
+	"""Handle shield updates from health component."""
 	if overhead_hud:
 		overhead_hud.update_shield(current, maximum)
+	if _visual_effects:
+		_visual_effects.update_shield_display(current, maximum)
 
 
 func _on_revive_triggered() -> void:
 	"""Handle revive from CharacterUpgrades component."""
 	hp = max_hp
 	_update_health_display(max_hp, false)
-	_spawn_revive_effect()
+	if _visual_effects:
+		_visual_effects.spawn_revive_effect()
 	_cecil_revive_invincible_timer = 5.0
 	invincible = true
 
@@ -456,12 +464,12 @@ func _apply_character_shop_upgrades(all_ids: Array) -> void:
 								if controller.has_signal("ammo_changed"):
 									controller.ammo_changed.emit(controller.ammo, controller.max_ammo)
 		
-		# Handle local visual side effects
+		# Handle local visual side effects (delegated to health + visual effects)
 		if _upgrade_manager.has_cecil_eden_shield:
-			_eden_shield_max = int(max_hp * 0.5)
-			if not _eden_shield_visual:
-				_create_eden_shield_visual()
-				call_deferred("_update_shield_display")
+			_health.configure_shield(int(max_hp * 0.5))
+			if _visual_effects:
+				_visual_effects.create_eden_shield_visual()
+				call_deferred("_visual_effects.update_shield_display", _health.shield_current, _health.shield_max)
 
 func _apply_upgrade_for_character(char_idx: int) -> void:
 	"""Apply shop upgrade for a specific character when unlocked during gameplay.
@@ -481,12 +489,12 @@ func _apply_upgrade_for_character(char_idx: int) -> void:
 	var char_id: String = all_ids[char_idx]
 	_upgrade_manager.apply_upgrade_for_character(char_id)
 	
-	# Handle local visual side effects
+	# Handle local visual side effects (delegated to health + visual effects)
 	if char_id == "cecil" and _upgrade_manager.has_cecil_eden_shield:
-		_eden_shield_max = int(max_hp * 0.5)
-		if not _eden_shield_visual:
-			_create_eden_shield_visual()
-			call_deferred("_update_shield_display")
+		_health.configure_shield(int(max_hp * 0.5))
+		if _visual_effects:
+			_visual_effects.create_eden_shield_visual()
+			call_deferred("_visual_effects.update_shield_display", _health.shield_current, _health.shield_max)
 
 
 func _apply_all_talents_to_controllers() -> void:
@@ -553,46 +561,17 @@ func on_enemy_killed(_enemy: Node2D, killer_source: String = "player") -> void:
 			heal_amount = 1
 		heal(heal_amount)
 	
-	# Regen Eden Shield on kill (1% of max HP) - direct player kills only
-	if _upgrade_manager.has_cecil_eden_shield and _eden_shield_current < _eden_shield_max and is_direct_kill:
+	# Regen Eden Shield on kill (1% of max HP) - direct player kills only (delegated to health component)
+	if _upgrade_manager.has_cecil_eden_shield and _health.shield_current < _health.shield_max and is_direct_kill:
 		var regen_amount: int = maxi(1, int(max_hp * 0.01))
-		gain_shield(regen_amount)
+		_health.add_shield(regen_amount)
 	
-	# Nayuta: "Duplicity" - 10% chance to spawn a clone when player directly kills enemy
-	# Exclude summon/clone kills to prevent chain reactions
-	if _upgrade_manager.has_nayuta_duplicity_upgrade and is_direct_kill and randf() < 0.10:
-		_spawn_duplicity_clone()
+	# Nayuta: "Duplicity" - 10% chance to spawn a clone (delegated to PlayerCloneManager)
+	if _clone_manager:
+		_clone_manager.has_duplicity_upgrade = _upgrade_manager.has_nayuta_duplicity_upgrade
+		_clone_manager.on_enemy_killed(is_direct_kill)
 
-func _spawn_duplicity_clone() -> void:
-	"""Spawn a clone at the player's position for Nayuta's Duplicity upgrade."""
-	var NayutaCloneScript = preload("res://scripts/characters/effects/NayutaClone.gd")
-	var clone: Node2D = NayutaCloneScript.new()
-	
-	# CRITICAL: Set collision layers BEFORE adding to scene tree
-	# This ensures proper physics collision detection with enemy projectiles
-	clone.collision_layer = 8 # Allies layer (detected by EnemyLaser mask)
-	clone.collision_mask = 5 # World (1) + Enemies (4)
-	
-	# Deferred add to avoid "parent busy" errors during physics callbacks
-	get_parent().call_deferred("add_child", clone)
-	clone.global_position = global_position + Vector2(randf_range(-30, 30), randf_range(-30, 30))
-	
-	# Clone stats: 25% player HP with level scaling, 20% damage multiplier, no heal on death
-	# HP scales: base 25% of player HP, +25% per level
-	var hp_level_mult := 1.0 + (level - 1) * 0.25
-	var clone_hp: int = maxi(1, int((max_hp / 4.0) * hp_level_mult))
-	var clone_attack: float = 0.2
-	
-	# Determine weapon type - use Nayuta's weapon pool if available
-	var weapon_type: String = "smg" # Default fallback
-	if _current_controller is NayutaController:
-		var nayuta_ctrl := _current_controller as NayutaController
-		if nayuta_ctrl.has_method("get_weapon_pool"):
-			var weapon_pool: Array = nayuta_ctrl.get_weapon_pool()
-			if weapon_pool.size() > 0:
-				weapon_type = weapon_pool[randi() % weapon_pool.size()]
-	
-	clone.call("initialize", self, weapon_type, clone_hp, clone_attack, false, level)
+# (Duplicity clone spawning delegated to PlayerCloneManager)
 
 func _init_ui() -> void:
 	if overhead_hud:
@@ -770,57 +749,7 @@ func _apply_universal_shader() -> void:
 	# Instead, we create a PointLight2D for night glow effect (see _setup_environment_modulate)
 	pass
 
-# Night glow light reference
-var _night_glow_light: PointLight2D = null
-
-func _setup_environment_modulate() -> void:
-	# Create a subtle glow light for night visibility
-	_create_night_glow_light()
-	
-	# Connect to EnvironmentController to toggle night glow
-	var env_controller = get_tree().get_first_node_in_group("environment_controller")
-	if env_controller and env_controller is EnvironmentController:
-		if env_controller.has_signal("modulate_changed"):
-			env_controller.modulate_changed.connect(_on_environment_modulate_changed)
-			# Set initial state
-			_on_environment_modulate_changed(env_controller.current_modulate)
-
-func _create_night_glow_light() -> void:
-	if _night_glow_light:
-		return
-	
-	_night_glow_light = PointLight2D.new()
-	_night_glow_light.name = "NightGlowLight"
-	_night_glow_light.color = Color(0.7, 0.85, 1.0, 1.0) # Soft blue-white glow
-	_night_glow_light.energy = 0.0 # Start hidden (will be enabled at night)
-	_night_glow_light.texture_scale = 12.0 # Large soft radius
-	_night_glow_light.blend_mode = Light2D.BLEND_MODE_ADD
-	_night_glow_light.z_index = -1 # Behind the sprite
-	
-	# Create a simple radial gradient texture for smooth falloff
-	var img := Image.create(64, 64, false, Image.FORMAT_RGBA8)
-	var center := Vector2(32, 32)
-	for x in 64:
-		for y in 64:
-			var dist := Vector2(x, y).distance_to(center) / 32.0
-			var alpha := clampf(1.0 - dist, 0.0, 1.0) * 0.5 # Soft edges
-			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, alpha))
-	
-	var tex := ImageTexture.create_from_image(img)
-	_night_glow_light.texture = tex
-	
-	add_child(_night_glow_light)
-
-func _on_environment_modulate_changed(color: Color) -> void:
-	# Calculate night intensity from modulate color (darker = more night)
-	# Day modulate is ~Color(0.95, 0.95, 0.95), night is ~Color(0.32, 0.39, 0.53)
-	var avg_brightness: float = (color.r + color.g + color.b) / 3.0
-	# Map brightness to night_boost: 0.95 = day (0.0), 0.35 = night (1.0)
-	var night_boost: float = clampf((0.95 - avg_brightness) / 0.6, 0.0, 1.0)
-	
-	# Update glow light energy based on night intensity
-	if _night_glow_light:
-		_night_glow_light.energy = night_boost * 0.4 # Subtle glow at night, none during day
+# (Night glow light management delegated to PlayerNightGlow)
 
 # ============= DAMAGE / HEALING =============
 
@@ -852,20 +781,26 @@ func _on_health_damage_taken_visuals(dmg: int, is_crit: bool, direction: Vector2
 	EventBus.player_damaged.emit(dmg, null)
 
 func _on_health_shield_blocked_visuals(_amount: int) -> void:
-	_spawn_shield_hit_effect()
-	call_deferred("_update_shield_display")
+	if _visual_effects:
+		_visual_effects.spawn_shield_hit_effect()
+		call_deferred("_visual_effects.update_shield_display", _health.shield_current, _health.shield_max)
 
 func _on_health_sin_wish_triggered() -> void:
-	_trigger_sin_wish_sequence()
+	if _visual_effects:
+		_visual_effects.trigger_sin_wish_sequence()
 	print("[PlayerCore] Sin's wish save triggered (via component)!")
 
 func _on_health_cecil_revive_triggered() -> void:
-	_spawn_revive_effect()
+	if _visual_effects:
+		_visual_effects.spawn_revive_effect()
 	_update_health_display(max_hp, false) # Full heal display
 	print("[PlayerCore] Cecil revive triggered (via component)!")
 
 func _on_health_marian_beam_absorbed() -> void:
-	_activate_marian_beam_buff()
+	if _upgrade_manager:
+		_upgrade_manager.trigger_marian_beam_absorb()
+	if _visual_effects:
+		_visual_effects.activate_marian_beam_buff()
 
 func _on_health_death_final() -> void:
 	# Record the run result to GameManager for leaderboard
@@ -1180,157 +1115,15 @@ func _spawn_level_up_glow() -> void:
 	get_parent().add_child(glow)
 	glow.attach_to_player(self)
 
-func _spawn_revive_effect() -> void:
-	## Spawns Cecil's "Three Wishes" visual effect with pause and wish image
-	var CecilWishEffectScript = preload("res://scripts/characters/effects/CecilWishEffect.gd")
-	var effect = CecilWishEffectScript.new()
-	effect.player_ref = self
-	get_parent().add_child(effect)
-	effect.global_position = global_position
+# (Revive effect spawning delegated to PlayerVisualEffects)
 
-func _create_eden_shield_visual() -> void:
-	## Creates the visual shield effect for Eden's Shield upgrade
-	if _eden_shield_visual and is_instance_valid(_eden_shield_visual):
-		return
-	
-	var KiloShieldVisualScript = preload("res://scripts/effects/KiloShieldVisual.gd")
-	_eden_shield_visual = KiloShieldVisualScript.new()
-	_eden_shield_visual.name = "EdenShieldVisual"
-	call_deferred("_add_eden_shield_visual")
-
-func _add_eden_shield_visual() -> void:
-	if _eden_shield_visual and is_instance_valid(_eden_shield_visual):
-		get_parent().add_child(_eden_shield_visual)
-		_eden_shield_visual.initialize(self)
-
-func _update_shield_display() -> void:
-	## Updates the overhead HUD and visual shield with current shield status
-	if overhead_hud and overhead_hud.has_method("update_shield"):
-		overhead_hud.update_shield(_eden_shield_current, _eden_shield_max)
-	
-	# Update visual shield
-	if _eden_shield_visual and is_instance_valid(_eden_shield_visual):
-		_eden_shield_visual.update_shield(_eden_shield_current, _eden_shield_max)
-
-func _spawn_shield_hit_effect() -> void:
-	## Spawns a cyan shield hit effect when Eden's shield absorbs damage
-	var ShieldHitScript = preload("res://scripts/effects/ShieldHitEffect.gd")
-	var effect = ShieldHitScript.new()
-	get_parent().add_child(effect)
-	effect.global_position = global_position
-	
-	# Also trigger flash on visual shield
-	if _eden_shield_visual and is_instance_valid(_eden_shield_visual) and _eden_shield_visual.has_method("on_shield_hit"):
-		_eden_shield_visual.on_shield_hit()
-
-func gain_shield(amount: int) -> void:
-	## Add shield HP, up to max
-	if _upgrade_manager.has_cecil_eden_shield and _eden_shield_current < _eden_shield_max:
-		var old = _eden_shield_current
-		_eden_shield_current = mini(_eden_shield_current + amount, _eden_shield_max)
-		if _eden_shield_current != old:
-			call_deferred("_update_shield_display")
+# (Eden shield visual management delegated to PlayerVisualEffects)
 
 # ============= MARIAN BEAM BUFF =============
 
-func _activate_marian_beam_buff() -> void:
-	"""Activate Marian's beam absorption buff (Delegated to Manager)."""
-	if _upgrade_manager:
-		_upgrade_manager.trigger_marian_beam_absorb()
-
-func _create_marian_buff_visual() -> void:
-	"""Create smoky purple glow around player."""
-	if _marian_beam_buff_visual and is_instance_valid(_marian_beam_buff_visual):
-		return
-	
-	_marian_beam_buff_visual = Node2D.new()
-	_marian_beam_buff_visual.name = "MarianBeamBuffGlow"
-	_marian_beam_buff_visual.set_script(_get_marian_buff_glow_script())
-	add_child(_marian_beam_buff_visual)
-
-func _get_marian_buff_glow_script() -> GDScript:
-	var script := GDScript.new()
-	script.source_code = """
-extends Node2D
-
-var _time: float = 0.0
-var _particles: Array = []
-
-func _ready() -> void:
-	z_index = -1
-	for i in range(12):
-		_particles.append({
-			"angle": randf() * TAU,
-			"dist": randf_range(30, 60),
-			"speed": randf_range(0.5, 1.5),
-			"size": randf_range(15, 30),
-			"alpha": randf_range(0.3, 0.6)
-		})
-
-func _process(delta: float) -> void:
-	_time += delta
-	for p in _particles:
-		p.angle += p.speed * delta
-	queue_redraw()
-
-func _draw() -> void:
-	# Smoky purple glow
-	for p in _particles:
-		var pos = Vector2(cos(p.angle), sin(p.angle)) * p.dist
-		var pulse = 0.8 + 0.2 * sin(_time * 3.0 + p.angle)
-		var color = Color(0.6, 0.2, 0.9, p.alpha * pulse)
-		draw_circle(pos, p.size, color)
-	
-	# Central glow
-	var center_alpha = 0.3 + 0.1 * sin(_time * 4.0)
-	draw_circle(Vector2.ZERO, 50, Color(0.5, 0.1, 0.8, center_alpha))
-"""
-	script.reload()
-	return script
-
-func _update_marian_beam_visual(active: bool) -> void:
-	"""Update Marian beam visual state (Called by PlayerUpgradeManager)."""
-	if active:
-		_create_marian_buff_visual()
-		if _current_controller is MarianController:
-			_current_controller.set_beam_buff_active(true)
-		print("[PlayerCore] Marian beam buff visual ON")
-	else:
-		if _marian_beam_buff_visual and is_instance_valid(_marian_beam_buff_visual):
-			_marian_beam_buff_visual.queue_free()
-			_marian_beam_buff_visual = null
-		
-		# Notify controller
-		if _current_controller is MarianController:
-			_current_controller.set_beam_buff_active(false)
-		
-		print("[PlayerCore] Marian beam buff visual OFF")
+# (Marian beam buff visual delegated to PlayerVisualEffects)
 
 # ============= SIN WISH SAVE =============
-
-func _trigger_sin_wish_sequence() -> void:
-	"""Trigger Sin's 'I WISH They Were Gone' death save sequence."""
-	var SinWishEffectScript = load("res://scripts/characters/effects/SinWishEffect.gd")
-	if not SinWishEffectScript:
-		push_error("[PlayerCore] Failed to load SinWishEffect.gd!")
-		return
-	
-	var effect = SinWishEffectScript.new()
-	effect.player_ref = self
-	get_parent().add_child(effect)
-	effect.global_position = global_position
-	
-	# Connect completion signal to grant invulnerability
-	effect.sequence_complete.connect(_on_sin_wish_complete)
-
-func _on_sin_wish_complete() -> void:
-	"""Called when Sin's wish sequence finishes."""
-	# Grant 3 seconds of invulnerability
-	invincible = true
-	_cecil_revive_invincible_timer = 3.0 # Reuse Cecil's timer for invincibility
-	hp = max_hp # Full heal
-	_update_health_display(max_hp, false)
-	print("[PlayerCore] Sin wish sequence complete. 3s invulnerability granted.")
 
 func reset_sin_wish_for_new_match() -> void:
 	"""Reset Sin's wish usage for a new match."""
@@ -1451,102 +1244,14 @@ func _on_talent_tree_closed() -> void:
 		_update_skill_points_notification(tree.get_skill_points())
 
 func _update_skill_points_notification(points: int) -> void:
-	var canvas := get_parent().get_node_or_null("CanvasLayer")
-	if canvas == null:
-		canvas = get_tree().root
-	
-	# Hide if no points
-	if points <= 0:
-		if _skill_points_notify and is_instance_valid(_skill_points_notify):
-			_skill_points_notify.visible = false
-		return
-	
-	# Create notification if needed
+	"""Show or update the skill points notification (delegated to SkillPointsNotification component)."""
 	if _skill_points_notify == null or not is_instance_valid(_skill_points_notify):
-		_skill_points_notify = _create_skill_points_notification()
-		canvas.add_child(_skill_points_notify)
+		var canvas := get_parent().get_node_or_null("CanvasLayer")
+		if canvas == null:
+			canvas = get_tree().root
+		_skill_points_notify = SkillPointsNotification.create(canvas)
 	
-	# Update text and show
-	var main_label: Label = _skill_points_notify.get_node_or_null("MainLabel")
-	if main_label:
-		main_label.text = "SKILL POINTS AVAILABLE × %d" % points
-	_skill_points_notify.visible = true
-	
-	# Animate pulse
-	_animate_skill_points_notification()
-
-func _create_skill_points_notification() -> Control:
-	var container := Control.new()
-	container.name = "SkillPointsNotify"
-	# Position under player HUD with good padding
-	container.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	container.position = Vector2(35, 200)
-	container.size = Vector2(240, 48)
-	container.pivot_offset = Vector2(120, 24)
-	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	
-	# Background panel with golden border
-	var bg := Panel.new()
-	bg.name = "Background"
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	var bg_style := StyleBoxFlat.new()
-	bg_style.bg_color = Color(0.02, 0.02, 0.04, 0.95)
-	bg_style.border_color = Color(1.0, 0.85, 0.2, 1.0)
-	bg_style.set_border_width_all(3)
-	bg_style.set_corner_radius_all(6)
-	bg_style.shadow_color = Color(1.0, 0.75, 0.0, 0.5)
-	bg_style.shadow_size = 5
-	bg.add_theme_stylebox_override("panel", bg_style)
-	container.add_child(bg)
-	
-	# Main label
-	var main_label := Label.new()
-	main_label.name = "MainLabel"
-	main_label.text = "SKILL POINTS AVAILABLE × 1"
-	main_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	main_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	main_label.add_theme_font_size_override("font_size", 16)
-	main_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2, 1.0))
-	main_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.9))
-	main_label.add_theme_constant_override("shadow_offset_x", 1)
-	main_label.add_theme_constant_override("shadow_offset_y", 1)
-	main_label.position = Vector2(0, 4)
-	main_label.size = Vector2(240, 24)
-	container.add_child(main_label)
-	
-	# Sub label
-	var sub_label := Label.new()
-	sub_label.name = "SubLabel"
-	sub_label.text = "PRESS TAB TO OPEN SKILL TREE"
-	sub_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	sub_label.add_theme_font_size_override("font_size", 9)
-	sub_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75, 0.85))
-	sub_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.7))
-	sub_label.add_theme_constant_override("shadow_offset_x", 1)
-	sub_label.add_theme_constant_override("shadow_offset_y", 1)
-	sub_label.position = Vector2(0, 28)
-	sub_label.size = Vector2(240, 16)
-	container.add_child(sub_label)
-	
-	return container
-
-func _animate_skill_points_notification() -> void:
-	if _skill_points_notify == null or not is_instance_valid(_skill_points_notify):
-		return
-	
-	# Kill existing tween
-	if _skill_points_notify.has_meta("pulse_tween"):
-		var old_tween = _skill_points_notify.get_meta("pulse_tween")
-		if old_tween and is_instance_valid(old_tween):
-			old_tween.kill()
-	
-	# Pulse animation
-	var tween := create_tween()
-	tween.set_loops()
-	tween.tween_property(_skill_points_notify, "scale", Vector2(1.05, 1.05), 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	tween.tween_property(_skill_points_notify, "scale", Vector2(1.0, 1.0), 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	_skill_points_notify.set_meta("pulse_tween", tween)
+	_skill_points_notify.show_notification(points)
 
 func _update_burst_visibility() -> void:
 	# Burst bar should only be visible for the CURRENT character if they have burst unlocked
@@ -1669,6 +1374,11 @@ func _update_overhead_special() -> void:
 		is_locked = _current_controller._special_blocked
 	
 	overhead_hud.update_special_ability(unlocked, progress, is_locked)
+
+## Public accessor for current controller (used by PlayerCloneManager and external systems)
+func get_current_controller() -> CharacterController:
+	return _current_controller
+
 
 # ============= MAIN GAME LOOP =============
 
@@ -1956,12 +1666,7 @@ func _show_talent_tree(add_point: bool = false) -> void:
 	
 	# Hide skill points notification while tree is open
 	if _skill_points_notify and is_instance_valid(_skill_points_notify):
-		_skill_points_notify.visible = false
-		# Kill pulse animation
-		if _skill_points_notify.has_meta("pulse_tween"):
-			var tween = _skill_points_notify.get_meta("pulse_tween")
-			if tween and is_instance_valid(tween):
-				tween.kill()
+		_skill_points_notify.show_notification(-1) # -1 = hide
 	
 	# Check for existing talent tree
 	var existing = canvas.get_node_or_null("TalentTree")

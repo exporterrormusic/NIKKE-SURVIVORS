@@ -149,6 +149,10 @@ func _update_chromatic(delta: float) -> void:
 	
 	if _chromatic_material:
 		_chromatic_material.set_shader_parameter("aberration_strength", _chromatic_strength)
+	
+	# Hide overlay when not active to avoid unnecessary full-screen pass
+	if _chromatic_overlay and is_instance_valid(_chromatic_overlay):
+		_chromatic_overlay.visible = _chromatic_strength > 0.001
 
 func _update_camera(delta: float) -> void:
 	if not _camera:

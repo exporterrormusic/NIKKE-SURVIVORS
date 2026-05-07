@@ -5,9 +5,9 @@ class_name PhysicalGrassField
 ## Uses a single quad with procedural grass rendering for better compatibility
 
 @export var field_size: Vector2 = Vector2(4096, 4096)
-@export var world_bounds: Rect2 = Rect2(-2000, -2000, 4000, 4000)  # World boundary for clipping
-@export var grass_density: float = 1.0  # Visual density
-@export var blade_height: float = 54.0  # Increased from 40.0 (35% taller)
+@export var world_bounds: Rect2 = Rect2() # Empty - must be set before quad is created
+@export var grass_density: float = 1.0 # Visual density
+@export var blade_height: float = 54.0 # Increased from 40.0 (35% taller)
 @export var sway_strength: float = 12.0
 @export var wind_speed: float = 1.0
 @export var interaction_radius: float = 80.0
@@ -18,13 +18,24 @@ var _grass_quad: ColorRect = null
 var _player_position: Vector2 = Vector2.ZERO
 var _time: float = 0.0
 var _wind_direction: Vector2 = Vector2(1, 0)
+var _quad_created: bool = false # Track if quad has been created
 
 func _ready():
-	_create_grass_quad()
+	# IMPORTANT: Do NOT create quad here - wait until world_bounds is set externally
+	# This fixes exploration mode where bounds are set AFTER node is added to tree
 	set_process(true)
 
 func _process(delta: float):
 	_time += delta
+	
+	# Lazy-create quad if bounds have been set but quad doesn't exist yet
+	if not _quad_created and world_bounds.size != Vector2.ZERO:
+		print("[PhysicalGrassField] Creating quad with bounds: ", world_bounds)
+		_create_grass_quad()
+		_quad_created = true
+	elif not _quad_created and _time > 0.5:
+		# Debug: Check why quad isn't being created after 0.5 seconds
+		print("[PhysicalGrassField] WARNING: Quad not created after 0.5s. world_bounds: ", world_bounds)
 	
 	# Update shader parameters
 	if _grass_quad and _grass_quad.material:
@@ -46,7 +57,7 @@ func _create_grass_quad():
 	# Use world_bounds to position and size the grass correctly
 	_grass_quad.size = world_bounds.size
 	_grass_quad.position = world_bounds.position
-	_grass_quad.z_index = 0  # Same level as ground
+	_grass_quad.z_index = 0 # Same level as ground
 	
 	# Also update field_size to match world_bounds for shader calculations
 	field_size = world_bounds.size
@@ -174,22 +185,22 @@ float get_grass_height_multiplier(vec2 world_pos) {
 float draw_grass_clump(vec2 local_pos, vec2 clump_pos, float clump_seed, vec2 to_player_dir, float player_influence, float height_multiplier) {
 	float total_coverage = 0.0;
 	
-	// Fewer blades in cut regions for sparse look
-	int max_blades = height_multiplier < 0.4 ? 2 : int(2.0 + clump_seed * 1.0);  // Reduced from 3.0 for perf
+	// Original blade count for performance
+	int max_blades = height_multiplier < 0.4 ? 2 : int(2.0 + clump_seed * 1.0);  // 2-3 blades per clump
 	int num_blades = max_blades;
 	
-	for (int i = 0; i < 3; i++) { // Reduced from 5 for performance
+	for (int i = 0; i < 3; i++) { // Original loop count
 		if (i >= num_blades) break;
 		
 		// More random positioning
 		float blade_rand = hash21(vec2(clump_seed, float(i)));
-		float blade_offset_x = (blade_rand - 0.5) * 25.0; // Random horizontal spread
-		float blade_offset_y = hash21(vec2(clump_seed + 100.0, float(i))) * 8.0; // Random vertical offset
+		float blade_offset_x = (blade_rand - 0.5) * 30.0; // Moderate spread
+		float blade_offset_y = hash21(vec2(clump_seed + 100.0, float(i))) * 10.0;
 		float blade_seed = clump_seed + float(i) * 0.1547;
 		
-		// Blade properties - adjust width based on height
-		float base_width = 10.5 + hash21(vec2(blade_seed, 0.0)) * 7.5;
-		float blade_width = base_width * (0.7 + height_multiplier * 0.3); // Narrower when cut
+		// WIDER BLADES for more coverage without performance cost
+		float base_width = 16.0 + hash21(vec2(blade_seed, 0.0)) * 10.0; // 16-26px (was 10-18px)
+		float blade_width = base_width * (0.7 + height_multiplier * 0.3);
 		float base_height = blade_height * (0.85 + hash21(vec2(blade_seed, 1.0)) * 0.35);
 		float blade_h = base_height * height_multiplier; // Apply height multiplier
 		
@@ -246,23 +257,26 @@ void fragment() {
 	// Determine grass height for this region
 	float height_multiplier = get_grass_height_multiplier(world_pos);
 	
-	// Smaller spacing for double the grass density
-	float cell_size = 38.0 / grass_density; // Reduced from 55.0 for 2x density
+	// Original cell size for performance
+	float cell_size = 55.0 / grass_density; // Original value
 	vec2 cell = floor(world_pos / cell_size);
 	vec2 cell_local = fract(world_pos / cell_size) * cell_size;
 	
-	vec4 final_color = vec4(0.0);
+	// Start with grass-tinted ground fill (zero cost - fills gaps naturally)
+	vec4 ground_grass_tint = mix(grass_color_base, grass_color_tip, 0.3);
+	ground_grass_tint.a = 0.85; // Slightly transparent base
+	vec4 final_color = ground_grass_tint;
 	
-	// Check only 2x2 neighbor cells for performance (reduced from 3x3)
+	// Original 2x2 neighbor check for performance
 	for (int dx = 0; dx <= 1; dx++) {
 		for (int dy = 0; dy <= 1; dy++) {
 			vec2 neighbor_cell = cell + vec2(float(dx) - 0.5, float(dy) - 0.5);
 			float clump_seed = hash21(neighbor_cell);
 			
-			// More random position within cell - not centered
+			// Random position within cell
 			vec2 clump_offset = vec2(
-				hash21(neighbor_cell + vec2(13.7, 0.0)) * 0.9 + 0.05, // 0.05-0.95 range
-				hash21(neighbor_cell + vec2(0.0, 27.3)) * 0.4 // More Y variation now
+				hash21(neighbor_cell + vec2(13.7, 0.0)) * 0.9 + 0.05,
+				hash21(neighbor_cell + vec2(0.0, 27.3)) * 0.5
 			) * cell_size;
 			
 			vec2 clump_world_pos = neighbor_cell * cell_size + clump_offset;
@@ -325,7 +339,7 @@ void fragment() {
 	mat.set_shader_parameter("player_pos", _player_position)
 	mat.set_shader_parameter("time", 0.0)
 	mat.set_shader_parameter("field_size", field_size)
-	mat.set_shader_parameter("quad_position", Vector2.ZERO)  # Position relative to parent
+	mat.set_shader_parameter("quad_position", Vector2.ZERO) # Position relative to parent
 	
 	return mat
 

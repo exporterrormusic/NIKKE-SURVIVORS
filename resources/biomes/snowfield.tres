@@ -37,3 +37,4 @@ snow_ice_highlight = 0.28
 snow_sparkle_intensity = 0.45
 snowfall_density = 0.9
 snowfall_scale = 1.4
+shimmer_intensity = 0.12

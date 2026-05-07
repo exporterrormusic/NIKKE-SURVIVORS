@@ -102,13 +102,13 @@ static func _scan_character_bursts(characters_path: String) -> Array[String]:
 	return bursts
 
 static func _save_manifest() -> void:
-	var manifest := Resource.new()
-	manifest.set_meta("battle_music", battle_music)
-	manifest.set_meta("biome_files", biome_files)
-	manifest.set_meta("time_of_day_files", time_of_day_files)
-	manifest.set_meta("map_files", map_files)
-	manifest.set_meta("background_files", background_files)
-	manifest.set_meta("character_burst_files", character_burst_files)
+	var manifest := ResourceManifestData.new()
+	manifest.battle_music = battle_music
+	manifest.biome_files = biome_files
+	manifest.time_of_day_files = time_of_day_files
+	manifest.map_files = map_files
+	manifest.background_files = background_files
+	manifest.character_burst_files = character_burst_files
 	
 	var error := ResourceSaver.save(manifest, MANIFEST_PATH)
 	if error == OK:
@@ -121,17 +121,17 @@ static func _load_manifest() -> void:
 		push_error("ResourceManifest: No manifest found at %s - run game in editor first!" % MANIFEST_PATH)
 		return
 	
-	var manifest := load(MANIFEST_PATH)
+	var manifest := load(MANIFEST_PATH) as ResourceManifestData
 	if manifest == null:
-		push_error("ResourceManifest: Failed to load manifest")
+		push_error("ResourceManifest: Failed to load manifest — file may be from old format. Regenerate in editor.")
 		return
 	
-	battle_music = Array(manifest.get_meta("battle_music", []), TYPE_STRING, "", null)
-	biome_files = Array(manifest.get_meta("biome_files", []), TYPE_STRING, "", null)
-	time_of_day_files = Array(manifest.get_meta("time_of_day_files", []), TYPE_STRING, "", null)
-	map_files = Array(manifest.get_meta("map_files", []), TYPE_STRING, "", null)
-	background_files = Array(manifest.get_meta("background_files", []), TYPE_STRING, "", null)
-	character_burst_files = Array(manifest.get_meta("character_burst_files", []), TYPE_STRING, "", null)
+	battle_music = manifest.battle_music
+	biome_files = manifest.biome_files
+	time_of_day_files = manifest.time_of_day_files
+	map_files = manifest.map_files
+	background_files = manifest.background_files
+	character_burst_files = manifest.character_burst_files
 	
 	print("[ResourceManifest] Loaded manifest with %d battle tracks, %d biomes, %d backgrounds" % [
 		battle_music.size(), biome_files.size(), background_files.size()

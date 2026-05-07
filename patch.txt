@@ -1,3 +1,15 @@
+Patch v0.2B  -  "SNOW & PERFORMANCE"
+VISUAL UPGRADES:
+- New textured "Snowy Boulders" replace procedural rocks
+- Added physics-reactive "Swayable Bushes" that respond to wind, players, and bullets
+- Boulders now emit physical snow puffs on impact (blow-through effect)
+- Optimized global snow weather: flakes adjusted for better daytime visibility
+
+OPTIMIZATIONS:
+- Main Menu background (Venetian Blinds) significantly optimized
+- Implemented caching and frame-skipping for smoother menu transitions
+
+------------------------------------------------------------
 Patch v0.2A  -  "CHRISTMAS EVE LAUNCH"
 COMMANDER IMPROVEMENTS:
 - Assault rifle bullets now have slight homing toward nearby enemies

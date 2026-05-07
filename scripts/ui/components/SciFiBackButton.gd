@@ -23,10 +23,15 @@ func _init() -> void:
 	focus_mode = Control.FOCUS_ALL # Enable controller focus
 	mouse_entered.connect(func(): _is_hovered = true; queue_redraw())
 	mouse_exited.connect(func(): _is_hovered = false; queue_redraw())
+	# Also highlight on focus (for controller navigation)
+	focus_entered.connect(func(): _is_hovered = true; queue_redraw())
+	focus_exited.connect(func(): _is_hovered = false; queue_redraw())
 
 
 func _ready() -> void:
 	_build_content()
+	# Remove default focus style to prevent white box
+	add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 
 
 func _process(delta: float) -> void:

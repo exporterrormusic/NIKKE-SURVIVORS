@@ -15,6 +15,9 @@ static var _cached_chrono_frame: int = -1
 const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
 const SMG_BULLET_TEXTURE = preload("res://assets/projectiles/smg_bullet.png")
 
+# Cached GameManager reference (re-checked once per frame)
+static var _cached_game_manager: Node = null
+
 # Bullet settings
 const MAX_BULLETS = 2000
 const MASK_COLLISION = 7 # World(1) + Enemy(2 - legacy) + Hitbox(4)
@@ -86,11 +89,35 @@ func _ready() -> void:
 	if ShaderCache.get_bullet_glow_material():
 		_glow_material_rid = ShaderCache.get_bullet_glow_material().get_rid()
 	
+	# Get EffectsLayer canvas item to avoid night darkening
+	# Fallback to our own canvas if not found
 	_parent_canvas_item = get_canvas_item()
+	call_deferred("_try_reparent_to_effects_layer")
 	
 	# Pre-allocate pool
 	for i in range(200):
 		_pool.append(SimpleBullet.new(_parent_canvas_item))
+
+
+func _try_reparent_to_effects_layer() -> void:
+	"""Reparent bullets to EffectsLayer to avoid night darkening."""
+	var env = get_tree().get_first_node_in_group("environment_controller")
+	if env:
+		var effects = env.get_node_or_null("EffectsLayer")
+		if effects and effects is CanvasLayer:
+			update_parent_canvas(effects.get_canvas())
+
+func update_parent_canvas(new_parent: RID) -> void:
+	"""Update the parent canvas for all bullets. Called by EnvironmentController."""
+	_parent_canvas_item = new_parent
+	
+	# Reparent existing pool bullets
+	for b in _pool:
+		if b.visual_rid.is_valid():
+			RenderingServer.canvas_item_set_parent(b.visual_rid, _parent_canvas_item)
+	for b in _bullets:
+		if b.visual_rid.is_valid():
+			RenderingServer.canvas_item_set_parent(b.visual_rid, _parent_canvas_item)
 
 func _exit_tree() -> void:
 	# Clean up RIDs to prevent leaks
@@ -152,8 +179,11 @@ func spawn_colored_bullet(pos: Vector2, vel: Vector2, damage: int, owner_node: N
 	
 	_bullets.append(bullet)
 
-# Reusable query object to avoid per-bullet allocation
+# Reusable query objects to avoid per-bullet allocation
 var _query: PhysicsRayQueryParameters2D = null
+var _point_query: PhysicsPointQueryParameters2D = null
+var _shape_query: PhysicsShapeQueryParameters2D = null
+var _circle_shape: CircleShape2D = null
 
 func _physics_process(delta: float) -> void:
 	if _bullets.is_empty():
@@ -165,18 +195,27 @@ func _physics_process(delta: float) -> void:
 	var space_state = get_world_2d().direct_space_state
 	var i = _bullets.size() - 1
 	
-	# Create reusable query once
+	# Create reusable queries once
 	if _query == null:
 		_query = PhysicsRayQueryParameters2D.new()
 		_query.collision_mask = MASK_COLLISION
 		_query.collide_with_areas = true
 		_query.collide_with_bodies = true
+		
+		_shape_query = PhysicsShapeQueryParameters2D.new()
+		_shape_query.collision_mask = MASK_COLLISION
+		_shape_query.collide_with_areas = true
+		_shape_query.collide_with_bodies = true
+		
+		_circle_shape = CircleShape2D.new()
+		_circle_shape.radius = BULLET_COLLISION_RADIUS
 	
-	# PRE-CALCULATION: Get global time scale once per frame
+	# PRE-CALCULATION: Get global time scale once per frame (cached lookup)
 	var enemy_time_scale := 1.0
-	var game_manager = get_node_or_null("/root/GameManager")
-	if game_manager:
-		enemy_time_scale = game_manager.enemy_time_scale
+	if not _cached_game_manager or not is_instance_valid(_cached_game_manager):
+		_cached_game_manager = get_node_or_null("/root/GameManager")
+	if _cached_game_manager:
+		enemy_time_scale = _cached_game_manager.enemy_time_scale
 		
 	while i >= 0:
 		var b = _bullets[i]
@@ -212,21 +251,25 @@ func _physics_process(delta: float) -> void:
 		else:
 			b.position = next_pos
 		
-		# ADDITIONAL: Area-based collision check for more generous hitbox
-		# This catches enemies within BULLET_COLLISION_RADIUS of the bullet
+		# OPTIMIZED: Use physics shape query instead of manual enemy iteration
+		# This leverages the physics server's broad-phase for O(log n) instead of O(n)
 		if not destroyed:
-			var enemies = TargetCache.get_enemies()
-			var radius_sq := BULLET_COLLISION_RADIUS * BULLET_COLLISION_RADIUS
-			for enemy in enemies:
-				if not is_instance_valid(enemy):
-					continue
-				if enemy is Node2D:
-					var enemy_node: Node2D = enemy as Node2D
-					var dist_sq: float = b.position.distance_squared_to(enemy_node.global_position)
-					if dist_sq < radius_sq:
-						if _handle_collision(b, enemy):
-							destroyed = true
-							break
+			# Scale collision radius with velocity to prevent bullet tunneling
+			# Fast bullets get a larger radius to catch hits between frames
+			var vel_radius := maxf(BULLET_COLLISION_RADIUS, move_vec.length() * 0.5)
+			_circle_shape.radius = vel_radius
+			_shape_query.shape = _circle_shape
+			_shape_query.transform = Transform2D(0, b.position)
+			_shape_query.exclude.clear()
+			if is_instance_valid(b.owner) and b.owner is CollisionObject2D:
+				_shape_query.exclude.append(b.owner.get_rid())
+			
+			var near_hits = space_state.intersect_shape(_shape_query)
+			for hit in near_hits:
+				var collider = hit.collider
+				if is_instance_valid(collider) and _handle_collision(b, collider):
+					destroyed = true
+					break
 			
 		if not destroyed:
 			# Lifecycle checks - use distance_squared for performance
@@ -306,24 +349,25 @@ func _handle_collision(b: SimpleBullet, collider: Object) -> bool:
 	if not collider.has_method("take_damage"):
 		# Wall/Obstacle -> Destroy (unless it's a boulder and we can phase through)
 		if collider is TileMap or collider is StaticBody2D:
-			# PERFORMANCE: Use TargetCache instead of get_nodes_in_group per collision
-			var is_boulder = false
-			var boulders = TargetCache.get_boulders()
-			for boulder in boulders:
-				if is_instance_valid(boulder) and (boulder == collider or boulder.is_ancestor_of(collider)):
-					is_boulder = true
-					break
-				# Spatial backup check
-				if is_instance_valid(boulder):
-					var b_rad = 150.0
-					if "boulder_size" in boulder: b_rad = boulder.boulder_size * 0.5
-					if b.position.distance_squared_to(boulder.global_position) < (b_rad * 1.2) ** 2:
+			# OPTIMIZED: Check the collider's groups instead of iterating ALL boulders
+			# Also check if any child of the collider is in the boulders group (for split bodies)
+			var is_boulder = collider.is_in_group("boulders")
+			if not is_boulder and collider is Node:
+				# Check children for boulder group membership (covers grouped children)
+				for child in collider.get_children():
+					if child.is_in_group("boulders"):
 						is_boulder = true
 						break
 			
 			if is_boulder:
 				if _cached_chrono_intangibility:
 					return false # Phase through boulder
+				# Trigger bump shake on SwayableBush
+				if collider.has_method("trigger_bump"):
+					collider.trigger_bump(0.7, true)
+				# Trigger snow puff on SnowyBoulder
+				if collider.has_method("trigger_snow_puff"):
+					collider.trigger_snow_puff(b.position)
 			
 			return true
 		return false # Pass through non-blocking

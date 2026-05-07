@@ -66,7 +66,7 @@ func _async_init() -> void:
 
 
 func load_settings() -> void:
-	var data := SaveManager.load_config(SaveManager.SETTINGS_PATH)
+	var data := SaveManager.load_section("settings")
 	
 	if data.is_empty():
 		print("[SettingsManager] No saved settings found, using defaults")
@@ -122,7 +122,7 @@ func _perform_save() -> void:
 		}
 	}
 	
-	var err := SaveManager.save_config(data, SaveManager.SETTINGS_PATH)
+	var err := SaveManager.save_section("settings", data)
 	if err == OK:
 		print("[SettingsManager] Settings saved successfully")
 	else:

@@ -51,9 +51,9 @@ func _process(delta: float) -> void:
 		marian_beam_buff_timer -= delta
 		if marian_beam_buff_timer <= 0:
 			marian_beam_buff_active = false
-			# Notify player to remove visual effect
-			if _player.has_method("_update_marian_beam_visual"):
-				_player._update_marian_beam_visual(false)
+			# Notify visual effects to remove glow
+			if _player._visual_effects:
+				_player._visual_effects.update_marian_beam_visual(false)
 	
 	# Commander wave heal - 30s timer for timerless modes
 	if has_commander_wave_heal:
@@ -156,8 +156,8 @@ func trigger_marian_beam_absorb() -> void:
 	
 	marian_beam_buff_active = true
 	marian_beam_buff_timer = MARIAN_BEAM_BUFF_DURATION
-	if _player.has_method("_update_marian_beam_visual"):
-		_player._update_marian_beam_visual(true)
+	if _player._visual_effects:
+		_player._visual_effects.update_marian_beam_visual(true)
 
 # --- Cecil: Three Wishes (Revive) ---
 var cecil_lives_remaining: int = 0
@@ -208,64 +208,32 @@ func try_absorb_damage(damage: int) -> int:
 
 ## Loads unlocked talents directly from disk to ensure they differ from UI state
 func load_unlocked_talents_from_disk() -> Dictionary:
-	# Access SaveManager global class directly
-	# We know the path is "user://shop_data.cfg" from SaveManager.SHOP_PATH class const
-	# But since we can't easily access the const if SaveManager isn't a global class_name in this scope (it is an autoload),
-	# we will string match or try to access the singleton.
-	var save_path := "user://shop_data.cfg"
-	if has_node("/root/SaveManager"):
-		var sm = get_node("/root/SaveManager")
-		if "SHOP_PATH" in sm:
-			save_path = sm.SHOP_PATH
-	
-	var config := ConfigFile.new()
-	var err := config.load(save_path)
-	if err != OK:
-		print("[PlayerUpgradeManager] Failed to load shop data from path: %s (Error %d)" % [save_path, err])
+	if not has_node("/root/SaveManager"):
 		return {}
+	var sm: Node = get_node("/root/SaveManager")
 	
-	# Structure in ShopMenu._save_shop_data: data["talents"] = { "unlocked": ... }
-	# ConfigFile saves dictionary as a value under the key.
-	# So we look for section "talents", key "unlocked".
-	
-	if config.has_section_key("talents", "unlocked"):
-		var val = config.get_value("talents", "unlocked", {})
-		if val is Dictionary:
-			print("[PlayerUpgradeManager] Loaded %d unlocked talents from info on disk" % val.size())
-			return val
-	
-	print("[PlayerUpgradeManager] 'talents/unlocked' key not found in shop data.")
-	return {}
+	var shop_data: Dictionary = sm.load_section("shop")
+	var talents = shop_data.get("talents", {})
+	var unlocked = talents.get("unlocked", {}) if talents is Dictionary else {}
+	if not unlocked.is_empty():
+		print("[PlayerUpgradeManager] Loaded %d unlocked talents from disk" % unlocked.size())
+	return unlocked
 
 ## Loads unlocked characters and converts to indices (for PlayerCore)
 func load_unlocked_characters_indices() -> Array[int]:
 	# STRICT MODE: Only trust save data or absolute mandatory starter (Scarlet)
-	# Do NOT trust CharacterRegistry.DEFAULT_UNLOCKED as it likely contains the whole squad for testing.
-	var unlocked_ids: Array = ["scarlet"] # Base starter only
+	var unlocked_ids: Array = ["scarlet"]
 	
-	# Load from disk
-	var save_path := "user://shop_data.cfg"
 	if has_node("/root/SaveManager"):
-		var sm = get_node("/root/SaveManager")
-		if "SHOP_PATH" in sm:
-			save_path = sm.SHOP_PATH
-			
-	var config := ConfigFile.new()
-	var err := config.load(save_path)
-	
-	if err == OK:
-		# If save exists, respect it completely.
-		# If it has "characters/unlocked", use those.
-		var disk_unlocked = config.get_value("characters", "unlocked", [])
-		if not disk_unlocked.is_empty():
-			# Merge, but actually if save exists we should barely need Scarlet fallback if the save is valid?
-			# Let's just append disk ones to the base starter
+		var sm: Node = get_node("/root/SaveManager")
+		var shop_data: Dictionary = sm.load_section("shop")
+		var disk_unlocked = shop_data.get("characters", {}).get("unlocked", [])
+		if disk_unlocked is Array and not disk_unlocked.is_empty():
 			for id in disk_unlocked:
 				if id not in unlocked_ids:
 					unlocked_ids.append(id)
 	else:
-		# Save file missing?
-		print("[UpgradeManager] No save data found. Defaulting to ONLY Scarlet.")
+		print("[UpgradeManager] No SaveManager found. Defaulting to ONLY Scarlet.")
 	
 	print("[UpgradeManager DEBUG] Final Unlocked IDs for Upgrades: ", unlocked_ids)
 	

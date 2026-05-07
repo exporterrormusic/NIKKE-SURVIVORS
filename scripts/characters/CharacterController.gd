@@ -1,9 +1,10 @@
 class_name CharacterController
-extends RefCounted
+extends Node
 ## Base class for character-specific combat logic.
 ## Each character extends this and implements their unique attack, special, and burst.
 
 const MusicPlayerUI := preload("res://scripts/ui/MusicPlayerUI.gd")
+const ShopMenuScript := preload("res://scripts/ui/ShopMenu.gd")
 
 # Reference to the player node
 var player: Node2D = null
@@ -94,11 +95,10 @@ func apply_squad_upgrades() -> void:
 # Kilo bullet regen tracking
 var _kilo_shot_counter: int = 0
 
-## Helper to check for shop upgrades without creating circular dependency
+## Helper to check for shop upgrades
 func has_upgrade(char_id: String, upgrade_id: String) -> bool:
-	var shop = load("res://scripts/ui/ShopMenu.gd")
-	if shop:
-		return shop.has_character_upgrade(char_id, upgrade_id)
+	if ShopMenuScript:
+		return ShopMenuScript.has_character_upgrade(char_id, upgrade_id)
 	return false
 
 ## Called when controller is initialized - override for custom setup

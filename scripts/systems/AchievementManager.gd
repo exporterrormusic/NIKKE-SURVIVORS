@@ -681,7 +681,7 @@ func _format_number(value: int) -> String:
 # --- Persistence ---
 
 func _load_achievements() -> void:
-	var data := SaveManager.load_config(SaveManager.ACHIEVEMENTS_PATH)
+	var data := SaveManager.load_section("achievements")
 	
 	if not data.is_empty():
 		var achievements_data = data.get("achievements", {})
@@ -698,7 +698,7 @@ func _save_achievements() -> void:
 		"achievements": _achievements
 	}
 	
-	var err := SaveManager.save_config(data, SaveManager.ACHIEVEMENTS_PATH)
+	var err := SaveManager.save_section("achievements", data)
 	if err == OK:
 		print("[AchievementManager] Saved %d achievements" % _achievements.size())
 	else:

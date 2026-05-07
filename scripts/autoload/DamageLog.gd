@@ -1,8 +1,19 @@
 extends Node
-## DamageLog - Tracks recent damage taken by player for debugging/UI display.
-## Autoload singleton with minimal performance impact (no per-frame processing).
+class_name DamageLog
+## Tracks recent damage taken by player for debugging/UI display.
+## Lazy singleton — created on first access.
 
 const MAX_ENTRIES := 20
+
+static var _instance: DamageLog = null
+
+static func get_instance() -> DamageLog:
+	if _instance == null:
+		_instance = DamageLog.new()
+		_instance.name = "DamageLog"
+		if Engine.get_main_loop():
+			Engine.get_main_loop().root.add_child(_instance)
+	return _instance
 
 # Each entry: {source: String, type: String, amount: int, time: float}
 var _entries: Array[Dictionary] = []

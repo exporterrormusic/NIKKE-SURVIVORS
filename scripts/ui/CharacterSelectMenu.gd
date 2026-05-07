@@ -113,6 +113,7 @@ func _handle_escape() -> void:
 func _transition_to_stage() -> void:
 	if _phase == Phase.STAGE:
 		return
+	
 	_phase = Phase.STAGE
 	_stage_container.visible = true # Enable input processing for stage selector
 	
@@ -615,7 +616,9 @@ func _apply_next_button_style(btn: Button) -> void:
 
 func _on_next_pressed() -> void:
 	# Only proceed if we have a full squad (3 characters)
-	if not _squad_slots.is_complete():
+	var valid_start = _squad_slots.is_complete()
+	
+	if not valid_start:
 		return
 	UISounds.play_confirm()
 	_transition_to_stage()

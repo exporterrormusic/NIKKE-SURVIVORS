@@ -11,7 +11,7 @@ const STAGES := [
 		"name": "Standard",
 		"biome": "sakura_grove",
 		"time": "day",
-		"unlock_after": null,  # Always unlocked
+		"unlock_after": null, # Always unlocked
 		"spawn_rules": {},
 		"description": "Survive 11 waves of Raptures to complete the mission."
 	},
@@ -20,9 +20,9 @@ const STAGES := [
 		"name": "Endless",
 		"biome": "sakura_grove",
 		"time": "night",
-		"unlock_after": null,  # Always unlocked
+		"unlock_after": null, # Always unlocked
 		"spawn_rules": {
-			"endless": true,  # No wave limit
+			"endless": true, # No wave limit
 		},
 		"description": "No wave limit. How long can you survive the endless horde?"
 	},

@@ -6,7 +6,7 @@
 [ext_resource type="Script" path="res://scripts/components/HitboxComponent.gd" id="4_hit"]
 [ext_resource type="Texture2D" path="res://assets/enemies/rapture-basic/sprite.png" id="5_sprite"]
 [ext_resource type="Resource" path="res://resources/enemies/rapture_stats.tres" id="6_stats"]
-[ext_resource type="Script" path="res://scripts/characters/character_sprite_animator.gd" id="7_anim"]
+[ext_resource type="Script" path="res://scripts/characters/CharacterSpriteAnimator.gd" id="7_anim"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_1"]
 radius = 20.0

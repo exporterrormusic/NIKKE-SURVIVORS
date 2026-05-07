@@ -125,7 +125,7 @@ func _on_body_entered(body: Node) -> void:
 	if body == owner_node or body.name == "Player" or body.is_in_group("player"):
 		return
 	# Ignore other projectiles (and self)
-	if body.is_in_group("projectiles") or body is KiloPellet:
+	if body.is_in_group("projectiles") or body.is_in_group("enemy_projectiles") or body is KiloPellet:
 		return
 		
 	if _hit_nodes.has(body): return

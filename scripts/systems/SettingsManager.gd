@@ -151,18 +151,6 @@ func _add_default_key_bindings() -> void:
 		event.keycode = KEY_E
 		InputMap.action_add_event("burst", event)
 		print("[SettingsManager] Added default E key to burst action")
-		
-	if not InputMap.has_action("next_character"):
-		InputMap.add_action("next_character")
-		var event = InputEventMouseButton.new()
-		event.button_index = MOUSE_BUTTON_WHEEL_UP
-		InputMap.action_add_event("next_character", event)
-		
-	if not InputMap.has_action("prev_character"):
-		InputMap.add_action("prev_character")
-		var event = InputEventMouseButton.new()
-		event.button_index = MOUSE_BUTTON_WHEEL_DOWN
-		InputMap.action_add_event("prev_character", event)
 
 
 func _update_key_bindings_from_inputmap() -> void:

@@ -5,12 +5,36 @@ extends Node
 
 const SINGLE_SAVE_PATH := "user://save.cfg"
 
+## Bump to invalidate old saves. v2: single-character rework (squad removed,
+## talents run-only, character unlocks moved to character select).
+const SAVE_VERSION := 2
+
 # Deprecated legacy paths — still available for migration
 const SHOP_PATH := "user://shop_data.cfg"
 const ACHIEVEMENTS_PATH := "user://achievements.cfg"
 const SETTINGS_PATH := "user://settings.cfg"
 const LEADERBOARD_PATH := "user://leaderboard.cfg"
 const STAGE_PROGRESS_PATH := "user://stage_progress.cfg"
+
+
+func _ready() -> void:
+	# Runs before other autoloads read their sections (autoload order)
+	_check_save_version()
+
+
+## Wipe outdated saves. User settings (audio, keybinds) survive the wipe.
+func _check_save_version() -> void:
+	var meta := load_section("meta")
+	var version: int = meta.get("version", 1)
+	if version >= SAVE_VERSION:
+		return
+
+	var settings := load_section("settings")
+	delete_all_saves()
+	if not settings.is_empty():
+		save_section("settings", settings)
+	save_section("meta", {"version": SAVE_VERSION})
+	print("[SaveManager] Save data wiped (version %d -> %d)" % [version, SAVE_VERSION])
 
 
 # --- Single-file Section API ---

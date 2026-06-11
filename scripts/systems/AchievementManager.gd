@@ -17,14 +17,21 @@ const KILL_MILESTONE := 10000
 
 # Total skill purchases per character to max tree
 # 7 nodes but special upgrades have max level 3: unlock(1) + special(1) + 2x special_upgrades(3+3) + burst(1) + 2x burst_upgrades(1+1) = 11
-const SKILL_PURCHASES_PER_CHARACTER := 11
+const TalentDataScript = preload("res://scripts/ui/TalentData.gd")
+
+## Total purchases to max a character's tree, computed from TalentData
+static func _skill_purchases_for(char_index: int) -> int:
+	var total := 0
+	for talent in TalentDataScript.TALENT_DATA.get(char_index, []):
+		total += talent.get("max", 1)
+	return total
 
 # Achievement types
 enum AchievementType {
 	SHOP_UNLOCK, # Unlock character in shop
 	KILL_COUNT, # Kill 10,000 Raptures as character
 	ALL_SKILLS, # Purchase all skills in a single match
-	WIN_GAME, # Win a game with character in squad
+	WIN_GAME, # Win a game playing this character
 	# General Achievements
 	MASSACRE, # Kill 50,000 Raptures total
 	BOSS_SLAYER, # Defeat a boss enemy
@@ -61,8 +68,7 @@ func _ready() -> void:
 	# Connect to EventBus signals for tracking
 	if EventBus:
 		EventBus.enemy_killed.connect(_on_enemy_killed_event)
-		EventBus.character_switched.connect(_on_character_switched)
-		
+
 		# New Signals for General Achievements
 		if EventBus.has_signal("run_started"):
 			EventBus.run_started.connect(_on_run_started)
@@ -296,10 +302,11 @@ func get_character_achievements(char_id: String) -> Array[Dictionary]:
 	# All skills achievement
 	var skills_id := get_achievement_id(AchievementType.ALL_SKILLS, char_id)
 	var skills_data: Dictionary = _achievements.get(skills_id, {"unlocked": false, "progress": 0})
+	var skills_target := _skill_purchases_for(_registry.get_character_index(char_id)) if _registry else 12
 	achievements.append({
 		"id": skills_id,
 		"title": "Purchase all skills for %s" % display_name,
-		"desc": "Buy all %d skill nodes for %s during a single match" % [SKILL_PURCHASES_PER_CHARACTER, display_name],
+		"desc": "Buy all %d skill nodes for %s during a single match" % [skills_target, display_name],
 		"category": char_id,
 		"unlocked": skills_data.get("unlocked", false),
 		"progress": skills_data.get("progress", 0),
@@ -312,7 +319,7 @@ func get_character_achievements(char_id: String) -> Array[Dictionary]:
 	achievements.append({
 		"id": win_id,
 		"title": "Win a game with %s" % display_name,
-		"desc": "Complete a run with %s in your squad" % display_name,
+		"desc": "Complete a run playing %s" % display_name,
 		"category": char_id,
 		"unlocked": win_data.get("unlocked", false),
 		"progress": win_data.get("progress", 0),
@@ -402,37 +409,28 @@ func on_skill_purchased(char_id, _skill_id: String) -> void:
 		print("[AchievementManager] Invalid char_id for skill purchase: %s" % str(char_id))
 		return
 	
-	# Initialize skill counter if not exists, pre-crediting squad members with their unlock
+	# Initialize skill counter if not exists
 	if not _session_skills.has(char_index):
-		_session_skills[char_index] = _get_initial_skill_credit(char_index)
-	
+		_session_skills[char_index] = 0
+
 	_session_skills[char_index] += 1
-	
-	# Check if all skills are now purchased (11 total points to max a tree)
+
+	# Check if all skills are now purchased
 	var skills_count: int = _session_skills[char_index]
-	print("[AchievementManager] Character %s (idx %d) now has %d/%d skills" % [str(char_id), char_index, skills_count, SKILL_PURCHASES_PER_CHARACTER])
-	
-	if skills_count >= SKILL_PURCHASES_PER_CHARACTER:
+	var skills_target := _skill_purchases_for(char_index)
+	print("[AchievementManager] Character %s (idx %d) now has %d/%d skills" % [str(char_id), char_index, skills_count, skills_target])
+
+	if skills_count >= skills_target:
 		var resolved_char_id: String = _registry.get_character_id(char_index)
 		var achievement_id := get_achievement_id(AchievementType.ALL_SKILLS, resolved_char_id)
 		_unlock_achievement(achievement_id, resolved_char_id, AchievementType.ALL_SKILLS)
 
 
-## Get initial skill credit for a character (1 if they're in the selected squad, 0 otherwise)
-func _get_initial_skill_credit(char_index: int) -> int:
-	var game_manager = get_node_or_null("/root/GameManager")
-	if game_manager and game_manager.selected_character_indices:
-		if char_index in game_manager.selected_character_indices:
-			print("[AchievementManager] Character %d is in squad, pre-crediting unlock skill" % char_index)
-			return 1 # They start with unlock already purchased
-	return 0
-
-
-## Call when a game is won (pass array of squad character IDs)
-func on_game_won(squad_char_ids: Array) -> void:
+## Call when a game is won (pass array of played character IDs)
+func on_game_won(played_char_ids: Array) -> void:
 	_ensure_registry()
 	var all_char_ids := _registry.get_all_character_ids()
-	for char_id in squad_char_ids:
+	for char_id in played_char_ids:
 		if char_id is String and char_id in all_char_ids:
 			var achievement_id := get_achievement_id(AchievementType.WIN_GAME, char_id)
 			_unlock_achievement(achievement_id, char_id, AchievementType.WIN_GAME)
@@ -546,13 +544,6 @@ func _get_achievement_title(type: AchievementType, display_name: String) -> Stri
 
 # --- Event Handlers ---
 
-func _on_character_switched(slot_idx: int, char_index: int) -> void:
-	# Update current character ID for tracking
-	_ensure_registry()
-	if _registry:
-		_current_character_id = _registry.get_character_id(char_index)
-
-
 func _on_enemy_killed_event(enemy: Node, killer_source: String) -> void:
 	# Ignore if not killed by player
 	if killer_source not in ["player", "projectile", "summon", "cecil_drone"]:
@@ -565,14 +556,12 @@ func _on_enemy_killed_event(enemy: Node, killer_source: String) -> void:
 	if enemy.is_in_group("boss") or enemy.is_in_group("super_boss"):
 		_unlock_achievement(get_achievement_id(AchievementType.BOSS_SLAYER, ""), "", AchievementType.BOSS_SLAYER)
 	
-	# Ensure we have a valid character ID (fallback to current squad's first character)
+	# Ensure we have a valid character ID (fallback to the selected character)
 	if _current_character_id.is_empty():
 		_ensure_registry()
 		var game_manager = get_node_or_null("/root/GameManager")
-		if game_manager and game_manager.selected_character_indices.size() > 0:
-			var first_idx = game_manager.selected_character_indices[0]
-			if _registry:
-				_current_character_id = _registry.get_character_id(first_idx)
+		if game_manager and _registry:
+			_current_character_id = _registry.get_character_id(game_manager.player_character_index)
 		print("[AchievementManager] Fallback character ID: %s" % _current_character_id)
 	
 	# Track per-character kills
@@ -584,6 +573,12 @@ func _on_run_started(map_id: String) -> void:
 	_current_map_id = map_id
 	_wave_damaged = false
 	_shots_fired = false # Reset for No Shots Fired achievement
+
+	# Track the selected character for per-character achievements
+	_ensure_registry()
+	var game_manager = get_node_or_null("/root/GameManager")
+	if game_manager and _registry:
+		_current_character_id = _registry.get_character_id(game_manager.player_character_index)
 
 
 func _on_run_completed(is_win: bool, map_id: String, _duration: float) -> void:

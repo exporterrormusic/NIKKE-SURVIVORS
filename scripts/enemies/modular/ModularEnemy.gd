@@ -559,7 +559,7 @@ func _process(delta: float) -> void:
 		
 		if _charge_timer <= 0:
 			# Fire!
-			var target_pos = global_position # Default to self if invalid? No.
+			var _target_pos = global_position # Default to self if invalid? No.
 			
 			# Re-validate target before firing
 			var has_valid_target = is_instance_valid(_current_target)

@@ -175,7 +175,7 @@ func _end_time_slow() -> void:
     if secrets_of_past_level >= 2:
         _apply_speed_boost(false)
 
-func _perform_special(direction: Vector2) -> void:
+func _perform_special(_direction: Vector2) -> void:
     # Override to prevent "Not Implemented" error
     # Logic is handled via Input in _process, so this is a placeholder
     pass
@@ -296,7 +296,7 @@ func _apply_dust_damage(delta: float) -> void:
         
         # Apply damage (No crit, source='wells_dust')
         # Ensure at least 1 damage if pct > 0
-        var dmg_int = max(1, int(damage))
+        var _dmg_int = max(1, int(damage))
         
         # Use take_damage
         # Since this runs every frame, it might spam damage numbers.
@@ -565,150 +565,13 @@ func _on_enemy_marian_died() -> void:
     _enemy_marian = null
 
 func _get_portal_script() -> GDScript:
-    var script := GDScript.new()
-    script.source_code = """
-extends Node2D
-
-var _time: float = 0.0
-var _duration: float = 2.5
-
-func _ready() -> void:
-    z_index = 200
-
-func _process(delta: float) -> void:
-    _time += delta
-    if _time >= _duration:
-        queue_free()
-        return
-    queue_redraw()
-
-func _draw() -> void:
-    var progress := _time / _duration
-    var open_phase := clampf(progress * 2.0, 0.0, 1.0)  # Portal opens in first half
-    var close_phase := clampf((progress - 0.7) / 0.3, 0.0, 1.0)  # Closes in last 30%
-    
-    var alpha := 1.0 - close_phase
-    var portal_w := 100.0 * open_phase * (1.0 - close_phase * 0.5)
-    var portal_h := 175.0 * open_phase * (1.0 - close_phase * 0.5)
-    
-    # Shimmering distortion effect - wavy oval portal
-    var wave_offset := sin(_time * 8.0) * 5.0
-    
-    # Outer glow
-    for i in range(5):
-        var glow_alpha := alpha * 0.15 * (1.0 - float(i) * 0.15)
-        var extra := float(i) * 8.0
-        _draw_wavy_oval(portal_w + extra, portal_h + extra, Color(0.6, 0.2, 0.9, glow_alpha), wave_offset)
-    
-    # Portal core (darker center)
-    _draw_wavy_oval(portal_w * 0.8, portal_h * 0.8, Color(0.1, 0.0, 0.2, alpha * 0.9), wave_offset)
-    
-    # Edge ring
-    _draw_wavy_oval_ring(portal_w, portal_h, Color(0.9, 0.4, 1.0, alpha), wave_offset, 4.0)
-    
-    # Inner shimmer particles
-    for i in range(8):
-        var angle := TAU * float(i) / 8.0 + _time * 3.0
-        var r := portal_w * 0.6 * (0.7 + sin(_time * 5.0 + float(i)) * 0.3)
-        var px := cos(angle) * r
-        var py := sin(angle) * r * (portal_h / portal_w)
-        draw_circle(Vector2(px, py), 3.02, Color(1.0, 0.8, 1.0, alpha * 0.7))
-
-func _draw_wavy_oval(w: float, h: float, color: Color, wave: float) -> void:
-    var points := PackedVector2Array()
-    for i in range(32):
-        var angle := TAU * float(i) / 32.0
-        var wave_mod := 1.0 + sin(angle * 4.0 + wave * 0.5) * 0.1
-        points.append(Vector2(cos(angle) * w * wave_mod, sin(angle) * h * wave_mod))
-    draw_colored_polygon(points, color)
-
-func _draw_wavy_oval_ring(w: float, h: float, color: Color, wave: float, thickness: float) -> void:
-    var prev := Vector2.ZERO
-    for i in range(33):
-        var angle := TAU * float(i) / 32.0
-        var wave_mod := 1.0 + sin(angle * 4.0 + wave * 0.5) * 0.1
-        var pt := Vector2(cos(angle) * w * wave_mod, sin(angle) * h * wave_mod)
-        if i > 0:
-            draw_line(prev, pt, color, thickness)
-        prev = pt
-"""
-    script.reload()
+    var script := preload("res://scripts/characters/effects/visuals/WellsPortal.gd")
     return script
 
 func _get_temporal_glow_script() -> GDScript:
-    var script := GDScript.new()
-    script.source_code = """
-extends Node2D
-
-var _time: float = 0.0
-
-func _ready() -> void:
-    z_index = -1
-
-func _process(delta: float) -> void:
-    _time += delta
-    queue_redraw()
-
-func _draw() -> void:
-    var pulse := sin(_time * 4.0) * 0.3 + 0.7
-    var alpha := 0.5 * pulse
-    
-    # Pulsing red glow
-    for i in range(4):
-        var radius := 40.0 + float(i) * 20.0
-        var color := Color(1.0, 0.15, 0.15, alpha * (1.0 - float(i) * 0.2))
-        draw_arc(Vector2.ZERO, radius, 0, TAU, 24, color, 4.0)
-    
-    # Red energy particles orbiting
-    for i in range(8):
-        var angle := TAU * float(i) / 8.0 + _time * 2.5
-        var dist := 50.0 + sin(_time * 3.0 + float(i)) * 15.0
-        var pos := Vector2(cos(angle), sin(angle)) * dist
-        draw_circle(pos, 5.0, Color(1.0, 0.2, 0.2, 0.7))
-"""
-    script.reload()
+    var script := preload("res://scripts/characters/effects/visuals/WellsTemporalGlow.gd")
     return script
 
 func _get_spark_script() -> GDScript:
-    var script := GDScript.new()
-    script.source_code = """
-extends Node2D
-
-var _time: float = 0.0
-var _sparks: Array = []
-
-func _ready() -> void:
-    z_index = 300
-    # Generate random sparks
-    for i in range(12):
-        _sparks.append({
-            "dir": Vector2(randf_range(-1.0, 1.0), randf_range(-1.5, -0.3)).normalized(),
-            "speed": randf_range(80.0, 200.0),
-            "life": randf_range(0.3, 0.6),
-            "pos": Vector2.ZERO
-        })
-
-func _process(delta: float) -> void:
-    _time += delta
-    for spark in _sparks:
-        spark.pos += spark.dir * spark.speed * delta
-    if _time >= 0.7:
-        queue_free()
-        return
-    queue_redraw()
-
-func _draw() -> void:
-    for spark in _sparks:
-        var age: float = float(_time) / float(spark.life)
-        if age > 1.0:
-            continue
-        var alpha: float = 1.0 - age
-        # Yellow-orange sparks
-        var color: Color = Color(1.0, 0.8 - age * 0.4, 0.2, alpha)
-        draw_circle(spark.pos, 2.0 + (1.0 - age) * 2.0, color)
-        # Spark trail
-        var trail: Vector2 = spark.pos - spark.dir * 8.0
-        draw_line(trail, spark.pos, Color(1.0, 0.9, 0.4, alpha * 0.5), 1.5)
-"""
-    script.reload()
+    var script := preload("res://scripts/characters/effects/visuals/WellsSpark.gd")
     return script

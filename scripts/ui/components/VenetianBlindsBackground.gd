@@ -679,44 +679,10 @@ static func _blit_image_with_clipping(dest: Image, src: Image, dest_pos: Vector2
 
 
 ## Apply monochrome effect to image - converts to grayscale and applies blue tint
-static func _apply_monochrome_effect(image: Image) -> void:
+static func _apply_monochrome_effect(_image: Image) -> void:
 	# PERFORMANCE FIX: CPU pixel processing is too slow for large backgrounds.
 	# We rely on the shader/draw-time modulation for tinting instead.
-	return
-	if image == null or image.is_empty():
-		return
-	
-	var img_size := image.get_size()
-	var tint := MONOCHROME_HUE
-	var desat := DESATURATION
-	
-	for y in img_size.y:
-		for x in img_size.x:
-			var pixel := image.get_pixel(x, y)
-			if pixel.a < 0.01:
-				continue
-			
-			# Calculate luminance
-			var luminance := pixel.r * 0.299 + pixel.g * 0.587 + pixel.b * 0.114
-			
-			# Apply slight brightness boost and contrast
-			luminance = (luminance - 0.5) * 1.1 + 0.5
-			luminance *= 1.15
-			luminance = clampf(luminance, 0.0, 1.0)
-			
-			# Mix with grayscale based on desaturation amount
-			var gray := Color(luminance, luminance, luminance, pixel.a)
-			var desaturated := pixel.lerp(gray, desat)
-			
-			# Apply tint
-			var final_color := Color(
-				desaturated.r * tint.r,
-				desaturated.g * tint.g,
-				desaturated.b * tint.b,
-				pixel.a
-			)
-			
-			image.set_pixel(x, y, final_color)
+	pass
 
 
 static func _make_texture_entry(texture: Texture2D) -> Dictionary:

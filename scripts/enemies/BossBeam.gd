@@ -306,7 +306,7 @@ func _get_oil_manager() -> Node2D:
 		push_error("[BossBeam] OilBurnZone script not loaded")
 	return null
 
-func _create_oil(pos: Vector2, rot: float) -> void:
+func _create_oil(_pos: Vector2, _rot: float) -> void:
 	pass # Deprecated
 
 func _has_line_of_sight(from: Vector2, to: Vector2) -> bool:

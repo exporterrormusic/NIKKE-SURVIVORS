@@ -383,26 +383,26 @@ func _should_ignore_target(target: Node) -> bool:
 		return true
 	
 	if target.is_in_group("shielder_shields") or target.is_in_group("boss_shields"):
-		# Skip if Chrono-Intangibility upgrade is active AND Wells is in squad
+		# Skip if Chrono-Intangibility upgrade is active AND playing Wells
 		var player = get_tree().get_first_node_in_group("player")
 		var has_upgrade = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility")
-		var in_squad = false
-		if player and player.has_method("is_character_in_squad"):
-			in_squad = player.is_character_in_squad("wells") or player.is_character_in_squad("Wells")
+		var playing_wells = false
+		if player and player.has_method("is_playing_character"):
+			playing_wells = player.is_playing_character("wells")
 			
-		if has_upgrade and in_squad:
+		if has_upgrade and playing_wells:
 			return true # Ignore shield, let projectile pass through
 			
 	# Also check parent in case we hit a collision area child of a shield
 	if target.get_parent() and (target.get_parent().is_in_group("shielder_shields") or target.get_parent().is_in_group("boss_shields")):
-		# Skip if Chrono-Intangibility upgrade is active AND Wells is in squad
+		# Skip if Chrono-Intangibility upgrade is active AND playing Wells
 		var player = get_tree().get_first_node_in_group("player")
 		var has_upgrade = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility")
-		var in_squad = false
-		if player and player.has_method("is_character_in_squad"):
-			in_squad = player.is_character_in_squad("wells") or player.is_character_in_squad("Wells")
+		var playing_wells = false
+		if player and player.has_method("is_playing_character"):
+			playing_wells = player.is_playing_character("wells")
 			
-		if has_upgrade and in_squad:
+		if has_upgrade and playing_wells:
 			return true # Ignore shield, let projectile pass through
 	
 	if target.get_script() and target.get_script().resource_path:
@@ -414,11 +414,11 @@ func _should_ignore_target(target: Node) -> bool:
 	if target.is_in_group("boulders"):
 		var player = get_tree().get_first_node_in_group("player")
 		var has_upgrade = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility")
-		var in_squad = false
-		if player and player.has_method("is_character_in_squad"):
-			in_squad = player.is_character_in_squad("wells") or player.is_character_in_squad("Wells")
+		var playing_wells = false
+		if player and player.has_method("is_playing_character"):
+			playing_wells = player.is_playing_character("wells")
 			
-		if has_upgrade and in_squad:
+		if has_upgrade and playing_wells:
 			# DIAGNOSTIC for Body Entered (only print occasionally if needed, but logic is shared)
 			# print("[Explosive] Ignored Boulder due to Intangibility")
 			return true
@@ -432,11 +432,11 @@ func _check_boulder_collision() -> bool:
 	# Skip if Chrono-Intangibility upgrade is active
 	var player = get_tree().get_first_node_in_group("player")
 	var has_upgrade = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility")
-	var in_squad = false
-	if player and player.has_method("is_character_in_squad"):
-		in_squad = player.is_character_in_squad("wells") or player.is_character_in_squad("Wells")
+	var playing_wells = false
+	if player and player.has_method("is_playing_character"):
+		playing_wells = player.is_playing_character("wells")
 	
-	if has_upgrade and in_squad:
+	if has_upgrade and playing_wells:
 		return false
 	
 	# Use TargetCache to avoid expensive get_nodes_in_group and array allocation every frame

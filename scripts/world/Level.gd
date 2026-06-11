@@ -143,14 +143,9 @@ func _play_character_bgm(forced_index: int = -1) -> void:
 		return
 		
 	# Determine which character to play music for
-	var main_char_idx = 0
+	var main_char_idx = GameManager.player_character_index
 	if forced_index != -1:
 		main_char_idx = forced_index
-	else:
-		# Default to main selected character
-		var char_indices = GameManager.selected_character_indices
-		if not char_indices.is_empty():
-			main_char_idx = char_indices[0]
 	
 	var registry = CharacterRegistry.get_instance()
 	if not registry:
@@ -707,9 +702,9 @@ func _spawn_pristine_core_orb_at_boss() -> void:
 func _has_kilo_core_boost() -> bool:
 	if not player:
 		return false
-	# Check if Kilo is in the squad
-	if player.has_method("is_character_in_squad"):
-		if not player.is_character_in_squad("kilo"):
+	# Check if playing Kilo
+	if player.has_method("is_playing_character"):
+		if not player.is_playing_character("kilo"):
 			return false
 	else:
 		return false
@@ -729,8 +724,7 @@ func _on_run_complete(survived: bool, final_time: float) -> void:
 			GameManager.mark_stage_cleared(GameManager.current_stage_id)
 			# Core is awarded via orb when boss dies, no need to add here
 			
-			# Track win achievement for all characters in squad
-			# Track win achievement for all characters in squad
+			# Track win achievement for the played character
 			_track_win_achievement()
 			
 			# Notify event bus
@@ -1041,38 +1035,7 @@ func _spawn_charmed_death_explosion(death_pos: Vector2) -> void:
 	visual.global_position = death_pos
 
 func _create_explosion_visual_script() -> GDScript:
-	var script := GDScript.new()
-	script.source_code = """
-extends Node2D
-
-var radius: float = 120.0
-var color: Color = Color(1.0, 0.3, 0.6, 0.8)
-var _time: float = 0.0
-var _duration: float = 0.35
-
-func _ready() -> void:
-	z_index = 200
-
-func _process(delta: float) -> void:
-	_time += delta
-	if _time >= _duration:
-		queue_free()
-		return
-	queue_redraw()
-
-func _draw() -> void:
-	var progress := _time / _duration
-	var current_radius := radius * (0.5 + progress * 0.5)
-	var alpha := (1.0 - progress) * color.a
-	
-	# Explosion ring
-	draw_arc(Vector2.ZERO, current_radius, 0, TAU, 32, Color(color.r, color.g, color.b, alpha), 6.0)
-	
-	# Inner flash
-	var inner_alpha := alpha * 0.5 * (1.0 - progress)
-	draw_circle(Vector2.ZERO, current_radius * 0.7, Color(1.0, 0.8, 1.0, inner_alpha))
-"""
-	script.reload()
+	var script := preload("res://scripts/effects/visuals/LevelExplosionVisual.gd")
 	return script
 
 # Legacy spawn function (kept for compatibility but no longer used by timer)
@@ -1133,25 +1096,25 @@ func _propagate_pause(node: Node, paused: bool) -> void:
 		_propagate_pause(child, paused)
 
 
-## Track win achievement for all squad members
+## Track win achievement for the selected character
 func _track_win_achievement() -> void:
 	if not has_node("/root/AchievementManager"):
 		return
-	
+
 	var achievement_manager = get_node("/root/AchievementManager")
-	
-	# Get squad character IDs from GameManager
+
+	# Get the selected character ID from GameManager
 	var char_ids: Array = []
 	if GameManager:
 		var registry = CharacterRegistry.get_instance()
 		if registry:
 			var all_ids: Array = registry.get_all_character_ids()
-			for idx in GameManager.selected_character_indices:
-				if idx >= 0 and idx < all_ids.size():
-					char_ids.append(all_ids[idx])
-	
+			var idx: int = GameManager.player_character_index
+			if idx >= 0 and idx < all_ids.size():
+				char_ids.append(all_ids[idx])
+
 	if char_ids.size() > 0:
-		print("[Level] Tracking win for squad: %s" % str(char_ids))
+		print("[Level] Tracking win for: %s" % str(char_ids))
 		achievement_manager.on_game_won(char_ids)
 
 

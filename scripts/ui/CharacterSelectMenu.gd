@@ -1,15 +1,14 @@
 extends Control
 ## Character and Stage Selection Menu.
-## Layout: Grid (top-left) + Details (bottom-left) + Squad slots (right full height).
-## When squad is complete, animates up to reveal stage selector.
+## Layout: Grid (top) + Details (bottom). Picking a character reveals the
+## stage selector.
 
 const UI := preload("res://scripts/ui/UITheme.gd")
 const UISounds := preload("res://scripts/ui/UISoundManager.gd")
 
-signal play_requested(squad: Array[int], stage_id: String)
+signal play_requested(character_index: int, stage_id: String)
 signal back_requested
 
-const SquadSlotsScript = preload("res://scripts/ui/components/SquadSlots.gd")
 const CharacterInfoPanelScript = preload("res://scripts/ui/components/CharacterInfoPanel.gd")
 const StageSelectorScript = preload("res://scripts/ui/components/StageSelector.gd")
 const VenetianBlindsScript = preload("res://scripts/ui/components/VenetianBlindsBackground.gd")
@@ -17,10 +16,16 @@ const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
 
 const CARD_SIZE := Vector2(140, 220)
 const GRID_COLUMNS := 5
-const SQUAD_SLOT_SIZE := Vector2(180, 220)
 
-enum Phase {SQUAD, STAGE}
-var _phase: Phase = Phase.SQUAD
+enum Phase {CHARACTER, STAGE}
+var _phase: Phase = Phase.CHARACTER
+
+var _selected_char_id: String = ""
+
+# Unlock storefront state
+var _core_counter: PristineCoreContainer = null
+var _unlock_dialog: ConfirmationDialog = null
+var _pending_unlock_id: String = ""
 
 var _registry: RefCounted
 var _cards: Dictionary = {} # char_id -> card node
@@ -29,10 +34,9 @@ var _card_tweens: Dictionary = {} # char_id -> Tween (for killing old tweens)
 var _burst_audio: AudioStreamPlayer # For character selection burst SFX
 
 var _bg: Control
-var _squad_container: Control
+var _char_container: Control
 var _stage_container: Control
 var _grid: Control # VBoxContainer holding row HBoxContainers
-var _squad_slots: Control
 var _info_panel: Panel
 var _stage_selector: Control
 var _transition_tween: Tween
@@ -40,10 +44,8 @@ var _transition_tween: Tween
 # PERFORMANCE: Pre-cached StyleBox objects to avoid per-hover allocation
 var _style_normal: StyleBoxFlat
 var _style_hovered: StyleBoxFlat
-var _style_in_squad: StyleBoxFlat
 var _border_style_normal: StyleBoxFlat
 var _border_style_hovered: StyleBoxFlat
-var _border_style_in_squad: StyleBoxFlat
 
 func _ready() -> void:
 	_init_style_cache() # PERFORMANCE: Pre-create StyleBox objects
@@ -79,8 +81,8 @@ func _input(event: InputEvent) -> void:
 		if vp:
 			vp.set_input_as_handled()
 	elif event.is_action_pressed("ui_accept"):
-		# Only handle character card selection in SQUAD phase
-		if _phase != Phase.SQUAD:
+		# Only handle character card selection in CHARACTER phase
+		if _phase != Phase.CHARACTER:
 			return
 		# Controller A button on focused card
 		var focused := get_viewport().gui_get_focus_owner()
@@ -88,25 +90,16 @@ func _input(event: InputEvent) -> void:
 			var char_id: String = focused.get_meta("char_id")
 			var is_unlocked: bool = focused.get_meta("is_unlocked", false)
 			if is_unlocked:
-				if _squad_slots.has_character(char_id):
-					_remove_from_squad(char_id)
-				else:
-					_add_to_squad(char_id)
+				_select_character(char_id)
+			else:
+				_try_unlock(char_id)
 			get_viewport().set_input_as_handled()
 
 func _handle_escape() -> void:
 	if _phase == Phase.STAGE:
-		# Go back to squad selection
-		_transition_to_squad()
+		# Go back to character selection
+		_transition_to_character()
 	else:
-		# Try to deselect the last character first (if any)
-		# This solves the issue where users feel "trapped" if they can't clear the squad via Back button
-		if _squad_slots.remove_last_character():
-			# Logic inside SquadSlots emits 'slot_cleared', which triggers _update_card_states via _on_slot_cleared
-			# So we don't need manual update calls here.
-			return
-			
-		# Only exit if squad is empty
 		_go_back()
 
 
@@ -127,8 +120,8 @@ func _transition_to_stage() -> void:
 	
 	var vh := get_viewport_rect().size.y
 	_transition_tween = create_tween().set_parallel(true)
-	_transition_tween.tween_property(_squad_container, "position:y", -vh, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
-	_transition_tween.tween_property(_squad_container, "modulate:a", 0.0, 0.4)
+	_transition_tween.tween_property(_char_container, "position:y", -vh, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	_transition_tween.tween_property(_char_container, "modulate:a", 0.0, 0.4)
 	_transition_tween.tween_property(_stage_container, "position:y", 0.0, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 	_transition_tween.tween_property(_stage_container, "modulate:a", 1.0, 0.4).set_delay(0.1)
 	
@@ -179,11 +172,11 @@ func _build_ui() -> void:
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(overlay)
 	
-	# Squad selection container
-	_squad_container = Control.new()
-	_squad_container.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(_squad_container)
-	_build_squad_phase()
+	# Character selection container
+	_char_container = Control.new()
+	_char_container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(_char_container)
+	_build_character_phase()
 	
 	# Stage selection container (hidden below)
 	_stage_container = Control.new()
@@ -194,7 +187,22 @@ func _build_ui() -> void:
 	add_child(_stage_container)
 	_build_stage_phase()
 
-func _build_squad_phase() -> void:
+	# Pristine Core counter (top-right) - characters are unlocked here with cores
+	_core_counter = PristineCoreContainer.new()
+	_core_counter.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_core_counter.position = Vector2(get_viewport_rect().size.x - 224, 24)
+	_char_container.add_child(_core_counter)
+	call_deferred("_update_core_counter")
+
+	# Unlock confirmation dialog
+	_unlock_dialog = ConfirmationDialog.new()
+	_unlock_dialog.title = "Unlock Character"
+	_unlock_dialog.initial_position = Window.WINDOW_INITIAL_POSITION_CENTER_MAIN_WINDOW_SCREEN
+	_unlock_dialog.ok_button_text = "Unlock"
+	_unlock_dialog.confirmed.connect(_on_unlock_confirmed)
+	add_child(_unlock_dialog)
+
+func _build_character_phase() -> void:
 	# Main content area (full height minus bottom buttons)
 	var content := Control.new()
 	content.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -202,32 +210,11 @@ func _build_squad_phase() -> void:
 	content.offset_bottom = -70
 	content.offset_left = 24
 	content.offset_right = -24
-	_squad_container.add_child(content)
-	
-	# RIGHT: Squad slots panel (full height, right side)
-	var squad_panel := Panel.new()
-	squad_panel.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
-	squad_panel.anchor_left = 0.78
-	squad_panel.offset_left = 0
-	squad_panel.offset_right = 0
-	_apply_panel_style(squad_panel)
-	content.add_child(squad_panel)
-	
-	_squad_slots = SquadSlotsScript.new()
-	_squad_slots.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_squad_slots.offset_left = 20
-	_squad_slots.offset_right = -20
-	_squad_slots.offset_top = 16
-	_squad_slots.offset_bottom = -16
-	_squad_slots.squad_complete.connect(_on_squad_complete)
-	_squad_slots.slot_cleared.connect(_on_slot_cleared)
-	squad_panel.add_child(_squad_slots)
-	
-	# LEFT SIDE: Grid (top) + Details (bottom)
+	_char_container.add_child(content)
+
+	# Grid (top) + Details (bottom)
 	var left_side := Control.new()
 	left_side.set_anchors_preset(Control.PRESET_FULL_RECT)
-	left_side.anchor_right = 0.77
-	left_side.offset_right = -16
 	content.add_child(left_side)
 	
 	# TOP-LEFT: Character grid (about 65% height)
@@ -286,7 +273,7 @@ func _build_squad_phase() -> void:
 	btn_row.offset_left = 24
 	btn_row.offset_right = -24
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	_squad_container.add_child(btn_row)
+	_char_container.add_child(btn_row)
 	
 	var back_btn := Button.new()
 	back_btn.text = "BACK"
@@ -305,17 +292,6 @@ func _build_squad_phase() -> void:
 	_apply_random_button_style(random_btn)
 	random_btn.pressed.connect(_on_random_pressed)
 	btn_row.add_child(random_btn)
-	
-	var spacer2 := Control.new()
-	spacer2.custom_minimum_size.x = 20
-	btn_row.add_child(spacer2)
-	
-	var next_btn := Button.new()
-	next_btn.text = "NEXT"
-	next_btn.custom_minimum_size = Vector2(140, 45)
-	_apply_next_button_style(next_btn)
-	next_btn.pressed.connect(_on_next_pressed)
-	btn_row.add_child(next_btn)
 
 func _build_stage_phase() -> void:
 	var margin := MarginContainer.new()
@@ -419,10 +395,29 @@ func _create_card(char_id: String, data: Resource) -> Control:
 		lock_icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lock_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		lock_vbox.add_child(lock_icon)
-		
+
+		# Unlock price (Pristine Cores)
+		var cost_row := HBoxContainer.new()
+		cost_row.alignment = BoxContainer.ALIGNMENT_CENTER
+		cost_row.add_theme_constant_override("separation", 6)
+		cost_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		lock_vbox.add_child(cost_row)
+
+		var core_icon := PristineCoreContainer.PristineCoreIcon.new()
+		core_icon.custom_minimum_size = Vector2(26, 26)
+		core_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cost_row.add_child(core_icon)
+
+		var cost_text := Label.new()
+		cost_text.text = str(CharacterRegistry.get_unlock_cost(char_id))
+		cost_text.add_theme_font_size_override("font_size", 26)
+		cost_text.add_theme_color_override("font_color", UI.COLOR_CORE)
+		cost_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cost_row.add_child(cost_text)
+
 		var locked_text := Label.new()
-		locked_text.text = "LOCKED"
-		locked_text.add_theme_font_size_override("font_size", 24)
+		locked_text.text = "CLICK TO UNLOCK"
+		locked_text.add_theme_font_size_override("font_size", 16)
 		locked_text.add_theme_color_override("font_color", UI.COLOR_DANGER)
 		locked_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		locked_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -503,30 +498,16 @@ func _init_style_cache() -> void:
 	_border_style_hovered.set_corner_radius_all(12)
 	_border_style_hovered.border_color = UI.ACCENT_HOVER
 	_border_style_hovered.set_border_width_all(4)
-	
-	# Border styles - in squad
-	_border_style_in_squad = StyleBoxFlat.new()
-	_border_style_in_squad.bg_color = UI.TRANSPARENT
-	_border_style_in_squad.set_corner_radius_all(12)
-	_border_style_in_squad.border_color = UI.COLOR_SUCCESS
-	_border_style_in_squad.set_border_width_all(4)
 
 
-func _apply_card_style(card: Panel, in_squad: bool, is_hovered: bool = false) -> void:
+func _apply_card_style(card: Panel, is_hovered: bool = false) -> void:
 	# PERFORMANCE: Use cached styles instead of creating new ones
 	card.add_theme_stylebox_override("panel", _style_normal)
-	
+
 	# Update border overlay if it exists
 	var border_overlay = card.get_meta("border_overlay") if card.has_meta("border_overlay") else null
 	if border_overlay:
-		var border_style: StyleBoxFlat
-		if in_squad:
-			border_style = _border_style_in_squad
-		elif is_hovered:
-			border_style = _border_style_hovered
-		else:
-			border_style = _border_style_normal
-		
+		var border_style: StyleBoxFlat = _border_style_hovered if is_hovered else _border_style_normal
 		border_overlay.add_theme_stylebox_override("panel", border_style)
 
 func _apply_button_style(btn: Button) -> void:
@@ -567,61 +548,18 @@ func _apply_random_button_style(btn: Button) -> void:
 
 func _on_random_pressed() -> void:
 	UISounds.play_select()
-	# Disconnect squad_complete signal to prevent auto-transition
-	if _squad_slots.squad_complete.is_connected(_on_squad_complete):
-		_squad_slots.squad_complete.disconnect(_on_squad_complete)
-	
-	# Clear current squad
-	_squad_slots.clear()
-	_update_card_states()
-	
+
 	# Get all character IDs and filter to only unlocked ones
 	var all_ids: Array = _registry.get_all_character_ids().duplicate()
 	var unlocked_ids: Array = []
 	for char_id in all_ids:
 		if ShopMenuScript.is_character_unlocked(char_id):
 			unlocked_ids.append(char_id)
-	unlocked_ids.shuffle()
-	
-	# Pick first 3 unlocked characters
-	for i in range(mini(3, unlocked_ids.size())):
-		_squad_slots.add_character(unlocked_ids[i])
-	
-	_update_card_states()
-	
-	# Reconnect the signal
-	_squad_slots.squad_complete.connect(_on_squad_complete)
-	
-	# Manually check if complete, since we suppressed the signal during adding
-	if _squad_slots.is_complete():
-		_on_squad_complete()
-
-func _apply_next_button_style(btn: Button) -> void:
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = UI.BTN_SUCCESS_BG
-	normal.border_color = UI.BTN_SUCCESS_BORDER
-	normal.set_border_width_all(2)
-	normal.set_corner_radius_all(8)
-	btn.add_theme_stylebox_override("normal", normal)
-	
-	var hover := StyleBoxFlat.new()
-	hover.bg_color = UI.BTN_SUCCESS_HOVER_BG
-	hover.border_color = UI.BTN_SUCCESS_HOVER_BORDER
-	hover.set_border_width_all(3)
-	hover.set_corner_radius_all(8)
-	btn.add_theme_stylebox_override("hover", hover)
-	
-	btn.add_theme_font_size_override("font_size", 16)
-	btn.add_theme_color_override("font_color", UI.BTN_SUCCESS_TEXT)
-
-func _on_next_pressed() -> void:
-	# Only proceed if we have a full squad (3 characters)
-	var valid_start = _squad_slots.is_complete()
-	
-	if not valid_start:
+	if unlocked_ids.is_empty():
 		return
-	UISounds.play_confirm()
-	_transition_to_stage()
+	unlocked_ids.shuffle()
+
+	_select_character(unlocked_ids[0])
 
 func _on_card_input(event: InputEvent, char_id: String) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -632,36 +570,24 @@ func _on_card_input(event: InputEvent, char_id: String) -> void:
 			is_unlocked = card.get_meta("is_unlocked", true)
 		
 		if not is_unlocked:
-			# Shake the card to indicate locked
-			if card:
-				var orig_pos: float = card.position.x
-				var tween := create_tween()
-				tween.tween_property(card, "position:x", orig_pos + 5, 0.05)
-				tween.tween_property(card, "position:x", orig_pos - 5, 0.05)
-				tween.tween_property(card, "position:x", orig_pos + 3, 0.05)
-				tween.tween_property(card, "position:x", orig_pos, 0.05)
+			_try_unlock(char_id)
 			return
-		
-		if _squad_slots.has_character(char_id):
-			# Click on already-selected character removes them
-			_remove_from_squad(char_id)
-		else:
-			_add_to_squad(char_id)
+
+		_select_character(char_id)
 
 func _on_card_hover(char_id: String) -> void:
 	if _registry:
 		var data = _registry.get_character(char_id)
 		_info_panel.set_character(data)
-	
+
 	var card = _cards.get(char_id)
 	if card:
-		var in_squad: bool = _squad_slots.has_character(char_id)
-		_apply_card_style(card, in_squad, true)
-		
+		_apply_card_style(card, true)
+
 		# PERFORMANCE: Kill old tween before starting new one
 		if _card_tweens.has(char_id) and _card_tweens[char_id] and _card_tweens[char_id].is_valid():
 			_card_tweens[char_id].kill()
-		
+
 		var tween := create_tween().set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 		tween.tween_property(card, "scale", Vector2(1.02, 1.02), 0.1)
 		_card_tweens[char_id] = tween
@@ -669,24 +595,86 @@ func _on_card_hover(char_id: String) -> void:
 func _on_card_unhover(char_id: String) -> void:
 	var card = _cards.get(char_id)
 	if card:
-		var in_squad: bool = _squad_slots.has_character(char_id)
-		_apply_card_style(card, in_squad, false)
-		
+		_apply_card_style(card, false)
+
 		# PERFORMANCE: Kill old tween before starting new one
 		if _card_tweens.has(char_id) and _card_tweens[char_id] and _card_tweens[char_id].is_valid():
 			_card_tweens[char_id].kill()
-		
+
 		var tween := create_tween().set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 		tween.tween_property(card, "scale", Vector2.ONE, 0.1)
 		_card_tweens[char_id] = tween
 
-func _add_to_squad(char_id: String) -> void:
-	if _squad_slots.has_character(char_id):
-		return # Already in squad
-	
-	if _squad_slots.add_character(char_id):
-		_play_burst_sfx(char_id)
-		_update_card_states()
+func _select_character(char_id: String) -> void:
+	_selected_char_id = char_id
+	_play_burst_sfx(char_id)
+	UISounds.play_confirm()
+	_transition_to_stage()
+
+# ─── Unlock storefront ──────────────────────────────────────────────────
+
+func _try_unlock(char_id: String) -> void:
+	var cost := CharacterRegistry.get_unlock_cost(char_id)
+
+	if GameManager.get_pristine_cores() < cost:
+		# Can't afford: shake the card
+		UISounds.play_back()
+		var card = _cards.get(char_id)
+		if card:
+			var orig_pos: float = card.position.x
+			var tween := create_tween()
+			tween.tween_property(card, "position:x", orig_pos + 5, 0.05)
+			tween.tween_property(card, "position:x", orig_pos - 5, 0.05)
+			tween.tween_property(card, "position:x", orig_pos + 3, 0.05)
+			tween.tween_property(card, "position:x", orig_pos, 0.05)
+		return
+
+	# Confirm before spending
+	_pending_unlock_id = char_id
+	var data = _registry.get_character(char_id) if _registry else null
+	var char_name: String = data.display_name if data else char_id
+	_unlock_dialog.dialog_text = "Unlock %s for %d Pristine Cores?" % [char_name, cost]
+	_unlock_dialog.popup_centered()
+
+func _on_unlock_confirmed() -> void:
+	if _pending_unlock_id.is_empty():
+		return
+	var char_id := _pending_unlock_id
+	_pending_unlock_id = ""
+
+	var cost := CharacterRegistry.get_unlock_cost(char_id)
+	if not GameManager.spend_pristine_cores(cost):
+		return
+
+	ShopMenuScript.unlock_character(char_id)
+
+	# Track achievement
+	if has_node("/root/AchievementManager"):
+		get_node("/root/AchievementManager").on_character_unlocked_in_shop(char_id)
+
+	UISounds.play_confirm()
+	_play_burst_sfx(char_id)
+	_rebuild_grid()
+	_update_core_counter()
+	print("[CharacterSelectMenu] Unlocked character: %s (%d cores)" % [char_id, cost])
+
+func _rebuild_grid() -> void:
+	var row1: HBoxContainer = _grid.get_meta("row1") if _grid else null
+	var row2: HBoxContainer = _grid.get_meta("row2") if _grid else null
+	if not row1 or not row2:
+		return
+	for child in row1.get_children():
+		child.queue_free()
+	for child in row2.get_children():
+		child.queue_free()
+	_cards.clear()
+	_card_tweens.clear()
+	_populate_grid()
+	call_deferred("_grab_initial_focus")
+
+func _update_core_counter() -> void:
+	if _core_counter and _core_counter.get_count_label():
+		_core_counter.get_count_label().text = str(GameManager.get_pristine_cores())
 
 func _play_burst_sfx(char_id: String) -> void:
 	# Stop any currently playing burst sound to prevent overlap
@@ -701,33 +689,14 @@ func _play_burst_sfx(char_id: String) -> void:
 		_burst_audio.stream = stream
 		_burst_audio.play()
 
-func _on_slot_cleared(_index: int) -> void:
-	_update_card_states()
-
-func _update_card_states() -> void:
-	for char_id in _cards:
-		var card = _cards[char_id]
-		var in_squad: bool = _squad_slots.has_character(char_id)
-		_apply_card_style(card, in_squad, false)
-		card.modulate = UI.CHAR_IN_SQUAD if in_squad else Color.WHITE
-
-func _remove_from_squad(char_id: String) -> void:
-	_squad_slots.remove_character_by_id(char_id)
-	_update_card_states()
-
-func _on_squad_complete() -> void:
-	UISounds.play_confirm()
-	_transition_to_stage()
-
-
 func _on_stage_back() -> void:
 	UISounds.play_back()
-	_transition_to_squad()
+	_transition_to_character()
 
-func _transition_to_squad() -> void:
-	if _phase == Phase.SQUAD:
+func _transition_to_character() -> void:
+	if _phase == Phase.CHARACTER:
 		return
-	_phase = Phase.SQUAD
+	_phase = Phase.CHARACTER
 	
 	# Reset stage selector state (music, easter eggs)
 	# Reset stage selector state (music, easter eggs)
@@ -745,37 +714,32 @@ func _transition_to_squad() -> void:
 	_transition_tween = create_tween().set_parallel(true)
 	_transition_tween.tween_property(_stage_container, "position:y", vh, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 	_transition_tween.tween_property(_stage_container, "modulate:a", 0.0, 0.4)
-	_transition_tween.tween_property(_squad_container, "position:y", 0.0, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
-	_transition_tween.tween_property(_squad_container, "modulate:a", 1.0, 0.4).set_delay(0.1)
+	_transition_tween.tween_property(_char_container, "position:y", 0.0, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	_transition_tween.tween_property(_char_container, "modulate:a", 1.0, 0.4).set_delay(0.1)
 	_transition_tween.tween_callback(func(): _stage_container.visible = false) # Disable input processing after transition
-	
-	# Restore focus to first card when returning to squad phase
+
+	# Restore focus to first card when returning to character phase
 	call_deferred("_grab_initial_focus")
 
 func _on_stage_confirmed(stage_id: String) -> void:
-	var squad_ids: Array[String] = _squad_slots.get_squad()
-	
-	# Convert character IDs to indices for the Level/GameManager
-	var squad_indices: Array[int] = []
+	# Convert character ID to index for the Level/GameManager
 	var all_ids = _registry.get_all_character_ids()
-	for char_id in squad_ids:
-		var idx: int = all_ids.find(char_id)
-		if idx >= 0:
-			squad_indices.append(idx)
-	
+	var char_index: int = all_ids.find(_selected_char_id)
+	if char_index < 0:
+		push_warning("[CharacterSelectMenu] No character selected, defaulting to 0")
+		char_index = 0
+
 	# Emit signal for MenuManager if connected
-	play_requested.emit(squad_indices, stage_id)
-	
+	play_requested.emit(char_index, stage_id)
+
 	# If no listeners (loaded directly from game), handle game start ourselves
 	if play_requested.get_connections().is_empty():
-		_start_game(squad_indices, stage_id)
+		_start_game(char_index, stage_id)
 
-func _start_game(squad: Array[int], stage_id: String) -> void:
+func _start_game(char_index: int, stage_id: String) -> void:
 	# Save selection to GameManager
 	if GameManager:
-		GameManager.set_selected_characters(squad)
-		if squad.size() > 0:
-			GameManager.set_player_character(squad[0])
+		GameManager.set_player_character(char_index)
 		GameManager.current_stage_id = stage_id
 	
 	# Stop menu music

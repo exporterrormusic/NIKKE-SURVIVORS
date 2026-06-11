@@ -99,15 +99,15 @@ func _on_bullet_entered(area: Area2D) -> void:
 	if area is SnowWhiteBullet or area.name.contains("Sniper") or area.name.contains("SnowWhite"):
 		return
 	
-	# Check for Chrono-Intangibility upgrade (Wells in squad)
-	# Check for Chrono-Intangibility upgrade (Wells in squad)
+	# Check for Chrono-Intangibility upgrade (playing Wells)
+	# Check for Chrono-Intangibility upgrade (playing Wells)
 	var player = get_tree().get_first_node_in_group("player")
 	var has_upgrade = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility")
-	var in_squad = false
-	if player and player.has_method("is_character_in_squad"):
-		in_squad = player.is_character_in_squad("wells") or player.is_character_in_squad("Wells")
+	var playing_wells = false
+	if player and player.has_method("is_playing_character"):
+		playing_wells = player.is_playing_character("wells")
 	
-	if has_upgrade and in_squad:
+	if has_upgrade and playing_wells:
 		return # Bullet phases through
 	
 	if area.is_in_group("bullets") or area.is_in_group("projectiles") or area.is_in_group("player_projectiles") or area.is_in_group("enemy_projectiles"):
@@ -123,15 +123,15 @@ func _on_bullet_body_entered(body: Node2D) -> void:
 	if body is SnowWhiteBullet or body.name.contains("Sniper") or body.name.contains("SnowWhite"):
 		return
 	
-	# Check for Chrono-Intangibility upgrade (Wells in squad)
-	# Check for Chrono-Intangibility upgrade (Wells in squad)
+	# Check for Chrono-Intangibility upgrade (playing Wells)
+	# Check for Chrono-Intangibility upgrade (playing Wells)
 	var player = get_tree().get_first_node_in_group("player")
 	var has_upgrade = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility")
-	var in_squad = false
-	if player and player.has_method("is_character_in_squad"):
-		in_squad = player.is_character_in_squad("wells") or player.is_character_in_squad("Wells")
+	var playing_wells = false
+	if player and player.has_method("is_playing_character"):
+		playing_wells = player.is_playing_character("wells")
 	
-	if has_upgrade and in_squad:
+	if has_upgrade and playing_wells:
 		return # Bullet phases through
 	
 	if body.is_in_group("bullets") or body.is_in_group("projectiles") or body.is_in_group("player_projectiles"):

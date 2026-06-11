@@ -8,8 +8,7 @@ signal stage_unlocked(stage_id: String)
 signal wave_started(wave_num: int)
 
 # --- Character Selection ---
-var selected_character_indices: Array[int] = [8, 9, 4] # Default: Cecil, Nayuta, Marian
-var player_character_index: int = 9 # Index into registry
+var player_character_index: int = 0 # Index into registry (0 = Snow White, the default start)
 var _character_registry = null
 
 # --- Current Run Stats ---
@@ -28,20 +27,6 @@ var pristine_rapture_cores: int = 0
 var stages_cleared: Array[String] = []
 var _total_score_all_time: int = 0
 var _total_runs_all_time: int = 0
-var skill_points: int = 0 # Persistent skill points for Talent Tree
-
-func add_skill_points(amount: int) -> void:
-	skill_points += amount
-	print("[GameManager] Added %d skill points. Total: %d" % [amount, skill_points])
-
-func get_skill_points() -> int:
-	return skill_points
-
-func spend_skill_points(amount: int) -> bool:
-	if skill_points >= amount:
-		skill_points -= amount
-		return true
-	return false
 
 # --- Difficulty & Modes ---
 var difficulty_multiplier: float = 1.0
@@ -85,7 +70,6 @@ func _setup_event_listeners() -> void:
 	if EventBus:
 		EventBus.damage_dealt.connect(_on_damage_dealt)
 		EventBus.enemy_killed.connect(_on_enemy_killed)
-		EventBus.character_switched.connect(_on_character_switched)
 
 
 func _process(delta: float) -> void:
@@ -106,12 +90,11 @@ func reset_run_stats() -> void:
 	_run_already_recorded = false
 	match_tainted = false # Reset tainted flag for new run
 	
-	# Initialize stats for current squad
-	for char_idx in selected_character_indices:
-		damage_by_character[char_idx] = 0
-		kills_by_character[char_idx] = 0
-		boss_kills_by_character[char_idx] = 0
-	
+	# Initialize stats for the selected character
+	damage_by_character[player_character_index] = 0
+	kills_by_character[player_character_index] = 0
+	boss_kills_by_character[player_character_index] = 0
+
 	print("[GameManager] Run stats reset")
 
 
@@ -136,29 +119,8 @@ func set_current_wave(wave: int) -> void:
 
 # --- Event Handlers (from RunStatsTracker) ---
 
-func _get_source_character_index(source: String) -> int:
-	# Default to current player if source is generic
-	if source in ["player", "projectile", "unknown", "burn_dot"]:
-		return player_character_index
-	
-	# Check if source matches a squad member's weapon ID
-	_ensure_registry()
-	if _character_registry:
-		for char_idx in selected_character_indices:
-			# Get character ID from index
-			var all_ids = _character_registry.get_all_character_ids()
-			if char_idx >= 0 and char_idx < all_ids.size():
-				var char_id = all_ids[char_idx]
-				var char_data = _character_registry.get_character(char_id)
-				if char_data:
-					# Check main weapon ID
-					if char_data.get("weapon_id") == source:
-						return char_idx
-					# Check character-specific sources (e.g. "scarlet_burn", "snow_white_trail")
-					if source.begins_with(char_id):
-						return char_idx
-	
-	# Fallback to current player
+func _get_source_character_index(_source: String) -> int:
+	# Single-character runs: all damage/kills attribute to the player character
 	return player_character_index
 
 func _on_damage_dealt(target: Node, info: Variant) -> void:
@@ -192,10 +154,6 @@ func _on_enemy_killed(enemy: Node, killer_source: String) -> void:
 	
 	if enemy and (enemy.is_in_group("boss") or enemy.is_in_group("super_boss")):
 		boss_kills_by_character[char_idx] = boss_kills_by_character.get(char_idx, 0) + 1
-
-
-func _on_character_switched(_slot: int, registry_index: int) -> void:
-	player_character_index = registry_index
 
 
 # --- Getters for Run Stats (RunStatsTracker Compatibility) ---
@@ -295,7 +253,7 @@ func record_run_result(character_id: String = "") -> void:
 		"difficulty": difficulty_multiplier,
 		"goddess_fall": goddess_fall_mode,
 		"timestamp": int(Time.get_unix_time_from_system()),
-		"squad_indices": selected_character_indices.duplicate(),
+		"character_index": player_character_index,
 		"run_stats": {
 			"damage": damage_by_character.duplicate(),
 			"kills": kills_by_character.duplicate(),
@@ -338,7 +296,7 @@ func get_leaderboard_entries(max_count: int = 10) -> Array:
 			"best_difficulty": run.get("difficulty", 1),
 			"best_goddess_fall": run.get("goddess_fall", false),
 			"timestamp": run.get("timestamp", 0),
-			"squad_indices": run.get("squad_indices", []),
+			"character_index": run.get("character_index", -1),
 			"run_stats": run.get("run_stats", {})
 		})
 	
@@ -465,34 +423,12 @@ func add_cores(amount: int) -> void:
 
 # --- Character Selection Helpers ---
 
-func set_selected_characters(indices: Array[int]) -> void:
-	if indices.size() != 3:
-		return
-	selected_character_indices = indices.duplicate()
-
-
-func get_shop_character_order() -> Array[int]:
-	if selected_character_indices.size() >= 3:
-		return [selected_character_indices[1], selected_character_indices[0], selected_character_indices[2]]
-	return selected_character_indices.duplicate()
-
-
-func get_main_character() -> int:
-	if selected_character_indices.size() > 0:
-		return selected_character_indices[0]
-	return 0
-
-
 func set_player_character(index: int) -> void:
 	player_character_index = index
 
 
 func get_player_character() -> int:
 	return player_character_index
-
-
-func is_character_selected(registry_index: int) -> bool:
-	return registry_index in selected_character_indices
 
 
 func get_character_data(registry_index: int) -> Dictionary:
@@ -525,10 +461,6 @@ func get_all_characters() -> Array:
 func _ensure_registry() -> void:
 	if _character_registry == null:
 		_character_registry = CharacterRegistry.get_instance()
-
-
-func reset_selection() -> void:
-	selected_character_indices = [8, 9, 4]
 
 
 ## Get the character registry instance (cached)

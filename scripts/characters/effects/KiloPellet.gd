@@ -47,21 +47,15 @@ func _ready() -> void:
 	
 	# Debug upgrade logic (Uncommented for user feedback)
 	var has_upgrade = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility")
-	var is_in_squad = false
-	
-	if player and player.has_method("is_character_in_squad"):
-		is_in_squad = player.is_character_in_squad("wells")
-		
-		# Fallback check for capitalization or ID mismatch
-		if not is_in_squad:
-			# Try capital "Wells" just in case
-			if player.is_character_in_squad("Wells"):
-				is_in_squad = true
-				
+	var playing_wells = false
+
+	if player and player.has_method("is_playing_character"):
+		playing_wells = player.is_playing_character("wells")
+
 	if has_upgrade:
-		print("[KiloPellet] Upgrade ACTIVE. InSquad: ", is_in_squad)
-	
-	if has_upgrade and is_in_squad:
+		print("[KiloPellet] Upgrade ACTIVE. PlayingWells: ", playing_wells)
+
+	if has_upgrade and playing_wells:
 		print("[KiloPellet] Applying Intangibility")
 		is_intangible = true
 		# We CANNOT remove Layer 4 (Value 4) because Boulders share it with Hitboxes
@@ -219,54 +213,12 @@ func _apply_burn(body: Node) -> void:
 	# Create burn effect
 	var burn = Node.new()
 	burn.name = "KiloBurn"
-	burn.set_script(_get_burn_script())
+	burn.set_script(preload("res://scripts/effects/visuals/BurnTickEffect.gd"))
 	burn.set("damage_per_second", damage_per_second)
 	burn.set("duration", burn_duration)
 	burn.set("owner_node", owner_node)
+	burn.set("damage_source", "kilo")
 	body.add_child(burn)
-
-func _get_burn_script() -> GDScript:
-	var script := GDScript.new()
-	script.source_code = """
-extends Node
-
-var damage_per_second: int = 0
-var duration: float = 3.0
-var owner_node: Node = null
-var _timer: float = 0.0
-var _tick_timer: float = 0.0
-const TICK_INTERVAL := 0.5
-
-func _process(delta: float) -> void:
-	_timer += delta
-	_tick_timer += delta
-	
-	if _tick_timer >= TICK_INTERVAL:
-		_tick_timer = 0.0
-		_apply_tick()
-	
-	if _timer >= duration:
-		queue_free()
-
-func _apply_tick() -> void:
-	var parent := get_parent()
-	if not is_instance_valid(parent):
-		queue_free()
-		return
-	
-	var tick_damage := int(damage_per_second * TICK_INTERVAL)
-	if tick_damage <= 0:
-		return
-	
-	if parent.has_method(\"take_damage\"):
-		parent.take_damage(tick_damage, false, Vector2.ZERO, false, "kilo")
-	elif \"hp\" in parent:
-		parent.hp -= tick_damage
-		if parent.hp <= 0 and parent.has_method(\"die\"):
-			parent.die()
-"""
-	script.reload()
-	return script
 
 # === DRAWING LOGIC (Preserved from original as user liked visuals) ===
 func _draw() -> void:

@@ -16,7 +16,7 @@ signal intro_ready
 # Intro screen instance (visuals delegated to IntroScreen.gd)
 var _intro_screen_instance: IntroScreen = null
 
-signal game_started(squad: Array[int], stage_id: String)
+signal game_started(character_index: int, stage_id: String)
 
 # Menu scenes - load on demand instead of preload to speed up startup
 var MainMenuScene: PackedScene = null
@@ -98,32 +98,29 @@ func _on_loading_delay_timeout() -> void:
 	_loading_delay_timer = null # Setting to null allows _check_resources_loaded to proceed
 
 
-func _input(event: InputEvent) -> void:
+func _input(_event: InputEvent) -> void:
 	# If intro is still active, don't process menu navigation
 	if _intro_screen_instance and is_instance_valid(_intro_screen_instance):
 		return
 
-	# Input Switching Logic:
+	# Input Switching Logic (disabled):
 	# If user uses controller but focus is lost (e.g. used mouse), restore focus immediately.
 	# if event is InputEventJoypadButton or event is InputEventJoypadMotion:
-		# Ignore small motion
-		# if event is InputEventJoypadMotion and abs(event.axis_value) < 0.5:
-		# 	return
-			
-		if get_viewport().gui_get_focus_owner() == null:
-			if _current_menu and is_instance_valid(_current_menu):
-				if _current_menu.has_method("_grab_initial_focus"):
-					_current_menu._grab_initial_focus()
-				else:
-					# Fallback: try to find any focusable
-					var btn := _find_first_focusable(_current_menu)
-					if btn:
-						btn.grab_focus()
+	# 	if event is InputEventJoypadMotion and abs(event.axis_value) < 0.5:
+	# 		return  # Ignore small motion
+	# 	if get_viewport().gui_get_focus_owner() == null:
+	# 		if _current_menu and is_instance_valid(_current_menu):
+	# 			if _current_menu.has_method("_grab_initial_focus"):
+	# 				_current_menu._grab_initial_focus()
+	# 			else:
+	# 				var btn := _find_first_focusable(_current_menu)
+	# 				if btn:
+	# 					btn.grab_focus()
 
 var _last_frame_time: int = 0
 var _first_frame_rendered: bool = false
 
-func _process(delta: float) -> void:
+func _process(_delta: float) -> void:
 	# On the very first _process call, the intro screen has rendered at least once
 	# Signal other autoloads that they can now do heavy initialization
 	if not _first_frame_rendered:
@@ -406,12 +403,6 @@ func show_character_select() -> void:
 		menu.play_requested.connect(_on_game_start_requested)
 	if menu.has_signal("back_requested"):
 		menu.back_requested.connect(_on_back_requested)
-	
-	# Load saved selection if available
-	if GameManager:
-		var saved_selection := GameManager.get_shop_character_order()
-		if saved_selection.size() == 3 and menu.has_method("set_initial_selection"):
-			menu.set_initial_selection(saved_selection)
 
 
 func show_achievements_menu() -> void:
@@ -552,23 +543,20 @@ func _on_back_requested() -> void:
 	_pop_menu()
 
 
-func _on_game_start_requested(squad: Array[int], stage_id: String) -> void:
-	print("[MenuManager] _on_game_start_requested called with squad: ", squad, " stage: ", stage_id)
-	
+func _on_game_start_requested(character_index: int, stage_id: String) -> void:
+	print("[MenuManager] _on_game_start_requested called with character: ", character_index, " stage: ", stage_id)
+
 	# Save selection to GameManager
 	if GameManager:
-		GameManager.set_selected_characters(squad)
-		# Set the main character (first in squad) as the player character
-		if squad.size() > 0:
-			GameManager.set_player_character(squad[0])
+		GameManager.set_player_character(character_index)
 		# Store stage_id for Level to use
 		GameManager.current_stage_id = stage_id
-	
+
 	# Stop menu music
 	stop_menu_music()
-	
+
 	# Emit signal for game to handle
-	emit_signal("game_started", squad, stage_id)
+	emit_signal("game_started", character_index, stage_id)
 	
 	# Clear menus and transition to game
 	_clear_stack()

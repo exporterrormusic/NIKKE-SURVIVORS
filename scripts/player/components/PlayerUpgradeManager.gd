@@ -64,23 +64,7 @@ func _process(delta: float) -> void:
 			if _is_timerless_mode():
 				_apply_commander_wave_heal()
 
-func apply_character_shop_upgrades(all_ids: Array, selected_indices: Array, swappable_slots: Array) -> void:
-	"""Apply character-specific upgrades for characters currently in the squad."""
-	for slot_idx in range(selected_indices.size()):
-		var char_idx = selected_indices[slot_idx]
-		
-		if char_idx < 0 or char_idx >= all_ids.size():
-			continue
-		
-		# Only apply if the squad slot is currently active in the run (swappable)
-		# This prevents upgrades from leaking to "locked" slots even if the character is owned
-		if slot_idx not in swappable_slots:
-			continue
-			
-		var char_id: String = all_ids[char_idx]
-		_check_and_activate_upgrade(char_id)
-	
-## Apply upgrade for a newly unlocked character (during gameplay)
+## Apply character-specific shop upgrades for the run's character
 func apply_upgrade_for_character(char_id: String) -> void:
 	_check_and_activate_upgrade(char_id)
 
@@ -109,18 +93,20 @@ func _check_and_activate_upgrade(char_id: String) -> void:
 				has_crown_trombe_stacking = true
 				print("[UpgradeManager] Crown 'Trombe Stacking' active")
 		"cecil":
-			if ShopMenuScript.has_character_upgrade("cecil", "basic_attack"):
+			# Guards: this re-runs on every talent purchase; don't reset lives/shield
+			if not has_cecil_wishes and ShopMenuScript.has_character_upgrade("cecil", "basic_attack"):
 				has_cecil_wishes = true
 				if _player._health: _player._health.configure_cecil_lives(3) # Default 3 lives
 				print("[UpgradeManager] Cecil 'Three Wishes' active")
-			if ShopMenuScript.has_character_upgrade("cecil", "eden_shield"):
+			if not has_cecil_eden_shield and ShopMenuScript.has_character_upgrade("cecil", "eden_shield"):
 				has_cecil_eden_shield = true
-				# CRITICAL: Configure shield for ALL squad members, not just current!
 				if _player._health:
-					_player._health.configure_shield_for_squad(0.5) # 50% of max HP
+					_player._health.configure_shield_percent(0.5) # 50% of max HP
+				if _player._visual_effects:
+					_player._visual_effects.create_eden_shield_visual()
 				if _player.has_method("_update_shield_display"):
 					_player.call_deferred("_update_shield_display")
-				print("[UpgradeManager] Cecil 'Noah's Defiance' active - Shield for ALL squad")
+				print("[UpgradeManager] Cecil 'Noah's Defiance' active")
 		"kilo":
 			if ShopMenuScript.has_character_upgrade("kilo", "talos_ammo"):
 				has_kilo_ammo_upgrade = true
@@ -145,7 +131,8 @@ func _check_and_activate_upgrade(char_id: String) -> void:
 			if ShopMenuScript.has_character_upgrade("sin", "basic_attack"):
 				has_sin_mind_control = true
 				print("[UpgradeManager] Sin 'Magnetic Personality' active")
-			if ShopMenuScript.has_character_upgrade("sin", "wish_save"):
+			# Guard: enable_sin_wish() re-arms the once-per-match save
+			if not has_sin_wish_upgrade and ShopMenuScript.has_character_upgrade("sin", "wish_save"):
 				has_sin_wish_upgrade = true
 				if _player._health: _player._health.enable_sin_wish()
 				print("[UpgradeManager] Sin 'I WISH They Were Gone' active")
@@ -203,52 +190,6 @@ func try_absorb_damage(damage: int) -> int:
 # Actually, I will defer adding complex logic I'm unsure about until I verified PlayerCore usage.
 # PlayerCore uses `_has_cecil_eden_shield`. I expose `has_cecil_eden_shield` in this manager.
 # I will stick to just the flags for now to avoid breaking working logic.
-
-# --- Persistence Helper ---
-
-## Loads unlocked talents directly from disk to ensure they differ from UI state
-func load_unlocked_talents_from_disk() -> Dictionary:
-	if not has_node("/root/SaveManager"):
-		return {}
-	var sm: Node = get_node("/root/SaveManager")
-	
-	var shop_data: Dictionary = sm.load_section("shop")
-	var talents = shop_data.get("talents", {})
-	var unlocked = talents.get("unlocked", {}) if talents is Dictionary else {}
-	if not unlocked.is_empty():
-		print("[PlayerUpgradeManager] Loaded %d unlocked talents from disk" % unlocked.size())
-	return unlocked
-
-## Loads unlocked characters and converts to indices (for PlayerCore)
-func load_unlocked_characters_indices() -> Array[int]:
-	# STRICT MODE: Only trust save data or absolute mandatory starter (Scarlet)
-	var unlocked_ids: Array = ["scarlet"]
-	
-	if has_node("/root/SaveManager"):
-		var sm: Node = get_node("/root/SaveManager")
-		var shop_data: Dictionary = sm.load_section("shop")
-		var disk_unlocked = shop_data.get("characters", {}).get("unlocked", [])
-		if disk_unlocked is Array and not disk_unlocked.is_empty():
-			for id in disk_unlocked:
-				if id not in unlocked_ids:
-					unlocked_ids.append(id)
-	else:
-		print("[UpgradeManager] No SaveManager found. Defaulting to ONLY Scarlet.")
-	
-	print("[UpgradeManager DEBUG] Final Unlocked IDs for Upgrades: ", unlocked_ids)
-	
-	# Convert to indices
-	var valid_indices: Array[int] = []
-	var all_ids: Array = []
-	if _registry:
-		all_ids = _registry.get_all_character_ids()
-	
-	for id in unlocked_ids:
-		var idx = all_ids.find(id)
-		if idx != -1:
-			valid_indices.append(idx)
-			
-	return valid_indices
 
 # ========== COMMANDER WAVE HEAL UPGRADE ==========
 
@@ -315,17 +256,9 @@ func _apply_commander_wave_heal() -> void:
 	# else: 0 bonus
 	
 	var total_heal := base_heal + bonus_heal
-	
-	# Heal Commander specifically (even if not active character)
-	# Find Commander in squad and heal their HP bar
-	if _player._health and _player._health.has_method("heal_character_by_id"):
-		_player._health.heal_character_by_id("commander", total_heal)
-	elif _player.has_method("heal"):
-		# Fallback: heal current player if Commander
-		if _player._health and "current_character_id" in _player._health:
-			if _player._health.current_character_id == "commander":
-				_player.heal(total_heal)
-		else:
-			_player.heal(total_heal)
-	
+
+	# Heal the player (this upgrade only activates when playing Commander)
+	if _player.has_method("heal"):
+		_player.heal(total_heal)
+
 	print("[UpgradeManager] Commander healed for %d (burst: %.0f%%)" % [total_heal, burst_percent * 100])

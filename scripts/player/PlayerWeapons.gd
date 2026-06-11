@@ -30,7 +30,7 @@ func can_fire() -> bool:
 
 
 ## Fire current weapon
-func fire(target_position: Vector2) -> bool:
+func fire(_target_position: Vector2) -> bool:
 	if not can_fire():
 		return false
 	

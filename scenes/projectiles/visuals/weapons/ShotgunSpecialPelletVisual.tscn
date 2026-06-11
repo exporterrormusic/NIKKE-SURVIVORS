@@ -1,7 +1,7 @@
 [gd_scene load_steps=8 format=3 uid="uid://vm700jq68pjs"]
 
 [ext_resource type="Script" uid="uid://co6b8fofsh8iv" path="res://src/projectiles/visuals/weapons/shotgun_special_pellet_visual.gd" id="1"]
-[ext_resource type="Texture2D" uid="uid://dwek2ej8a0kxy" path="res://assets/images/Bullets/Shotgun_Special.png" id="2"]
+[ext_resource type="Texture2D" uid="uid://dpoxu6nkwoyfj" path="res://assets/images/Bullets/Shotgun_Special.png" id="2"]
 [ext_resource type="Shader" uid="uid://d08hxd1am20uf" path="res://src/projectiles/shaders/smg_glow.gdshader" id="3"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_hyfii"]

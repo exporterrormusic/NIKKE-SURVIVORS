@@ -98,39 +98,31 @@ func _ready() -> void:
 	set_character(0)
 
 func _load_character_portraits() -> void:
-	# Load portraits from GameManager's selected characters
-	# Order: [Main, Support1, Support2] - same as selected_character_indices
+	# Load the portrait of the selected character from GameManager
 	_character_portraits.clear()
 	_portrait_indices.clear()
-	
-	# Try to get from GameManager autoloadas
+
 	var game_manager = get_node_or_null("/root/GameManager")
-	
+
 	if game_manager:
-		# Use selected_character_indices directly (Main, Support1, Support2 order)
-		var selected: Array[int] = game_manager.selected_character_indices.duplicate()
-		_portrait_indices = selected.duplicate()
-		
-		# Get CharacterRegistry to map indices to portrait paths
+		var idx: int = game_manager.player_character_index
+		_portrait_indices = [idx]
+
+		# Get CharacterRegistry to map index to portrait path
 		var registry = CharacterRegistry.get_instance()
 		if registry:
 			var all_ids: Array[String] = registry.get_all_character_ids()
-			for idx in selected:
-				if idx >= 0 and idx < all_ids.size():
-					var char_id: String = all_ids[idx]
-					var folder_name: String = char_id.replace("_", "-")
-					_character_portraits.append("res://assets/characters/%s/portrait-sq.png" % folder_name)
-				else:
-					_character_portraits.append("")
-	
+			if idx >= 0 and idx < all_ids.size():
+				var char_id: String = all_ids[idx]
+				var folder_name: String = char_id.replace("_", "-")
+				_character_portraits.append("res://assets/characters/%s/portrait-sq.png" % folder_name)
+			else:
+				_character_portraits.append("")
+
 	# Fallback if nothing loaded
 	if _character_portraits.is_empty():
-		_character_portraits = [
-			"res://assets/characters/scarlet/portrait-sq.png",
-			"res://assets/characters/commander/portrait-sq.png",
-			"res://assets/characters/marian/portrait-sq.png"
-		]
-		_portrait_indices = [0, 1, 4]
+		_character_portraits = ["res://assets/characters/snow-white/portrait-sq.png"]
+		_portrait_indices = [0]
 
 func _setup_bar_value_labels() -> void:
 	# Create HP value label inside HP bar
@@ -177,8 +169,7 @@ func set_character(character_slot: int, burst_unlocked: bool = true) -> void:
 	if _character_portraits.is_empty():
 		return # Still empty, can't set portrait
 	
-	# character_slot is the slot in the squad (0=Main, 1=Support1, 2=Support2)
-	# _character_portraits is in the same order, so use directly
+	# Single-character runs: only slot 0 exists
 	if character_slot < 0 or character_slot >= _character_portraits.size():
 		character_slot = 0
 	

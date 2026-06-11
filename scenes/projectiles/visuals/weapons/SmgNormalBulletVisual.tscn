@@ -1,7 +1,7 @@
 [gd_scene load_steps=6 format=3 uid="uid://bq64ffrxn7umb"]
 
 [ext_resource type="Script" uid="uid://jwe1pt4703sp" path="res://src/projectiles/visuals/weapons/smg_normal_bullet_visual.gd" id="1"]
-[ext_resource type="Texture2D" uid="uid://1q37hn2mjviw" path="res://assets/images/Bullets/SMG.png" id="2"]
+[ext_resource type="Texture2D" uid="uid://chlsj2ulah42i" path="res://assets/images/Bullets/SMG.png" id="2"]
 [ext_resource type="Shader" uid="uid://d08hxd1am20uf" path="res://src/projectiles/shaders/smg_glow.gdshader" id="2_hvwgj"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_hhngn"]

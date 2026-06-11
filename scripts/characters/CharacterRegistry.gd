@@ -17,7 +17,27 @@ var _characters: Dictionary = {}
 var _character_order: Array[String] = []
 
 # Characters that start unlocked by default (source of truth)
-const DEFAULT_UNLOCKED: Array[String] = ["snow_white", "scarlet", "rapunzel"]
+const DEFAULT_UNLOCKED: Array[String] = ["snow_white"]
+
+# Pristine Core cost to unlock each character (tiered: early roster cheap,
+# late roster expensive). Characters in DEFAULT_UNLOCKED cost 0.
+const UNLOCK_COSTS := {
+	"scarlet": 3,
+	"rapunzel": 3,
+	"commander": 3,
+	"nayuta": 5,
+	"marian": 5,
+	"kilo": 5,
+	"crown": 8,
+	"cecil": 8,
+	"sin": 8,
+	"wells": 12,
+}
+
+static func get_unlock_cost(char_id: String) -> int:
+	if char_id in DEFAULT_UNLOCKED:
+		return 0
+	return UNLOCK_COSTS.get(char_id, 5)
 
 # Controller scripts
 const CONTROLLER_SCRIPTS = {

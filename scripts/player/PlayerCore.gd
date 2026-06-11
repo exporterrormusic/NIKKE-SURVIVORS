@@ -6,7 +6,6 @@ class_name PlayerCore
 # Character system
 const CharacterRegistryScript = preload("res://scripts/characters/CharacterRegistry.gd")
 const PlayerOverheadHudScript = preload("res://scripts/player/PlayerOverheadHud.gd")
-const CharacterSwapEffectScript = preload("res://scripts/effects/CharacterSwapEffect.gd")
 const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
 const MusicPlayerUIScript = preload("res://scripts/ui/MusicPlayerUI.gd")
 
@@ -51,15 +50,8 @@ var audio_director = null
 
 # Character management
 var _registry: RefCounted = null # CharacterRegistry
-var _controllers: Array = [] # CharacterController instances
 var _current_controller: CharacterController = null
-var _selected_char_indices: Array[int] = [] # Selected characters from GameManager
-var current_character: int = 0 # Slot index (0=Main, 1=Support1, 2=Support2)
-var swappable_slots: Array[int] = [0] # Slots activated in Talent Tree (0=Main ALWAYS active)
-var owned_characters: Array[int] = [] # Registry IDs unlocked in shop/save
-
-# Burst sounds
-var _burst_sounds: Array = []
+var _character_index: int = 0 # Registry index of the run's character
 
 # Level up sound
 var _level_up_sfx: AudioStream = null
@@ -91,7 +83,7 @@ var _progression: PlayerProgression = null
 # Legacy accessors (for compatibility)
 var xp: int = 0: get = get_xp, set = set_xp
 var level: int = 1: get = get_level
-var xp_to_next: int = 100: get = get_xp_to_next
+var xp_to_next: int = 120: get = get_xp_to_next
 
 # Player subsystems (delegated)
 var _health: PlayerHealth = null
@@ -100,9 +92,6 @@ var _weapons: PlayerWeapons = null
 
 # New modular components (Phase 2 refactor)
 var _burst_system: BurstSystem = null
-
-var _char_switcher: CharacterSwitcher = null
-var _talent_ui: TalentUIManager = null
 
 # Extracted modular components (Phase 3 refactor)
 var _visual_effects: PlayerVisualEffects = null
@@ -125,9 +114,6 @@ var aim_direction: Vector2 = Vector2.RIGHT
 const AIM_ASSIST_ANGLE := 15.0 # degrees - subtle cone
 const AIM_ASSIST_RANGE := 350.0 # pixels
 const AIM_ASSIST_STRENGTH := 0.4 # how strongly to pull toward target
-
-# Visual effects
-var _swap_effect: Node2D = null
 
 # Character-specific shop upgrades manager
 var _upgrade_manager: PlayerUpgradeManager = null
@@ -157,20 +143,7 @@ func _ready() -> void:
 	set_collision_mask_value(16, true) # Collide with walls/boundaries
 	
 	_create_shadow()
-	
-	# Register default squad switching actions if they don't exist
-	if not InputMap.has_action("next_character"):
-		InputMap.add_action("next_character")
-		var ev = InputEventMouseButton.new()
-		ev.button_index = MOUSE_BUTTON_WHEEL_UP
-		InputMap.action_add_event("next_character", ev)
-		
-	if not InputMap.has_action("prev_character"):
-		InputMap.add_action("prev_character")
-		var ev = InputEventMouseButton.new()
-		ev.button_index = MOUSE_BUTTON_WHEEL_DOWN
-		InputMap.action_add_event("prev_character", ev)
-	
+
 	# Register sprite for night glow effect (Managed via universal shader now)
 	# if _animator:
 	#	NightGlowManager.register_sprite(_animator)
@@ -190,10 +163,9 @@ func _ready() -> void:
 	# Deferred: connect to environment for night glow (delegated to PlayerNightGlow component)
 	if _night_glow:
 		_night_glow.call_deferred("setup_environment_modulate")
-	
-	# Connect to switcher signals if using component
-	if _char_switcher:
-		_char_switcher.character_switched.connect(_on_controller_switched)
+
+	# Pre-create the talent tree (hidden) so level-up can open it without a load stutter
+	call_deferred("_ensure_talent_tree")
 
 
 func _setup_components() -> void:
@@ -201,7 +173,7 @@ func _setup_components() -> void:
 	# 1. Core Systems
 	_progression = PlayerProgression.new()
 	add_child(_progression)
-	_progression.configure(1, 0, 100)
+	_progression.configure(1, 0, 120)
 	_progression.level_up.connect(_on_progression_level_up)
 	
 	_health = PlayerHealth.new()
@@ -245,14 +217,6 @@ func _setup_components() -> void:
 	add_child(_upgrade_manager)
 	print("[PlayerCore] PlayerUpgradeManager initialized")
 
-	_talent_ui = TalentUIManager.new()
-	_talent_ui.name = "TalentUIManager"
-	add_child(_talent_ui)
-	_talent_ui.initialize(self)
-	_talent_ui.talent_unlocked.connect(_on_component_talent_unlocked)
-	_talent_ui.talent_tree_opened.connect(func(): shop_open = true)
-	_talent_ui.talent_tree_closed.connect(func(): shop_open = false)
-	
 	# 3. Audio & Effects
 	var AudioDirectorScript = load("res://scripts/systems/AudioDirector.gd")
 	audio_director = AudioDirectorScript.new()
@@ -313,11 +277,6 @@ func _on_revive_triggered() -> void:
 	invincible = true
 
 
-func _on_component_talent_unlocked(char_id: int, talent_id: String) -> void:
-	"""Handle talent unlock from TalentUIManager component."""
-	# Forward to existing handler
-	_on_talent_unlocked(char_id, talent_id)
-
 func _apply_shop_upgrades() -> void:
 	"""Apply permanent shop upgrades to player stats."""
 	# HP bonus: +1 per level
@@ -356,192 +315,43 @@ func _init_character_system() -> void:
 	# Load selected characters from GameManager
 	var game_manager = get_node_or_null("/root/GameManager")
 	if game_manager:
-		_selected_char_indices = game_manager.selected_character_indices.duplicate()
-		print("[PlayerCore] Loaded selected characters: ", _selected_char_indices)
+		_character_index = game_manager.player_character_index
+		print("[PlayerCore] Loaded selected character: ", _character_index)
 	else:
-		# Fallback defaults
-		_selected_char_indices = [0, 1, 4] # Scarlet, Commander, Marian
-		print("[PlayerCore] Using fallback characters: ", _selected_char_indices)
-	
-	# Create controllers only for selected characters
-	_controllers.clear()
+		_character_index = 0 # Fallback: Snow White
+		print("[PlayerCore] Using fallback character: ", _character_index)
+
+	# Create the controller for the selected character
 	var all_ids = _registry.get_all_character_ids()
-	for char_idx in _selected_char_indices:
-		if char_idx >= 0 and char_idx < all_ids.size():
-			var char_id = all_ids[char_idx]
-			var controller = _registry.create_controller(char_id, self)
-			_controllers.append(controller)
-			print("[PlayerCore] Created controller for %s (index %d)" % [char_id, char_idx])
-		else:
-			_controllers.append(null)
-			push_warning("[PlayerCore] Invalid character index: %d" % char_idx)
-	
-	# Register squad for health tracking
-	var squad_ids: Array = []
-	for idx in _selected_char_indices:
-		if idx >= 0 and idx < all_ids.size():
-			squad_ids.append(all_ids[idx])
-	
+	if _character_index < 0 or _character_index >= all_ids.size():
+		push_warning("[PlayerCore] Invalid character index: %d" % _character_index)
+		_character_index = 0
+
+	var char_id: String = all_ids[_character_index]
+	_current_controller = _registry.create_controller(char_id, self)
+	print("[PlayerCore] Created controller for %s (index %d)" % [char_id, _character_index])
+
+	# Sync ID to health system for character-specific defenses (Marian absorb)
 	if _health:
-		_health.set_squad_ids(squad_ids)
-	
-	# Start with Main character (slot 0)
-	current_character = 0
-	# Load registry indices of characters unlocked in the shop/skill tree permanently
-	if _upgrade_manager:
-		owned_characters = _upgrade_manager.load_unlocked_characters_indices()
-		# Fallback if load failed or empty (should always have Scarlet at index 0)
-		if owned_characters.is_empty():
-			owned_characters = [0]
-	else:
-		owned_characters = [0]
+		_health.current_character_id = char_id
 
-	# Slots unlocked in the current run via the Talent Tree
-	# Always start with the first slot (Main character) swappable
-	swappable_slots = [0]
-	
-	# RESTORE: Load previously unlocked slots from saved talents
-	var saved_talents = _upgrade_manager.load_unlocked_talents_from_disk() if _upgrade_manager else {}
-	for slot_idx in range(1, _selected_char_indices.size()):
-		var reg_idx = _selected_char_indices[slot_idx]
-		var char_data = saved_talents.get(reg_idx, saved_talents.get(str(reg_idx), {}))
-		if char_data.get("unlock", 0) > 0:
-			if slot_idx not in swappable_slots:
-				swappable_slots.append(slot_idx)
-	
-	swappable_slots.sort()
-	print("[PlayerCore] Initialized swappable_slots: ", swappable_slots)
+	# Apply the character's shop upgrades
+	# (Talents are run-only: the run starts with none; they apply via _on_talent_unlocked)
+	_apply_character_shop_upgrades(char_id)
 
-	
-	# Set initial controller
-	if current_character < _controllers.size() and _controllers[current_character] != null:
-		_current_controller = _controllers[current_character]
-		# Sync ID to health system for character-specific defenses (Marian absorb)
-		if _health and _registry:
-			var char_idx = _selected_char_indices[current_character]
-			var start_id = _registry.get_character_id(char_idx)
-			_health.current_character_id = start_id
-	
-	# Load burst sounds for selected characters
-	_burst_sounds = []
-	for char_idx in _selected_char_indices:
-		if char_idx >= 0 and char_idx < all_ids.size():
-			var char_id = all_ids[char_idx]
-			var sound = _registry.get_burst_sound(char_id)
-			_burst_sounds.append(sound)
-		else:
-			_burst_sounds.append(null)
-	
-	# Apply character-specific shop upgrades for selected squad
-	_apply_character_shop_upgrades(all_ids)
-	
-	# Apply all unlocked talents to controllers
-	_apply_all_talents_to_controllers()
-
-func _apply_character_shop_upgrades(all_ids: Array) -> void:
-	"""Apply character-specific shop upgrades based on selected squad.
-	   Delegated to PlayerUpgradeManager."""
-	if _upgrade_manager:
-		# PASS swappable_slots to ensure we only apply upgrades to characters active in the current run
-		_upgrade_manager.apply_character_shop_upgrades(all_ids, _selected_char_indices, swappable_slots)
-		
-		# Explicitly notify controllers of changes that require immediate stat updates
-		# (e.g. Snow White's ammo needs value update, not just a flag check)
-		if _upgrade_manager.has_snow_white_ammo_upgrade:
-			for controller in _controllers:
-				# Fix: Resource path is likely 'snowwhitecontroller.gd', so 'snow_white' usually fails.
-				# Check for 'snowwhite' (stripped) or rely on data.id if possible.
-				if controller:
-					var path = controller.get_script().resource_path.to_lower()
-					if "snowwhite" in path or "snow_white" in path:
-						# If controller has update_ammo_capacity method, use it
-						# Or manually set if exposed
-						if controller.has_method("apply_squad_upgrades"):
-							controller.apply_squad_upgrades() # This function checks the upgrade flag!
-							# Fix: Ensure ammo starts full if we just upgraded capacity
-							if "ammo" in controller and "max_ammo" in controller:
-								controller.ammo = controller.max_ammo
-								if controller.has_signal("ammo_changed"):
-									controller.ammo_changed.emit(controller.ammo, controller.max_ammo)
-		
-		# Handle local visual side effects (delegated to health + visual effects)
-		if _upgrade_manager.has_cecil_eden_shield:
-			_health.configure_shield(int(max_hp * 0.5))
-			if _visual_effects:
-				_visual_effects.create_eden_shield_visual()
-				call_deferred("_visual_effects.update_shield_display", _health.shield_current, _health.shield_max)
-
-func _apply_upgrade_for_character(char_idx: int) -> void:
-	"""Apply shop upgrade for a specific character when unlocked during gameplay.
-	   Delegated to PlayerUpgradeManager."""
-	if not _registry:
-		return
+func _apply_character_shop_upgrades(char_id: String) -> void:
+	"""Apply character-specific shop upgrades. Delegated to PlayerUpgradeManager."""
 	if not _upgrade_manager:
 		return
-	
-	if char_idx < 0:
-		return
-		
-	var all_ids: Array = _registry.get_all_character_ids()
-	if char_idx >= all_ids.size():
-		return
-	
-	var char_id: String = all_ids[char_idx]
+
 	_upgrade_manager.apply_upgrade_for_character(char_id)
-	
-	# Handle local visual side effects (delegated to health + visual effects)
-	if char_id == "cecil" and _upgrade_manager.has_cecil_eden_shield:
-		_health.configure_shield(int(max_hp * 0.5))
-		if _visual_effects:
-			_visual_effects.create_eden_shield_visual()
-			call_deferred("_visual_effects.update_shield_display", _health.shield_current, _health.shield_max)
 
+	# Explicitly notify the controller of changes that require immediate stat updates
+	# (e.g. Snow White's ammo needs value update, not just a flag check)
+	if _upgrade_manager.has_snow_white_ammo_upgrade and _current_controller:
+		if _current_controller.has_method("apply_shop_upgrades"):
+			_current_controller.apply_shop_upgrades() # This function checks the upgrade flag!
 
-func _apply_all_talents_to_controllers() -> void:
-	"""Apply all unlocked talents to controllers when the game starts."""
-	# Load directly from disk to ensure we have data even if UI isn't open
-	var unlocked_talents: Dictionary = {}
-	
-	if _upgrade_manager:
-		unlocked_talents = _upgrade_manager.load_unlocked_talents_from_disk()
-	
-	# If disk load failed (empty), try tree as backup (if it happens to exist)
-	if unlocked_talents.is_empty():
-		var tree := _get_talent_tree()
-		if tree and tree.has_method("get_unlocked_talents"):
-			unlocked_talents = tree.get_unlocked_talents()
-	
-	if unlocked_talents.is_empty():
-		return
-	
-	# Apply talents for each character slot
-	for slot_idx in range(_controllers.size()):
-		if slot_idx >= _selected_char_indices.size():
-			continue
-		
-		var registry_idx: int = _selected_char_indices[slot_idx]
-		
-		# Fundamental Logic Fix: Do not apply talents if character slot is not active in the current run
-		# This prevents upgrades from "leaking" to locked characters who happen to be in the default squad
-		if not slot_idx in swappable_slots:
-			continue
-
-		var controller = _controllers[slot_idx]
-		
-		# Handle potential String/Int key mismatch from JSON/Config loading
-		var char_talents: Dictionary = {}
-		if registry_idx in unlocked_talents:
-			char_talents = unlocked_talents[registry_idx]
-		elif str(registry_idx) in unlocked_talents:
-			char_talents = unlocked_talents[str(registry_idx)]
-			
-		if controller and not char_talents.is_empty():
-			for talent_id in char_talents:
-				var talent_level: int = char_talents[talent_id]
-				for i in range(talent_level):
-					if controller.has_method("apply_talent"):
-						controller.apply_talent(talent_id)
-						print("[PlayerCore] Applied talent %s (level %d) to controller slot %d (registry %d)" % [talent_id, i + 1, slot_idx, registry_idx])
 
 func on_enemy_killed(_enemy: Node2D, killer_source: String = "player") -> void:
 	"""Called by Level when an enemy dies. Handles kill-based character upgrades.
@@ -549,7 +359,7 @@ func on_enemy_killed(_enemy: Node2D, killer_source: String = "player") -> void:
 	# Check if this is a valid kill source for upgrades
 	# Valid: player, projectile, cecil_drone, summon (for other upgrades like Kilo shield)
 	# Invalid: charmed_enemy
-	var valid_kill: bool = killer_source in ["player", "projectile", "cecil_drone", "summon"]
+	var _valid_kill: bool = killer_source in ["player", "projectile", "cecil_drone", "summon"]
 	
 	# Rapunzel: "I'm a healer, but..." - Heal 2% HP on each kill (exclude clone kills)
 	# Valid sources: player, projectile, and all weapon types (rocket, sniper, etc.) + Character Bursts
@@ -577,50 +387,41 @@ func _init_ui() -> void:
 	if overhead_hud:
 		overhead_hud.update_health(hp, max_hp)
 		overhead_hud.update_burst(burst_current, burst_max)
-		# Pass registry index (not slot index) for proper ammo display
-		var registry_idx: int = _selected_char_indices[current_character] if current_character < _selected_char_indices.size() else 0
-		overhead_hud.update_character(registry_idx)
+		overhead_hud.update_character(_character_index)
 		_update_overhead_ammo()
 	update_xp_bar()
 	_hud_initialized = true
 
 func _update_hud() -> void:
 	if player_hud and player_hud.is_inside_tree():
-		player_hud.set_character(current_character, is_burst_unlocked())
+		player_hud.set_character(0, is_burst_unlocked())
 		player_hud.configure(hp, max_hp, burst_current, burst_max, stamina, max_stamina)
 
 func update_sprite() -> void:
 	if not _animator or not _registry:
 		push_warning("[PlayerCore] update_sprite: animator or registry missing")
 		return
-	
-	# current_character is slot index (0, 1, 2)
-	# _selected_char_indices maps slot to registry index
-	if current_character < 0 or current_character >= _selected_char_indices.size():
-		push_warning("[PlayerCore] update_sprite: current_character %d out of bounds" % current_character)
-		return
-	
-	var registry_idx: int = _selected_char_indices[current_character]
-	var char_data = _registry.get_character_by_index(registry_idx)
+
+	var char_data = _registry.get_character_by_index(_character_index)
 	if char_data:
 		var texture = char_data.get_sprite()
 		if texture:
 			# Default animation settings - could be in CharacterData
 			_animator.configure(texture, 3, 4, 6.0, 0.2)
-			print("[PlayerCore] Loaded sprite for slot %d (registry %d)" % [current_character, registry_idx])
+			print("[PlayerCore] Loaded sprite for character %d" % _character_index)
 		else:
-			push_warning("[PlayerCore] update_sprite: No texture for character %d" % registry_idx)
-		
+			push_warning("[PlayerCore] update_sprite: No texture for character %d" % _character_index)
+
 		# Apply character stats
 		_apply_character_stats(char_data)
-		
+
 		# Apply universal shader for night glow
 		_apply_universal_shader()
 	else:
-		push_warning("[PlayerCore] update_sprite: No char_data for index %d" % registry_idx)
-	
+		push_warning("[PlayerCore] update_sprite: No char_data for index %d" % _character_index)
+
 	if player_hud and player_hud.is_inside_tree():
-		player_hud.set_character(current_character, is_burst_unlocked())
+		player_hud.set_character(0, is_burst_unlocked())
 
 func _apply_character_stats(char_data: Resource) -> void:
 	"""Apply character-specific stats like speed."""
@@ -673,11 +474,8 @@ func get_crit_chance() -> float:
 
 ## Get current character's base damage from CharacterData
 func get_base_damage() -> float:
-	if current_character < 0 or current_character >= _selected_char_indices.size():
-		return 1.0
-	var registry_idx: int = _selected_char_indices[current_character]
 	if _registry:
-		var char_data = _registry.get_character_by_index(registry_idx)
+		var char_data = _registry.get_character_by_index(_character_index)
 		if char_data:
 			return char_data.base_damage
 	return 1.0
@@ -700,9 +498,7 @@ func gain_burst(amount: float) -> void:
 func is_burst_unlocked() -> bool:
 	if _current_controller:
 		# Check if burst talent is unlocked for this character
-		# Use registry index for talent lookup
-		var registry_idx: int = _selected_char_indices[current_character] if current_character < _selected_char_indices.size() else 0
-		return _get_talent_level(registry_idx, "burst") > 0
+		return _get_talent_level(_character_index, "burst") > 0
 	return false
 
 func _get_talent_tree() -> Control:
@@ -710,12 +506,6 @@ func _get_talent_tree() -> Control:
 	if canvas == null:
 		canvas = get_tree().root
 	return canvas.get_node_or_null("TalentTree")
-
-func _get_shop_menu() -> Control:
-	var canvas := get_parent().get_node_or_null("CanvasLayer")
-	if canvas == null:
-		canvas = get_tree().root
-	return canvas.get_node_or_null("ShopMenu")
 
 func _get_talent_level(char_id: int, talent_id: String) -> int:
 	var tree := _get_talent_tree()
@@ -727,17 +517,15 @@ func get_talent_level(char_id: int, talent_id: String) -> int:
 	return _get_talent_level(char_id, talent_id)
 
 func get_sin_captivating_level() -> int:
-	"""Get Sin's Captivating talent level directly from the controller (if Sin is in party)."""
-	for controller in _controllers:
-		if controller is SinController:
-			return controller.captivating_level
+	"""Get Sin's Captivating talent level directly from the controller (if playing Sin)."""
+	if _current_controller is SinController:
+		return _current_controller.captivating_level
 	return 0
 
 func get_sin_damage() -> int:
-	"""Get Sin's current damage for explosion calculations (if Sin is in party)."""
-	for controller in _controllers:
-		if controller is SinController:
-			return calc_damage() # Use player's damage (includes level scaling)
+	"""Get Sin's current damage for explosion calculations (if playing Sin)."""
+	if _current_controller is SinController:
+		return calc_damage() # Use player's damage (includes level scaling)
 	return 0
 
 func _create_shadow() -> void:
@@ -760,7 +548,7 @@ func take_damage(dmg: int, is_crit: bool = false, direction: Vector2 = Vector2.Z
 	# Pass to health component
 	_health.take_damage(dmg, is_crit, direction, is_true_damage, source)
 
-func _on_health_damage_taken_visuals(dmg: int, is_crit: bool, direction: Vector2) -> void:
+func _on_health_damage_taken_visuals(dmg: int, _is_crit: bool, _direction: Vector2) -> void:
 	"""Handle visuals when the health component actually takes damage."""
 	if screen_flash and screen_flash.has_method("flash_damage"):
 		screen_flash.flash_damage()
@@ -818,15 +606,7 @@ func _on_health_death_final() -> void:
 		if root and root.has_method("show_defeat_menu"):
 			root.show_defeat_menu()
 
-func _on_controller_switched(slot_idx: int, registry_idx: int) -> void:
-	"""Handle internal logic when controller changes."""
-	# Update health system context
-	if _health and _registry:
-		var char_id = _registry.get_character_id(registry_idx)
-		_health.current_character_id = char_id
-		print("[PlayerCore] Switched character context to: ", char_id)
-
-func _on_health_changed(current: int, maximum: int) -> void:
+func _on_health_changed(_current: int, _maximum: int) -> void:
 	# Call directly when HUD is ready, defer only during initialization
 	if _hud_initialized:
 		_update_health_display(0, false)
@@ -834,11 +614,17 @@ func _on_health_changed(current: int, maximum: int) -> void:
 		call_deferred("_update_health_display", 0, false)
 
 func add_skill_points(amount: int) -> void:
-	if _progression:
+	# The talent tree is the source of truth for run skill points
+	var tree := _ensure_talent_tree()
+	if tree:
+		tree.add_skill_points(amount)
+		if _progression:
+			_progression.set_skill_points(tree.get_skill_points())
+		_update_skill_points_notification(tree.get_skill_points())
+	elif _progression:
 		_progression.add_skill_points(amount)
-		# Show/update skill points notification
 		_update_skill_points_notification(_progression.get_skill_points())
-	
+
 	if overhead_hud:
 		overhead_hud.update_skill_points_available(true)
 
@@ -915,17 +701,13 @@ func _get_current_weapon_type() -> String:
 	## Get weapon type string for current character
 	if not _registry:
 		return "smg" # Fallback
-	
+
 	var all_ids = _registry.get_all_character_ids()
-	if current_character < 0 or current_character >= _selected_char_indices.size():
+	if _character_index < 0 or _character_index >= all_ids.size():
 		return "smg"
-	
-	var char_idx = _selected_char_indices[current_character]
-	if char_idx < 0 or char_idx >= all_ids.size():
-		return "smg"
-	
-	var char_id = all_ids[char_idx]
-	
+
+	var char_id = all_ids[_character_index]
+
 	# Map character ID to weapon type
 	match char_id:
 		"snow_white":
@@ -984,22 +766,16 @@ func _attempt_burst_activation() -> void:
 func _play_burst_voice() -> void:
 	# Get current character ID for runtime sound lookup
 	var char_id: String = ""
-	if _registry and current_character >= 0:
+	if _registry:
 		var all_ids = _registry.get_all_character_ids()
-		if current_character < _selected_char_indices.size():
-			var char_idx = _selected_char_indices[current_character]
-			if char_idx >= 0 and char_idx < all_ids.size():
-				char_id = all_ids[char_idx]
-	
+		if _character_index >= 0 and _character_index < all_ids.size():
+			char_id = all_ids[_character_index]
+
 	# Get sound at runtime (enables Commander random selection)
 	var sound: AudioStream = null
 	if char_id != "" and _registry:
 		sound = _registry.get_burst_sound(char_id)
-	else:
-		# Fallback to cached sound
-		if current_character >= 0 and current_character < _burst_sounds.size():
-			sound = _burst_sounds[current_character]
-	
+
 	if sound == null:
 		return
 	
@@ -1055,7 +831,7 @@ func add_xp(amount: int) -> void:
 	_progression.set_xp_multiplier(xp_multiplier)
 	
 	# Delegate to progression module (it handles EventBus emission)
-	var leveled_up = _progression.add_xp(amount)
+	var _leveled_up = _progression.add_xp(amount)
 	
 	# Update UI
 	update_xp_bar()
@@ -1064,21 +840,25 @@ func add_xp(amount: int) -> void:
 
 func _on_progression_level_up(new_level: int, skill_points_gained: int) -> void:
 	"""Called when PlayerProgression module triggers a level up"""
-	# Add skill points (could be multiple if leveled up more than once)
-	for i in range(skill_points_gained):
-		_add_skill_point()
-	
+	# Grant points to the talent tree (could be multiple if leveled up more than once)
+	var tree := _ensure_talent_tree()
+	if tree:
+		tree.add_skill_points(skill_points_gained)
+
 	# UI flash
 	if xp_ui and xp_ui.has_method("flash_level_up"):
 		xp_ui.set_level(new_level)
 		xp_ui.flash_level_up()
-	
+
 	# Play level up sound
 	_play_level_up_sound()
-	
+
 	# Spawn WoW-style golden glow effect around player
 	_spawn_level_up_glow()
-	
+
+	# Open the talent tree to spend the point (level-up IS the upgrade choice)
+	_show_talent_tree()
+
 	# Note: EventBus.player_leveled_up already emitted by PlayerProgression
 
 
@@ -1135,93 +915,38 @@ func update_xp_bar() -> void:
 		xp_ui.set_xp(xp, xp_to_next)
 		xp_ui.set_level(level)
 
-func _add_skill_point() -> void:
-	var canvas := get_parent().get_node_or_null("CanvasLayer")
-	if canvas == null:
-		canvas = get_tree().root
-	
-	var existing := canvas.get_node_or_null("TalentTree")
-	if existing:
-		existing.add_skill_points(1)
-	
-	# Optimization: Do NOT instantiate TalentTree here. 
-	# It causes a stutter on level up due to resource loading.
-	# Rely on _update_skill_points_notification to inform the user.
-	# The tree will be created when _show_talent_tree is called (TAB).
-	var points_available = 1
-	if existing and existing.has_method("get_skill_points"):
-		points_available = existing.get_skill_points()
-	elif _progression:
-		points_available = _progression.get_skill_points()
-	
-	if overhead_hud:
-		overhead_hud.update_skill_points_available(points_available > 0)
-	
-	# Show/update skill points notification
-	_update_skill_points_notification(points_available)
-
-func is_character_in_squad(char_id: String) -> bool:
-	"""Check if a character is currently available in the squad (swappable/active in run)."""
+func is_playing_character(char_id: String) -> bool:
+	"""Check if the given character is the one being played this run."""
 	char_id = char_id.to_lower()
-	
-	# Check active squad slots
-	for slot_idx in swappable_slots:
-		if slot_idx >= 0 and slot_idx < _controllers.size():
-			var controller = _controllers[slot_idx]
-			if controller:
-				# Robust check: Check controller data directly first
-				# Using get() is safer than direct access if property might confuse parser
-				var data = controller.get("data")
-				if data and "id" in data:
-					if data.id.to_lower() == char_id:
-						return true
-				
-				# Fallback: Check script path for name match
-				var path = controller.get_script().resource_path.to_lower()
-				# Fix: Snow White controller file is "SnowWhiteController.gd", no underscore. 
-				# Handle "snow_white" by checking for both "snow_white" and "snowwhite"
-				var search_term = char_id.replace("_", "")
-				if search_term in path.replace("_", ""):
-					return true
+
+	if _current_controller:
+		# Robust check: Check controller data directly first
+		# Using get() is safer than direct access if property might confuse parser
+		var data = _current_controller.get("data")
+		if data and "id" in data:
+			if data.id.to_lower() == char_id:
+				return true
+
+		# Fallback: Check script path for name match
+		var path = _current_controller.get_script().resource_path.to_lower()
+		# Fix: Snow White controller file is "SnowWhiteController.gd", no underscore.
+		# Handle "snow_white" by checking for both "snow_white" and "snowwhite"
+		var search_term = char_id.replace("_", "")
+		if search_term in path.replace("_", ""):
+			return true
 	return false
 
-func _refresh_squad_synergies() -> void:
-	"""Notify all controllers to update stats based on current squad composition."""
-	for controller in _controllers:
-		if controller and controller.has_method("apply_squad_upgrades"):
-			controller.apply_squad_upgrades()
-
 func _on_talent_unlocked(char_id: int, talent_id: String) -> void:
-	# char_id is a registry index, we need to convert to slot index
-	var slot_idx: int = _selected_char_indices.find(char_id)
-	
-	# Unlock character slot if this is an unlock talent
-	if talent_id == "unlock":
-		# Find which slot this registry index corresponds to
-		if slot_idx >= 0 and slot_idx not in swappable_slots:
-			swappable_slots.append(slot_idx)
-			swappable_slots.sort()
-			print("[PlayerCore] Activated character slot %d (registry %d) in current run" % [slot_idx, char_id])
-			
-			# Apply shop upgrades for the newly unlocked character
-			_apply_upgrade_for_character(char_id)
-			print("[PlayerCore] Swappable slots now: ", swappable_slots)
-			
-			# Refresh squad synergies (e.g. Kilo's ammo buff needing Kilo in squad)
-			_refresh_squad_synergies()
-	
-	# Forward talent to controller - use slot index
-	# FIX: Only apply talent if the character slot is actually active in the current run
-	if slot_idx >= 0 and slot_idx < _controllers.size() and slot_idx in swappable_slots:
-		var controller = _controllers[slot_idx]
-		if controller and controller.has_method("apply_talent"):
-			controller.apply_talent(talent_id)
-	
-	# Save shop data when talents change
-	var shop_menu = _get_shop_menu()
-	if shop_menu and shop_menu.has_method("_save_shop_data"):
-		shop_menu._save_shop_data()
-	
+	# Forward talent to controller (only the run's character has a controller)
+	if char_id == _character_index and _current_controller:
+		if _current_controller.has_method("apply_talent"):
+			_current_controller.apply_talent(talent_id)
+
+		# Re-check signature upgrades: migrated ex-shop talents activate their
+		# upgrade flags (and side effects) through PlayerUpgradeManager
+		if _registry:
+			_apply_character_shop_upgrades(_registry.get_character_id(_character_index))
+
 	# Update burst visibility
 	_update_burst_visibility()
 	
@@ -1254,11 +979,9 @@ func _update_skill_points_notification(points: int) -> void:
 	_skill_points_notify.show_notification(points)
 
 func _update_burst_visibility() -> void:
-	# Burst bar should only be visible for the CURRENT character if they have burst unlocked
-	# Use registry index for talent lookup
-	var registry_idx: int = _selected_char_indices[current_character] if current_character < _selected_char_indices.size() else 0
-	var current_has_burst := _get_talent_level(registry_idx, "burst") > 0
-	
+	# Burst bar should only be visible if the character has burst unlocked
+	var current_has_burst := _get_talent_level(_character_index, "burst") > 0
+
 	if player_hud and player_hud.has_method("set_burst_unlocked"):
 		player_hud.set_burst_unlocked(current_has_burst)
 		# Also refresh the burst gauge value to prevent visual reset
@@ -1269,57 +992,6 @@ func _update_burst_visibility() -> void:
 		# Also refresh the burst gauge value
 		if current_has_burst:
 			overhead_hud.update_burst(burst_current, burst_max)
-
-# ============= CHARACTER SWITCHING =============
-
-func switch_character(direction: int) -> void:
-	if swappable_slots.size() <= 1:
-		return
-	
-	# Cleanup old controller before switching
-	if _current_controller and _current_controller.has_method("cleanup"):
-		_current_controller.cleanup()
-	
-	var old_char = current_character
-	var idx = swappable_slots.find(current_character)
-	idx = (idx + direction + swappable_slots.size()) % swappable_slots.size()
-	current_character = swappable_slots[idx]
-	_current_controller = _controllers[current_character]
-	
-	print("[PlayerCore] Swapping from slot %d to %d. SwappableSlots: %s. Controller: %s" % [old_char, current_character, swappable_slots, _current_controller])
-	
-	_trigger_swap_effect()
-	update_sprite()
-	_update_overhead_ammo()
-	_update_burst_visibility() # Update burst bar for new character
-	
-	# Update GameManager so achievements track the correct character
-	var registry_idx: int = _selected_char_indices[current_character] if current_character < _selected_char_indices.size() else 0
-	var game_manager = get_node_or_null("/root/GameManager")
-	if game_manager:
-		game_manager.set_player_character(registry_idx)
-	
-	if overhead_hud:
-		# Pass registry index (not slot index) for proper ammo display
-		overhead_hud.update_character(registry_idx)
-	
-	# Sync character ID with health component for character-specific blocks/buffs
-	if _health and _registry:
-		var char_id = _registry.get_character_id(registry_idx)
-		_health.current_character_id = char_id
-
-func _trigger_swap_effect() -> void:
-	if not is_instance_valid(_swap_effect):
-		_swap_effect = Node2D.new()
-		_swap_effect.set_script(CharacterSwapEffectScript)
-		_swap_effect.name = "SwapEffect"
-		_swap_effect.z_index = 50
-		get_parent().add_child(_swap_effect)
-	
-	if _swap_effect.has_method("trigger"):
-		# Pass registry index (not slot index) for correct character effect
-		var registry_idx: int = _selected_char_indices[current_character] if current_character < _selected_char_indices.size() else 0
-		_swap_effect.trigger(registry_idx, global_position)
 
 # ============= AMMO UI =============
 
@@ -1346,14 +1018,11 @@ func _update_overhead_special() -> void:
 	
 	var unlocked = _current_controller.special_unlocked
 	var progress = 1.0
-	
+
 	# Update Scarlet's special unlocked status (index 1 in CharacterRegistry)
-	# Check current character index in _selected_char_indices
-	if _selected_char_indices.size() > current_character:
-		var char_idx = _selected_char_indices[current_character]
-		if char_idx == 1: # Scarlet's index in CharacterRegistry
-			overhead_hud.update_scarlet_special_unlocked(unlocked)
-	
+	if _character_index == 1: # Scarlet's index in CharacterRegistry
+		overhead_hud.update_scarlet_special_unlocked(unlocked)
+
 	# Get special cooldown progress from controller
 	if _current_controller.has_method("get_special_cooldown_progress"):
 		progress = _current_controller.get_special_cooldown_progress()
@@ -1483,8 +1152,7 @@ func _handle_input() -> void:
 		elif not Input.is_action_pressed("dash"):
 			_movement.set_running(false)
 	
-	# Character switching and Burst are now handled exclusively in _input(event) 
-	# to prevent duplicate triggers (which caused swap-and-swap-back bugs).
+	# Burst is handled exclusively in _input(event) to prevent duplicate triggers.
 
 func _update_aim() -> void:
 	# Controller aim
@@ -1580,73 +1248,22 @@ func _input(event: InputEvent) -> void:
 	# Detect mouse usage to switch aim mode - lower threshold to catch subtle movements
 	if event is InputEventMouseMotion and event.relative.length_squared() > 0.01:
 		_using_controller = false
-	
-	# Character switching (using remappable actions)
-	if event.is_action_pressed("next_character") and not event.is_echo():
-		switch_character(1)
-	elif event.is_action_pressed("prev_character") and not event.is_echo():
-		switch_character(-1)
-	
+
 	# Burst activation via controller button (Y/Triangle)
 	if event.is_action_pressed("burst") and not event.is_echo():
 		_attempt_burst_activation()
-	
+
 	# Keyboard inputs
 	if event is InputEventKey and event.pressed and not event.echo:
 		match event.keycode:
-			KEY_1:
-				_select_character_by_index(0)
-			KEY_2:
-				_select_character_by_index(1)
-			KEY_3:
-				_select_character_by_index(2)
-			KEY_4:
-				_select_character_by_index(3)
 			KEY_E:
 				_attempt_burst_activation()
 			KEY_R:
 				_try_manual_reload()
-	
+
 	# Skill tree via remappable action
 	if event.is_action_pressed("show_talent_tree") and not event.is_echo():
 		_show_talent_tree()
-
-
-func _select_character_by_index(index: int) -> void:
-	if index in swappable_slots and index >= 0 and index < _controllers.size():
-		# Prevent switching to dead characters
-		if _health and _registry:
-			var registry_idx = _selected_char_indices[index] if index < _selected_char_indices.size() else 0
-			var char_id = _registry.get_character_id(registry_idx)
-			# Only blocking switch if explicitly dead
-			if not _health.is_character_alive(char_id):
-				print("[PlayerCore] Cannot switch to dead character: %s" % char_id)
-				# TODO: Play error sound?
-				return
-
-		# Cleanup previous controller (removes active effects like Bullet Time audio/visuals)
-		if _current_controller and _current_controller.has_method("cleanup"):
-			_current_controller.cleanup()
-			
-		current_character = index
-		_current_controller = _controllers[current_character]
-		
-		# Ensure current state is saved before switch (handled by setter of current_character_id)
-		# But we need to update the ID on the health component to trigger load
-		if _health and _registry:
-			var char_idx = _selected_char_indices[current_character]
-			var start_id = _registry.get_character_id(char_idx)
-			_health.current_character_id = start_id
-		
-		_trigger_swap_effect()
-		update_sprite()
-		_update_overhead_ammo()
-		_update_burst_visibility() # Update burst bar for new character
-		
-		if overhead_hud:
-			# Pass registry index (not slot index) for proper ammo display
-			var registry_idx: int = _selected_char_indices[current_character] if current_character < _selected_char_indices.size() else 0
-			overhead_hud.update_character(registry_idx)
 
 
 func _try_manual_reload() -> void:
@@ -1659,37 +1276,22 @@ func _try_manual_reload() -> void:
 		_current_controller.manual_reload()
 		_update_overhead_ammo()
 
-func _show_talent_tree(add_point: bool = false) -> void:
+## Get the run's talent tree, creating it (hidden) if it doesn't exist yet.
+## Pre-created at run start so opening on level-up has no load stutter.
+func _ensure_talent_tree() -> Control:
 	var canvas = get_parent().get_node_or_null("CanvasLayer")
 	if canvas == null:
 		canvas = get_tree().root
-	
-	# Hide skill points notification while tree is open
-	if _skill_points_notify and is_instance_valid(_skill_points_notify):
-		_skill_points_notify.show_notification(-1) # -1 = hide
-	
-	# Check for existing talent tree
+
 	var existing = canvas.get_node_or_null("TalentTree")
 	if existing:
-		if add_point:
-			existing.add_skill_points(1) # Add point for leveling up
-		# Sync points if needed (only if mismatch, but usually trust tree)
-		# if _progression:
-		# 	existing.set_skill_points(_progression.get_skill_points()) -> CAUSES INFINITE POINTS EXPLOIT
-		existing.show_tree(self)
-		shop_open = true
-		if get_parent().has_method("set_game_paused"):
-			get_parent().call_deferred("set_game_paused", true)
-		return
-	
-	# Sync skill points from progression
-	var current_points = _progression.get_skill_points() if _progression else 0
+		return existing
 
 	# Create new talent tree using preload for proper initialization
 	var TalentTreeScript = preload("res://scripts/ui/TalentTree.gd")
 	var tree = TalentTreeScript.new()
 	tree.name = "TalentTree"
-	
+
 	# For Controls in CanvasLayer, we need to set anchors properly
 	tree.anchor_left = 0.0
 	tree.anchor_top = 0.0
@@ -1699,20 +1301,26 @@ func _show_talent_tree(add_point: bool = false) -> void:
 	tree.offset_top = 0.0
 	tree.offset_right = 0.0
 	tree.offset_bottom = 0.0
-	
+
 	canvas.add_child(tree)
-	
+
 	# Connect signals
 	tree.talent_unlocked.connect(_on_talent_unlocked)
 	tree.tree_closed.connect(_on_talent_tree_closed)
-	
-	# Initialize points
-	tree.set_skill_points(current_points)
-	
-	if add_point:
-		tree.add_skill_points(1)
-	
-	# Pass player reference via show_tree (not a property)
+
+	# Run-only points: start with whatever progression has banked (usually 0)
+	tree.set_skill_points(_progression.get_skill_points() if _progression else 0)
+	return tree
+
+func _show_talent_tree() -> void:
+	var tree := _ensure_talent_tree()
+	if tree == null:
+		return
+
+	# Hide skill points notification while tree is open
+	if _skill_points_notify and is_instance_valid(_skill_points_notify):
+		_skill_points_notify.show_notification(-1) # -1 = hide
+
 	tree.show_tree(self)
 	shop_open = true
 	if get_parent().has_method("set_game_paused"):
@@ -1725,10 +1333,9 @@ func get_low_hp_damage_multiplier() -> float:
 	return 1.0
 
 func _exit_tree() -> void:
-	# Cleanup all controllers to ensure global effects (AudioServer, etc) are removed
-	for controller in _controllers:
-		if controller and controller.has_method("cleanup"):
-			controller.cleanup()
+	# Cleanup controller to ensure global effects (AudioServer, etc) are removed
+	if _current_controller and _current_controller.has_method("cleanup"):
+		_current_controller.cleanup()
 
 
 ## Apply subtle aim assist for controller users - pulls aim toward nearby enemies

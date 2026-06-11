@@ -128,69 +128,7 @@ func _create_charm_indicator() -> void:
 	_charm_indicator.set("indicator_color", Color(0.7, 0.5, 1.0, 0.65)) # Light purple, slightly more opaque
 
 func _get_indicator_script() -> GDScript:
-	var script := GDScript.new()
-	script.source_code = """
-extends Node2D
-
-var player: Node2D = null
-var radius: float = 150.0
-var indicator_color: Color = Color(0.3, 0.5, 1.0, 0.3)
-var _visible: bool = false
-var _activation_flash: float = 0.0
-
-func show_indicator() -> void:
-	_visible = true
-	queue_redraw()
-
-func hide_indicator() -> void:
-	_visible = false
-	queue_redraw()
-
-func set_radius(r: float) -> void:
-	radius = r
-	queue_redraw()
-
-func trigger_activation() -> void:
-	_activation_flash = 1.0
-
-func _process(delta: float) -> void:
-	if player and is_instance_valid(player):
-		global_position = player.get_global_mouse_position()
-	
-	if _activation_flash > 0:
-		_activation_flash -= delta * 3.0
-		queue_redraw()
-	elif _visible:
-		queue_redraw()
-
-func _draw() -> void:
-	if not _visible and _activation_flash <= 0:
-		return
-	
-	var alpha := indicator_color.a
-	if _activation_flash > 0:
-		alpha = _activation_flash
-	
-	var color := Color(indicator_color.r, indicator_color.g, indicator_color.b, alpha)
-	
-	# Outer glow ring
-	draw_arc(Vector2.ZERO, radius * 1.05, 0, TAU, 48, Color(color.r, color.g, color.b, alpha * 0.4), 8.0)
-	
-	# Main circle - thick and bright
-	draw_arc(Vector2.ZERO, radius, 0, TAU, 48, color, 4.0)
-	
-	# Inner ring
-	draw_arc(Vector2.ZERO, radius * 0.9, 0, TAU, 48, Color(color.r, color.g, color.b, alpha * 0.6), 2.0)
-	
-	# Filled center - more opaque
-	draw_circle(Vector2.ZERO, radius, Color(color.r, color.g, color.b, alpha * 0.35))
-	
-	# Crosshair lines
-	var line_color := Color(color.r, color.g, color.b, alpha * 0.7)
-	draw_line(Vector2(-radius * 0.3, 0), Vector2(radius * 0.3, 0), line_color, 2.0)
-	draw_line(Vector2(0, -radius * 0.3), Vector2(0, radius * 0.3), line_color, 2.0)
-"""
-	script.reload()
+	var script := preload("res://scripts/characters/effects/visuals/MarianCharmIndicator.gd")
 	return script
 
 func _get_current_charm_radius() -> float:
@@ -366,38 +304,7 @@ func _spawn_stun_effect(boss: Node) -> void:
 	stun_visual.name = "MarianStunEffect"
 	stun_visual.z_index = 100
 	
-	var script := GDScript.new()
-	script.source_code = """
-extends Node2D
-
-var _time: float = 0.0
-var _duration: float = 5.0
-var _star_count: int = 5
-
-func _process(delta: float) -> void:
-	_time += delta
-	if _time >= _duration:
-		queue_free()
-		return
-	queue_redraw()
-
-func _draw() -> void:
-	# Draw spinning stars around the boss's head
-	var radius := 40.0
-	for i in range(_star_count):
-		var angle := _time * 3.0 + float(i) * TAU / float(_star_count)
-		var pos := Vector2(cos(angle), sin(angle)) * radius + Vector2(0, -50)
-		_draw_star(pos, 8.0, Color(1.0, 1.0, 0.5, 1.0))
-
-func _draw_star(center: Vector2, size: float, color: Color) -> void:
-	var points := PackedVector2Array()
-	for i in range(10):
-		var angle := float(i) * TAU / 10.0 - PI / 2.0
-		var r := size if i % 2 == 0 else size * 0.4
-		points.append(center + Vector2(cos(angle), sin(angle)) * r)
-	draw_colored_polygon(points, color)
-"""
-	script.reload()
+	var script := preload("res://scripts/characters/effects/visuals/MarianStunEffect.gd")
 	stun_visual.set_script(script)
 	stun_visual.set("_duration", 5.0)
 	boss.add_child(stun_visual)
@@ -411,34 +318,7 @@ func _spawn_charm_aoe_visual(center: Vector2, radius: float) -> void:
 	visual.global_position = center
 
 func _get_charm_aoe_script() -> GDScript:
-	var script := GDScript.new()
-	script.source_code = """
-extends Node2D
-
-var radius: float = 150.0
-var color: Color = Color(0.3, 0.5, 1.0, 0.6)
-var _time: float = 0.0
-var _duration: float = 0.5
-
-func _ready() -> void:
-	z_index = 100
-
-func _process(delta: float) -> void:
-	_time += delta
-	if _time >= _duration:
-		queue_free()
-		return
-	queue_redraw()
-
-func _draw() -> void:
-	var progress := _time / _duration
-	var current_radius := radius * progress
-	var alpha := (1.0 - progress) * color.a
-	
-	draw_arc(Vector2.ZERO, current_radius, 0, TAU, 64, Color(color.r, color.g, color.b, alpha), 4.0)
-	draw_circle(Vector2.ZERO, current_radius * 0.9, Color(color.r, color.g, color.b, alpha * 0.3))
-"""
-	script.reload()
+	var script := preload("res://scripts/characters/effects/visuals/MarianCharmAoe.gd")
 	return script
 
 func _on_burst_start() -> void:

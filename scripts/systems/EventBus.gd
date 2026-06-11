@@ -103,19 +103,6 @@ signal boss_defeated(boss: Node)
 signal game_paused(is_paused: bool)
 
 # =============================================================================
-# CHARACTER EVENTS
-# =============================================================================
-
-## Emitted when the active character changes
-## @param slot_index: The new active character slot (0, 1, 2)
-## @param character_id: Registry ID of the character
-signal character_switched(slot_index: int, character_id: int)
-
-## Emitted when a character is unlocked during gameplay
-## @param slot_index: Which slot was unlocked
-signal character_unlocked(slot_index: int)
-
-# =============================================================================
 # ENVIRONMENT EVENTS
 # =============================================================================
 

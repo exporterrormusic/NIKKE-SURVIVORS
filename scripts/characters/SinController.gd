@@ -251,38 +251,7 @@ func _spawn_charm_aoe_visual(center: Vector2, radius: float) -> void:
 	visual.global_position = center
 
 func _get_charm_aoe_script() -> GDScript:
-	var script := GDScript.new()
-	script.source_code = """
-extends Node2D
-
-var radius: float = 150.0
-var color: Color = Color(0.7, 0.2, 0.9, 0.6)
-var _time: float = 0.0
-var _duration: float = 0.5
-
-func _ready() -> void:
-	z_index = 100
-
-func _process(delta: float) -> void:
-	_time += delta
-	if _time >= _duration:
-		queue_free()
-		return
-	queue_redraw()
-
-func _draw() -> void:
-	var progress := _time / _duration
-	var current_radius := radius * progress
-	var alpha := (1.0 - progress) * color.a
-	
-	# Outer ring
-	draw_arc(Vector2.ZERO, current_radius, 0, TAU, 64, Color(color.r, color.g, color.b, alpha), 4.0)
-	
-	# Inner glow
-	var inner_alpha := alpha * 0.3
-	draw_circle(Vector2.ZERO, current_radius * 0.9, Color(color.r, color.g, color.b, inner_alpha))
-"""
-	script.reload()
+	var script := preload("res://scripts/characters/effects/visuals/SinCharmAoe.gd")
 	return script
 
 func _on_burst_start() -> void:
@@ -511,38 +480,7 @@ func _spawn_burst_explosion(position: Vector2) -> void:
 	visual.global_position = position
 
 func _get_explosion_visual_script() -> GDScript:
-	var script := GDScript.new()
-	script.source_code = """
-extends Node2D
-
-var radius: float = 100.0
-var color: Color = Color(0.7, 0.2, 0.9, 0.8)
-var _time: float = 0.0
-var _duration: float = 0.3
-
-func _ready() -> void:
-	z_index = 200
-
-func _process(delta: float) -> void:
-	_time += delta
-	if _time >= _duration:
-		queue_free()
-		return
-	queue_redraw()
-
-func _draw() -> void:
-	var progress := _time / _duration
-	var current_radius := radius * (0.5 + progress * 0.5)
-	var alpha := (1.0 - progress) * color.a
-	
-	# Explosion ring
-	draw_arc(Vector2.ZERO, current_radius, 0, TAU, 32, Color(color.r, color.g, color.b, alpha), 6.0)
-	
-	# Inner flash
-	var inner_alpha := alpha * 0.5 * (1.0 - progress)
-	draw_circle(Vector2.ZERO, current_radius * 0.7, Color(1.0, 0.8, 1.0, inner_alpha))
-"""
-	script.reload()
+	var script := preload("res://scripts/characters/effects/visuals/SinExplosionVisual.gd")
 	return script
 
 ## Apply talent upgrade

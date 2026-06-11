@@ -39,32 +39,7 @@ func _setup_shadow() -> void:
 	_shadow = Node2D.new()
 	_shadow.name = "EliteShadow"
 	_shadow.z_index = -3
-	var script := GDScript.new()
-	script.source_code = """
-extends Node2D
-
-func _ready() -> void:
-	queue_redraw()
-
-func _draw() -> void:
-	# Get sprite info for proper feet positioning
-	var parent := get_parent().get_parent()
-	var sprite = parent.get_node_or_null("AnimatedSprite2D") if parent else null
-	var feet_offset: float = 18.0  # Default
-	if sprite and sprite.sprite_frames:
-		var anim = sprite.animation
-		if sprite.sprite_frames.has_animation(anim) and sprite.sprite_frames.get_frame_count(anim) > 0:
-			var tex = sprite.sprite_frames.get_frame_texture(anim, 0)
-			if tex:
-				feet_offset = tex.get_height() * sprite.scale.y * 0.4
-	
-	var shadow_color := Color(0.0, 0.0, 0.0, 0.35)
-	draw_set_transform(Vector2(0, feet_offset), 0.0, Vector2(1.0, 0.4))
-	draw_circle(Vector2.ZERO, 20.0, shadow_color)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-"""
-	script.reload()
-	_shadow.set_script(script)
+	_shadow.set_script(preload("res://scripts/enemies/effects/visuals/EnemyShadowVisual.gd"))
 	add_child(_shadow)
 
 func _process(_delta: float) -> void:

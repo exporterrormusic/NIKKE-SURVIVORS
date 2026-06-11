@@ -1,7 +1,7 @@
 extends "res://scripts/characters/CharacterController.gd"
 class_name CommanderController
 ## Legendary Commander - Assault Rifle
-# Special: Order - Buffs squad
+# Special: Order - stuns all enemies
 # Burst: Air Support
 
 func get_is_automatic() -> bool:

@@ -229,55 +229,13 @@ func _apply_frostburn(enemy: Node2D) -> void:
 	
 	# Create burn effect node
 	var burn := Node.new()
-	burn.set_script(_get_burn_script())
+	burn.set_script(preload("res://scripts/effects/visuals/BurnTickEffect.gd"))
 	burn.name = "Frostburn"
 	burn.set("damage_per_second", damage_per_tick)
 	burn.set("duration", burn_duration)
 	burn.set("owner_node", owner_node)
+	burn.set("damage_source", "SnowWhiteBurst")
 	enemy.add_child(burn)
-
-func _get_burn_script() -> GDScript:
-	var script := GDScript.new()
-	script.source_code = """
-extends Node
-
-var damage_per_second: int = 0
-var duration: float = 3.0
-var owner_node: Node = null
-var _timer: float = 0.0
-var _tick_timer: float = 0.0
-const TICK_INTERVAL := 0.5
-
-func _process(delta: float) -> void:
-	_timer += delta
-	_tick_timer += delta
-	
-	if _tick_timer >= TICK_INTERVAL:
-		_tick_timer = 0.0
-		_apply_tick()
-	
-	if _timer >= duration:
-		queue_free()
-
-func _apply_tick() -> void:
-	var parent := get_parent()
-	if not is_instance_valid(parent):
-		queue_free()
-		return
-	
-	var tick_damage := int(damage_per_second * TICK_INTERVAL)
-	if tick_damage <= 0:
-		return
-	
-	if parent.has_method(\"take_damage\"):
-		parent.take_damage(tick_damage, false, Vector2.ZERO, false, \"SnowWhiteBurst\")
-	elif \"hp\" in parent:
-		parent.hp -= tick_damage
-		if parent.hp <= 0 and parent.has_method(\"die\"):
-			parent.die()
-"""
-	script.reload()
-	return script
 
 func _draw() -> void:
 	if duration <= 0.0:

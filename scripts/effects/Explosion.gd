@@ -94,7 +94,7 @@ func _process(delta):
 	if has_node("Sprite2D"):
 		$Sprite2D.material.set_shader_parameter("time", time)
 
-func _on_body_entered(body):
+func _on_body_entered(_body):
 	# Fallback/Redundancy
 	# _try_damage_body(body) 
 	pass
@@ -177,8 +177,8 @@ func _try_damage_body(body) -> void:
 func _has_line_of_sight(target: Node2D) -> bool:
 	# If Chrono-Intangibility is active, ignore all shields (always LOS)
 	var player = get_tree().get_first_node_in_group("player")
-	var wells_in_squad = player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells")
-	if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and wells_in_squad:
+	var playing_wells = player and player.has_method("is_playing_character") and player.is_playing_character("wells")
+	if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and playing_wells:
 		return true
 
 	var space_state = get_world_2d().direct_space_state

@@ -93,7 +93,7 @@ func stop() -> void:
 func set_enemy_count(count: int) -> void:
 	_current_enemy_count = count
 
-func notify_boss_defeated(is_super: bool = false, boss_id: String = "") -> void:
+func notify_boss_defeated(_is_super: bool = false, boss_id: String = "") -> void:
 	if _bosses_remaining > 0:
 		_bosses_remaining -= 1
 	

@@ -164,11 +164,11 @@ func _handle_bullet_area(area: Area2D) -> void:
 	# Check for Chrono-Intangibility upgrade
 	var player = get_tree().get_first_node_in_group("player")
 	var has_upgrade = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility")
-	var in_squad = false
-	if player and player.has_method("is_character_in_squad"):
-		in_squad = player.is_character_in_squad("wells") or player.is_character_in_squad("Wells")
+	var playing_wells = false
+	if player and player.has_method("is_playing_character"):
+		playing_wells = player.is_playing_character("wells")
 	
-	if has_upgrade and in_squad:
+	if has_upgrade and playing_wells:
 		return
 	
 	if area.is_in_group("bullets") or area.is_in_group("projectiles") or area.is_in_group("player_projectiles") or area.is_in_group("enemy_projectiles"):
@@ -202,11 +202,11 @@ func _handle_bullet_body(body: Node2D) -> void:
 	
 	var player = get_tree().get_first_node_in_group("player")
 	var has_upgrade = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility")
-	var in_squad = false
-	if player and player.has_method("is_character_in_squad"):
-		in_squad = player.is_character_in_squad("wells") or player.is_character_in_squad("Wells")
+	var playing_wells = false
+	if player and player.has_method("is_playing_character"):
+		playing_wells = player.is_playing_character("wells")
 	
-	if has_upgrade and in_squad:
+	if has_upgrade and playing_wells:
 		return
 	
 	if body.is_in_group("bullets") or body.is_in_group("projectiles") or body.is_in_group("player_projectiles"):

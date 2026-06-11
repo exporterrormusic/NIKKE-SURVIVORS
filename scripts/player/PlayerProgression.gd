@@ -18,8 +18,9 @@ signal skill_point_added(total_skill_points: int)
 ## Current experience points
 var xp: int = 0
 
-## XP required for next level
-var xp_to_next: int = 100
+## XP required for next level (raised 100 -> 120 in the rework balance pass;
+## with geometric scaling this slows leveling ~20% across the board)
+var xp_to_next: int = 120
 
 ## Current level
 var level: int = 1
@@ -35,7 +36,7 @@ var xp_multiplier: float = 1.0
 
 
 ## Configure initial progression state
-func configure(initial_level: int = 1, initial_xp: int = 0, initial_xp_to_next: int = 100) -> void:
+func configure(initial_level: int = 1, initial_xp: int = 0, initial_xp_to_next: int = 120) -> void:
 	level = initial_level
 	xp = initial_xp
 	xp_to_next = initial_xp_to_next

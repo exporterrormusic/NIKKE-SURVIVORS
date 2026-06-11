@@ -371,15 +371,15 @@ static func _apply_compensation(color: Color, world_position: Vector2, viewport:
 		color.a
 	)
 	
-	# REMOVED: Normalization clamping. We WANT values > 1.0 to fight darkness or create glow.
-	# With CanvasModulate at night (e.g. 0.2), we need Modulate > 1.0 to appear bright.
-	return compensated
 	# Optional debug logging to inspect compensation math at runtime
 	if DebugSettings.projectile_debug_log:
 		var vp_name := "<no-vp>"
 		if viewport:
 			vp_name = str(viewport)
 		printerr("[PROJ_DEBUG] pos=", world_position, "vp=", vp_name, "ambient=", ambient_multiplier, "vignette=", vignette_multiplier, "total=", total_multiplier, "->", compensated)
+
+	# REMOVED: Normalization clamping. We WANT values > 1.0 to fight darkness or create glow.
+	# With CanvasModulate at night (e.g. 0.2), we need Modulate > 1.0 to appear bright.
 	return compensated
 
 static func _resolve_vignette_multiplier_cap() -> float:

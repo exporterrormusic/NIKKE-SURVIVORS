@@ -29,7 +29,7 @@ func _ready() -> void:
 
 
 # The method projectiles call (polymorphic compatibility with existing system)
-func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector2.ZERO, is_burst: bool = false, source: String = "unknown", skip_floating_text: bool = false) -> void:
+func take_damage(amount: int, is_crit: bool = false, _direction: Vector2 = Vector2.ZERO, is_burst: bool = false, source: String = "unknown", skip_floating_text: bool = false) -> void:
 	# DebugLog.log("[Hitbox] take_damage: " + str(amount) + " from " + source)
 	hit_received.emit(amount, null) # For visuals
 	

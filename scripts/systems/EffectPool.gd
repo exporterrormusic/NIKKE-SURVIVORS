@@ -81,13 +81,13 @@ func _perform_prewarm() -> void:
 		return
 		
 	# Spread instantiation over multiple frames
-	await _prewarm_damage_numbers_async()
+	_prewarm_damage_numbers_async()
 	await get_tree().process_frame
-	
-	await _prewarm_hit_sparks_async()
+
+	_prewarm_hit_sparks_async()
 	await get_tree().process_frame
-	
-	await _prewarm_smg_bullets_async()
+
+	_prewarm_smg_bullets_async()
 	
 	print("[EffectPool] Initialized: %d damage#, %d sparks, %d SMG bullets" % [
 		DAMAGE_NUMBER_POOL_SIZE, HIT_SPARK_POOL_SIZE, SMG_BULLET_POOL_SIZE

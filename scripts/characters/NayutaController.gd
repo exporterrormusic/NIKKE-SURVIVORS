@@ -264,114 +264,11 @@ func _spawn_galaxy_explosion() -> void:
 	player.get_parent().add_child(explosion)
 
 func _get_galaxy_explosion_script() -> GDScript:
-	var script := GDScript.new()
-	script.source_code = """
-extends Node2D
-
-var _time: float = 0.0
-var _duration: float = 1.5
-var _max_radius: float = 800.0
-
-func _ready() -> void:
-	z_index = 100
-	# Use unscaled time so burst plays at full speed during time dilation
-	process_mode = Node.PROCESS_MODE_ALWAYS
-
-func _process(_delta: float) -> void:
-	# Use real time instead of scaled delta for consistent animation speed
-	var real_delta = _delta
-	if Engine.time_scale > 0.01:
-		real_delta = _delta / Engine.time_scale
-	else:
-		real_delta = 1.0 / 60.0  # Fallback during complete freeze
-	
-	_time += real_delta
-	if _time >= _duration:
-		queue_free()
-		return
-	queue_redraw()
-
-func _draw() -> void:
-	var progress := _time / _duration
-	var radius := _max_radius * ease(progress, 0.3)
-	var alpha := 1.0 - progress
-	
-	# Deep purple galaxy colors
-	var inner_color := Color(0.6, 0.2, 1.0, alpha * 0.8)
-	var mid_color := Color(0.4, 0.1, 0.8, alpha * 0.5)
-	var outer_color := Color(0.2, 0.05, 0.5, alpha * 0.3)
-	
-	# Draw expanding circles
-	draw_circle(Vector2.ZERO, radius * 0.3, inner_color)
-	draw_circle(Vector2.ZERO, radius * 0.6, mid_color)
-	draw_circle(Vector2.ZERO, radius, outer_color)
-	
-	# Draw swirling stars (reduced from 30 to 15 for performance)
-	var num_stars := 15
-	for i in range(num_stars):
-		var angle := (TAU / num_stars) * i + _time * 3.0 + i * 0.2
-		var star_dist := radius * (0.3 + 0.6 * (float(i) / num_stars))
-		var star_pos := Vector2(cos(angle), sin(angle)) * star_dist
-		var star_size := 3.0 + sin(_time * 5.0 + i) * 2.0
-		var star_alpha := alpha * (0.5 + 0.5 * sin(_time * 4.0 + i * 0.5))
-		draw_circle(star_pos, star_size, Color(1.0, 0.8, 1.0, star_alpha))
-	
-	# Draw spiral arms (reduced from 3 to 2 arms, 20 to 12 segments for performance)
-	for arm in range(2):
-		var arm_base_angle := (TAU / 2.0) * arm + _time * 2.0
-		for seg in range(12):
-			var seg_progress := float(seg) / 12.0
-			var spiral_angle := arm_base_angle + seg_progress * PI
-			var spiral_radius := radius * seg_progress * 0.9
-			var pos := Vector2(cos(spiral_angle), sin(spiral_angle)) * spiral_radius
-			var seg_alpha := alpha * (1.0 - seg_progress) * 0.6
-			draw_circle(pos, 4.0 - seg_progress * 2.0, Color(0.8, 0.5, 1.0, seg_alpha))
-"""
-	script.reload()
+	var script := preload("res://scripts/characters/effects/visuals/NayutaGalaxyExplosion.gd")
 	return script
 
 func _get_galaxy_debuff_script() -> GDScript:
-	var script := GDScript.new()
-	script.source_code = """
-extends Node2D
-
-var _time: float = 0.0
-
-func _ready() -> void:
-	z_index = 50
-	# Use unscaled time for consistent animation during time dilation
-	process_mode = Node.PROCESS_MODE_ALWAYS
-
-func _process(_delta: float) -> void:
-	# Use real time instead of scaled delta
-	var real_delta = _delta
-	if Engine.time_scale > 0.01:
-		real_delta = _delta / Engine.time_scale
-	else:
-		real_delta = 1.0 / 60.0
-	_time += real_delta
-	queue_redraw()
-
-func _draw() -> void:
-	# Purple galaxy star effect around debuffed enemy (reduced from 6 to 4 stars)
-	var num_stars := 4
-	for i in range(num_stars):
-		var angle := (TAU / num_stars) * i + _time * 2.0
-		var radius := 25.0 + sin(_time * 3.0 + i) * 5.0
-		var pos := Vector2(cos(angle), sin(angle)) * radius
-		var star_alpha := 0.6 + 0.3 * sin(_time * 4.0 + i * 0.7)
-		
-		# Draw star shape
-		var star_size := 4.0
-		draw_circle(pos, star_size, Color(0.7, 0.3, 1.0, star_alpha))
-		
-		# Twinkle lines removed for performance
-	
-	# Outer ring (reduced segments from 32 to 16)
-	var ring_alpha := 0.3 + 0.1 * sin(_time * 2.0)
-	draw_arc(Vector2.ZERO, 35.0, 0, TAU, 16, Color(0.5, 0.2, 0.8, ring_alpha), 2.0)
-"""
-	script.reload()
+	var script := preload("res://scripts/characters/effects/visuals/NayutaGalaxyDebuff.gd")
 	return script
 
 func _on_burst_end() -> void:

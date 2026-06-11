@@ -312,8 +312,8 @@ func _handle_collision(b: SimpleBullet, collider: Object) -> bool:
 		_cached_player_frame = current_frame
 		_cached_player = get_tree().get_first_node_in_group("player")
 		# Also cache Chrono-Intangibility check once per frame
-		if _cached_player and _cached_player.has_method("is_character_in_squad"):
-			_cached_chrono_intangibility = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and _cached_player.is_character_in_squad("wells")
+		if _cached_player and _cached_player.has_method("is_playing_character"):
+			_cached_chrono_intangibility = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and _cached_player.is_playing_character("wells")
 		else:
 			_cached_chrono_intangibility = false
 		_cached_chrono_frame = current_frame

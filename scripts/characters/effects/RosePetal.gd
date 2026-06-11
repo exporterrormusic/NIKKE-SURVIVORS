@@ -75,7 +75,7 @@ func _physics_process(delta: float) -> void:
 		var collider = result.collider
 		if collider is StaticBody2D and collider.is_in_group("boulders"):
 			var player_ref = get_tree().get_first_node_in_group("player")
-			if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player_ref and player_ref.has_method("is_character_in_squad") and player_ref.is_character_in_squad("wells"):
+			if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player_ref and player_ref.has_method("is_playing_character") and player_ref.is_playing_character("wells"):
 				# Phase through boulder - continue to next_pos, don't stop at collision point
 				global_position = next_pos
 				# Skip the rest of the collision handling
@@ -114,9 +114,9 @@ func _physics_process(delta: float) -> void:
 
 func _check_boulder_collision() -> bool:
 	"""Manual boulder collision check since petals don't reparent but still need check."""
-	# Skip if Chrono-Intangibility upgrade is active AND Wells is in squad
+	# Skip if Chrono-Intangibility upgrade is active AND playing Wells
 	var player = get_tree().get_first_node_in_group("player")
-	if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+	if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_playing_character") and player.is_playing_character("wells"):
 		return false
 		
 	var boulders := get_tree().get_nodes_in_group("boulders")
@@ -168,7 +168,7 @@ func _on_body_entered(body: Node2D) -> void:
 	# Check if this "damageable" body is actually a boulder (destructible terrain)
 	if body.is_in_group("boulders") or (body.get_parent() and body.get_parent().is_in_group("boulders")):
 		var check_player = get_tree().get_first_node_in_group("player")
-		if ShopMenu.has_character_upgrade("wells", "chrono_intangibility") and check_player and check_player.has_method("is_character_in_squad") and check_player.is_character_in_squad("wells"):
+		if ShopMenu.has_character_upgrade("wells", "chrono_intangibility") and check_player and check_player.has_method("is_playing_character") and check_player.is_playing_character("wells"):
 			return # Ignore boulder hitting
 			
 	# Backup spatial check for boulders in body_entered if group check failed
@@ -180,7 +180,7 @@ func _on_body_entered(body: Node2D) -> void:
 			if global_position.distance_squared_to(b.global_position) < (b_rad * 1.2) ** 2:
 				# It is inside a boulder radius, treat as boulder
 				var check_player = get_tree().get_first_node_in_group("player")
-				if ShopMenu.has_character_upgrade("wells", "chrono_intangibility") and check_player and check_player.has_method("is_character_in_squad") and check_player.is_character_in_squad("wells"):
+				if ShopMenu.has_character_upgrade("wells", "chrono_intangibility") and check_player and check_player.has_method("is_playing_character") and check_player.is_playing_character("wells"):
 					return
 	
 	_has_hit = true

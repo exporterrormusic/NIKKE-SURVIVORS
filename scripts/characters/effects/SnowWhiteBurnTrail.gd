@@ -235,6 +235,10 @@ func _draw_trail_layer(lengths: PackedFloat32Array, total_length: float, width_m
 	for i in range(bottom_pts.size() - 1, -1, -1):
 		polygon.append(bottom_pts[i])
 	
+	# Skip degenerate strips (duplicate/collinear points) that cannot be triangulated
+	if Geometry2D.triangulate_polygon(polygon).is_empty():
+		return
+
 	# Single draw call for entire layer
 	draw_colored_polygon(polygon, color)
 

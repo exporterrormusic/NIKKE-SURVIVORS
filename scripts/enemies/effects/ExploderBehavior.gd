@@ -217,7 +217,7 @@ func _apply_full_red_tint() -> void:
 	elif _state == State.COUNTDOWN:
 		# Full Red / Flashing to Black or White for urgency?
 		# Let's do Red to Dark Red strobe
-		var gb = 0.0
+		var _gb = 0.0
 		# Strobe intensity 0..1. 
 		# When 1 (bright) -> Pure Red (1,0,0)
 		# When 0 (dark) -> Dark Red (0.5, 0, 0)? Or just keep Pure Red?
@@ -322,7 +322,7 @@ func _draw_hp_bar_fire_overlay() -> void:
 	
 	# Timer Radial Square (Right of HP bar)
 	if _state == State.BURNING:
-		var remaining = 1.0 - burn_progress
+		var _remaining = 1.0 - burn_progress
 		var square_size = 12.0
 		var square_pos = Vector2(bar_pos.x + bar_width + 4, bar_pos.y + (bar_height - square_size) / 2)
 		var center = square_pos + Vector2(square_size, square_size) / 2

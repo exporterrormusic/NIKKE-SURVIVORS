@@ -9,7 +9,7 @@ const UI := preload("res://scripts/ui/UITheme.gd")
 
 # Data source
 var _stats_data: Dictionary = {} # From GameManager or leaderboard entry
-var _squad_indices: Array = [] # Character indices in the squad
+var _char_indices: Array = [] # Character indices shown in the panel
 
 # UI elements
 var _title_label: Label = null
@@ -66,7 +66,7 @@ func _build_ui() -> void:
 	
 	# Title
 	_title_label = Label.new()
-	_title_label.text = "SQUAD STATS"
+	_title_label.text = "RUN STATS"
 	_title_label.add_theme_font_override("font", UI.FONT_TITLE)
 	_title_label.add_theme_font_size_override("font_size", 36)
 	_title_label.add_theme_color_override("font_color", UI.ACCENT_PRIMARY)
@@ -89,21 +89,24 @@ func set_live_stats() -> void:
 	var game_manager = get_node_or_null("/root/GameManager")
 	if game_manager:
 		_stats_data = game_manager.get_run_stats()
-		_squad_indices = game_manager.selected_character_indices.duplicate()
+		_char_indices = [game_manager.player_character_index]
 		_refresh_display()
 
 ## Set stats from a leaderboard entry (historical mode)
 func set_entry_stats(entry: Dictionary) -> void:
 	_stats_data = entry.get("run_stats", {})
-	_squad_indices = entry.get("squad_indices", [])
-	
-	# Fallback for old saves: try to derive squad from damage stats
-	if _squad_indices.is_empty() and not _stats_data.is_empty():
+	_char_indices = []
+	var entry_char: int = entry.get("character_index", -1)
+	if entry_char >= 0:
+		_char_indices = [entry_char]
+
+	# Fallback for old entries: derive characters from damage stats
+	if _char_indices.is_empty() and not _stats_data.is_empty():
 		var damage_data = _stats_data.get("damage_by_character", {})
 		if not damage_data.is_empty():
-			_squad_indices = damage_data.keys()
-			_squad_indices.sort() # Sort by index since we lost original slot order
-	
+			_char_indices = damage_data.keys()
+			_char_indices.sort()
+
 	_refresh_display()
 
 func _refresh_display() -> void:
@@ -111,23 +114,23 @@ func _refresh_display() -> void:
 	for child in _content.get_children():
 		child.queue_free()
 	
-	if _squad_indices.is_empty():
+	if _char_indices.is_empty():
 		var empty_label := Label.new()
-		empty_label.text = "No squad data"
+		empty_label.text = "No run data"
 		empty_label.add_theme_color_override("font_color", UI.TEXT_MUTED)
 		empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_content.add_child(empty_label)
 		return
-	
+
 	# Get damage data for max calculation
 	var damage_data: Dictionary = _stats_data.get("damage_by_character", {})
 	var max_damage := 1 # Avoid div by zero
-	for char_idx in _squad_indices:
+	for char_idx in _char_indices:
 		var dmg: int = damage_data.get(char_idx, 0)
 		max_damage = max(max_damage, dmg)
-	
-	# Create entry for each squad member
-	for char_idx in _squad_indices:
+
+	# Create entry for each character
+	for char_idx in _char_indices:
 		var entry := _create_character_entry(char_idx, max_damage)
 		_content.add_child(entry)
 	
@@ -238,16 +241,12 @@ func _create_totals_section() -> Control:
 	container.add_child(divider)
 	
 	# Calculate totals
-	var damage_data: Dictionary = _stats_data.get("damage_by_character", {})
 	var normal_kills_data: Dictionary = _stats_data.get("normal_kills_by_character", {})
 	var boss_kills_data: Dictionary = _stats_data.get("boss_kills_by_character", {})
 	
-	var total_damage := 0
 	var total_normal := 0
 	var total_boss := 0
-	
-	for val in damage_data.values():
-		total_damage += val
+
 	for val in normal_kills_data.values():
 		total_normal += val
 	for val in boss_kills_data.values():
@@ -255,7 +254,7 @@ func _create_totals_section() -> Control:
 	
 	# Totals row
 	var title_lbl := Label.new()
-	title_lbl.text = "SQUAD TOTAL"
+	title_lbl.text = "RUN TOTAL"
 	title_lbl.add_theme_font_override("font", UI.FONT_BOLD)
 	title_lbl.add_theme_font_size_override("font_size", 22)
 	title_lbl.add_theme_color_override("font_color", UI.ACCENT_PRIMARY)

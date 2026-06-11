@@ -1,18 +1,16 @@
 extends Node
 class_name ShopUpgradeGrid
-## Right-side upgrade grid and unlock panel for ShopMenu.
-## Builds upgrade cards in a grid, manages the unlock panel for locked characters,
-## and provides buy/reset buttons with visual feedback.
+## Upgrade grid for ShopMenu (general stat upgrades only).
+## Builds upgrade cards in a grid with buy/reset buttons and visual feedback.
 ##
 ## Usage: var grid = ShopUpgradeGrid.new()
-##        grid.setup(upgrade_grid, upgrade_scroll, right_panel, unlock_panel, core_icon_factory)
+##        grid.setup(upgrade_grid, upgrade_scroll, right_panel, core_icon_factory)
 ##        grid.purchase_requested.connect(_on_purchase)
 ##        grid.reset_requested.connect(_on_reset)
 
 const UI := preload("res://scripts/ui/UITheme.gd")
 const UISounds := preload("res://scripts/ui/UISoundManager.gd")
 const GENERAL_FILTER := "GENERAL"
-const CHARACTER_UNLOCK_COST := 3
 
 signal purchase_requested(upgrade_id: String, cost: int)
 signal reset_requested(category: String)
@@ -20,49 +18,31 @@ signal reset_requested(category: String)
 var _upgrade_grid: GridContainer
 var _upgrade_scroll: ScrollContainer
 var _right_panel: Panel
-var _unlock_panel: Control
 
 # Callable(icon_size: int) -> Control — factory for creating core icons
 var _core_icon_factory: Callable
 
 
-func setup(upgrade_grid: GridContainer, upgrade_scroll: ScrollContainer, right_panel: Panel, unlock_panel: Control, core_icon_factory: Callable) -> void:
+func setup(upgrade_grid: GridContainer, upgrade_scroll: ScrollContainer, right_panel: Panel, core_icon_factory: Callable) -> void:
 	_upgrade_grid = upgrade_grid
 	_upgrade_scroll = upgrade_scroll
 	_right_panel = right_panel
-	_unlock_panel = unlock_panel
 	_core_icon_factory = core_icon_factory
 
 
-func rebuild(filter: String, unlocked_characters: Array[String], upgrade_levels: Dictionary, cores_spent: Dictionary) -> void:
+func rebuild(upgrade_levels: Dictionary, cores_spent: Dictionary) -> void:
 	# Clear grid
 	for child in _upgrade_grid.get_children():
 		child.queue_free()
-	
+
 	# Clear any existing reset buttons from the right panel
 	if _right_panel:
 		for child in _right_panel.get_children():
 			if child.has_meta("is_reset_container"):
 				child.queue_free()
-	
-	if filter == GENERAL_FILTER:
-		_upgrade_scroll.visible = true
-		_unlock_panel.visible = false
-		_build_general_upgrades(upgrade_levels, cores_spent)
-	else:
-		var is_unlocked := filter in unlocked_characters
-		if is_unlocked:
-			_upgrade_scroll.visible = true
-			_unlock_panel.visible = false
-			_build_character_upgrades(filter, upgrade_levels, cores_spent)
-		else:
-			_upgrade_scroll.visible = false
-			_unlock_panel.visible = true
-			_update_unlock_panel(filter, cores_spent)
 
-
-func update_unlock_panel(char_id: String, registry: CharacterRegistry, cores_spent: Dictionary) -> void:
-	_update_unlock_panel(char_id, cores_spent)
+	_upgrade_scroll.visible = true
+	_build_general_upgrades(upgrade_levels, cores_spent)
 
 
 # ─── Upgrade grid builders ──────────────────────────────────────────────
@@ -71,31 +51,11 @@ func _build_general_upgrades(upgrade_levels: Dictionary, cores_spent: Dictionary
 	for upgrade in ShopData.GENERAL_UPGRADES:
 		var card := _create_upgrade_card(upgrade, "general", upgrade_levels, cores_spent)
 		_upgrade_grid.add_child(card)
-	
+
 	_add_reset_button_to_content(GENERAL_FILTER.to_lower())
 
 
-func _build_character_upgrades(char_id: String, upgrade_levels: Dictionary, cores_spent: Dictionary) -> void:
-	if char_id in ShopData.CHARACTER_UPGRADES:
-		var upgrades: Array = ShopData.CHARACTER_UPGRADES[char_id]
-		for upgrade in upgrades:
-			var card := _create_upgrade_card(upgrade, char_id, upgrade_levels, cores_spent)
-			_upgrade_grid.add_child(card)
-	else:
-		var placeholder := Label.new()
-		placeholder.text = "No upgrades available"
-		placeholder.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		placeholder.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		if UI.FONT_MEDIUM:
-			placeholder.add_theme_font_override("font", UI.FONT_MEDIUM)
-		placeholder.add_theme_font_size_override("font_size", 24)
-		placeholder.add_theme_color_override("font_color", UI.TEXT_SECONDARY)
-		_upgrade_grid.add_child(placeholder)
-	
-	_add_reset_button_to_content(char_id)
-
-
-func _create_upgrade_card(upgrade: Dictionary, category: String, upgrade_levels: Dictionary, cores_spent: Dictionary) -> Control:
+func _create_upgrade_card(upgrade: Dictionary, category: String, upgrade_levels: Dictionary, _cores_spent: Dictionary) -> Control:
 	var upgrade_id: String = category + "_" + upgrade["id"]
 	var current_level: int = upgrade_levels.get(upgrade_id, 0)
 	var max_level: int = upgrade["max_level"]
@@ -214,7 +174,7 @@ func _create_upgrade_card(upgrade: Dictionary, category: String, upgrade_levels:
 	return card
 
 
-func _on_card_clicked(upgrade_id: String, cost: int, card: _UpgradeCard) -> void:
+func _on_card_clicked(upgrade_id: String, cost: int, _card: _UpgradeCard) -> void:
 	purchase_requested.emit(upgrade_id, cost)
 	# The parent handles the purchase; we flash the card when notified
 
@@ -323,81 +283,8 @@ func _create_cost_button(cost: int, upgrade_id: String, can_afford: bool, parent
 	return btn
 
 
-func _on_buy_button_pressed(upgrade_id: String, cost: int, parent_card: _UpgradeCard) -> void:
+func _on_buy_button_pressed(upgrade_id: String, cost: int, _parent_card: _UpgradeCard) -> void:
 	purchase_requested.emit(upgrade_id, cost)
-
-
-# ─── Unlock panel ───────────────────────────────────────────────────────
-
-func _update_unlock_panel(char_id: String, cores_spent: Dictionary) -> void:
-	var panel_btn := _unlock_panel as Button
-	if not panel_btn:
-		return
-	
-	var content: VBoxContainer = null
-	for child in panel_btn.get_children():
-		if child is VBoxContainer:
-			content = child
-			break
-	if not content:
-		return
-	
-	var char_name := _get_char_name(char_id)
-	
-	var unlock_label := content.get_node_or_null("UnlockLabel") as Label
-	if unlock_label:
-		unlock_label.text = char_name.to_upper() + " LOCKED"
-	
-	var cost := CHARACTER_UNLOCK_COST
-	var can_afford: bool = GameManager.get_pristine_cores() >= cost
-	
-	# Update cost row
-	var cost_row := content.get_node_or_null("CostRow") as HBoxContainer
-	if cost_row:
-		for child in cost_row.get_children():
-			child.queue_free()
-		
-		if _core_icon_factory.is_valid():
-			var core_icon: Control = _core_icon_factory.call(40)
-			core_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			cost_row.add_child(core_icon)
-		
-		var cost_label := Label.new()
-		cost_label.text = "%d" % cost
-		if UI.FONT_TITLE:
-			cost_label.add_theme_font_override("font", UI.FONT_TITLE)
-		cost_label.add_theme_font_size_override("font_size", 48)
-		cost_label.add_theme_color_override("font_color", UI.COLOR_CORE)
-		cost_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		cost_row.add_child(cost_label)
-	
-	# Update hint text based on affordability
-	var hint := content.get_node_or_null("ClickHint") as Label
-	if hint:
-		if can_afford:
-			hint.text = "Click to Unlock"
-			hint.add_theme_color_override("font_color", UI.SHOP_HINT_BRIGHT)
-		else:
-			hint.text = "Not Enough Cores"
-			hint.add_theme_color_override("font_color", UI.SHOP_HINT_MUTED)
-	
-	# Enable/disable button
-	panel_btn.disabled = not can_afford
-	
-	# Disconnect old signals and connect new
-	for connection in panel_btn.pressed.get_connections():
-		panel_btn.pressed.disconnect(connection["callable"])
-	
-	panel_btn.pressed.connect(_on_unlock_clicked.bind(char_id, cost))
-
-
-func _on_unlock_clicked(char_id: String, cost: int) -> void:
-	purchase_requested.emit(char_id + "_unlock", cost)
-
-
-func _get_char_name(char_id: String) -> String:
-	var registry := CharacterRegistry.get_instance()
-	return registry.get_character_name(char_id)
 
 
 # ─── Reset button ───────────────────────────────────────────────────────

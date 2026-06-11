@@ -82,14 +82,14 @@ func _check_intangibility() -> void:
 	# Check for Intangibility Upgrade (Once per spawn, deferred via physics checks)
 	var p = get_tree().get_first_node_in_group("player")
 	var has_upgrade = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility")
-	var in_squad = false
-	if p and p.has_method("is_character_in_squad"):
-		in_squad = p.is_character_in_squad("wells") or p.is_character_in_squad("Wells")
+	var playing_wells = false
+	if p and p.has_method("is_playing_character"):
+		playing_wells = p.is_playing_character("wells")
 	
 	# DIAGNOSTIC: Always print to help debug
-	# print("[Rocket] Intangibility Check: has_upgrade=", has_upgrade, " in_squad=", in_squad, " player=", p)
+	# print("[Rocket] Intangibility Check: has_upgrade=", has_upgrade, " playing_wells=", playing_wells, " player=", p)
 	
-	if has_upgrade and in_squad:
+	if has_upgrade and playing_wells:
 		# print("[Rocket] Intangibility ACTIVE - will phase through boulders")
 		is_intangible = true
 	else:

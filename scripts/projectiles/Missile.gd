@@ -158,18 +158,18 @@ func _physics_process(delta):
 
 func _check_boulder_collision() -> bool:
 	"""Check if missile hit a boulder."""
-	# Skip if Chrono-Intangibility upgrade is active AND Wells is in squad
+	# Skip if Chrono-Intangibility upgrade is active AND playing Wells
 	var player = get_tree().get_first_node_in_group("player")
 	var has_upgrade = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility")
-	var in_squad = false
-	if player and player.has_method("is_character_in_squad"):
-		in_squad = player.is_character_in_squad("wells") or player.is_character_in_squad("Wells")
+	var playing_wells = false
+	if player and player.has_method("is_playing_character"):
+		playing_wells = player.is_playing_character("wells")
 	
 	# DIAGNOSTIC
 	if has_upgrade:
-		print("[Missile] Intangibility Check: has_upgrade=", has_upgrade, " in_squad=", in_squad)
+		print("[Missile] Intangibility Check: has_upgrade=", has_upgrade, " playing_wells=", playing_wells)
 	
-	if has_upgrade and in_squad:
+	if has_upgrade and playing_wells:
 		return false
 	
 	var boulders := get_tree().get_nodes_in_group("boulders")

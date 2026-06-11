@@ -754,7 +754,7 @@ func _update_playlist() -> void:
 			# Include unlisted tracks too (they'll show capitalized filename)
 			_playlist.append(file_path)
 
-func play_next_random_song(force_start: bool = false) -> void:
+func play_next_random_song(_force_start: bool = false) -> void:
 	# Always refresh playlist to pick up newly unlocked songs
 	_update_playlist()
 	if _playlist.is_empty(): return

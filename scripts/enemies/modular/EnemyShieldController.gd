@@ -79,7 +79,7 @@ func check_shielder_protection(damage_amount: int, source: String) -> bool:
 	# Check for Chrono-Intangibility upgrade (Wells) — bypasses shield
 	if _enemy.is_inside_tree():
 		var player = _enemy.get_tree().get_first_node_in_group("player")
-		if player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+		if player and player.has_method("is_playing_character") and player.is_playing_character("wells"):
 			const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
 			if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility"):
 				return false

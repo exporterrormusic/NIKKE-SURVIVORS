@@ -150,8 +150,8 @@ func _handle_hit(target: Node, is_shield: bool = false) -> void:
 	if is_shield:
 		# Check if Chrono-Intangibility upgrade allows phasing through shields
 		var p = get_tree().get_first_node_in_group("player")
-		var wells_in_squad = p and p.has_method("is_character_in_squad") and p.is_character_in_squad("wells")
-		if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and wells_in_squad:
+		var playing_wells = p and p.has_method("is_playing_character") and p.is_playing_character("wells")
+		if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and playing_wells:
 			# Bullet phases through shield completely - no damage, no stop, continue flying
 			# Don't add to _hit_nodes so it can hit the enemy behind
 			return
@@ -171,8 +171,8 @@ func _handle_hit(target: Node, is_shield: bool = false) -> void:
 		# UNLESS Chrono-Intangibility is active
 		var protected = false
 		var p = get_tree().get_first_node_in_group("player")
-		var wells_in_squad = p and p.has_method("is_character_in_squad") and p.is_character_in_squad("wells")
-		var can_pierce_shield = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and wells_in_squad
+		var playing_wells = p and p.has_method("is_playing_character") and p.is_playing_character("wells")
+		var can_pierce_shield = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and playing_wells
 		
 		if not can_pierce_shield:
 			if target.has_method("is_protected_by_shield") and target.is_protected_by_shield():

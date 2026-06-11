@@ -492,13 +492,6 @@ func _ensure_vignette_overlay() -> ColorRect:
 	vignette_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vignette_overlay.color = Color(0.0, 0.0, 0.0, 0.0)
 	vignette_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	# Explicitly set size to viewport for proper coverage
-	var viewport_size := Vector2(1920, 1080) # Default fallback
-	if Engine.get_main_loop() and Engine.get_main_loop() is SceneTree:
-		var tree := Engine.get_main_loop() as SceneTree
-		if tree.root:
-			viewport_size = tree.root.get_visible_rect().size
-	vignette_overlay.size = viewport_size
 	if vignette_shader:
 		var shader_material := ShaderMaterial.new()
 		shader_material.shader = vignette_shader

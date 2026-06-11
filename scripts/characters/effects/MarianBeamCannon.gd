@@ -285,7 +285,7 @@ func _apply_damage() -> void:
 	# Check if Chrono-Intangibility upgrade is active
 	var shop = load("res://scripts/ui/ShopMenu.gd")
 	var player = get_tree().get_first_node_in_group("player")
-	var can_pierce_shields = shop and shop.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells")
+	var can_pierce_shields = shop and shop.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_playing_character") and player.is_playing_character("wells")
 	
 	# Collect beam hit candidates
 	# 1. Find the closest blocking shield (if any)
@@ -400,9 +400,9 @@ func _is_boulder_blocking(distance_along_beam: float) -> bool:
 	"""Check if any boulder blocks the beam before the given distance."""
 	# Skip if Chrono-Intangibility upgrade is active
 	var shop = load("res://scripts/ui/ShopMenu.gd")
-	# Skip if Chrono-Intangibility upgrade is active AND Wells is in squad
+	# Skip if Chrono-Intangibility upgrade is active AND playing Wells
 	var player = get_tree().get_first_node_in_group("player")
-	if shop and shop.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+	if shop and shop.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_playing_character") and player.is_playing_character("wells"):
 		return false
 	
 	var boulders := get_tree().get_nodes_in_group("boulders")
@@ -463,7 +463,7 @@ func _get_visible_beam_range(max_range: float) -> float:
 	# Check if Chrono-Intangibility upgrade is active
 	var shop = load("res://scripts/ui/ShopMenu.gd")
 	var player = get_tree().get_first_node_in_group("player")
-	var can_pierce = shop and shop.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells")
+	var can_pierce = shop and shop.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_playing_character") and player.is_playing_character("wells")
 	
 	var boulders := get_tree().get_nodes_in_group("boulders")
 	var beam_origin: Vector2 = global_position

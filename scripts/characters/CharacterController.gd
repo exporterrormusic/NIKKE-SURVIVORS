@@ -45,8 +45,8 @@ func initialize(p_player: Node2D, p_data: Resource) -> void: # CharacterData
 	max_ammo = data.ammo_capacity
 	base_max_ammo = max_ammo
 	
-	# Apply initial squad upgrades (if any apply at start, e.g. main character)
-	apply_squad_upgrades()
+	# Apply initial shop upgrades
+	apply_shop_upgrades()
 			
 	ammo = max_ammo
 	
@@ -59,18 +59,17 @@ func initialize(p_player: Node2D, p_data: Resource) -> void: # CharacterData
 	# Character-specific initialization
 	_on_initialize()
 
-## Apply dynamic squad upgrades (called when squad composition changes)
-func apply_squad_upgrades() -> void:
+## Apply shop upgrades that modify base stats
+func apply_shop_upgrades() -> void:
 	# Reset to base stats before re-applying modifiers
 	max_ammo = base_max_ammo
-	
-	# Snow White's "Master Mechanic" (Ammo Boost) - same logic as old Kilo upgrade
-	# Requires: 1. Upgrade purchased, 2. Snow White unlocked in current squad
+
+	# Snow White's "Master Mechanic" (Ammo Boost)
+	# Requires: 1. Upgrade purchased, 2. Playing Snow White
 	if has_upgrade("snow_white", "master_mechanic"):
-		# Check if Snow White is in the squad
 		var snow_white_active = false
-		if player and player.has_method("is_character_in_squad"):
-			snow_white_active = player.is_character_in_squad("snow_white")
+		if player and player.has_method("is_playing_character"):
+			snow_white_active = player.is_playing_character("snow_white")
 		
 		if snow_white_active:
 			var w_type = _get_weapon_type_name().to_lower()
@@ -175,8 +174,8 @@ func attack(direction: Vector2) -> bool:
 		# Kilo's "Build-a-Bullet": Every 3rd shot regenerates 1 ammo
 		if has_upgrade("kilo", "talos_ammo"):
 			var kilo_active = false
-			if player and player.has_method("is_character_in_squad"):
-				kilo_active = player.is_character_in_squad("kilo")
+			if player and player.has_method("is_playing_character"):
+				kilo_active = player.is_playing_character("kilo")
 			
 			if kilo_active:
 				_kilo_shot_counter += 1

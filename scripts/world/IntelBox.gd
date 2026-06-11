@@ -272,33 +272,7 @@ func _create_particle(angle: float) -> Node2D:
 	var particle := Node2D.new()
 	particle.global_position = global_position
 	
-	var script := GDScript.new()
-	script.source_code = """
-extends Node2D
-
-var velocity: Vector2
-var lifetime: float = 0.5
-var _time: float = 0.0
-var color: Color
-
-func _ready() -> void:
-	z_index = 100
-
-func _process(delta: float) -> void:
-	_time += delta
-	global_position += velocity * delta
-	velocity *= 0.95
-	if _time >= lifetime:
-		queue_free()
-	queue_redraw()
-
-func _draw() -> void:
-	var alpha := 1.0 - (_time / lifetime)
-	var draw_color := color
-	draw_color.a = alpha
-	draw_circle(Vector2.ZERO, 4.0, draw_color)
-"""
-	script.reload()
+	var script := preload("res://scripts/effects/visuals/IntelBoxParticle.gd")
 	particle.set_script(script)
 	particle.set("velocity", Vector2.from_angle(angle) * 400.0)
 	particle.set("color", PRIMARY_COLOR)

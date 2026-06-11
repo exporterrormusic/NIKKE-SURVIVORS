@@ -1,8 +1,8 @@
 [gd_scene load_steps=6 format=3 uid="uid://5c36lkfttb6k"]
 
 [ext_resource type="Script" uid="uid://cjqxo5vwuxgxa" path="res://src/projectiles/visuals/weapons/assault_special_bullet_visual.gd" id="1"]
-[ext_resource type="Texture2D" uid="uid://bq53gwokll1gm" path="res://assets/images/Bullets/Assault_Special.png" id="2"]
-[ext_resource type="Shader" uid="uid://d08hxd1am20uf" path="res://src/projectiles/shaders/assault_special_glow.gdshader" id="3"]
+[ext_resource type="Texture2D" uid="uid://dwgxrlqo0dfjm" path="res://assets/images/Bullets/Assault_Special.png" id="2"]
+[ext_resource type="Shader" uid="uid://tamglpj65gmb" path="res://src/projectiles/shaders/assault_special_glow.gdshader" id="3"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_4pckh"]
 shader = ExtResource("3")

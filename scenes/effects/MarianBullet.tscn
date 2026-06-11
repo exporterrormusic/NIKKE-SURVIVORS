@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://b5im6yof6rsqk" path="res://scripts/projectiles/Bullet.gd" id="1"]
 [ext_resource type="Shader" path="res://resources/shaders/marian_bullet.gdshader" id="2"]
-[ext_resource type="Texture2D" uid="uid://c3hcccpyfdj3a" path="res://assets/projectiles/bullet.png" id="3"]
+[ext_resource type="Texture2D" uid="uid://bh2iestos2ml0" path="res://assets/projectiles/bullet.png" id="3"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_marian"]
 shader = ExtResource("2")

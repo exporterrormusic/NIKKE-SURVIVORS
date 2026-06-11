@@ -78,7 +78,6 @@ const CHAR_HOVER := Color(0.12, 0.12, 0.18, 0.98)       # Hovered character card
 const CHAR_SELECTED := Color(0.18, 0.18, 0.25, 1.0)     # Selected character card
 const CHAR_LOCKED := Color(0.05, 0.05, 0.07, 0.95)      # Locked character card
 const CHAR_PORTRAIT_UNLOCKED := Color(1, 1, 1, 0.95)    # Portrait modulate when unlocked
-const CHAR_IN_SQUAD := Color(0.6, 0.6, 0.6, 0.85)       # Dimmed when already in squad
 const CHAR_CARD_NORMAL_BG := Color(0.12, 0.12, 0.16, 0.95)
 const CHAR_CARD_HOVER_BG := Color(0.18, 0.18, 0.24, 0.98)
 const CHAR_CARD_SELECTED_BG := Color(0.26, 0.26, 0.34, 1.0)

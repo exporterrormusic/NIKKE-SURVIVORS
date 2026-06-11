@@ -228,7 +228,7 @@ func _input(event: InputEvent) -> void:
 
 	var is_key: bool = event is InputEventKey
 	var is_mouse: bool = event is InputEventMouseButton
-	var is_joypad: bool = event is InputEventJoypadButton
+	var _is_joypad: bool = event is InputEventJoypadButton
 
 	if is_key or is_mouse:
 		get_viewport().set_input_as_handled()

@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://cfx6gpbocmgvm" path="res://src/projectiles/visuals/weapons/minigun_bullet_visual.gd" id="1"]
 [ext_resource type="Shader" uid="uid://d08hxd1am20uf" path="res://src/projectiles/shaders/smg_glow.gdshader" id="4_hc48a"]
-[ext_resource type="Texture2D" uid="uid://1q37hn2mjviw" path="res://assets/images/Bullets/SMG.png" id="5_v33ea"]
+[ext_resource type="Texture2D" uid="uid://chlsj2ulah42i" path="res://assets/images/Bullets/SMG.png" id="5_v33ea"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_23qhn"]
 shader = ExtResource("4_hc48a")

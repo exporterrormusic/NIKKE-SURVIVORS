@@ -136,11 +136,11 @@ func _handle_projectile_hit(projectile: Node2D) -> void:
 	if projectile.is_in_group("player_projectiles") or projectile.is_in_group("projectiles"):
 		var player = get_tree().get_first_node_in_group("player")
 		var has_upgrade = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility")
-		var in_squad = false
-		if player and player.has_method("is_character_in_squad"):
-			in_squad = player.is_character_in_squad("wells") or player.is_character_in_squad("Wells")
+		var playing_wells = false
+		if player and player.has_method("is_playing_character"):
+			playing_wells = player.is_playing_character("wells")
 			
-		if has_upgrade and in_squad:
+		if has_upgrade and playing_wells:
 			# Player projectile phases completely through - no shield damage, no projectile destruction
 			return
 		

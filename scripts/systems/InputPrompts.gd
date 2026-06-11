@@ -13,8 +13,6 @@ const KEYBOARD_PROMPTS := {
 	"thrust": "RMB",
 	"dash": "Shift",
 	"burst": "Q",
-	"next_character": "Scroll Up",
-	"prev_character": "Scroll Down",
 	"ui_cancel": "Esc",
 	"move_up": "W",
 	"move_down": "S",
@@ -28,8 +26,6 @@ const CONTROLLER_PROMPTS := {
 	"thrust": "[LT]",
 	"dash": "[A]",
 	"burst": "[Y]",
-	"next_character": "[RB]",
-	"prev_character": "[LB]",
 	"ui_cancel": "[Start]",
 	"move_up": "[L↑]",
 	"move_down": "[L↓]",
@@ -43,8 +39,6 @@ const PLAYSTATION_PROMPTS := {
 	"thrust": "[L2]",
 	"dash": "[X]",
 	"burst": "[△]",
-	"next_character": "[R1]",
-	"prev_character": "[L1]",
 	"ui_cancel": "[Options]",
 }
 

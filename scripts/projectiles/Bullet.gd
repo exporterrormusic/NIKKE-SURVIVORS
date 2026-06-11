@@ -199,7 +199,7 @@ func _physics_process(delta):
 			global_position = next_pos
 		elif collider is StaticBody2D and collider.is_in_group("boulders"):
 			var player_ref = get_tree().get_first_node_in_group("player")
-			if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player_ref and player_ref.has_method("is_character_in_squad") and player_ref.is_character_in_squad("wells"):
+			if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player_ref and player_ref.has_method("is_playing_character") and player_ref.is_playing_character("wells"):
 				# Phase through boulder - continue to next_pos, don't stop at collision point
 				global_position = next_pos
 				# Skip the rest of the collision handling
@@ -258,9 +258,9 @@ func _physics_process(delta):
 
 func _check_boulder_collision() -> bool:
 	"""Manual boulder collision check using cached boulder list for performance."""
-	# Skip if Chrono-Intangibility upgrade is active AND Wells is in squad
+	# Skip if Chrono-Intangibility upgrade is active AND playing Wells
 	var player = get_tree().get_first_node_in_group("player")
-	if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells"):
+	if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_playing_character") and player.is_playing_character("wells"):
 		return false
 	
 	var boulders := TargetCache.get_boulders()
@@ -280,7 +280,7 @@ func _check_boulder_collision() -> bool:
 
 func _on_body_entered(body):
 	# Handle both Body (CharacterBody2D) and Area (HitboxComponent) collisions
-	var target = body
+	var _target = body
 	
 	# VISUAL DEBUG: Turn red on detected collision
 	if sprite: sprite.modulate = Color(10, 0, 0, 1)
@@ -300,9 +300,9 @@ func _on_body_entered(body):
 		return
 
 	# Check for Shield Hit (Area2D child of ShielderShield)
-	# Skip shields if Chrono-Intangibility upgrade is active AND Wells is in squad
+	# Skip shields if Chrono-Intangibility upgrade is active AND playing Wells
 	var player = get_tree().get_first_node_in_group("player")
-	var has_chrono: bool = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_character_in_squad") and player.is_character_in_squad("wells")
+	var has_chrono: bool = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player and player.has_method("is_playing_character") and player.is_playing_character("wells")
 	
 	var shield_root = null
 	if body is Area2D:
@@ -328,7 +328,7 @@ func _on_body_entered(body):
 			
 			if is_boulder:
 				var player_ref = get_tree().get_first_node_in_group("player")
-				if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player_ref and player_ref.has_method("is_character_in_squad") and player_ref.is_character_in_squad("wells"):
+				if ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility") and player_ref and player_ref.has_method("is_playing_character") and player_ref.is_playing_character("wells"):
 					return # Phase through boulder
 
 			_despawn()

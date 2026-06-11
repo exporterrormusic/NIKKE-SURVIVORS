@@ -309,9 +309,6 @@ func _update_weapon_pool() -> void:
 	if clone_weapon_level >= 3:
 		_weapon_pool.append("sniper")
 
-func _get_weapon_type_name() -> String:
-	return "SMG"
-
 ## Get active clone count for UI
 func get_clone_count() -> int:
 	_cleanup_clones()

@@ -67,6 +67,7 @@ func _load_all_characters() -> void:
 	# Order: Snow White, Scarlet, Rapunzel, Nayuta, Commander, Marian, Crown, Kilo, Cecil, Sin
 	
 	_register_character("snow_white", {
+		"weapon_kind": "sniper",
 		"display_name": "Snow White",
 		"description": "Sniper with piercing shots and turrets",
 		"sprite_path": "snow-white-sprite.png",
@@ -95,6 +96,7 @@ func _load_all_characters() -> void:
 	})
 	
 	_register_character("scarlet", {
+		"weapon_kind": "sword",
 		"display_name": "Scarlet",
 		"description": "Melee fighter who sacrifices HP for power",
 		"sprite_path": "scarlet-sprite.png",
@@ -121,6 +123,7 @@ func _load_all_characters() -> void:
 	})
 	
 	_register_character("rapunzel", {
+		"weapon_kind": "rocket",
 		"display_name": "Rapunzel",
 		"description": "Rocket launcher with healing abilities",
 		"sprite_path": "rapunzel-sprite.png",
@@ -149,6 +152,7 @@ func _load_all_characters() -> void:
 	})
 	
 	_register_character("nayuta", {
+		"weapon_kind": "smg",
 		"display_name": "Nayuta",
 		"description": "SMG with clone summoning",
 		"sprite_path": "nayuta-sprite.png",
@@ -177,6 +181,7 @@ func _load_all_characters() -> void:
 	})
 	
 	_register_character("commander", {
+		"weapon_kind": "assault",
 		"display_name": "Commander",
 		"description": "Leader with ally summoning",
 		"sprite_path": "commander-sprite.png",
@@ -205,6 +210,7 @@ func _load_all_characters() -> void:
 	})
 	
 	_register_character("marian", {
+		"weapon_kind": "minigun",
 		"display_name": "Marian",
 		"description": "Minigun with charm and epic beam burst",
 		"sprite_path": "marian-sprite.png",
@@ -233,6 +239,7 @@ func _load_all_characters() -> void:
 	})
 	
 	_register_character("crown", {
+		"weapon_kind": "minigun",
 		"display_name": "Crown",
 		"description": "Minigun cavalry with golden nova burst",
 		"sprite_path": "crown-sprite.png",
@@ -261,6 +268,7 @@ func _load_all_characters() -> void:
 	})
 	
 	_register_character("kilo", {
+		"weapon_kind": "shotgun",
 		"display_name": "Kilo",
 		"description": "Shotgun specialist with explosive blasts",
 		"sprite_path": "kilo-sprite.png",
@@ -291,6 +299,7 @@ func _load_all_characters() -> void:
 	})
 	
 	_register_character("cecil", {
+		"weapon_kind": "smg",
 		"display_name": "Cecil",
 		"description": "SMG with drone robots and hacking burst",
 		"sprite_path": "cecil-sprite.png",
@@ -319,6 +328,7 @@ func _load_all_characters() -> void:
 	})
 	
 	_register_character("sin", {
+		"weapon_kind": "smg",
 		"display_name": "Sin",
 		"description": "SMG with charm and life drain abilities",
 		"sprite_path": "sin-sprite.png",
@@ -347,6 +357,7 @@ func _load_all_characters() -> void:
 	})
 	
 	_register_character("wells", {
+		"weapon_kind": "sniper",
 		"display_name": "Wells",
 		"description": "Time Traveler Sniper with Bullet Time",
 		"sprite_path": "wells-sprite.png",

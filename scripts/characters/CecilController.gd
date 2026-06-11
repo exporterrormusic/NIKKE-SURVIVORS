@@ -315,9 +315,6 @@ func apply_talent(talent_id: String) -> void:
 		"burst_boss":
 			burst_boss_damage = true
 
-func _get_weapon_type_name() -> String:
-	return "SMG"
-
 ## Get current drone mode for UI
 func get_drone_mode() -> String:
 	return _drone_mode

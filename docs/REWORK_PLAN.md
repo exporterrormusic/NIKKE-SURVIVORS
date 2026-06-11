@@ -115,11 +115,15 @@ Code health:
   PlayerInputHandler, talent tree management → PlayerTalentBridge, HUD
   plumbing → PlayerHudBridge. PlayerCore 1371→892 lines; public API
   unchanged (thin delegates).
-- Next modularization candidates (assessed 2026-06-11):
-  environment_controller scaffolding split; Level.gd menus + duplicate
-  PristineCore inner classes; ModularEnemy status effects;
-  basic_projectile_visual per-style split; weapon-type map duplicated in
-  3 places → CharacterData.
+- ✅ DONE (2026-06-11): weapon-type map → CharacterData.weapon_kind (was
+  duplicated in PlayerCore, TalentTree and 9 controller overrides; also
+  fixed Crown using sniper reload audio). Level.gd now uses the shared
+  PristineCoreContainer (duplicate inner classes deleted, flash_collected
+  added to the component). ModularEnemy: dead per-enemy core-orb spawner
+  removed (cores only drop from bosses via Level).
+- Next modularization candidates: environment_controller scaffolding
+  split; Level.gd menu wiring; ModularEnemy status effects + Wells shader
+  block; basic_projectile_visual per-style split.
 - `TalentData` as static dictionaries → consider Resource-based talent
   definitions (editor-editable, type-safe).
 - EventBus audit after squad removal (dead signals).

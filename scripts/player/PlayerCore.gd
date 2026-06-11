@@ -684,34 +684,12 @@ func register_burst_hit(_target = null, from_burst: bool = false, weapon_type: S
 			overhead_hud.update_burst(burst_current, burst_max)
 
 func _get_current_weapon_type() -> String:
-	## Get weapon type string for current character
-	if not _registry:
-		return "smg" # Fallback
-
-	var all_ids = _registry.get_all_character_ids()
-	if _character_index < 0 or _character_index >= all_ids.size():
-		return "smg"
-
-	var char_id = all_ids[_character_index]
-
-	# Map character ID to weapon type
-	match char_id:
-		"snow_white":
-			return "sniper"
-		"scarlet":
-			return "sword"
-		"rapunzel":
-			return "rocket"
-		"commander":
-			return "assault"
-		"nayuta", "cecil", "sin":
-			return "smg"
-		"marian", "crown":
-			return "minigun"
-		"kilo":
-			return "shotgun"
-		_:
-			return "smg"
+	## Get the canonical weapon key for the current character (CharacterData.weapon_kind)
+	if _registry:
+		var char_data = _registry.get_character_by_index(_character_index)
+		if char_data and char_data.weapon_kind != "":
+			return char_data.weapon_kind
+	return "smg" # Fallback
 
 func is_burst_ready() -> bool:
 	if _burst_system:

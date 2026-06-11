@@ -534,17 +534,18 @@ func _setup_core_counter() -> void:
 	counter.name = "CoreCounter"
 	counter.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	counter.offset_left = -220
-	counter.offset_top = -85
+	counter.offset_top = -95
 	counter.offset_right = -20
 	counter.offset_bottom = -20
 	_core_counter.add_child(counter)
-	
-	# Use the styled container like the shop
-	var styled_container: Control = _PristineCoreContainer.new()
+
+	# Shared styled container (same component as the shop / character select)
+	var styled_container: Control = PristineCoreContainer.new()
 	styled_container.name = "StyledContainer"
 	styled_container.set_anchors_preset(Control.PRESET_FULL_RECT)
 	counter.add_child(styled_container)
-	
+	styled_container.update_count(GameManager.get_pristine_cores() if GameManager else 0)
+
 	print("[Level] Core counter initialized")
 
 func _update_core_counter() -> void:
@@ -557,42 +558,6 @@ func _update_core_counter() -> void:
 	var styled := counter.get_node_or_null("StyledContainer")
 	if styled and styled.has_method("update_count"):
 		styled.update_count(GameManager.get_pristine_cores())
-
-# Inner class for drawing the Pristine Core icon
-class _PristineCoreIcon extends Control:
-	func _draw() -> void:
-		var center: Vector2 = size / 2.0
-		var radius: float = minf(size.x, size.y) / 2.0 - 2.0
-		
-		# Outer glow
-		for i in range(6, 0, -1):
-			var glow_alpha: float = 0.12 * (1.0 - float(i) / 6.0)
-			var glow_radius: float = radius + float(i) * 1.5
-			draw_circle(center, glow_radius, Color(1.0, 0.2, 0.2, glow_alpha))
-		
-		# Main sphere gradient
-		var segments: int = 24
-		for i in range(segments, 0, -1):
-			var t: float = float(i) / float(segments)
-			var r: float = radius * t
-			var color := Color(0.6 + 0.4 * (1.0 - t), 0.1 + 0.2 * (1.0 - t), 0.1 + 0.1 * (1.0 - t))
-			draw_circle(center, r, color)
-		
-		# Inner glowing core
-		var core_radius: float = radius * 0.5
-		for i in range(12, 0, -1):
-			var t: float = float(i) / 12.0
-			var r: float = core_radius * t
-			var alpha: float = 0.8 * (1.0 - t * 0.5)
-			draw_circle(center, r, Color(1.0, 0.5, 0.3, alpha))
-		
-		# Hot center
-		draw_circle(center, radius * 0.15, Color(1.0, 0.9, 0.7, 1.0))
-		
-		# Specular highlight
-		var highlight_offset: Vector2 = Vector2(-radius * 0.25, -radius * 0.25)
-		var highlight_radius: float = radius * 0.2
-		draw_circle(center + highlight_offset, highlight_radius, Color(1.0, 1.0, 1.0, 0.6))
 
 var _goddess_elapsed: float = 0.0
 
@@ -1116,115 +1081,3 @@ func _track_win_achievement() -> void:
 	if char_ids.size() > 0:
 		print("[Level] Tracking win for: %s" % str(char_ids))
 		achievement_manager.on_game_won(char_ids)
-
-
-# Styled container for Pristine Rapture Cores (matching shop style)
-class _PristineCoreContainer extends Control:
-	const UI := preload("res://scripts/ui/UITheme.gd")
-	const CONTAINER_WIDTH := 200.0
-	const CONTAINER_HEIGHT := 65.0
-	const BORDER_THICKNESS := 2.0
-	const CORNER_CUT := 8.0
-	
-	var _count_label: Label = null
-	var _glow_time: float = 0.0
-	var _flash_time: float = 0.0 # Time remaining for collection flash
-	
-	func _init() -> void:
-		custom_minimum_size = Vector2(CONTAINER_WIDTH, CONTAINER_HEIGHT)
-	
-	func _ready() -> void:
-		_build_container()
-	
-	func _process(delta: float) -> void:
-		_glow_time += delta
-		if _flash_time > 0:
-			_flash_time -= delta
-		queue_redraw()
-	
-	func update_count(value: int) -> void:
-		if _count_label:
-			_count_label.text = str(value)
-	
-	func flash_collected() -> void:
-		_flash_time = 0.5 # Flash for 0.5 seconds
-	
-	func _build_container() -> void:
-		# Main content HBox
-		var content := HBoxContainer.new()
-		content.set_anchors_preset(Control.PRESET_FULL_RECT)
-		content.offset_left = 12
-		content.offset_right = -12
-		content.offset_top = 16
-		content.offset_bottom = -6
-		content.add_theme_constant_override("separation", 8)
-		content.alignment = BoxContainer.ALIGNMENT_CENTER
-		add_child(content)
-		
-		# Core icon
-		var icon := _PristineCoreIcon.new()
-		icon.custom_minimum_size = Vector2(32, 32)
-		content.add_child(icon)
-		
-		# Count label
-		_count_label = Label.new()
-		_count_label.text = str(GameManager.get_pristine_cores()) if GameManager else "0"
-		_count_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_count_label.add_theme_font_size_override("font_size", 28)
-		_count_label.add_theme_color_override("font_color", Color(1.0, 0.35, 0.3, 1.0))
-		_count_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
-		_count_label.add_theme_constant_override("shadow_offset_x", 2)
-		_count_label.add_theme_constant_override("shadow_offset_y", 2)
-		content.add_child(_count_label)
-	
-	func _draw() -> void:
-		var w := size.x
-		var h := size.y
-		
-		# Calculate flash intensity
-		var flash_intensity: float = 0.0
-		if _flash_time > 0:
-			flash_intensity = _flash_time / 0.5 # 0 to 1 based on remaining time
-		
-		# Pulsing glow effect (enhanced during flash)
-		var base_pulse: float = 0.4 + 0.15 * sin(_glow_time * 2.5)
-		var glow_pulse: float = base_pulse + flash_intensity * 0.6
-		
-		# Draw outer glow (larger and more intense during flash)
-		var glow_layers := 4 + int(flash_intensity * 4)
-		for i in range(glow_layers, 0, -1):
-			var glow_alpha: float = glow_pulse * 0.08 * (1.0 - float(i) / float(glow_layers))
-			glow_alpha += flash_intensity * 0.15
-			var offset: float = float(i) * (2.0 + flash_intensity * 2.0)
-			var glow_rect := Rect2(-offset, -offset, w + offset * 2, h + offset * 2)
-			draw_rect(glow_rect, Color(1.0, 0.2 + flash_intensity * 0.3, 0.2, glow_alpha))
-		
-		# Draw background with cut corners (brighter during flash)
-		var bg_brightness := 0.05 + flash_intensity * 0.15
-		var bg_points := PackedVector2Array([
-			Vector2(CORNER_CUT, 0),
-			Vector2(w - CORNER_CUT, 0),
-			Vector2(w, CORNER_CUT),
-			Vector2(w, h - CORNER_CUT),
-			Vector2(w - CORNER_CUT, h),
-			Vector2(CORNER_CUT, h),
-			Vector2(0, h - CORNER_CUT),
-			Vector2(0, CORNER_CUT)
-		])
-		draw_colored_polygon(bg_points, Color(bg_brightness, bg_brightness * 0.8, bg_brightness * 0.8, 0.9))
-		
-		# Draw border (brighter during flash)
-		var border_brightness := 0.8 + flash_intensity * 0.2
-		for i in range(bg_points.size()):
-			var p1: Vector2 = bg_points[i]
-			var p2: Vector2 = bg_points[(i + 1) % bg_points.size()]
-			draw_line(p1, p2, Color(border_brightness, 0.25 + flash_intensity * 0.5, 0.2, 0.9), BORDER_THICKNESS + flash_intensity * 2.0, true)
-		
-		# Draw "PRISTINE RAPTURE CORES" title at top
-		var title_text := "PRISTINE RAPTURE CORES"
-		var title_size := 9
-		var font := ThemeDB.fallback_font
-		var title_width: float = font.get_string_size(title_text, HORIZONTAL_ALIGNMENT_LEFT, -1, title_size).x
-		var title_x: float = (w - title_width) / 2.0
-		draw_string(font, Vector2(title_x, 11), title_text, HORIZONTAL_ALIGNMENT_LEFT, -1, title_size, Color(0.7, 0.7, 0.7, 0.9))

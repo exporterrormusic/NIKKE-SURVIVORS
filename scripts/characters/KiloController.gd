@@ -180,10 +180,6 @@ func _get_burst_glow_script() -> GDScript:
 func is_invincible() -> bool:
 	return burst_invincible
 
-## Get weapon type name for audio
-func _get_weapon_type_name() -> String:
-	return "shotgun"
-
 ## Apply talent upgrade
 func apply_talent(talent_id: String) -> void:
 	match talent_id:

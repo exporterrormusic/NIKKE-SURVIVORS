@@ -413,5 +413,3 @@ func start_reload() -> void:
 			var weapon_type := _get_weapon_type_name()
 			player.audio_director.play_weapon_reload_sound(weapon_type)
 
-func _get_weapon_type_name() -> String:
-	return "Minigun"

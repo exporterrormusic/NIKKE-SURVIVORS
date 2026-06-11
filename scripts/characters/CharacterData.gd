@@ -74,6 +74,11 @@ extends Resource
 @export var weapon_name: String = "Standard-Issue"
 @export var weapon_type_name: String = "Assault Rifle"  # Display name
 @export_enum("Melee", "Rifle", "Launcher", "Shotgun", "SMG") var weapon_type: int = 1
+## Canonical weapon key used for BurstConfig rates and weapon audio lookup
+## (sniper/sword/rocket/smg/assault/minigun/shotgun). Single source of truth;
+## was previously duplicated as match-maps in PlayerCore, TalentTree and
+## per-controller _get_weapon_type_name overrides.
+@export var weapon_kind: String = "smg"
 @export_multiline var weapon_description: String = "Reliable weapon with balanced cadence."
 @export var weapon_special_name: String = ""
 @export_multiline var weapon_special_description: String = ""

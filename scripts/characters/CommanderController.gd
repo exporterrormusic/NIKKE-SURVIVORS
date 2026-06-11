@@ -364,6 +364,3 @@ func apply_talent(talent_id: String) -> void:
 		"burst_duration":
 			summon_duration += 3.0 # +3 seconds per upgrade
 
-## Get weapon type name for audio
-func _get_weapon_type_name() -> String:
-	return "Assault Rifle"

@@ -193,6 +193,3 @@ func get_special_charges() -> int:
 func get_special_max_charges() -> int:
 	return turret_max_charges
 
-## Get weapon type name for audio
-func _get_weapon_type_name() -> String:
-	return "sniper"

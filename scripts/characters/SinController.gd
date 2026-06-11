@@ -500,6 +500,3 @@ func apply_talent(talent_id: String) -> void:
 		"burst_explode":
 			burst_explode_on_death = true
 
-## Get weapon type name for audio
-func _get_weapon_type_name() -> String:
-	return "SMG"

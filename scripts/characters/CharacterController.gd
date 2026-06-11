@@ -78,7 +78,7 @@ func apply_shop_upgrades() -> void:
 				max_ammo *= 2
 				print("[CharacterController] Applied Snow White Ammo Boost (2x) to %s. New Max: %d" % [w_type, max_ammo])
 			# +50% for Minigun/SMG/Shotgun/Assault Rifle
-			elif w_type in ["minigun", "smg", "assault_rifle", "shotgun", "assault rifle"]:
+			elif w_type in ["minigun", "smg", "assault", "assault_rifle", "shotgun", "assault rifle"]:
 				max_ammo = int(max_ammo * 1.5)
 				print("[CharacterController] Applied Snow White Ammo Boost (1.5x) to %s. New Max: %d" % [w_type, max_ammo])
 	
@@ -265,10 +265,12 @@ func manual_reload() -> void:
 	
 	start_reload()
 
-## Get weapon type name for audio
+## Get the canonical weapon key (audio + burst rates). Data-driven from
+## CharacterData.weapon_kind (replaces per-controller overrides).
 func _get_weapon_type_name() -> String:
-	# Override in subclasses for specific weapon types
-	return "sniper" # Default
+	if data and data.weapon_kind != "":
+		return data.weapon_kind
+	return "smg" # Fallback
 
 ## Finish reloading
 func _finish_reload() -> void:

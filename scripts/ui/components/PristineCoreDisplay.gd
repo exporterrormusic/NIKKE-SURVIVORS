@@ -17,6 +17,7 @@ const CORNER_CUT := 10.0
 var _core_icon: Control = null
 var _count_label: Label = null
 var _glow_time: float = 0.0
+var _flash_time: float = 0.0 # Time remaining for collection flash
 
 
 func _init() -> void:
@@ -29,6 +30,8 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_glow_time += delta
+	if _flash_time > 0:
+		_flash_time -= delta
 	queue_redraw()
 
 
@@ -38,6 +41,16 @@ func get_core_icon() -> Control:
 
 func get_count_label() -> Label:
 	return _count_label
+
+
+func update_count(value: int) -> void:
+	if _count_label:
+		_count_label.text = str(value)
+
+
+## Briefly intensify the glow (used by the in-game counter on core pickup)
+func flash_collected() -> void:
+	_flash_time = 0.5
 
 
 func _build_container() -> void:
@@ -92,16 +105,18 @@ func _build_container() -> void:
 func _draw() -> void:
 	var w := size.x
 	var h := size.y
-	
-	# Pulsing glow effect
-	var glow_pulse: float = 0.5 + 0.2 * sin(_glow_time * 2.5)
-	
+
+	# Pulsing glow effect (intensified during collection flash)
+	var flash_intensity: float = _flash_time / 0.5 if _flash_time > 0 else 0.0
+	var glow_pulse: float = 0.5 + 0.2 * sin(_glow_time * 2.5) + flash_intensity * 0.6
+
 	# Draw outer glow
-	for i in range(6, 0, -1):
-		var glow_alpha: float = glow_pulse * 0.08 * (1.0 - float(i) / 6.0)
-		var offset: float = float(i) * 2.0
+	var glow_layers := 6 + int(flash_intensity * 4)
+	for i in range(glow_layers, 0, -1):
+		var glow_alpha: float = glow_pulse * 0.08 * (1.0 - float(i) / float(glow_layers)) + flash_intensity * 0.15
+		var offset: float = float(i) * (2.0 + flash_intensity * 2.0)
 		var glow_rect := Rect2(-offset, -offset, w + offset * 2, h + offset * 2)
-		draw_rect(glow_rect, Color(UI.SHOP_CORE_GLOW.r, UI.SHOP_CORE_GLOW.g, UI.SHOP_CORE_GLOW.b, glow_alpha))
+		draw_rect(glow_rect, Color(UI.SHOP_CORE_GLOW.r, UI.SHOP_CORE_GLOW.g + flash_intensity * 0.3, UI.SHOP_CORE_GLOW.b, glow_alpha))
 	
 	# Draw background with cut corners
 	var bg_points := PackedVector2Array([

@@ -189,10 +189,6 @@ func _apply_self_damage() -> void:
 		if actual_damage > 0:
 			player._update_health_display(-actual_damage, true)
 
-## Get weapon type name for audio
-func _get_weapon_type_name() -> String:
-	return "sword"
-
 ## Apply talent upgrade
 func apply_talent(talent_id: String) -> void:
 	match talent_id:

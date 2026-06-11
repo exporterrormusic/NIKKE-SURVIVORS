@@ -796,13 +796,10 @@ func _finalize_death(overkill: int, death_gen_id: int = -1) -> void:
 	# Drop XP orbs
 	_spawn_xp_orbs()
 		
-	# Special meta-drop for Pristine Core
-	if has_meta("pristine_core_drop"):
-		var chance = get_meta("pristine_core_drop")
-		if randf() < chance:
-			# Drop the core! 
-			# Using _spawn_pristine_core_orb helper if available or standard drops
-			pass
+	# NOTE: "pristine_core_drop" meta was never wired up — cores only drop
+	# from boss kills (see Level._spawn_pristine_core_orb_at_boss). The dead
+	# per-enemy orb spawner was removed in the modularization pass; restore
+	# from git history if per-enemy core drops are ever wanted.
 
 	# Spawn visual effect
 	var death_effect = ProjectileCache.create_robot_death_effect()
@@ -869,77 +866,6 @@ func _spawn_xp_orbs() -> void:
 	elif EventBus.has_signal("xp_orb_collected"):
 		# Fallback if player not cached yet
 		EventBus.xp_orb_collected.emit(drop_xp)
-
-
-func _spawn_pristine_core_orb(value: int) -> void:
-	if ResourceLoader.exists("res://scripts/world/PristineCoreOrb.gd"):
-		var orb = Area2D.new()
-		orb.set_script(load("res://scripts/world/PristineCoreOrb.gd"))
-		orb.set("cores_value", value)
-		
-		var player = get_tree().get_first_node_in_group("player")
-		var camera := get_viewport().get_camera_2d() if get_viewport() else null
-		
-		# Map bounds (Safe Zone: 1700x1700 to ensure reachable)
-		# Reduced from 2000 to 1800 and increased margin to ensure strict in-bounds
-		var map_half_size := 1800.0
-		var map_margin := 400.0 # Result: [-1400, 1400] range
-		var map_min := Vector2(-map_half_size + map_margin, -map_half_size + map_margin)
-		var map_max := Vector2(map_half_size - map_margin, map_half_size - map_margin)
-		
-		# Calculate spawn position
-		var spawn_pos := global_position # Default: enemy death position
-		
-		if player and camera:
-			# Get camera viewport bounds
-			var viewport_size := get_viewport().get_visible_rect().size
-			var cam_pos := camera.global_position
-			var cam_zoom := camera.zoom
-			var half_view := viewport_size / (2.0 * cam_zoom)
-			
-			# Visible screen bounds
-			var view_min := cam_pos - half_view
-			var view_max := cam_pos + half_view
-			
-			# Clamp view bounds to map bounds
-			view_min.x = maxf(view_min.x, map_min.x)
-			view_min.y = maxf(view_min.y, map_min.y)
-			view_max.x = minf(view_max.x, map_max.x)
-			view_max.y = minf(view_max.y, map_max.y)
-			
-			# Minimum distance from player (they need to walk to it)
-			var min_dist_from_player := 150.0
-			var max_dist_from_player := 400.0
-			
-			# If enemy death pos is on screen and far enough from player, use it
-			var death_in_view := spawn_pos.x >= view_min.x and spawn_pos.x <= view_max.x and spawn_pos.y >= view_min.y and spawn_pos.y <= view_max.y
-			var death_dist := spawn_pos.distance_to(player.global_position)
-			
-			if death_in_view and death_dist >= min_dist_from_player:
-				# Use enemy death position - already good
-				pass
-			else:
-				# Pick a random position within view, at good distance from player
-				var best_pos := spawn_pos
-				for _attempt in range(10):
-					var test_pos := Vector2(
-						randf_range(view_min.x, view_max.x),
-						randf_range(view_min.y, view_max.y)
-					)
-					var test_dist := test_pos.distance_to(player.global_position)
-					if test_dist >= min_dist_from_player and test_dist <= max_dist_from_player:
-						best_pos = test_pos
-						break
-					elif test_dist >= min_dist_from_player:
-						best_pos = test_pos # Accept but keep trying for better
-				spawn_pos = best_pos
-		
-		# Final clamp to map bounds
-		spawn_pos.x = clampf(spawn_pos.x, map_min.x, map_max.x)
-		spawn_pos.y = clampf(spawn_pos.y, map_min.y, map_max.y)
-		
-		orb.global_position = spawn_pos
-		get_parent().add_child(orb)
 
 
 # Forwarding 'take_damage' for direct calls that bypass HitboxComponent

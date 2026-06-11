@@ -461,34 +461,12 @@ func _set_stat_value(row_name: String, value: String) -> void:
 			value_label.text = value
 
 func _get_weapon_type_for_index(char_index: int) -> String:
-	# Map character index to weapon type for BurstConfig lookup
-	# Indices: 0=snow_white, 1=scarlet, 2=rapunzel, 3=nayuta, 4=commander, 
-	#          5=marian, 6=crown, 7=kilo, 8=cecil, 9=sin
-	match char_index:
-		0: # Snow White
-			return "sniper"
-		1: # Scarlet
-			return "sword"
-		2: # Rapunzel
-			return "rocket"
-		3: # Nayuta
-			return "smg"
-		4: # Commander
-			return "assault"
-		5: # Marian
-			return "minigun"
-		6: # Crown
-			return "minigun"
-		7: # Kilo
-			return "shotgun"
-		8: # Cecil
-			return "smg"
-		9: # Sin
-			return "smg"
-		10: # Wells
-			return "sniper"
-		_:
-			return "smg"
+	# Canonical weapon key for BurstConfig lookup (CharacterData.weapon_kind)
+	if _character_registry:
+		var char_data = _character_registry.get_character_by_index(char_index)
+		if char_data and char_data.weapon_kind != "":
+			return char_data.weapon_kind
+	return "smg"
 
 func _style_button(btn: Button) -> void:
 	var normal := StyleBoxFlat.new()

@@ -108,10 +108,6 @@ func _on_burst_start() -> void:
 	burst_active = false
 	burst_ended.emit()
 
-## Get weapon type name for audio
-func _get_weapon_type_name() -> String:
-	return "rocket"
-
 ## Apply talent upgrade
 func apply_talent(talent_id: String) -> void:
 	match talent_id:

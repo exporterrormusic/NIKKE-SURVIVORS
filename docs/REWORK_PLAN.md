@@ -111,11 +111,15 @@ Code health:
   MarianBeam 814→545 lines.
 - `TalentTree.gd` (~985 lines) mixes data access, layout, drawing,
   tooltips, and input — split UI from state.
-- Next modularization candidates (assessed 2026-06-11): PlayerCore input/
-  talent-bridge/HUD-bridge split; environment_controller scaffolding split;
-  Level.gd menus + duplicate PristineCore inner classes; ModularEnemy
-  status effects; basic_projectile_visual per-style split; weapon-type map
-  duplicated in 3 places → CharacterData.
+- ✅ DONE (2026-06-11): PlayerCore split — input/aim/attacks →
+  PlayerInputHandler, talent tree management → PlayerTalentBridge, HUD
+  plumbing → PlayerHudBridge. PlayerCore 1371→892 lines; public API
+  unchanged (thin delegates).
+- Next modularization candidates (assessed 2026-06-11):
+  environment_controller scaffolding split; Level.gd menus + duplicate
+  PristineCore inner classes; ModularEnemy status effects;
+  basic_projectile_visual per-style split; weapon-type map duplicated in
+  3 places → CharacterData.
 - `TalentData` as static dictionaries → consider Resource-based talent
   definitions (editor-editable, type-safe).
 - EventBus audit after squad removal (dead signals).

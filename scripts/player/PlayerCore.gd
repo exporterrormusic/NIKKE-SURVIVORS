@@ -7,7 +7,6 @@ class_name PlayerCore
 const CharacterRegistryScript = preload("res://scripts/characters/CharacterRegistry.gd")
 const PlayerOverheadHudScript = preload("res://scripts/player/PlayerOverheadHud.gd")
 const ShopMenuScript = preload("res://scripts/ui/ShopMenu.gd")
-const MusicPlayerUIScript = preload("res://scripts/ui/MusicPlayerUI.gd")
 
 # Movement settings
 @export var speed: float = 400.0
@@ -92,28 +91,26 @@ var _weapons: PlayerWeapons = null
 
 # New modular components (Phase 2 refactor)
 var _burst_system: BurstSystem = null
+var _hud_bridge: PlayerHudBridge = null
+var _talent_bridge: PlayerTalentBridge = null
+var _input_handler: PlayerInputHandler = null
 
 # Extracted modular components (Phase 3 refactor)
 var _visual_effects: PlayerVisualEffects = null
 var _night_glow: PlayerNightGlow = null
 var _clone_manager: PlayerCloneManager = null
-var _skill_points_notify: SkillPointsNotification = null
 
 # Movement state (delegated to PlayerMovement)
 var dashing: bool:
 	get: return _movement.dashing if _movement else false
 
 # Combat state
-var attack_timer: float = 0.0
 var shop_open: bool = false
 
-# Controller/aim state
-var _using_controller: bool = false
-var aim_direction: Vector2 = Vector2.RIGHT
-
-const AIM_ASSIST_ANGLE := 15.0 # degrees - subtle cone
-const AIM_ASSIST_RANGE := 350.0 # pixels
-const AIM_ASSIST_STRENGTH := 0.4 # how strongly to pull toward target
+# Aim state (delegated to PlayerInputHandler; controllers read this)
+var aim_direction: Vector2:
+	get: return _input_handler.aim_direction if _input_handler else Vector2.RIGHT
+	set(value): if _input_handler: _input_handler.aim_direction = value
 
 # Character-specific shop upgrades manager
 var _upgrade_manager: PlayerUpgradeManager = null
@@ -216,6 +213,22 @@ func _setup_components() -> void:
 	_upgrade_manager.name = "PlayerUpgradeManager"
 	add_child(_upgrade_manager)
 	print("[PlayerCore] PlayerUpgradeManager initialized")
+
+	_hud_bridge = PlayerHudBridge.new()
+	_hud_bridge.name = "PlayerHudBridge"
+	add_child(_hud_bridge)
+	_hud_bridge.initialize(self)
+
+	_talent_bridge = PlayerTalentBridge.new()
+	_talent_bridge.name = "PlayerTalentBridge"
+	add_child(_talent_bridge)
+	_talent_bridge.initialize(self)
+	_talent_bridge.talent_unlocked.connect(_on_talent_unlocked)
+
+	_input_handler = PlayerInputHandler.new()
+	_input_handler.name = "PlayerInputHandler"
+	add_child(_input_handler)
+	_input_handler.initialize(self)
 
 	# 3. Audio & Effects
 	var AudioDirectorScript = load("res://scripts/systems/AudioDirector.gd")
@@ -383,19 +396,13 @@ func on_enemy_killed(_enemy: Node2D, killer_source: String = "player") -> void:
 
 # (Duplicity clone spawning delegated to PlayerCloneManager)
 
+# HUD plumbing is delegated to PlayerHudBridge; thin wrappers kept because
+# many internal/external call sites use these names.
 func _init_ui() -> void:
-	if overhead_hud:
-		overhead_hud.update_health(hp, max_hp)
-		overhead_hud.update_burst(burst_current, burst_max)
-		overhead_hud.update_character(_character_index)
-		_update_overhead_ammo()
-	update_xp_bar()
-	_hud_initialized = true
+	_hud_bridge.init_ui()
 
 func _update_hud() -> void:
-	if player_hud and player_hud.is_inside_tree():
-		player_hud.set_character(0, is_burst_unlocked())
-		player_hud.configure(hp, max_hp, burst_current, burst_max, stamina, max_stamina)
+	_hud_bridge.update_hud()
 
 func update_sprite() -> void:
 	if not _animator or not _registry:
@@ -502,16 +509,10 @@ func is_burst_unlocked() -> bool:
 	return false
 
 func _get_talent_tree() -> Control:
-	var canvas := get_parent().get_node_or_null("CanvasLayer")
-	if canvas == null:
-		canvas = get_tree().root
-	return canvas.get_node_or_null("TalentTree")
+	return _talent_bridge.get_tree_node()
 
 func _get_talent_level(char_id: int, talent_id: String) -> int:
-	var tree := _get_talent_tree()
-	if tree and tree.has_method("get_talent_level"):
-		return tree.get_talent_level(char_id, talent_id)
-	return 0
+	return _talent_bridge.get_talent_level(char_id, talent_id)
 
 func get_talent_level(char_id: int, talent_id: String) -> int:
 	return _get_talent_level(char_id, talent_id)
@@ -614,19 +615,7 @@ func _on_health_changed(_current: int, _maximum: int) -> void:
 		call_deferred("_update_health_display", 0, false)
 
 func add_skill_points(amount: int) -> void:
-	# The talent tree is the source of truth for run skill points
-	var tree := _ensure_talent_tree()
-	if tree:
-		tree.add_skill_points(amount)
-		if _progression:
-			_progression.set_skill_points(tree.get_skill_points())
-		_update_skill_points_notification(tree.get_skill_points())
-	elif _progression:
-		_progression.add_skill_points(amount)
-		_update_skill_points_notification(_progression.get_skill_points())
-
-	if overhead_hud:
-		overhead_hud.update_skill_points_available(true)
+	_talent_bridge.add_skill_points(amount)
 
 func heal(amount: int) -> void:
 	# Pass to health component
@@ -643,10 +632,7 @@ func heal(amount: int) -> void:
 	_update_health_display(amount, true)
 
 func _update_health_display(change: int = 0, animate: bool = false) -> void:
-	if player_hud:
-		player_hud.update_health(hp, max_hp, change, animate)
-	if overhead_hud:
-		overhead_hud.update_health(hp, max_hp)
+	_hud_bridge.update_health_display(change, animate)
 
 func _heal_nayuta_clones(player_heal_amount: int) -> void:
 	"""Heal all active Nayuta clones for the full amount of player healing."""
@@ -748,7 +734,7 @@ func use_burst() -> bool:
 	return true
 
 func is_using_controller() -> bool:
-	return _using_controller
+	return _input_handler.is_using_controller() if _input_handler else false
 
 func _attempt_burst_activation() -> void:
 	if not is_burst_unlocked():
@@ -841,9 +827,7 @@ func add_xp(amount: int) -> void:
 func _on_progression_level_up(new_level: int, skill_points_gained: int) -> void:
 	"""Called when PlayerProgression module triggers a level up"""
 	# Grant points to the talent tree (could be multiple if leveled up more than once)
-	var tree := _ensure_talent_tree()
-	if tree:
-		tree.add_skill_points(skill_points_gained)
+	_talent_bridge.grant_points(skill_points_gained)
 
 	# UI flash
 	if xp_ui and xp_ui.has_method("flash_level_up"):
@@ -911,9 +895,7 @@ func reset_sin_wish_for_new_match() -> void:
 
 
 func update_xp_bar() -> void:
-	if xp_ui and xp_ui.has_method("set_xp"):
-		xp_ui.set_xp(xp, xp_to_next)
-		xp_ui.set_level(level)
+	_hud_bridge.update_xp_bar()
 
 func is_playing_character(char_id: String) -> bool:
 	"""Check if the given character is the one being played this run."""
@@ -937,6 +919,7 @@ func is_playing_character(char_id: String) -> bool:
 	return false
 
 func _on_talent_unlocked(char_id: int, talent_id: String) -> void:
+	"""Gameplay application of a talent purchase (UI handled by PlayerTalentBridge)."""
 	# Forward talent to controller (only the run's character has a controller)
 	if char_id == _character_index and _current_controller:
 		if _current_controller.has_method("apply_talent"):
@@ -949,100 +932,17 @@ func _on_talent_unlocked(char_id: int, talent_id: String) -> void:
 
 	# Update burst visibility
 	_update_burst_visibility()
-	
-	# Sync progression skill points
-	var tree := _get_talent_tree()
-	if tree and _progression and tree.has_method("get_skill_points"):
-		_progression.set_skill_points(tree.get_skill_points())
-
-func _on_talent_tree_closed() -> void:
-	shop_open = false
-	if get_parent().has_method("set_game_paused"):
-		get_parent().call_deferred("set_game_paused", false)
-	
-	var tree := _get_talent_tree()
-	if tree and overhead_hud:
-		overhead_hud.update_skill_points_available(tree.get_skill_points() > 0)
-	
-	# Update skill points notification
-	if tree:
-		_update_skill_points_notification(tree.get_skill_points())
-
-func _update_skill_points_notification(points: int) -> void:
-	"""Show or update the skill points notification (delegated to SkillPointsNotification component)."""
-	if _skill_points_notify == null or not is_instance_valid(_skill_points_notify):
-		var canvas := get_parent().get_node_or_null("CanvasLayer")
-		if canvas == null:
-			canvas = get_tree().root
-		_skill_points_notify = SkillPointsNotification.create(canvas)
-	
-	_skill_points_notify.show_notification(points)
 
 func _update_burst_visibility() -> void:
-	# Burst bar should only be visible if the character has burst unlocked
-	var current_has_burst := _get_talent_level(_character_index, "burst") > 0
-
-	if player_hud and player_hud.has_method("set_burst_unlocked"):
-		player_hud.set_burst_unlocked(current_has_burst)
-		# Also refresh the burst gauge value to prevent visual reset
-		if current_has_burst:
-			player_hud.update_burst(burst_current, burst_max, false)
-	if overhead_hud and overhead_hud.has_method("update_burst_unlocked"):
-		overhead_hud.update_burst_unlocked(current_has_burst)
-		# Also refresh the burst gauge value
-		if current_has_burst:
-			overhead_hud.update_burst(burst_current, burst_max)
+	_hud_bridge.update_burst_visibility()
 
 # ============= AMMO UI =============
 
 func _update_overhead_ammo() -> void:
-	if not overhead_hud or not _current_controller:
-		return
-	
-	var cur_ammo = _current_controller.ammo
-	var max_ammo = _current_controller.max_ammo
-	var is_reloading = _current_controller.is_reloading
-	var reload_time = 1.5
-	if _current_controller.data:
-		reload_time = _current_controller.data.reload_time
-	
-	if max_ammo <= 0:
-		# Unlimited ammo
-		overhead_hud.update_ammo(1, 1, false, reload_time)
-	else:
-		overhead_hud.update_ammo(cur_ammo, max_ammo, is_reloading, reload_time)
+	_hud_bridge.update_overhead_ammo()
 
 func _update_overhead_special() -> void:
-	if not overhead_hud or not _current_controller:
-		return
-	
-	var unlocked = _current_controller.special_unlocked
-	var progress = 1.0
-
-	# Update Scarlet's special unlocked status (index 1 in CharacterRegistry)
-	if _character_index == 1: # Scarlet's index in CharacterRegistry
-		overhead_hud.update_scarlet_special_unlocked(unlocked)
-
-	# Get special cooldown progress from controller
-	if _current_controller.has_method("get_special_cooldown_progress"):
-		progress = _current_controller.get_special_cooldown_progress()
-	elif _current_controller.has_method("get_special_progress"):
-		progress = _current_controller.get_special_progress()
-	
-	# Check if controller supports charges (Snow White turrets)
-	if _current_controller.has_method("get_special_charges"):
-		var charges = _current_controller.get_special_charges()
-		var max_charges = _current_controller.get_special_max_charges()
-		if overhead_hud.has_method("update_special_ability_with_charges"):
-			overhead_hud.update_special_ability_with_charges(unlocked, progress, charges, max_charges)
-			return
-	
-	# Check for Wells locked state (Future Marian active)
-	var is_locked: bool = false
-	if "_special_blocked" in _current_controller:
-		is_locked = _current_controller._special_blocked
-	
-	overhead_hud.update_special_ability(unlocked, progress, is_locked)
+	_hud_bridge.update_overhead_special()
 
 ## Public accessor for current controller (used by PlayerCloneManager and external systems)
 func get_current_controller() -> CharacterController:
@@ -1058,7 +958,7 @@ func _process(delta: float) -> void:
 		return
 		
 	# Update aim every frame for smooth visual tracking
-	_update_aim()
+	_input_handler.update_aim()
 	
 	# Cheats
 	if CheatManager.is_cheat_active("infinite_burst"):
@@ -1098,23 +998,11 @@ func _process(delta: float) -> void:
 func _physics_process(delta: float) -> void:
 	if shop_open:
 		return
-	
-	_handle_input()
-	
-	# _update_aim() is now called in _process for smoother visual tracking
-	
-	# Delegate movement to component
-	var input_vector = Input.get_vector("move_left", "move_right", "move_up", "move_down")
-	if _movement:
-		_movement.handle_movement(delta, input_vector)
-	
-	# Update attack timer
-	if attack_timer > 0:
-		attack_timer -= delta
-	
-	# Handle attacks
-	_handle_attacks(aim_direction, delta)
-	
+
+	# Input, movement, and attacks (delegated to PlayerInputHandler;
+	# aim is updated in _process for smoother visual tracking)
+	_input_handler.physics_update(delta)
+
 	# Cecil revive invincibility timer
 	if _cecil_revive_invincible_timer > 0.0:
 		_cecil_revive_invincible_timer -= delta
@@ -1134,99 +1022,6 @@ func _physics_process(delta: float) -> void:
 	if _animator and _animator.has_method("update_state"):
 		_animator.update_state(velocity, aim_direction)
 
-func _handle_input() -> void:
-	if dashing:
-		return
-	
-	var input_dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
-	
-	# Dash input - only on press
-	if Input.is_action_just_pressed("dash"):
-		if _movement:
-			_movement.try_dash(input_dir if input_dir.length() > 0 else aim_direction)
-	
-	# Running - holding dash key while not dashing (will also start after dash ends while held)
-	if _movement:
-		if Input.is_action_pressed("dash") and not dashing:
-			_movement.set_running(true)
-		elif not Input.is_action_pressed("dash"):
-			_movement.set_running(false)
-	
-	# Burst is handled exclusively in _input(event) to prevent duplicate triggers.
-
-func _update_aim() -> void:
-	# Controller aim
-	var stick_aim := Input.get_vector("aim_left", "aim_right", "aim_up", "aim_down")
-	if stick_aim.length() > 0.3:
-		_using_controller = true
-		aim_direction = stick_aim.normalized()
-		aim_direction = _apply_aim_assist(aim_direction)
-	elif not _using_controller:
-		# Mouse aim
-		var mouse_pos := get_global_mouse_position()
-		aim_direction = (mouse_pos - global_position).normalized()
-	
-	if aim_direction == Vector2.ZERO:
-		aim_direction = Vector2.RIGHT
-
-	# Animator state is updated in _physics_process via update_state()
-
-
-func _handle_attacks(aim_direction: Vector2, _delta: float) -> void:
-	if not _current_controller:
-		return
-	
-	# Check if Kilo burst mode is active for automatic fire
-	var is_kilo_burst: bool = _current_controller is KiloController and _current_controller.burst_active
-	
-	
-	# Use get_is_automatic() from controller base class instead of hardcoded checks
-	var is_auto_fire: bool = false
-	if _current_controller.has_method("get_is_automatic"):
-		is_auto_fire = _current_controller.get_is_automatic()
-	else:
-		# Fallback for old controllers? Shouldn't happen if base class updated
-		is_auto_fire = _current_controller is CommanderController or _current_controller is SinController or _current_controller is CecilController or _current_controller is CrownController or _current_controller is MarianController or _current_controller is NayutaController
-	
-	# Primary attack - during Kilo burst or auto-fire weapons: continuous while holding, no stamina cost
-	var wants_attack := false
-	
-	# Block attacks if mouse is hovering over music player UI
-	if MusicPlayerUIScript.is_mouse_over():
-		wants_attack = false
-	elif is_kilo_burst or is_auto_fire:
-		wants_attack = Input.is_action_pressed("attack")
-	else:
-		wants_attack = Input.is_action_just_pressed("attack")
-	
-	var can_fire := wants_attack and attack_timer <= 0
-	
-	# Debug attack logic (temporary)
-	# if wants_attack:
-	# 	print("[PlayerCore] Attack requested. Timer: %.3f, Stamina: %.1f, CanFire: %s" % [attack_timer, stamina, can_fire])
-	
-	if not is_kilo_burst and not is_auto_fire:
-		can_fire = can_fire and stamina >= attack_stamina_cost
-	
-	if can_fire:
-		if _current_controller.attack(aim_direction):
-			if not is_kilo_burst and not is_auto_fire:
-				stamina -= attack_stamina_cost
-			
-# Combat juice (no camera shake for regular attacks)
-			
-			# Set cooldown based on controller
-			if _current_controller.has_method("get_attack_cooldown"):
-				attack_timer = _current_controller.get_attack_cooldown()
-			else:
-				attack_timer = attack_cooldown
-	
-	# Special attack (thrust)
-	if Input.is_action_just_pressed("thrust") and attack_timer <= 0 and stamina >= attack_stamina_cost:
-		if _current_controller.use_special(aim_direction):
-			stamina -= attack_stamina_cost
-			attack_timer = attack_cooldown
-
 func _on_dash_started() -> void:
 	invincible = true
 	# Notify camera for juicy lag effect
@@ -1237,94 +1032,14 @@ func _on_dash_started() -> void:
 func _on_dash_ended() -> void:
 	invincible = false
 
-func _input(event: InputEvent) -> void:
-	# Delegate device detection to InputManager (which updates is_controller property)
-	# But keep local listener for burst/switch if not handled by manager globally
-	# If input manager handles buffering, we still need to buffer here? 
-	# No, InputManager._input handles buffering global inputs.
-	if shop_open:
-		return
 
-	# Detect mouse usage to switch aim mode - lower threshold to catch subtle movements
-	if event is InputEventMouseMotion and event.relative.length_squared() > 0.01:
-		_using_controller = false
-
-	# Burst activation via controller button (Y/Triangle)
-	if event.is_action_pressed("burst") and not event.is_echo():
-		_attempt_burst_activation()
-
-	# Keyboard inputs
-	if event is InputEventKey and event.pressed and not event.echo:
-		match event.keycode:
-			KEY_E:
-				_attempt_burst_activation()
-			KEY_R:
-				_try_manual_reload()
-
-	# Skill tree via remappable action
-	if event.is_action_pressed("show_talent_tree") and not event.is_echo():
-		_show_talent_tree()
-
-
-func _try_manual_reload() -> void:
-	# Allow player to manually reload with R key
-	if not _current_controller:
-		return
-	
-	# Delegate reload to controller if it supports it
-	if _current_controller.has_method("manual_reload"):
-		_current_controller.manual_reload()
-		_update_overhead_ammo()
-
-## Get the run's talent tree, creating it (hidden) if it doesn't exist yet.
-## Pre-created at run start so opening on level-up has no load stutter.
+# Talent tree management is delegated to PlayerTalentBridge; thin wrappers
+# kept because internal call sites use these names.
 func _ensure_talent_tree() -> Control:
-	var canvas = get_parent().get_node_or_null("CanvasLayer")
-	if canvas == null:
-		canvas = get_tree().root
-
-	var existing = canvas.get_node_or_null("TalentTree")
-	if existing:
-		return existing
-
-	# Create new talent tree using preload for proper initialization
-	var TalentTreeScript = preload("res://scripts/ui/TalentTree.gd")
-	var tree = TalentTreeScript.new()
-	tree.name = "TalentTree"
-
-	# For Controls in CanvasLayer, we need to set anchors properly
-	tree.anchor_left = 0.0
-	tree.anchor_top = 0.0
-	tree.anchor_right = 1.0
-	tree.anchor_bottom = 1.0
-	tree.offset_left = 0.0
-	tree.offset_top = 0.0
-	tree.offset_right = 0.0
-	tree.offset_bottom = 0.0
-
-	canvas.add_child(tree)
-
-	# Connect signals
-	tree.talent_unlocked.connect(_on_talent_unlocked)
-	tree.tree_closed.connect(_on_talent_tree_closed)
-
-	# Run-only points: start with whatever progression has banked (usually 0)
-	tree.set_skill_points(_progression.get_skill_points() if _progression else 0)
-	return tree
+	return _talent_bridge.ensure_tree()
 
 func _show_talent_tree() -> void:
-	var tree := _ensure_talent_tree()
-	if tree == null:
-		return
-
-	# Hide skill points notification while tree is open
-	if _skill_points_notify and is_instance_valid(_skill_points_notify):
-		_skill_points_notify.show_notification(-1) # -1 = hide
-
-	tree.show_tree(self)
-	shop_open = true
-	if get_parent().has_method("set_game_paused"):
-		get_parent().call_deferred("set_game_paused", true)
+	_talent_bridge.show_tree()
 
 func get_low_hp_damage_multiplier() -> float:
 	## Wrapper to get damage multiplier from current controller (for UI stats)
@@ -1337,35 +1052,3 @@ func _exit_tree() -> void:
 	if _current_controller and _current_controller.has_method("cleanup"):
 		_current_controller.cleanup()
 
-
-## Apply subtle aim assist for controller users - pulls aim toward nearby enemies
-func _apply_aim_assist(base_aim: Vector2) -> Vector2:
-	if not _using_controller:
-		return base_aim
-	
-	var best_target: Node2D = null
-	var best_score: float = 0.0
-	
-	# Find best target in cone
-	for enemy in TargetCache.get_enemies():
-		if not is_instance_valid(enemy):
-			continue
-		var to_enemy: Vector2 = enemy.global_position - global_position
-		var dist: float = to_enemy.length()
-		if dist > AIM_ASSIST_RANGE or dist < 10:
-			continue
-		
-		var angle_diff: float = rad_to_deg(absf(base_aim.angle_to(to_enemy.normalized())))
-		if angle_diff > AIM_ASSIST_ANGLE:
-			continue
-		
-		# Score: closer + more aligned = better
-		var score: float = (1.0 - dist / AIM_ASSIST_RANGE) * (1.0 - angle_diff / AIM_ASSIST_ANGLE)
-		if score > best_score:
-			best_score = score
-			best_target = enemy
-	
-	if best_target:
-		var target_aim: Vector2 = (best_target.global_position - global_position).normalized()
-		return base_aim.lerp(target_aim, AIM_ASSIST_STRENGTH * best_score)
-	return base_aim

@@ -109,7 +109,7 @@ func _update_background_style() -> void:
 	if not style or not style is StyleBoxFlat:
 		style = StyleBoxFlat.new()
 		style.set_border_width_all(2)
-		style.set_corner_radius_all(4)
+		style.set_corner_radius_all(0)
 	style.bg_color = bg_color
 	style.border_color = border_color
 	_background.add_theme_stylebox_override("panel", style)

@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SOV Leaderboard — Round 2 (hybrids)</title>
+<style>
+  :root{
+    --cyan:#35C5F2; --cyan-deep:#1F8FE0; --yellow:#FFD23F; --red:#E8392E;
+    --gold:#F8A33B; --muted:#97A0AC;
+    --admin-bg:#EDEFF2; --admin-hair:#D8DCE1; --admin-text:#2A2E35; --admin-dim:#8A9099;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#070a0e; color:#F0F4F8;
+    font-family:"Pretendard","Segoe UI",system-ui,sans-serif; padding:40px;}
+  h1{font-family:"Arial Narrow",sans-serif; font-size:32px; font-style:italic;
+    text-transform:uppercase; margin-bottom:4px;}
+  h2{font-family:"Arial Narrow",sans-serif; font-size:24px; font-style:italic;
+    text-transform:uppercase; margin:46px 0 4px;}
+  .sub{color:var(--muted); text-transform:uppercase; letter-spacing:.25em; font-size:12px;
+    margin-bottom:18px;}
+
+  .stage{position:relative; width:1280px; height:720px; overflow:hidden;
+    background:var(--admin-bg); border:1px solid #2a3340; margin-bottom:10px;
+    color:var(--admin-text);}
+  .scan{position:absolute; inset:0; pointer-events:none; z-index:50; opacity:.4;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px);}
+
+  .hdr{position:absolute; left:44px; top:24px; z-index:5;}
+  .hdr .t{font-family:"Arial Narrow",sans-serif; font-weight:800; font-style:italic; font-size:40px;}
+  .hdr .s{font-size:12px; letter-spacing:.3em; text-transform:uppercase; color:var(--admin-dim); margin-top:2px;}
+  .hdr .bar{width:54px; height:3px; background:var(--cyan); margin-top:8px;}
+  .topright{position:absolute; right:24px; top:22px; display:flex; gap:12px; z-index:5;}
+  .backchip{display:flex; align-items:center; height:38px; padding:0 18px;
+    transform:skewX(-6deg); background:#fff; color:var(--admin-text);
+    box-shadow:0 1px 4px rgba(0,0,0,.18); font-weight:800; font-size:14px; cursor:pointer;}
+  .backchip span{transform:skewX(6deg);}
+  .greeble{position:absolute; left:46px; bottom:20px; display:flex; align-items:center;
+    gap:14px; opacity:.35; font-size:9px; letter-spacing:.22em; font-weight:700; z-index:4;}
+  .greeble .bars{display:flex; gap:2px; align-items:flex-end;}
+  .greeble .bars i{display:block; width:2px; background:#2A2E35;}
+
+  .gfchip{font-size:10px; font-weight:800; letter-spacing:.1em; color:#fff; background:var(--red);
+    padding:3px 8px; clip-path:polygon(0 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%);}
+
+  /* detail pane (shared) */
+  .detail{position:absolute; right:36px; top:128px; width:360px; bottom:60px; z-index:3;
+    padding:24px 28px; display:flex; flex-direction:column;
+    background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.16);}
+  .detail .dpic{width:100%; height:210px; flex:none; overflow:hidden; margin-bottom:14px;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%); background:#1a212b;}
+  .detail .dpic img{width:100%; height:100%; object-fit:cover; object-position:50% 14%;}
+  .detail .dn{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:34px;}
+  .detail .dr{font-size:11px; letter-spacing:.24em; font-weight:800; color:var(--cyan-deep);
+    text-transform:uppercase; margin-bottom:12px;}
+  .detail .kv{display:flex; justify-content:space-between; align-items:baseline; padding:9px 0;
+    border-bottom:1px solid var(--admin-hair); font-size:13px;}
+  .detail .kv b{font-family:"Arial Narrow"; font-style:italic; font-size:22px;}
+  .detail .gfband{margin-top:auto; visibility:hidden; display:flex; align-items:center; gap:10px;
+    padding:10px 14px; border:1px solid rgba(232,57,46,.55); color:#c4271c; font-size:12px;
+    font-weight:800; letter-spacing:.14em; background:rgba(232,57,46,.06);}
+  .detail .gfband.show{visibility:visible;}
+  .detail .nodata{display:none; font-size:14px; color:var(--admin-dim); font-weight:700;
+    text-align:center; margin-top:30px; letter-spacing:.1em;}
+
+  /* ============ D: podium + rows + detail ============ */
+  #vD .podium{position:absolute; left:44px; top:128px; width:830px; display:flex; gap:14px; z-index:3;}
+  #vD .pcard{flex:1; background:#fff; box-shadow:0 1px 6px rgba(0,0,0,.15); cursor:pointer;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%);
+    position:relative; padding-bottom:12px;}
+  #vD .pcard .prank{position:absolute; left:10px; top:4px; font-family:"Arial Narrow"; z-index:2;
+    font-weight:800; font-style:italic; font-size:40px; color:#fff; text-shadow:0 2px 8px rgba(0,0,0,.6);}
+  #vD .pcard img{width:100%; height:150px; object-fit:cover; object-position:50% 12%; display:block;}
+  #vD .pcard .pn{font-weight:800; font-size:15px; padding:8px 12px 0;}
+  #vD .pcard .ps{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:27px; padding:0 12px;}
+  #vD .pcard .pw{font-size:11px; font-weight:800; color:var(--cyan-deep); padding:0 12px;}
+  #vD .pcard.g1::before{content:""; position:absolute; inset:0 0 auto 0; height:4px; background:var(--gold); z-index:2;}
+  #vD .pcard.g2::before{content:""; position:absolute; inset:0 0 auto 0; height:4px; background:#aab4c0; z-index:2;}
+  #vD .pcard.g3::before{content:""; position:absolute; inset:0 0 auto 0; height:4px; background:#c98a4b; z-index:2;}
+  #vD .pcard .gfchip{position:absolute; right:8px; top:8px;}
+  #vD .pcard.sel{outline:2px solid var(--yellow); outline-offset:2px;}
+  #vD .rows{position:absolute; left:44px; top:418px; width:830px; bottom:56px; z-index:3;
+    display:flex; flex-direction:column; gap:7px; overflow:hidden;}
+  .lrow{position:relative; display:flex; align-items:center; cursor:pointer; height:50px;
+    background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.12);}
+  .lrow .rank{width:64px; text-align:center; font-family:"Arial Narrow"; font-weight:800;
+    font-style:italic; font-size:22px; color:var(--admin-dim); flex:none;}
+  .lrow .pic{width:38px; height:38px; flex:none; overflow:hidden; background:#222a34;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%);}
+  .lrow .pic img{width:100%; height:100%; object-fit:cover; object-position:top;}
+  .lrow .nm{flex:1; font-weight:800; font-size:15px; padding-left:14px;}
+  .lrow .gfchip{flex:none; margin-right:10px;}
+  .lrow .score{width:120px; text-align:right; font-family:"Arial Narrow"; font-weight:800;
+    font-style:italic; font-size:21px; flex:none;}
+  .lrow .wave{width:92px; text-align:right; font-weight:800; font-size:13px; flex:none;
+    color:var(--cyan-deep); padding-right:16px;}
+  .lrow.sel{outline:2px solid var(--yellow); outline-offset:2px;}
+  .lrow.sel::before{content:""; position:absolute; left:0; top:0; bottom:0; width:4px;
+    background:var(--yellow); z-index:1;}
+
+  /* ============ E: full character gallery ============ */
+  #vE .grid{position:absolute; left:44px; top:128px; width:830px; bottom:40px; z-index:3;
+    display:flex; flex-wrap:wrap; gap:12px; align-content:flex-start;}
+  #vE .gcard{position:relative; width:198px; height:170px; background:#fff; cursor:pointer;
+    box-shadow:0 1px 5px rgba(0,0,0,.14);
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%);}
+  #vE .gcard img{width:100%; height:96px; object-fit:cover; object-position:50% 10%; display:block;}
+  #vE .gcard .grank{position:absolute; left:8px; top:0; font-family:"Arial Narrow"; z-index:2;
+    font-weight:800; font-style:italic; font-size:28px; color:#fff; text-shadow:0 2px 8px rgba(0,0,0,.65);}
+  #vE .gcard .grank.top{color:#fff;}
+  #vE .gcard .gfchip{position:absolute; right:6px; top:6px;}
+  #vE .gcard .gn{font-weight:800; font-size:12px; padding:5px 11px 0;}
+  #vE .gcard .gs{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:21px; padding:0 11px;}
+  #vE .gcard .gw{font-size:10px; font-weight:800; color:var(--cyan-deep); padding:0 11px;}
+  #vE .gcard.nodata img{filter:grayscale(1) brightness(.55);}
+  #vE .gcard.nodata .gs{color:var(--admin-dim); font-size:14px; padding-top:3px;}
+  #vE .gcard.sel{outline:2px solid var(--yellow); outline-offset:2px;}
+  #vE .gcard.sel::after{content:""; position:absolute; left:0; top:0; bottom:0; width:4px;
+    background:var(--yellow);}
+</style>
+</head>
+<body>
+
+<h1>Leaderboard — Round 2 · hybrids</h1>
+<div class="sub">No damage breakdown (squad system gone) · no summary strip · detail pane always visible · click everything</div>
+
+<!-- ============ D ============ -->
+<h2>D — “Podium + Records” · B's hero cards + A's detail pane</h2>
+<div class="sub">Top 3 as burst-art cards, ranks 4–10 as rows, click anything → detail pane right.</div>
+<div class="stage" id="vD">
+  <div class="hdr"><div class="t">LEADERBOARDS</div><div class="s">SERVICE RECORDS // BEST SORTIES</div><div class="bar"></div></div>
+  <div class="topright"><div class="backchip"><span>← BACK</span></div></div>
+  <div class="podium"></div>
+  <div class="rows"></div>
+  <div class="detail">
+    <div class="dpic"><img src=""></div>
+    <div class="dn">SNOW WHITE</div>
+    <div class="dr">RANK 01 // BEST SORTIE</div>
+    <div class="kv"><span>SCORE</span><b class="dscore">11,341,202</b></div>
+    <div class="kv"><span>WAVE REACHED</span><b class="dwave">32</b></div>
+    <div class="kv"><span>DIFFICULTY</span><b class="ddiff">×5</b></div>
+    <div class="kv"><span>DATE</span><b class="ddate" style="font-size:15px;">2026-06-08</b></div>
+    <div class="gfband">☠ GODDESS FALL RUN</div>
+  </div>
+  <div class="greeble"><div class="bars"></div><span>SERVICE RECORDS // ARK SYS V2.4</span></div>
+  <div class="scan"></div>
+</div>
+
+<!-- ============ E ============ -->
+<h2>E — “Operator Gallery” · podium card for EVERY character, best run each</h2>
+<div class="sub">All 11 operators as ranked cards (4-col grid, like character select); no-data operators grayed. Click → that character's best run in the pane.</div>
+<div class="stage" id="vE">
+  <div class="hdr"><div class="t">LEADERBOARDS</div><div class="s">SERVICE RECORDS // BEST RUN PER OPERATOR</div><div class="bar"></div></div>
+  <div class="topright"><div class="backchip"><span>← BACK</span></div></div>
+  <div class="grid"></div>
+  <div class="detail">
+    <div class="dpic"><img src=""></div>
+    <div class="dn">SNOW WHITE</div>
+    <div class="dr">RANK 01 // BEST SORTIE</div>
+    <div class="kvs">
+      <div class="kv"><span>SCORE</span><b class="dscore">11,341,202</b></div>
+      <div class="kv"><span>WAVE REACHED</span><b class="dwave">32</b></div>
+      <div class="kv"><span>DIFFICULTY</span><b class="ddiff">×5</b></div>
+      <div class="kv"><span>DATE</span><b class="ddate" style="font-size:15px;">2026-06-08</b></div>
+    </div>
+    <div class="nodata">NO SORTIES RECORDED YET</div>
+    <div class="gfband">☠ GODDESS FALL RUN</div>
+  </div>
+  <div class="greeble"><div class="bars"></div><span>SERVICE RECORDS // ARK SYS V2.4</span></div>
+  <div class="scan"></div>
+</div>
+
+<script>
+const E=[
+ {n:"SNOW WHITE", c:"snow-white", s:11341202, w:32, d:5, gf:true,  date:"2026-06-08"},
+ {n:"SCARLET", c:"scarlet", s:8920441, w:28, d:5, gf:false, date:"2026-06-10"},
+ {n:"KILO", c:"kilo", s:2401833, w:21, d:3, gf:false, date:"2026-06-05"},
+ {n:"MARIAN", c:"marian", s:1780020, w:19, d:2, gf:true, date:"2026-06-11"},
+ {n:"WELLS", c:"wells", s:980770, w:15, d:2, gf:false, date:"2026-06-02"},
+ {n:"RAPUNZEL", c:"rapunzel", s:740112, w:14, d:1, gf:false, date:"2026-05-30"},
+ {n:"COMMANDER", c:"commander", s:388045, w:12, d:1, gf:false, date:"2026-05-28"},
+ {n:"CECIL", c:"cecil", s:102230, w:9, d:1, gf:false, date:"2026-05-26"},
+ {n:"SIN", c:"sin", s:54210, w:7, d:1, gf:false, date:"2026-05-25"},
+ {n:"NAYUTA", c:"nayuta", s:12800, w:4, d:1, gf:false, date:"2026-05-24"},
+ {n:"CROWN", c:"crown", s:0, w:0, d:0, gf:false, date:""},
+];
+const img=c=>`../../assets/characters/${c}/portrait-sq.png`;
+const burst=c=>`../../assets/characters/${c}/burst.png`;
+const fmt=v=>v>=1e9?(v/1e9).toFixed(2)+"B":v>=1e6?(v>=1e7?(v/1e6).toFixed(1):(v/1e6).toFixed(2))+"M":
+  v>=1e3?(v>=1e5?Math.round(v/1e3):(v/1e3).toFixed(1))+"K":""+v;
+const full=v=>v.toString().replace(/\B(?=(\d{3})+(?!\d))/g,",");
+
+document.querySelectorAll(".greeble .bars").forEach(b=>{
+  for(let i=0;i<46;i++){const x=document.createElement("i");
+    x.style.height=(6+Math.random()*10)+"px"; x.style.width=(Math.random()<.3?"3":"1.5")+"px";
+    b.appendChild(x);}});
+
+function fillDetail(root,e,i){
+  const has=e.s>0;
+  root.querySelector(".dpic img").src=burst(e.c);
+  root.querySelector(".dn").textContent=e.n;
+  root.querySelector(".dr").textContent=has?`RANK ${String(i+1).padStart(2,"0")} // BEST SORTIE`:"UNRANKED";
+  root.querySelectorAll(".kv").forEach(k=>k.style.display=has?"flex":"none");
+  const nd=root.querySelector(".nodata"); if(nd)nd.style.display=has?"none":"block";
+  if(has){
+    root.querySelector(".dscore").textContent=full(e.s);
+    root.querySelector(".dwave").textContent=e.w;
+    root.querySelector(".ddiff").textContent="×"+e.d;
+    root.querySelector(".ddate").textContent=e.date;
+  }
+  root.querySelector(".gfband").classList.toggle("show",has&&e.gf);
+}
+
+/* D */
+(()=>{
+  const root=document.getElementById("vD"), pod=root.querySelector(".podium"),
+    rows=root.querySelector(".rows");
+  const sels=[];
+  function select(i){
+    sels.forEach((el,j)=>el.classList.toggle("sel",j===i));
+    fillDetail(root,E[i],i);
+  }
+  E.slice(0,3).forEach((e,i)=>{
+    const c=document.createElement("div"); c.className="pcard g"+(i+1);
+    c.innerHTML=`<div class="prank">${i+1}</div>${e.gf?'<div class="gfchip">☠ GODDESS</div>':""}
+      <img src="${burst(e.c)}">
+      <div class="pn">${e.n}</div><div class="ps">${fmt(e.s)}</div>
+      <div class="pw">×${e.d} · WAVE ${e.w}</div>`;
+    c.addEventListener("click",()=>select(i));
+    pod.appendChild(c); sels.push(c);
+  });
+  E.slice(3,10).forEach((e,k)=>{
+    const i=k+3;
+    const r=document.createElement("div"); r.className="lrow";
+    r.innerHTML=`<div class="rank">${String(i+1).padStart(2,"0")}</div>
+      <div class="pic"><img src="${img(e.c)}"></div>
+      <div class="nm">${e.n}</div>
+      ${e.gf?'<div class="gfchip">☠ GODDESS</div>':""}
+      <div class="score">${fmt(e.s)}</div>
+      <div class="wave">×${e.d} · W${e.w}</div>`;
+    r.addEventListener("click",()=>select(i));
+    rows.appendChild(r); sels.push(r);
+  });
+  select(0);
+})();
+
+/* E */
+(()=>{
+  const root=document.getElementById("vE"), grid=root.querySelector(".grid");
+  const cards=[];
+  function select(i){
+    cards.forEach((el,j)=>el.classList.toggle("sel",j===i));
+    fillDetail(root,E[i],i);
+  }
+  E.forEach((e,i)=>{
+    const has=e.s>0;
+    const c=document.createElement("div"); c.className="gcard"+(has?"":" nodata");
+    c.innerHTML=`<div class="grank${i<3&&has?" top":""}">${has?String(i+1).padStart(2,"0"):"--"}</div>
+      ${e.gf?'<div class="gfchip">☠</div>':""}
+      <img src="${burst(e.c)}">
+      <div class="gn">${e.n}</div>
+      <div class="gs">${has?fmt(e.s):"NO DATA"}</div>
+      <div class="gw">${has?`×${e.d} · WAVE ${e.w}`:"&nbsp;"}</div>`;
+    c.addEventListener("click",()=>select(i));
+    grid.appendChild(c); cards.push(c);
+  });
+  select(0);
+})();
+</script>
+</body>
+</html>

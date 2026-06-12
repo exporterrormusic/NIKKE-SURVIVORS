@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SOV Character Select — Round 5 (INTERACTIVE: click the cards!)</title>
+<style>
+  :root{
+    --bg-deep:#0E1116; --cyan:#35C5F2; --cyan-deep:#1F8FE0; --yellow:#FFD23F; --red:#E8392E;
+    --text:#F0F4F8; --muted:#97A0AC;
+    --admin-bg:#EDEFF2; --admin-hair:#D8DCE1; --admin-text:#2A2E35; --admin-dim:#8A9099;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#070a0e; color:var(--text);
+    font-family:"Pretendard","Segoe UI",system-ui,sans-serif; padding:40px;}
+  h1{font-family:"Arial Narrow",sans-serif; font-size:32px; font-style:italic;
+    text-transform:uppercase; margin-bottom:4px;}
+  .sub{color:var(--muted); text-transform:uppercase; letter-spacing:.25em; font-size:12px;
+    margin-bottom:30px;}
+  h2{font-family:"Arial Narrow",sans-serif; font-size:21px; font-style:italic;
+    text-transform:uppercase; margin:44px 0 6px; border-left:4px solid var(--cyan); padding-left:12px;}
+  .note{color:var(--muted); font-size:14px; margin-bottom:14px; max-width:940px; line-height:1.5;}
+
+  .stage{position:relative; width:1280px; height:720px; overflow:hidden;
+    background:var(--bg-deep); border:1px solid #2a3340; margin-bottom:10px;}
+  .scan{position:absolute; inset:0; pointer-events:none; z-index:50;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,.02) 0 1px, transparent 1px 4px);}
+
+  /* per-character tint overlay */
+  .tint{position:absolute; inset:0; z-index:0; transition:background-color .6s ease;}
+
+  /* diagonal strip hero with entrance + perpetual drift */
+  .heroclip{position:absolute; left:500px; width:460px; top:-10px; height:740px; z-index:1;
+    clip-path:polygon(22% 0, 100% 0, 78% 100%, 0 100%); overflow:hidden;}
+  .heroslide{width:100%; height:100%; transform:translateX(110%);}
+  .heroslide.in{transition:transform .5s cubic-bezier(.16,1,.3,1); transform:translateX(0);}
+  .herodrift{width:100%; height:100%; animation:drift 15s ease-in-out infinite alternate;}
+  @keyframes drift{from{transform:translateX(16px);} to{transform:translateX(-16px);}}
+  .heroimg{width:100%; height:100%; object-fit:cover; filter:saturate(.9) brightness(.92);
+    transform:scale(1.06);}
+  .herovig{position:absolute; inset:0;
+    background:linear-gradient(180deg, rgba(14,17,22,.3), transparent 30%, transparent 70%, rgba(14,17,22,.4));}
+  .edgeline{position:absolute; top:-10px; width:2px; height:740px; z-index:2;
+    background:linear-gradient(180deg, rgba(120,200,255,0), rgba(120,200,255,.55), rgba(120,200,255,0));
+    transform:skewX(-7.5deg); pointer-events:none;}
+
+  .hdr{position:absolute; left:44px; top:24px; z-index:5;}
+  .hdr .t{font-family:"Arial Narrow",sans-serif; font-weight:800; font-style:italic; font-size:40px;}
+  .hdr .s{font-size:12px; letter-spacing:.3em; text-transform:uppercase;}
+  .hdr .bar{width:54px; height:3px; background:var(--cyan); margin-top:8px;}
+  .topright{position:absolute; right:24px; top:22px; display:flex; gap:12px; z-index:5;}
+  .pill{display:flex; align-items:center; gap:8px; padding:6px 14px 6px 10px;
+    font-size:14px; font-weight:700; height:38px;}
+  .pill .gem{color:#ff4d4d;} .pill .plus{color:var(--cyan); font-weight:800;}
+  .backchip{display:flex; align-items:center; height:38px; padding:0 18px;
+    transform:skewX(-6deg); font-weight:800; font-size:14px;}
+  .backchip span{transform:skewX(6deg);}
+
+  /* grid: resized so bottom row clears the screen edge */
+  .grid{position:absolute; left:44px; top:118px; z-index:3; display:flex; flex-wrap:wrap;}
+  .g4 .grid{width:476px; gap:12px;}           /* 4 cols of 110px */
+  .g4 .ccard{width:110px; height:172px;}
+  .g4 .ccard img{height:134px;}
+  .g5 .grid{width:540px; gap:11px;}           /* 5 cols of 99px */
+  .g5 .ccard{width:99px; height:156px;}
+  .g5 .ccard img{height:120px;}
+
+  .ccard{position:relative; cursor:pointer; flex:none;}
+  .ccard .frame{position:absolute; inset:0; overflow:hidden;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%);}
+  .ccard img{width:100%; object-fit:cover; display:block; background:#222a34;}
+  .ccard .nm{position:absolute; left:0; right:0; bottom:0; height:34px; display:flex;
+    align-items:center; justify-content:center; font-size:11.5px; font-weight:800;
+    letter-spacing:.03em; text-transform:uppercase;}
+  .ccard .wpn{position:absolute; top:4px; left:4px; font-size:9px; font-weight:800;
+    background:rgba(0,0,0,.7); color:#fff; padding:2px 6px; letter-spacing:.1em;}
+  .ccard.locked img{filter:grayscale(1) brightness(.45);}
+  .ccard.locked .cost{position:absolute; top:48%; left:0; right:0; text-align:center;
+    transform:translateY(-50%); font-weight:800;}
+  .ccard.locked .cost .gem{color:#ff4d4d; font-size:14px;}
+  .ccard.locked .cost .n{color:#fff; font-size:17px; margin-left:4px;}
+  .ccard.locked .cost .u{display:block; font-size:8px; letter-spacing:.16em; color:#ffd23f; margin-top:2px;}
+  .ccard.sel .frame{outline:2px solid var(--yellow); outline-offset:2px;}
+  .ccard.sel::before,.ccard.sel::after{content:""; position:absolute; width:14px; height:14px;
+    border:3px solid var(--yellow); z-index:3;}
+  .ccard.sel::before{top:-6px; left:-6px; border-right:none; border-bottom:none;}
+  .ccard.sel::after{bottom:-6px; right:-6px; border-left:none; border-top:none;}
+  /* RANDOM slot: solid */
+  .ccard.random .frame{display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:6px; background:linear-gradient(180deg,#1d6e8c,#14506b);
+    border:1px solid rgba(120,210,247,.7);}
+  .ccard.random .q{font-size:38px; font-weight:800; color:#fff;}
+  .ccard.random .r{font-size:11px; font-weight:800; letter-spacing:.14em; color:#d6f1fd;}
+
+  .dark .ccard .frame{background:#161c25; border:1px solid rgba(255,255,255,.12);}
+  .dark .ccard .nm{background:rgba(0,0,0,.78); color:#e8eef4;}
+  .dark .pill{background:rgba(0,0,0,.55); color:#fff;}
+  .dark .backchip{background:rgba(0,0,0,.55); color:#fff;}
+  .light .ccard .frame{background:#fff; box-shadow:0 1px 5px rgba(0,0,0,.16); border:none;}
+  .light .ccard .nm{background:#fff; color:var(--admin-text);}
+  .light .pill{background:#fff; color:var(--admin-text); box-shadow:0 1px 4px rgba(0,0,0,.18);}
+  .light .backchip{background:#fff; color:var(--admin-text); box-shadow:0 1px 4px rgba(0,0,0,.18);}
+  .light .ccard.random .frame{background:linear-gradient(180deg,#2DA8E8,#1F8FE0); border:none;}
+
+  /* detail panel with quick swap animation */
+  .detail{position:absolute; right:36px; top:118px; width:350px; bottom:44px; z-index:3;
+    padding:24px 26px; display:flex; flex-direction:column;
+    transform:translateX(0); opacity:1;
+    transition:transform .22s cubic-bezier(.16,1,.3,1), opacity .22s;}
+  .detail.out{transform:translateX(48px); opacity:0; transition-duration:.16s;}
+  .detail .nm{font-family:'Arial Narrow'; font-weight:800; font-style:italic; font-size:40px;}
+  .detail .role{font-size:13px; letter-spacing:.2em; text-transform:uppercase; margin-top:2px;}
+  .statrow{display:flex; align-items:center; gap:10px; font-size:14px; font-weight:700; margin-bottom:9px;}
+  .statrow .k{width:46px;} .statrow .v{width:36px; text-align:right;}
+  .statrow .bar{flex:1; height:9px; position:relative; background:rgba(128,140,155,.28);}
+  .statrow .bar i{position:absolute; inset:0 auto 0 0; display:block;}
+  .sk{margin-top:14px;}
+  .sk .t{font-size:15px; font-weight:800;}
+  .sk .d{font-size:13.5px; line-height:1.5; margin-top:4px;}
+  .cta{display:flex; align-items:center; justify-content:center; height:56px;
+    background:linear-gradient(180deg,#5BD2F7,#1F8FE0); border-bottom:3px solid #15679f;
+    color:#fff; font-weight:800; font-size:20px; font-style:italic; cursor:pointer;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%);}
+</style>
+</head>
+<body>
+
+<h1>Character Select — Round 5 · INTERACTIVE</h1>
+<div class="sub">Click the character cards — panel swap, art slide, tint shift all animate live</div>
+
+<p class="note"><b>What's new:</b> art slides in from off-screen right then drifts ±16px on a
+15s ease-in-out loop · background tint shifts to each character's theme color · detail panel
+and art do a &lt;0.4s out/in swap on every click · grid resized so the bottom row clears the
+screen edge (dark = 4-column, light = 5-column — two sizing variations to compare) ·
+RANDOM is a solid slot · weapon tags now match the registry (Sin = SMG etc.).</p>
+
+<!-- ====================== DARK ====================== -->
+<h2>R5-DARK · 4-column grid</h2>
+<div class="stage dark g4" id="stage-dark">
+  <div class="tint"></div>
+  <div class="heroclip"><div class="heroslide"><div class="herodrift">
+    <img class="heroimg" src=""><div class="herovig"></div>
+  </div></div></div>
+  <div class="edgeline" style="left:594px;"></div>
+  <div class="edgeline" style="left:866px;"></div>
+
+  <div class="hdr" style="color:#fff;"><div class="t">CHARACTERS</div>
+    <div class="s" style="color:var(--muted);">SELECT YOUR NIKKE // SQUAD FILE</div><div class="bar"></div></div>
+  <div class="topright"><div class="backchip"><span>← BACK</span></div>
+    <div class="pill"><span class="gem">◆</span> 43 <span class="plus">+</span></div></div>
+
+  <div class="grid"></div>
+
+  <div class="detail" style="background:rgba(8,11,16,.72); border:1px solid rgba(90,160,200,.3); backdrop-filter:blur(2px); color:#fff;">
+    <div class="nm"></div>
+    <div class="role" style="color:var(--cyan);"></div>
+    <div style="margin-top:14px;" class="stats"></div>
+    <div style="height:1px; background:rgba(255,255,255,.14); margin:14px 0;"></div>
+    <div class="sk"><div class="t" style="color:#ffb45e;">⚡ SPECIAL — <span class="spn"></span></div>
+      <div class="d" style="color:#bcc6d2;">Placeholder special description — real text comes from the registry.</div></div>
+    <div class="sk"><div class="t" style="color:#b08aff;">✦ BURST — <span class="bn"></span></div>
+      <div class="d" style="color:#bcc6d2;">Placeholder burst description — real text comes from the registry.</div></div>
+    <div style="flex:1;"></div>
+    <div class="cta">▶ DEPLOY — SELECT STAGE</div>
+  </div>
+  <div class="scan"></div>
+</div>
+
+<!-- ====================== LIGHT ====================== -->
+<h2>R5-LIGHT · 5-column grid</h2>
+<div class="stage light g5" id="stage-light" style="background:var(--admin-bg);">
+  <div class="tint"></div>
+  <div class="heroclip"><div class="heroslide"><div class="herodrift">
+    <img class="heroimg" src=""><div class="herovig"></div>
+  </div></div></div>
+  <div class="edgeline" style="left:594px; background:linear-gradient(180deg, rgba(31,143,224,0), rgba(31,143,224,.5), rgba(31,143,224,0));"></div>
+  <div class="edgeline" style="left:866px; background:linear-gradient(180deg, rgba(31,143,224,0), rgba(31,143,224,.5), rgba(31,143,224,0));"></div>
+
+  <div class="hdr" style="color:var(--admin-text);"><div class="t">CHARACTERS</div>
+    <div class="s" style="color:var(--admin-dim);">SELECT YOUR NIKKE // SQUAD FILE</div><div class="bar"></div></div>
+  <div class="topright"><div class="backchip"><span>← BACK</span></div>
+    <div class="pill"><span class="gem">◆</span> 43 <span class="plus">+</span></div></div>
+
+  <div class="grid"></div>
+
+  <div class="detail" style="background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.16); color:var(--admin-text);">
+    <div class="nm"></div>
+    <div class="role" style="color:var(--cyan-deep);"></div>
+    <div style="margin-top:14px;" class="stats"></div>
+    <div style="height:1px; background:var(--admin-hair); margin:14px 0;"></div>
+    <div class="sk"><div class="t" style="color:#c77700;">⚡ SPECIAL — <span class="spn"></span></div>
+      <div class="d" style="color:#4a4f57;">Placeholder special description — real text comes from the registry.</div></div>
+    <div class="sk"><div class="t" style="color:#7a3fd6;">✦ BURST — <span class="bn"></span></div>
+      <div class="d" style="color:#4a4f57;">Placeholder burst description — real text comes from the registry.</div></div>
+    <div style="flex:1;"></div>
+    <div class="cta">▶ DEPLOY — SELECT STAGE</div>
+  </div>
+  <div class="scan" style="opacity:.4;"></div>
+</div>
+
+<script>
+// [folder, name, cost, weapon, role, tint, special, burst]
+const CHARS = [
+  ["snow-white","Snow White",0,"SR","ATTACKER // INNOCENT DAYS","#cfd6dd","PIERCING VOLLEY","ABSOLUTE ZERO"],
+  ["scarlet","Scarlet",0,"SWORD","ATTACKER // SWORD OF THE ARK","#7d5bd6","SCARLET FLASH","DOOM SLAYER"],
+  ["kilo","Kilo",0,"SG","DEFENDER // SHIELD PROTOCOL","#4caf6d","BULWARK","OVERDRIVE"],
+  ["rapunzel","Rapunzel",3,"RL","SUPPORTER // PURE GRACE","#e8c84a","BLESSING","REBIRTH"],
+  ["commander","Commander",3,"AR","LEADER // ARK COMMAND","#a8854a","RALLY","LAST STAND"],
+  ["nayuta","Nayuta",5,"SMG","ATTACKER // STARFALL","#6b6bd6","COMET DASH","SUPERNOVA"],
+  ["marian","Marian",5,"MG","DEFENDER // MODERNIA","#9b59d0","SUPPRESSION","RAPTURE STORM"],
+  ["crown","Crown",8,"MG","DEFENDER // IMPERIAL GUARD","#d4a730","ROYAL DECREE","CROWN AUTHORITY"],
+  ["cecil","Cecil",8,"SMG","SUPPORTER // FIELD MEDIC","#3aa8a0","TRIAGE","MIRACLE"],
+  ["sin","Sin",8,"SMG","ATTACKER // TEMPTATION","#8348c9","WICKED PACT","SOUL HARVEST"],
+  ["wells","Wells",12,"SR","SUPPORTER // OVERSEER","#3a7bd5","OVERSIGHT","JUDGEMENT DAY"],
+];
+const STATS = [["HP",55,"#4ade80",11],["ATK",80,"#ff6a5e",16],["SPD",64,"#5fa8e8",32],["CRIT",25,"#ffd23f",25]];
+
+function cardHTML(c, i, selected){
+  const [folder,name,cost,wpn] = c; const locked = cost>0;
+  return `<div class="ccard ${locked?"locked":""} ${selected?"sel":""}" data-i="${i}">
+    <div class="frame">
+      <img src="../../assets/characters/${folder}/portrait-sq.png">
+      <div class="wpn">${wpn}</div>
+      ${locked?`<div class="cost"><span class="gem">◆</span><span class="n">${cost}</span><span class="u">UNLOCK</span></div>`:""}
+      <div class="nm">${name}</div>
+    </div></div>`;
+}
+
+function setupStage(stageId, isLight){
+  const stage = document.getElementById(stageId);
+  const grid = stage.querySelector(".grid");
+  grid.innerHTML = CHARS.map((c,i)=>cardHTML(c,i,i===1)).join("") +
+    `<div class="ccard random"><div class="frame"><div class="q">?</div><div class="r">RANDOM</div></div></div>`;
+
+  const detail = stage.querySelector(".detail");
+  const hero = stage.querySelector(".heroimg");
+  const slide = stage.querySelector(".heroslide");
+  const tint = stage.querySelector(".tint");
+  const statsBox = stage.querySelector(".stats");
+  statsBox.innerHTML = STATS.map(s=>`<div class="statrow"><span class="k">${s[0]}</span>
+    <div class="bar"><i style="width:${s[1]}%;background:${s[2]};"></i></div><span class="v">${s[3]}</span></div>`).join("");
+
+  function apply(i, animate){
+    const [folder,name,cost,wpn,role,tintCol,sp,bu] = CHARS[i];
+    const swap = () => {
+      detail.querySelector(".nm").textContent = name.toUpperCase();
+      detail.querySelector(".role").textContent = role;
+      detail.querySelector(".spn").textContent = sp;
+      detail.querySelector(".bn").textContent = bu;
+      hero.src = `../../assets/characters/${folder}/burst.png`;
+      tint.style.backgroundColor = tintCol + (isLight ? "1f" : "24");
+      stage.querySelectorAll(".ccard").forEach(el=>el.classList.toggle("sel", +el.dataset.i===i));
+    };
+    if (!animate){ swap(); slide.classList.add("in"); return; }
+    // quick out -> swap -> in (<0.4s total)
+    detail.classList.add("out");
+    slide.classList.remove("in");
+    slide.style.transition = "transform .16s ease-in";
+    slide.style.transform = "translateX(110%)";
+    setTimeout(()=>{
+      swap();
+      slide.style.transition = "";
+      slide.style.transform = "";
+      void slide.offsetWidth;          // reflow to restart entrance
+      slide.classList.add("in");
+      detail.classList.remove("out");
+    }, 170);
+  }
+
+  grid.addEventListener("click", e=>{
+    const card = e.target.closest(".ccard");
+    if (!card) return;
+    if (card.classList.contains("random")){
+      apply(Math.floor(Math.random()*3), true);  // random among unlocked (first 3)
+      return;
+    }
+    apply(+card.dataset.i, true);
+  });
+
+  apply(1, false);
+  // initial entrance
+  setTimeout(()=>slide.classList.add("in"), 150);
+}
+setupStage("stage-dark", false);
+setupStage("stage-light", true);
+</script>
+</body>
+</html>

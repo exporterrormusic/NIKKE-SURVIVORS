@@ -459,6 +459,51 @@ func _perform_burst() -> void:
 	if _behavior and _behavior.has_method("perform_burst"):
 		_behavior.perform_burst(self)
 
+func _find_spaced_position(node_name_contains: String, min_distance: float) -> Vector2:
+	# Find a position that's spaced away from existing nodes with similar names
+	var base_pos := global_position
+	var best_pos := base_pos
+	var best_min_dist := 0.0
+
+	# Get all existing similar nodes
+	var existing_nodes: Array[Node2D] = []
+	var parent := get_parent()
+	if parent:
+		for child in parent.get_children():
+			if child is Node2D and node_name_contains in child.name:
+				existing_nodes.append(child as Node2D)
+
+	# If no existing nodes, just use current position
+	if existing_nodes.is_empty():
+		return base_pos
+
+	# Try several candidate positions and pick the one farthest from existing nodes
+	var candidates: Array[Vector2] = [base_pos]
+	for angle_idx in range(8):
+		var angle := TAU * float(angle_idx) / 8.0
+		var offset := Vector2(cos(angle), sin(angle)) * min_distance
+		candidates.append(base_pos + offset)
+
+	for candidate in candidates:
+		var min_dist_to_existing := INF
+		for existing in existing_nodes:
+			var dist := candidate.distance_to(existing.global_position)
+			min_dist_to_existing = minf(min_dist_to_existing, dist)
+
+		if min_dist_to_existing > best_min_dist:
+			best_min_dist = min_dist_to_existing
+			best_pos = candidate
+
+	# If best position is still too close, offset further
+	if best_min_dist < min_distance * 0.5:
+		var away_dir := Vector2.ZERO
+		for existing in existing_nodes:
+			away_dir += (base_pos - existing.global_position).normalized()
+		if away_dir.length() > 0.1:
+			best_pos = base_pos + away_dir.normalized() * min_distance
+
+	return best_pos
+
 func _spawn_burst_nova(_color: Color, _radius: float) -> void:
 	# Burst visual is handled by screen flash if available, or just skip
 	# This avoids expensive dynamic script creation

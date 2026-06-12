@@ -1,4 +1,4 @@
-extends Node
+﻿extends Node
 
 ## Rapunzel ally behavior - Rocket launcher with healing crosses
 
@@ -8,7 +8,7 @@ var reload_timer: float = 0.0
 var special_used: bool = false
 
 func configure(ally, registry) -> void:
-	var hp_mult := 1.0 + (ally.player_level - 1) * 0.25
+	var hp_mult: float = 1.0 + (ally.player_level - 1) * 0.25
 	ally.max_hp = int(55 * hp_mult)
 	ally.move_speed = 220.0
 	ally.attack_damage = ally._get_scaled_damage(15)
@@ -48,7 +48,7 @@ func should_use_special(ally) -> bool:
 	return not special_used
 
 func perform_special(ally) -> void:
-	var spawn_pos := ally._find_spaced_position("HealingCross", 80.0)
+	var spawn_pos: Vector2 = ally._find_spaced_position("HealingCross", 80.0)
 	var heal_item = ProjectileCache.create_healing_cross()
 	ally.get_parent().add_child(heal_item)
 	heal_item.global_position = spawn_pos

@@ -101,7 +101,6 @@ func _exit_tree() -> void:
 	TargetCache.cleanup()
 	UISoundManager.cleanup()
 	TextureCache.cleanup()
-	CharacterInfoPanel.cleanup()
 	VenetianBlindsBackground.clear_cache()
 	print("[Level] Cleanup complete")
 
@@ -207,9 +206,8 @@ func _setup_achievement_notification() -> void:
 	add_child(notif)
 
 func _setup_pause_menu() -> void:
-	var PauseMenuScript = load("res://scripts/ui/PauseMenu.gd")
-	_pause_menu = CanvasLayer.new()
-	_pause_menu.set_script(PauseMenuScript)
+	var pause_scene = load("res://scenes/ui/PauseMenu.tscn")
+	_pause_menu = pause_scene.instantiate()
 	_pause_menu.name = "PauseMenu"
 	add_child(_pause_menu)
 	
@@ -533,10 +531,10 @@ func _setup_core_counter() -> void:
 	var counter := Control.new()
 	counter.name = "CoreCounter"
 	counter.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	counter.offset_left = -220
-	counter.offset_top = -95
-	counter.offset_right = -20
-	counter.offset_bottom = -20
+	counter.offset_left = -180
+	counter.offset_top = -94
+	counter.offset_right = -30
+	counter.offset_bottom = -30
 	_core_counter.add_child(counter)
 
 	# Shared styled container (same component as the shop / character select)
@@ -786,13 +784,6 @@ func _start_she_descends_mode() -> void:
 	if _wave_ui and _wave_ui.has_method("set_goddess_mode"):
 		_wave_ui.set_goddess_mode(true)
 	
-	# Update HUD Text IMMEDIATELY (CanvasLayer is from scene file, already exists)
-	var canvas = get_node_or_null("CanvasLayer")
-	if canvas:
-		var wave_display = canvas.get_node_or_null("WaveDisplay")
-		if wave_display:
-			wave_display.text = "DEFEAT THE QUEEN"
-	
 	# Spawn N01 immediately (with short delay for dramatic effect)
 	await get_tree().create_timer(1.5).timeout
 	
@@ -916,16 +907,7 @@ func _on_wave_changed(wave_number: int) -> void:
 		var health_mult: float = _wave_director.get_health_multiplier()
 		# print("[Level] Setting health multiplier to: ", health_mult)
 		_enemy_spawner.set_health_multiplier(health_mult)
-	# Update the WaveDisplay label in the scene
-	var canvas := get_node_or_null("CanvasLayer")
-	if canvas:
-		var wave_display := canvas.get_node_or_null("WaveDisplay") as Label
-		if wave_display:
-			# Wave 12 is N01 boss fight
-			if wave_number == 12:
-				wave_display.text = "DEFEAT THE QUEEN"
-			else:
-				wave_display.text = "WAVE %d" % wave_number
+	# Wave text lives in WaveUI now (wave_changed -> _wave_ui.update_wave)
 
 func _on_enemy_died(enemy: Node2D, killer_source: String = "player") -> void:
 	# Handle charmed enemy deaths specially for Sin's Captivating talent

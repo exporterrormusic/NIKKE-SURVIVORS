@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SOV Leaderboard — Round 1 (3 layout directions)</title>
+<style>
+  :root{
+    --cyan:#35C5F2; --cyan-deep:#1F8FE0; --yellow:#FFD23F; --red:#E8392E;
+    --gold:#F8A33B; --muted:#97A0AC;
+    --admin-bg:#EDEFF2; --admin-hair:#D8DCE1; --admin-text:#2A2E35; --admin-dim:#8A9099;
+    --field-bg:#0E1116; --panel:#1C212A;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#070a0e; color:#F0F4F8;
+    font-family:"Pretendard","Segoe UI",system-ui,sans-serif; padding:40px;}
+  h1{font-family:"Arial Narrow",sans-serif; font-size:32px; font-style:italic;
+    text-transform:uppercase; margin-bottom:4px;}
+  h2{font-family:"Arial Narrow",sans-serif; font-size:24px; font-style:italic;
+    text-transform:uppercase; margin:46px 0 4px;}
+  .sub{color:var(--muted); text-transform:uppercase; letter-spacing:.25em; font-size:12px;
+    margin-bottom:18px;}
+
+  .stage{position:relative; width:1280px; height:720px; overflow:hidden;
+    border:1px solid #2a3340; margin-bottom:10px;}
+  .stage.light{background:var(--admin-bg); color:var(--admin-text);}
+  .stage.dark{background:var(--field-bg); color:#F0F4F8;}
+  .scan{position:absolute; inset:0; pointer-events:none; z-index:50; opacity:.4;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px);}
+
+  .hdr{position:absolute; left:44px; top:24px; z-index:5;}
+  .hdr .t{font-family:"Arial Narrow",sans-serif; font-weight:800; font-style:italic; font-size:40px;}
+  .hdr .s{font-size:12px; letter-spacing:.3em; text-transform:uppercase; opacity:.6; margin-top:2px;}
+  .hdr .bar{width:54px; height:3px; background:var(--cyan); margin-top:8px;}
+  .topright{position:absolute; right:24px; top:22px; display:flex; gap:12px; z-index:5;}
+  .backchip{display:flex; align-items:center; height:38px; padding:0 18px;
+    transform:skewX(-6deg); background:#fff; color:var(--admin-text);
+    box-shadow:0 1px 4px rgba(0,0,0,.18); font-weight:800; font-size:14px; cursor:pointer;}
+  .backchip span{transform:skewX(6deg);}
+  .stage.dark .backchip{background:rgba(14,17,22,.72); color:#fff; border:1px solid rgba(255,255,255,.22); box-shadow:none;}
+  .greeble{position:absolute; left:46px; bottom:20px; display:flex; align-items:center;
+    gap:14px; opacity:.35; font-size:9px; letter-spacing:.22em; font-weight:700; z-index:4;}
+  .greeble .bars{display:flex; gap:2px; align-items:flex-end;}
+  .stage.light .greeble .bars i{background:#2A2E35;}
+  .stage.dark .greeble .bars i{background:#F0F4F8;}
+  .greeble .bars i{display:block; width:2px;}
+
+  /* shared row anatomy */
+  .rows{display:flex; flex-direction:column; gap:8px;}
+  .lrow{position:relative; display:flex; align-items:center; gap:0; cursor:pointer; height:64px;}
+  .stage.light .lrow{background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.12);}
+  .stage.dark .lrow{background:rgba(28,33,42,.85); border:1px solid rgba(255,255,255,.12);}
+  .lrow .rank{width:74px; text-align:center; font-family:"Arial Narrow"; font-weight:800;
+    font-style:italic; font-size:26px; color:var(--admin-dim); flex:none;}
+  .stage.dark .lrow .rank{color:#7e8a93;}
+  .lrow .rank.top{color:var(--gold);}
+  .lrow .pic{width:48px; height:48px; flex:none; overflow:hidden; background:#222a34;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%);}
+  .lrow .pic img{width:100%; height:100%; object-fit:cover; object-position:top;}
+  .lrow .nm{flex:1; font-weight:800; font-size:16px; padding-left:16px; letter-spacing:.02em;}
+  .lrow .gf{flex:none; margin-right:10px; font-size:10px; font-weight:800; letter-spacing:.1em;
+    color:#fff; background:var(--red); padding:3px 8px;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%);}
+  .lrow .score{width:130px; text-align:right; font-family:"Arial Narrow"; font-weight:800;
+    font-style:italic; font-size:24px; flex:none;}
+  .lrow .wave{width:96px; text-align:right; font-weight:800; font-size:14px; flex:none;
+    color:var(--cyan-deep); padding-right:20px;}
+  .stage.dark .lrow .wave{color:var(--cyan);}
+  .lrow.sel{outline:2px solid var(--yellow); outline-offset:2px;}
+  .lrow.sel::before{content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--yellow); z-index:1;}
+  .lrow.first{box-shadow:0 1px 8px rgba(248,163,59,.35);}
+  .lrow.first::after{content:""; position:absolute; left:0; right:0; top:0; height:2px; background:var(--gold);}
+
+  /* detail panel (A + C) */
+  .detail{position:absolute; right:36px; top:128px; width:380px; bottom:60px; z-index:3;
+    padding:24px 28px; display:flex; flex-direction:column;}
+  .stage.light .detail{background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.16);}
+  .stage.dark .detail{background:rgba(16,20,26,.9); border:1px solid rgba(255,255,255,.14);}
+  .detail .dpic{width:100%; height:150px; overflow:hidden; margin-bottom:14px;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%); background:#1a212b;}
+  .detail .dpic img{width:100%; height:100%; object-fit:cover; object-position:50% 18%;}
+  .detail .dn{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:34px;}
+  .detail .dr{font-size:11px; letter-spacing:.24em; font-weight:800; color:var(--cyan-deep);
+    text-transform:uppercase; margin-bottom:12px;}
+  .stage.dark .detail .dr{color:var(--cyan);}
+  .detail .kv{display:flex; justify-content:space-between; align-items:baseline; padding:7px 0;
+    border-bottom:1px solid rgba(128,140,155,.25); font-size:13px;}
+  .detail .kv b{font-family:"Arial Narrow"; font-style:italic; font-size:20px;}
+  .detail .dmgcap{font-size:10px; letter-spacing:.26em; font-weight:800; opacity:.55;
+    margin:16px 0 8px;}
+  .dmgrow{margin-bottom:9px;}
+  .dmgrow .dk{display:flex; justify-content:space-between; font-size:12px; font-weight:700; margin-bottom:3px;}
+  .dmgrow .dbar{height:8px; background:rgba(128,140,155,.22); position:relative;}
+  .dmgrow .dbar i{position:absolute; left:0; top:0; bottom:0; background:linear-gradient(90deg,#5BD2F7,#1F8FE0);}
+  .detail .gfband{margin-top:auto; display:none; align-items:center; gap:10px; padding:10px 14px;
+    border:1px solid rgba(232,57,46,.55); color:#ff6b61; font-size:12px; font-weight:800;
+    letter-spacing:.14em; background:rgba(232,57,46,.08);}
+  .detail .gfband.show{display:flex;}
+
+  /* summary strip */
+  .sumstrip{position:absolute; left:44px; top:122px; display:flex; gap:36px; z-index:4;}
+  .sumstrip .cell .k{font-size:10px; letter-spacing:.24em; font-weight:800; opacity:.55;}
+  .sumstrip .cell .v{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:30px;}
+
+  /* A list area */
+  #vA .rows{position:absolute; left:44px; top:188px; width:790px; z-index:3;}
+
+  /* B podium */
+  #vB .podium{position:absolute; left:44px; top:170px; right:36px; display:flex; gap:18px; z-index:3;}
+  #vB .pcard{flex:1; background:#fff; box-shadow:0 1px 6px rgba(0,0,0,.15); cursor:pointer;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%);
+    position:relative; padding-bottom:14px;}
+  #vB .pcard .prank{position:absolute; left:12px; top:8px; font-family:"Arial Narrow"; z-index:2;
+    font-weight:800; font-style:italic; font-size:44px; color:#fff; text-shadow:0 2px 8px rgba(0,0,0,.6);}
+  #vB .pcard img{width:100%; height:170px; object-fit:cover; object-position:50% 12%; display:block;}
+  #vB .pcard .pn{font-weight:800; font-size:17px; padding:10px 14px 2px;}
+  #vB .pcard .ps{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:30px; padding:0 14px;}
+  #vB .pcard .pw{font-size:12px; font-weight:800; color:var(--cyan-deep); padding:0 14px;}
+  #vB .pcard.g1::after{content:""; position:absolute; inset:0 0 auto 0; height:4px; background:var(--gold);}
+  #vB .pcard.g2::after{content:""; position:absolute; inset:0 0 auto 0; height:4px; background:#aab4c0;}
+  #vB .pcard.g3::after{content:""; position:absolute; inset:0 0 auto 0; height:4px; background:#c98a4b;}
+  #vB .pcard .gf{position:absolute; right:10px; top:10px; font-size:10px; font-weight:800;
+    color:#fff; background:var(--red); padding:3px 8px;}
+  #vB .rows{position:absolute; left:44px; top:480px; right:36px; bottom:56px; z-index:3; overflow:hidden;}
+  #vB .lrow{height:48px;}
+  #vB .lrow .pic{width:36px; height:36px;}
+  #vB .lrow .score{font-size:20px;}
+
+  /* C dark */
+  #vC .rows{position:absolute; left:44px; top:188px; width:790px; z-index:3;}
+</style>
+</head>
+<body>
+
+<h1>Leaderboard — Round 1</h1>
+<div class="sub">3 directions · click any row/card — the detail pane replaces today's popup · GODDESS chip = goddess fall runs · real portraits</div>
+
+<!-- ============ A ============ -->
+<h2>A — “Service Records” · light admin, list + detail pane</h2>
+<div class="sub">Ranked ledger rows; click shows the run breakdown (damage bars, date) in the right pane — no popup.</div>
+<div class="stage light" id="vA">
+  <div class="hdr"><div class="t">LEADERBOARDS</div><div class="s">SERVICE RECORDS // BEST SORTIES</div><div class="bar"></div></div>
+  <div class="topright"><div class="backchip"><span>← BACK</span></div></div>
+  <div class="sumstrip">
+    <div class="cell"><div class="k">TOTAL SCORE</div><div class="v">26.7M</div></div>
+    <div class="cell"><div class="k">TOTAL RUNS</div><div class="v">142</div></div>
+    <div class="cell"><div class="k">OPERATORS RANKED</div><div class="v">10 / 11</div></div>
+  </div>
+  <div class="rows"></div>
+  <div class="detail">
+    <div class="dpic"><img src=""></div>
+    <div class="dn">SNOW WHITE</div>
+    <div class="dr">RANK 01 // BEST SORTIE</div>
+    <div class="kv"><span>SCORE</span><b class="dscore">11,341,202</b></div>
+    <div class="kv"><span>WAVE REACHED</span><b class="dwave">32</b></div>
+    <div class="kv"><span>DIFFICULTY</span><b class="ddiff">×5</b></div>
+    <div class="kv"><span>DATE</span><b class="ddate" style="font-size:15px;">2026-06-08</b></div>
+    <div class="dmgcap">DAMAGE BREAKDOWN</div>
+    <div class="dmg"></div>
+    <div class="gfband">☠ GODDESS FALL RUN</div>
+  </div>
+  <div class="greeble"><div class="bars"></div><span>SERVICE RECORDS // ARK SYS V2.4</span></div>
+  <div class="scan"></div>
+</div>
+
+<!-- ============ B ============ -->
+<h2>B — “Podium” · light admin, top 3 hero cards + compact list</h2>
+<div class="sub">Celebrates the top 3 with big portrait cards (gold/silver/bronze edge); ranks 4+ as slim rows. Detail still opens as a popup.</div>
+<div class="stage light" id="vB">
+  <div class="hdr"><div class="t">LEADERBOARDS</div><div class="s">SERVICE RECORDS // BEST SORTIES</div><div class="bar"></div></div>
+  <div class="topright"><div class="backchip"><span>← BACK</span></div></div>
+  <div class="podium"></div>
+  <div class="rows"></div>
+  <div class="greeble"><div class="bars"></div><span>SERVICE RECORDS // ARK SYS V2.4</span></div>
+  <div class="scan"></div>
+</div>
+
+<!-- ============ C ============ -->
+<h2>C — “Hall of Records” · dark field register version of A</h2>
+<div class="sub">Same structure as A but dark — gold ranks pop harder; question is whether records should feel “admin” or “trophy room”.</div>
+<div class="stage dark" id="vC">
+  <div class="hdr"><div class="t">LEADERBOARDS</div><div class="s">SERVICE RECORDS // BEST SORTIES</div><div class="bar"></div></div>
+  <div class="topright"><div class="backchip"><span>← BACK</span></div></div>
+  <div class="sumstrip">
+    <div class="cell"><div class="k">TOTAL SCORE</div><div class="v">26.7M</div></div>
+    <div class="cell"><div class="k">TOTAL RUNS</div><div class="v">142</div></div>
+    <div class="cell"><div class="k">OPERATORS RANKED</div><div class="v">10 / 11</div></div>
+  </div>
+  <div class="rows"></div>
+  <div class="detail">
+    <div class="dpic"><img src=""></div>
+    <div class="dn">SNOW WHITE</div>
+    <div class="dr">RANK 01 // BEST SORTIE</div>
+    <div class="kv"><span>SCORE</span><b class="dscore">11,341,202</b></div>
+    <div class="kv"><span>WAVE REACHED</span><b class="dwave">32</b></div>
+    <div class="kv"><span>DIFFICULTY</span><b class="ddiff">×5</b></div>
+    <div class="kv"><span>DATE</span><b class="ddate" style="font-size:15px;">2026-06-08</b></div>
+    <div class="dmgcap">DAMAGE BREAKDOWN</div>
+    <div class="dmg"></div>
+    <div class="gfband">☠ GODDESS FALL RUN</div>
+  </div>
+  <div class="greeble"><div class="bars"></div><span>SERVICE RECORDS // ARK SYS V2.4</span></div>
+  <div class="scan"></div>
+</div>
+
+<script>
+const E=[
+ {n:"SNOW WHITE", c:"snow-white", s:11341202, w:32, d:5, gf:true,  date:"2026-06-08",
+   dmg:[["SNOW WHITE",8200000],["ALLY · CROWN",1900000],["ALLY · KILO",1241202]]},
+ {n:"SCARLET", c:"scarlet", s:8920441, w:28, d:5, gf:false, date:"2026-06-10",
+   dmg:[["SCARLET",7100000],["ALLY · MARIAN",1820441]]},
+ {n:"KILO", c:"kilo", s:2401833, w:21, d:3, gf:false, date:"2026-06-05",
+   dmg:[["KILO",2401833]]},
+ {n:"MARIAN", c:"marian", s:1780020, w:19, d:2, gf:true, date:"2026-06-11",
+   dmg:[["MARIAN",1430020],["ALLY · RAPUNZEL",350000]]},
+ {n:"WELLS", c:"wells", s:980770, w:15, d:2, gf:false, date:"2026-06-02",
+   dmg:[["WELLS",980770]]},
+ {n:"RAPUNZEL", c:"rapunzel", s:740112, w:14, d:1, gf:false, date:"2026-05-30",
+   dmg:[["RAPUNZEL",740112]]},
+ {n:"COMMANDER", c:"commander", s:388045, w:12, d:1, gf:false, date:"2026-05-28",
+   dmg:[["COMMANDER",388045]]},
+ {n:"CECIL", c:"cecil", s:102230, w:9, d:1, gf:false, date:"2026-05-26",
+   dmg:[["CECIL",102230]]},
+ {n:"SIN", c:"sin", s:54210, w:7, d:1, gf:false, date:"2026-05-25",
+   dmg:[["SIN",54210]]},
+ {n:"NAYUTA", c:"nayuta", s:12800, w:4, d:1, gf:false, date:"2026-05-24",
+   dmg:[["NAYUTA",12800]]},
+];
+const img=c=>`../../assets/characters/${c}/portrait-sq.png`;
+const fmt=v=>v>=1e9?(v/1e9).toFixed(2)+"B":v>=1e6?(v>=1e7?(v/1e6).toFixed(1):(v/1e6).toFixed(2))+"M":
+  v>=1e3?(v>=1e5?Math.round(v/1e3):(v/1e3).toFixed(1))+"K":""+v;
+const full=v=>v.toString().replace(/\B(?=(\d{3})+(?!\d))/g,",");
+
+document.querySelectorAll(".greeble .bars").forEach(b=>{
+  for(let i=0;i<46;i++){const x=document.createElement("i");
+    x.style.height=(6+Math.random()*10)+"px"; x.style.width=(Math.random()<.3?"3":"1.5")+"px";
+    b.appendChild(x);}});
+
+function row(e,i){
+  const r=document.createElement("div"); r.className="lrow"+(i===0?" first":"");
+  r.innerHTML=`<div class="rank${i<3?" top":""}">${String(i+1).padStart(2,"0")}</div>
+    <div class="pic"><img src="${img(e.c)}"></div>
+    <div class="nm">${e.n}</div>
+    ${e.gf?'<div class="gf">☠ GODDESS</div>':""}
+    <div class="score">${fmt(e.s)}</div>
+    <div class="wave">×${e.d} · W${e.w}</div>`;
+  return r;
+}
+function fillDetail(root,e,i){
+  root.querySelector(".dpic img").src=img(e.c).replace("portrait-sq","burst");
+  root.querySelector(".dn").textContent=e.n;
+  root.querySelector(".dr").textContent=`RANK ${String(i+1).padStart(2,"0")} // BEST SORTIE`;
+  root.querySelector(".dscore").textContent=full(e.s);
+  root.querySelector(".dwave").textContent=e.w;
+  root.querySelector(".ddiff").textContent="×"+e.d;
+  root.querySelector(".ddate").textContent=e.date;
+  const dmg=root.querySelector(".dmg"); dmg.innerHTML="";
+  const max=Math.max(...e.dmg.map(d=>d[1]));
+  e.dmg.forEach(([k,v])=>{
+    const d=document.createElement("div"); d.className="dmgrow";
+    d.innerHTML=`<div class="dk"><span>${k}</span><span>${fmt(v)}</span></div>
+      <div class="dbar"><i style="width:${Math.round(v/max*100)}%"></i></div>`;
+    dmg.appendChild(d);
+  });
+  root.querySelector(".gfband").classList.toggle("show",e.gf);
+}
+
+/* A + C: list + detail */
+["vA","vC"].forEach(id=>{
+  const root=document.getElementById(id), rows=root.querySelector(".rows");
+  let sel=0;
+  E.forEach((e,i)=>{
+    const r=row(e,i);
+    r.addEventListener("click",()=>{sel=i;
+      rows.querySelectorAll(".lrow").forEach((x,j)=>x.classList.toggle("sel",j===i));
+      fillDetail(root,e,i);});
+    rows.appendChild(r);
+  });
+  rows.children[0].classList.add("sel");
+  fillDetail(root,E[0],0);
+});
+
+/* B: podium + compact rows */
+(()=>{
+  const root=document.getElementById("vB"), pod=root.querySelector(".podium"),
+    rows=root.querySelector(".rows");
+  E.slice(0,3).forEach((e,i)=>{
+    const c=document.createElement("div"); c.className="pcard g"+(i+1);
+    c.innerHTML=`<div class="prank">${i+1}</div>${e.gf?'<div class="gf">☠ GODDESS</div>':""}
+      <img src="${img(e.c).replace("portrait-sq","burst")}">
+      <div class="pn">${e.n}</div><div class="ps">${fmt(e.s)}</div>
+      <div class="pw">×${e.d} · WAVE ${e.w}</div>`;
+    pod.appendChild(c);
+  });
+  E.slice(3).forEach((e,i)=>rows.appendChild(row(e,i+3)));
+})();
+</script>
+</body>
+</html>

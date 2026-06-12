@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SOV Settings — Round 2 (Category Rail, final candidate)</title>
+<style>
+  :root{
+    --cyan:#35C5F2; --cyan-deep:#1F8FE0; --yellow:#FFD23F; --red:#E8392E;
+    --muted:#97A0AC;
+    --admin-bg:#EDEFF2; --admin-hair:#D8DCE1; --admin-text:#2A2E35; --admin-dim:#8A9099;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#070a0e; color:#F0F4F8;
+    font-family:"Pretendard","Segoe UI",system-ui,sans-serif; padding:40px;}
+  h1{font-family:"Arial Narrow",sans-serif; font-size:32px; font-style:italic;
+    text-transform:uppercase; margin-bottom:4px;}
+  .sub{color:var(--muted); text-transform:uppercase; letter-spacing:.25em; font-size:12px;
+    margin-bottom:18px;}
+
+  .stage{position:relative; width:1280px; height:720px; overflow:hidden;
+    background:var(--admin-bg); border:1px solid #2a3340; margin-bottom:10px;
+    color:var(--admin-text);}
+  .scan{position:absolute; inset:0; pointer-events:none; z-index:50; opacity:.4;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px);}
+
+  .hdr{position:absolute; left:44px; top:24px; z-index:5;}
+  .hdr .t{font-family:"Arial Narrow",sans-serif; font-weight:800; font-style:italic; font-size:40px;}
+  .hdr .s{font-size:12px; letter-spacing:.3em; text-transform:uppercase; color:var(--admin-dim); margin-top:2px;}
+  .hdr .bar{width:54px; height:3px; background:var(--cyan); margin-top:8px;}
+  .topright{position:absolute; right:24px; top:22px; display:flex; gap:12px; z-index:5;}
+  .backchip{display:flex; align-items:center; height:38px; padding:0 18px;
+    transform:skewX(-6deg); background:#fff; color:var(--admin-text);
+    box-shadow:0 1px 4px rgba(0,0,0,.18); font-weight:800; font-size:14px; cursor:pointer;}
+  .backchip span{transform:skewX(6deg);}
+  .greeble{position:absolute; left:46px; bottom:20px; display:flex; align-items:center;
+    gap:14px; opacity:.35; font-size:9px; letter-spacing:.22em; font-weight:700; z-index:4;}
+  .greeble .bars{display:flex; gap:2px; align-items:flex-end;}
+  .greeble .bars i{display:block; width:2px; background:#2A2E35;}
+
+  .seccap{display:flex; align-items:center; gap:10px; font-size:12px; letter-spacing:.28em;
+    color:var(--admin-dim); font-weight:800; margin-bottom:14px;}
+  .seccap::before{content:""; width:4px; height:16px; background:var(--cyan);}
+
+  .srow{display:flex; align-items:center; gap:16px; padding:10px 0;}
+  .srow .k{width:170px; font-weight:800; font-size:14px; letter-spacing:.06em;}
+  .srow input[type=range]{flex:1; -webkit-appearance:none; height:6px;
+    background:rgba(60,70,82,.22); outline:none;}
+  .srow input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:14px; height:24px;
+    background:var(--cyan); cursor:pointer; border:none;}
+  .srow .v{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:24px;
+    width:70px; text-align:right; color:var(--cyan-deep);}
+
+  .drow{display:flex; align-items:center; gap:16px; padding:10px 0;}
+  .drow .k{width:170px; font-weight:800; font-size:14px; letter-spacing:.06em;}
+  .drow .hint{font-size:11px; color:var(--admin-dim); margin-top:-6px; padding-bottom:8px;
+    padding-left:186px;}
+  .drow select{flex:1; height:44px; border:1px solid #c8cdd3; background:#fff;
+    font-family:inherit; font-weight:700; font-size:14px; padding:0 12px; color:var(--admin-text);
+    border-radius:0; outline:none;}
+  .seg{flex:1; display:flex; border:1px solid #c8cdd3; height:44px;}
+  .seg .opt{flex:1; display:flex; align-items:center; justify-content:center; cursor:pointer;
+    font-weight:800; font-size:13px; letter-spacing:.1em; color:var(--admin-dim); user-select:none;}
+  .seg .opt.sel{background:var(--admin-text); color:#fff;}
+
+  .krow{display:flex; align-items:center; padding:8px 0; gap:12px;}
+  .krow .k{flex:1; font-weight:700; font-size:14px;}
+  .keycap{min-width:110px; height:40px; display:flex; align-items:center; justify-content:center;
+    background:#fff; border:1px solid #c8cdd3; border-bottom:3px solid #aab1b9;
+    font-weight:800; font-size:13px; letter-spacing:.06em; cursor:pointer; user-select:none;
+    padding:0 14px;}
+  .keycap:hover{border-color:var(--cyan-deep);}
+  .keycap.capture{background:var(--yellow); border-color:#d9ab00; color:#5a4700;
+    animation:capblink 1s steps(2) infinite;}
+  @keyframes capblink{50%{opacity:.65;}}
+  .resetbtn{display:inline-flex; align-items:center; justify-content:center; gap:8px; height:44px;
+    background:#fff; border:1px solid #c4271c; color:#c4271c; font-weight:800; font-size:13px;
+    letter-spacing:.12em; cursor:pointer; user-select:none; padding:0 24px; margin-top:18px;}
+  .resetbtn:hover{background:#fdf0ef;}
+
+  .rail{position:absolute; left:44px; top:128px; width:280px; z-index:4;
+    display:flex; flex-direction:column; gap:8px;}
+  .railbtn{position:relative; padding:16px 20px; background:#fff; cursor:pointer;
+    box-shadow:0 1px 4px rgba(0,0,0,.12); user-select:none;}
+  .railbtn .t{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:22px;}
+  .railbtn .d{font-size:10.5px; color:var(--admin-dim); letter-spacing:.14em; margin-top:1px;}
+  .railbtn.sel{outline:2px solid var(--yellow); outline-offset:2px;}
+  .railbtn.sel::before{content:""; position:absolute; left:0; top:0; bottom:0; width:4px;
+    background:var(--yellow);}
+  .content{position:absolute; left:356px; top:128px; right:36px; bottom:60px;
+    background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.16); padding:30px 36px; z-index:3;}
+  .pane{display:none; max-width:680px;}
+  .pane.sel{display:block;}
+  .pane.controls{max-width:none;}
+  .pane.controls .kcols{columns:2; column-gap:48px;}
+  .pane.controls .krow{break-inside:avoid;}
+</style>
+</head>
+<body>
+
+<h1>Settings — Round 2 · Category Rail, final candidate</h1>
+<div class="sub">+ GAMEPLAY category (screen shake / damage numbers) · + reset bindings to defaults · all interactive</div>
+
+<div class="stage" id="vC">
+  <div class="hdr"><div class="t">SETTINGS</div><div class="s">SYSTEM CONFIG // COMMANDER PREFERENCES</div><div class="bar"></div></div>
+  <div class="topright"><div class="backchip"><span>← BACK</span></div></div>
+  <div class="rail">
+    <div class="railbtn sel" data-pane="audio"><div class="t">AUDIO</div><div class="d">VOLUME MIX</div></div>
+    <div class="railbtn" data-pane="video"><div class="t">VIDEO</div><div class="d">DISPLAY OUTPUT</div></div>
+    <div class="railbtn" data-pane="gameplay"><div class="t">GAMEPLAY</div><div class="d">READABILITY &amp; FEEDBACK</div></div>
+    <div class="railbtn" data-pane="controls"><div class="t">CONTROLS</div><div class="d">KEY BINDINGS</div></div>
+  </div>
+  <div class="content">
+    <div class="pane audio sel">
+      <div class="seccap">AUDIO</div><div class="audio-here"></div>
+    </div>
+    <div class="pane video">
+      <div class="seccap">VIDEO</div><div class="video-here"></div>
+    </div>
+    <div class="pane gameplay">
+      <div class="seccap">GAMEPLAY</div>
+      <div class="drow"><span class="k">SCREEN SHAKE</span>
+        <div class="seg" id="shakeseg"><div class="opt sel">ON</div><div class="opt">OFF</div></div></div>
+      <div class="drow hint">Camera impact shake on explosions, bosses and heavy hits.</div>
+      <div class="drow"><span class="k">DAMAGE NUMBERS</span>
+        <div class="seg" id="dmgseg"><div class="opt sel">ON</div><div class="opt">OFF</div></div></div>
+      <div class="drow hint">Floating damage / crit numbers on enemies. Heal numbers always show.</div>
+    </div>
+    <div class="pane controls">
+      <div class="seccap">KEY BINDINGS</div>
+      <div class="kcols controls-here"></div>
+      <div class="resetbtn">↺ RESET BINDINGS TO DEFAULTS</div>
+    </div>
+  </div>
+  <div class="greeble"><div class="bars"></div><span>SYS CONFIG // ARK SYS V2.4</span></div>
+  <div class="scan"></div>
+</div>
+
+<script>
+const BINDS=[
+ ["Move Up","W"],["Move Down","S"],["Move Left","A"],["Move Right","D"],
+ ["Dash","SPACE"],["Burst","Q"],["Special Attack","E"],["Pause","ESCAPE"],
+];
+const DEFAULTS=Object.fromEntries(BINDS.map(([l,k])=>[l,k]));
+const RES=["1280 x 720","1366 x 768","1600 x 900","1920 x 1080","2560 x 1440","3840 x 2160"];
+
+document.querySelectorAll(".greeble .bars").forEach(b=>{
+  for(let i=0;i<46;i++){const x=document.createElement("i");
+    x.style.height=(6+Math.random()*10)+"px"; x.style.width=(Math.random()<.3?"3":"1.5")+"px";
+    b.appendChild(x);}});
+
+const root=document.getElementById("vC");
+
+/* audio */
+const audioWrap=root.querySelector(".audio-here");
+[["MUSIC",80],["SFX",100]].forEach(([k,v])=>{
+  const r=document.createElement("div"); r.className="srow";
+  r.innerHTML=`<span class="k">${k}</span><input type="range" min="0" max="100" value="${v}">
+    <span class="v">${v}%</span>`;
+  const inp=r.querySelector("input"), val=r.querySelector(".v");
+  inp.addEventListener("input",()=>val.textContent=inp.value+"%");
+  audioWrap.appendChild(r);
+});
+
+/* video */
+const videoWrap=root.querySelector(".video-here");
+const r1=document.createElement("div"); r1.className="drow";
+r1.innerHTML=`<span class="k">RESOLUTION</span><select>${RES.map((r,i)=>
+  `<option ${i===3?"selected":""}>${r}</option>`).join("")}</select>`;
+videoWrap.appendChild(r1);
+const r2=document.createElement("div"); r2.className="drow";
+r2.innerHTML=`<span class="k">FULLSCREEN</span>
+  <div class="seg"><div class="opt sel">ON</div><div class="opt">OFF</div></div>`;
+videoWrap.appendChild(r2);
+
+/* all segmented toggles */
+root.querySelectorAll(".seg").forEach(seg=>
+  seg.querySelectorAll(".opt").forEach(o=>o.addEventListener("click",()=>{
+    seg.querySelectorAll(".opt").forEach(x=>x.classList.remove("sel"));
+    o.classList.add("sel");})));
+
+/* controls */
+let capturing=null;
+const caps={};
+const ch=root.querySelector(".controls-here");
+BINDS.forEach(([label,key])=>{
+  const r=document.createElement("div"); r.className="krow";
+  r.innerHTML=`<span class="k">${label.toUpperCase()}</span><div class="keycap">${key}</div>`;
+  const cap=r.querySelector(".keycap"); caps[label]=cap;
+  cap.addEventListener("click",()=>{
+    if(capturing){capturing.el.textContent=capturing.prev; capturing.el.classList.remove("capture");}
+    capturing={el:cap, prev:cap.textContent};
+    cap.textContent="PRESS KEY..."; cap.classList.add("capture");
+  });
+  ch.appendChild(r);
+});
+window.addEventListener("keydown",e=>{
+  if(!capturing)return;
+  e.preventDefault();
+  const el=capturing.el, prev=capturing.prev; capturing=null;
+  el.classList.remove("capture");
+  if(e.key==="Escape"){el.textContent=prev; return;}
+  let k=e.key.length===1?e.key.toUpperCase():e.key.toUpperCase()
+    .replace("ARROWUP","↑").replace("ARROWDOWN","↓").replace("ARROWLEFT","←").replace("ARROWRIGHT","→")
+    .replace("CONTROL","CTRL");
+  if(e.code==="Space")k="SPACE";
+  el.textContent=k;
+});
+root.querySelector(".resetbtn").addEventListener("click",()=>{
+  Object.entries(DEFAULTS).forEach(([l,k])=>caps[l].textContent=k);});
+
+/* rail */
+root.querySelectorAll(".railbtn").forEach(b=>b.addEventListener("click",()=>{
+  root.querySelectorAll(".railbtn").forEach(x=>x.classList.remove("sel"));
+  b.classList.add("sel");
+  root.querySelectorAll(".pane").forEach(p=>p.classList.toggle("sel",p.classList.contains(b.dataset.pane)));
+}));
+</script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-extends Node
+﻿extends Node
 
 ## Snow White ally behavior - Sniper with piercing shots and turret
 
@@ -8,7 +8,7 @@ var reload_timer: float = 0.0
 var turret_placed: bool = false
 
 func configure(ally, registry) -> void:
-	var hp_mult := 1.0 + (ally.player_level - 1) * 0.25
+	var hp_mult: float = 1.0 + (ally.player_level - 1) * 0.25
 	ally.max_hp = int(45 * hp_mult)
 	ally.move_speed = 200.0
 	ally.attack_damage = ally._get_scaled_damage(7)
@@ -47,7 +47,7 @@ func should_use_special(ally) -> bool:
 	return not turret_placed
 
 func perform_special(ally) -> void:
-	var spawn_pos := ally._find_spaced_position("Turret", 120.0)
+	var spawn_pos: Vector2 = ally._find_spaced_position("Turret", 120.0)
 	var turret = ProjectileCache.create_turret()
 	turret.ammo = 12
 	turret.max_ammo = 12
@@ -61,7 +61,7 @@ func perform_special(ally) -> void:
 
 func perform_burst(ally) -> void:
 	var SnowWhiteBurstBeamScript = preload("res://scripts/characters/effects/SnowWhiteBurstBeam.gd")
-	var direction := ally._last_direction.normalized()
+	var direction: Vector2 = ally._last_direction.normalized()
 	if direction.length() < 0.5:
 		direction = Vector2.RIGHT
 	var beam = SnowWhiteBurstBeamScript.new()

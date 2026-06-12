@@ -246,6 +246,8 @@ func _do_camera_punch(direction: Vector2, strength: float) -> void:
 
 ## Random camera shake - good for explosions
 static func camera_shake(strength: float = 5.0) -> void:
+	if SettingsManager and not SettingsManager.screen_shake_enabled:
+		return
 	if instance:
 		instance._do_camera_shake(strength)
 	else:

@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SOV Stage Select — Round 1 (3 layout directions)</title>
+<style>
+  :root{
+    --cyan:#35C5F2; --cyan-deep:#1F8FE0; --yellow:#FFD23F; --red:#E8392E;
+    --muted:#97A0AC;
+    --admin-bg:#EDEFF2; --admin-hair:#D8DCE1; --admin-text:#2A2E35; --admin-dim:#8A9099;
+    --field-bg:#0E1116; --panel:#1C212A; --panel-hi:#262C36;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#070a0e; color:#F0F4F8;
+    font-family:"Pretendard","Segoe UI",system-ui,sans-serif; padding:40px;}
+  h1{font-family:"Arial Narrow",sans-serif; font-size:32px; font-style:italic;
+    text-transform:uppercase; margin-bottom:4px;}
+  h2{font-family:"Arial Narrow",sans-serif; font-size:24px; font-style:italic;
+    text-transform:uppercase; margin:46px 0 4px;}
+  .sub{color:var(--muted); text-transform:uppercase; letter-spacing:.25em; font-size:12px;
+    margin-bottom:18px;}
+
+  .stage{position:relative; width:1280px; height:720px; overflow:hidden;
+    border:1px solid #2a3340; margin-bottom:10px;}
+  .scan{position:absolute; inset:0; pointer-events:none; z-index:60; opacity:.4;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px);}
+
+  /* shared header */
+  .hdr{position:absolute; left:44px; top:24px; z-index:8;}
+  .hdr .t{font-family:"Arial Narrow",sans-serif; font-weight:800; font-style:italic; font-size:40px;}
+  .hdr .s{font-size:12px; letter-spacing:.3em; text-transform:uppercase; opacity:.65; margin-top:2px;}
+  .hdr .bar{width:54px; height:3px; background:var(--cyan); margin-top:8px;}
+  .topright{position:absolute; right:24px; top:22px; display:flex; gap:12px; z-index:8;}
+  .backchip{display:flex; align-items:center; height:38px; padding:0 18px;
+    transform:skewX(-6deg); background:#fff; color:var(--admin-text);
+    box-shadow:0 1px 4px rgba(0,0,0,.18); font-weight:800; font-size:14px; cursor:pointer;}
+  .backchip span{transform:skewX(6deg);}
+  .backchip.dark{background:rgba(14,17,22,.72); color:#fff; border:1px solid rgba(255,255,255,.22);}
+
+  /* operator chip (deployed character) */
+  .opchip{display:flex; align-items:center; gap:10px; height:38px; padding:0 16px 0 6px;
+    background:rgba(14,17,22,.72); border:1px solid rgba(255,255,255,.22); font-size:12px;}
+  .opchip img{width:30px; height:30px; object-fit:cover; object-position:top;}
+  .opchip .k{letter-spacing:.18em; opacity:.6; font-size:9px; display:block;}
+  .opchip .v{font-weight:800; letter-spacing:.04em;}
+  .opchip.light{background:#fff; color:var(--admin-text); border:none;
+    box-shadow:0 1px 4px rgba(0,0,0,.18);}
+
+  /* CTA */
+  .cta{display:flex; align-items:center; justify-content:center; height:60px;
+    background:linear-gradient(180deg,#5BD2F7,#1F8FE0); border-bottom:3px solid #15679f;
+    color:#fff; font-weight:800; font-size:21px; font-style:italic; cursor:pointer;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%);
+    letter-spacing:.04em; user-select:none;}
+  .cta.danger{background:linear-gradient(180deg,#f0584d,#b81f15); border-bottom-color:#7d120b;}
+
+  /* difficulty slider */
+  .diffrow{display:flex; align-items:center; gap:14px;}
+  .diffrow .lbl{font-size:11px; letter-spacing:.22em; font-weight:800;}
+  .diffrow input[type=range]{flex:1; -webkit-appearance:none; height:6px; background:rgba(128,140,155,.35); outline:none;}
+  .diffrow input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:14px; height:24px;
+    background:var(--cyan); cursor:pointer; border:none;}
+  .diffrow .val{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:30px;
+    width:74px; text-align:right; color:var(--cyan);}
+  .scalerow{display:flex; gap:0; margin-top:10px;}
+  .scalecell{flex:1; text-align:center; padding:7px 0 8px; border-right:1px solid rgba(128,140,155,.25);}
+  .scalecell:last-child{border-right:none;}
+  .scalecell .k{font-size:9px; letter-spacing:.22em; opacity:.55; display:block;}
+  .scalecell .v{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:22px;}
+
+  /* hazard goddess toggle */
+  .hazard{position:relative; display:flex; align-items:center; gap:12px; padding:12px 16px;
+    border:1px solid rgba(232,57,46,.55); cursor:pointer; user-select:none; overflow:hidden;}
+  .hazard .stripes{position:absolute; left:0; top:0; bottom:0; width:8px;
+    background:repeating-linear-gradient(-45deg,#E8392E 0 7px,#14181F 7px 14px);}
+  .hazard .sk{font-size:22px; color:#E8392E; margin-left:8px;}
+  .hazard .tx .t{font-weight:800; font-size:15px; letter-spacing:.06em; color:#ff6b61;}
+  .hazard .tx .d{font-size:10.5px; opacity:.6; margin-top:1px;}
+  .hazard .sw{margin-left:auto; width:42px; height:20px; border:1px solid rgba(232,57,46,.6); position:relative;}
+  .hazard .sw i{position:absolute; top:2px; left:2px; width:14px; height:14px; background:#5a6470; transition:all .15s;}
+  .hazard.on{background:rgba(120,10,5,.35); border-color:#E8392E;
+    box-shadow:inset 0 0 24px rgba(232,57,46,.25);}
+  .hazard.on .sw i{left:24px; background:#E8392E;}
+  .hazard.on .tx .t{color:#fff;}
+
+  /* ====================== VARIANT A : FIELD BRIEFING ====================== */
+  #vA{background:var(--field-bg); color:#F0F4F8;}
+  #vA .bigmap{position:absolute; inset:0; z-index:0;}
+  #vA .bigmap img{width:100%; height:100%; object-fit:cover; filter:brightness(.78) saturate(.95);
+    transition:opacity .35s;}
+  #vA .bigmap .shade{position:absolute; inset:0;
+    background:linear-gradient(90deg, rgba(10,13,18,.88) 0%, rgba(10,13,18,.45) 34%, rgba(10,13,18,.12) 60%, rgba(10,13,18,.55) 100%),
+               linear-gradient(0deg, rgba(10,13,18,.85) 0%, transparent 30%);}
+  #vA .mapname{position:absolute; left:46px; bottom:208px; z-index:5;}
+  #vA .mapname .n{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:54px;
+    text-shadow:0 2px 12px rgba(0,0,0,.6);}
+  #vA .mapname .s{font-size:13px; letter-spacing:.34em; color:var(--cyan); font-weight:800; margin-top:2px;}
+  /* bottom thumbnail rail */
+  #vA .rail{position:absolute; left:44px; bottom:118px; display:flex; gap:10px; z-index:6;}
+  #vA .thumb{position:relative; width:150px; height:72px; cursor:pointer; flex:none;
+    transform:skewX(-6deg); overflow:hidden; border:1px solid rgba(255,255,255,.25);
+    background:#10141a;}
+  #vA .thumb img{width:118%; height:100%; object-fit:cover; transform:skewX(6deg) translateX(-9%);
+    filter:brightness(.62) saturate(.85);}
+  #vA .thumb .nm{position:absolute; left:0; right:0; bottom:0; padding:3px 10px; font-size:9px;
+    font-weight:800; letter-spacing:.1em; background:rgba(10,13,18,.78);}
+  #vA .thumb .nm em{font-style:normal; color:var(--cyan); margin-left:5px; font-size:8px;}
+  #vA .thumb.sel{border:2px solid var(--yellow);}
+  #vA .thumb.sel img{filter:brightness(.95) saturate(1);}
+  #vA .thumb.sel::before{content:""; position:absolute; inset:0; box-shadow:inset 0 0 0 1px rgba(0,0,0,.5);}
+  /* left mode stack */
+  #vA .modes{position:absolute; left:44px; top:128px; width:300px; z-index:6;
+    display:flex; flex-direction:column; gap:10px;}
+  #vA .mode{position:relative; padding:14px 18px; cursor:pointer; user-select:none;
+    background:rgba(20,24,31,.78); border:1px solid rgba(255,255,255,.18);
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%);}
+  #vA .mode .t{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:24px;}
+  #vA .mode .d{font-size:11px; opacity:.65; margin-top:3px; line-height:1.45;}
+  #vA .mode.sel{background:rgba(31,143,224,.28); border-color:var(--cyan);}
+  #vA .mode.sel::before{content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--cyan);}
+  #vA .mode.sel .t{color:var(--cyan);}
+  #vA .modes .hazard{margin-top:6px; background:rgba(20,24,31,.78);}
+  /* right ops panel */
+  #vA .ops{position:absolute; right:36px; bottom:44px; width:368px; z-index:6;
+    background:rgba(16,20,26,.84); border:1px solid rgba(255,255,255,.16); padding:18px 20px;}
+  #vA .ops .cap{font-size:10px; letter-spacing:.3em; opacity:.55; font-weight:800; margin-bottom:10px;}
+  #vA .ops .cta{margin-top:16px;}
+
+  /* ====================== VARIANT B : ADMIN DOSSIER ====================== */
+  #vB{background:var(--admin-bg); color:var(--admin-text);}
+  #vB .hdr .s{color:var(--admin-dim);}
+  #vB .mapsgrid{position:absolute; left:44px; top:128px; width:560px; z-index:3;
+    display:flex; flex-wrap:wrap; gap:14px;}
+  #vB .mcard{position:relative; width:272px; height:128px; cursor:pointer; background:#fff;
+    box-shadow:0 1px 5px rgba(0,0,0,.16); overflow:hidden;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%);}
+  #vB .mcard img{width:100%; height:96px; object-fit:cover; display:block; filter:saturate(.95);}
+  #vB .mcard .nm{height:32px; display:flex; align-items:center; padding:0 12px; font-size:11.5px;
+    font-weight:800; letter-spacing:.04em; background:#fff;}
+  #vB .mcard .nm em{font-style:normal; color:var(--cyan-deep); margin-left:8px; font-size:9px;
+    letter-spacing:.18em;}
+  #vB .mcard.sel{outline:2px solid var(--yellow); outline-offset:2px;}
+  #vB .mcard.sel::before,#vB .mcard.sel::after{content:""; position:absolute; width:14px; height:14px;
+    border:3px solid var(--yellow); z-index:3;}
+  #vB .mcard.sel::before{top:0; left:0; border-right:none; border-bottom:none;}
+  #vB .mcard.sel::after{bottom:0; right:0; border-left:none; border-top:none;}
+  /* right ops dossier */
+  #vB .dossier{position:absolute; right:36px; top:118px; width:520px; bottom:44px; z-index:3;
+    background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.16); padding:0; display:flex;
+    flex-direction:column;}
+  #vB .dossier .preview{position:relative; height:212px; overflow:hidden;}
+  #vB .dossier .preview img{width:100%; height:100%; object-fit:cover;}
+  #vB .dossier .preview .nm{position:absolute; left:0; bottom:0; right:0; padding:10px 18px;
+    background:linear-gradient(0deg, rgba(10,13,18,.85), transparent); color:#fff;}
+  #vB .dossier .preview .nm .n{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:30px;}
+  #vB .dossier .preview .nm .s{font-size:10px; letter-spacing:.3em; color:var(--cyan); font-weight:800;}
+  #vB .dbody{padding:16px 22px 20px; display:flex; flex-direction:column; flex:1;}
+  #vB .seg{display:flex; border:1px solid var(--admin-hair); margin-bottom:14px;}
+  #vB .seg .opt{flex:1; text-align:center; padding:10px 0; cursor:pointer; font-weight:800;
+    font-size:14px; letter-spacing:.08em; color:var(--admin-dim); user-select:none;}
+  #vB .seg .opt.sel{background:var(--admin-text); color:#fff;}
+  #vB .seg .opt .d{display:block; font-size:9px; font-weight:600; letter-spacing:.04em;
+    margin-top:2px; opacity:.7;}
+  #vB .dbody .diffrow .val{color:var(--cyan-deep);}
+  #vB .scalerow{border:1px solid var(--admin-hair); margin-top:12px;}
+  #vB .hazard{margin-top:14px;}
+  #vB .hazard .tx .t{color:#c4271c;}
+  #vB .hazard.on .tx .t{color:#E8392E;}
+  #vB .dbody .cta{margin-top:auto;}
+
+  /* ====================== VARIANT C : SPLIT OP ORDER ====================== */
+  #vC{background:var(--field-bg); color:#F0F4F8;}
+  #vC .heropane{position:absolute; left:44px; top:118px; width:760px; bottom:44px; z-index:3;
+    overflow:hidden; border:1px solid rgba(255,255,255,.18);
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 22px),calc(100% - 22px) 100%,0 100%);}
+  #vC .heropane img{width:100%; height:100%; object-fit:cover; filter:brightness(.85);}
+  #vC .heropane .shade{position:absolute; inset:0;
+    background:linear-gradient(0deg, rgba(10,13,18,.82) 0%, transparent 34%);}
+  #vC .navarrow{position:absolute; top:50%; transform:translateY(-50%); width:52px; height:88px;
+    display:flex; align-items:center; justify-content:center; font-size:26px; cursor:pointer;
+    background:rgba(10,13,18,.6); border:1px solid rgba(255,255,255,.25); user-select:none; z-index:5;}
+  #vC .navarrow:hover{background:rgba(31,143,224,.5);}
+  #vC .heropane .mapinfo{position:absolute; left:26px; bottom:48px; z-index:4;}
+  #vC .heropane .mapinfo .n{font-family:"Arial Narrow"; font-weight:800; font-style:italic;
+    font-size:46px; text-shadow:0 2px 10px rgba(0,0,0,.65);}
+  #vC .heropane .mapinfo .s{font-size:12px; letter-spacing:.32em; color:var(--cyan); font-weight:800;}
+  #vC .dots{position:absolute; left:26px; bottom:22px; display:flex; gap:8px; z-index:4;}
+  #vC .dots i{width:22px; height:5px; background:rgba(255,255,255,.28); cursor:pointer;}
+  #vC .dots i.sel{background:var(--yellow);}
+  /* right column */
+  #vC .col{position:absolute; right:36px; top:118px; width:392px; bottom:44px; z-index:3;
+    display:flex; flex-direction:column; gap:12px;}
+  #vC .panel{background:var(--panel); border:1px solid rgba(255,255,255,.12); padding:16px 18px;}
+  #vC .panel .cap{font-size:10px; letter-spacing:.3em; opacity:.55; font-weight:800; margin-bottom:10px;}
+  #vC .modegrid{display:flex; gap:10px;}
+  #vC .mode{flex:1; padding:12px 14px; cursor:pointer; user-select:none; text-align:left;
+    background:var(--panel-hi); border:1px solid rgba(255,255,255,.14);
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%);}
+  #vC .mode .t{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:21px;}
+  #vC .mode .d{font-size:10px; opacity:.6; margin-top:3px; line-height:1.4;}
+  #vC .mode.sel{background:rgba(31,143,224,.3); border-color:var(--cyan);}
+  #vC .mode.sel .t{color:var(--cyan);}
+  #vC .col .cta{margin-top:auto;}
+</style>
+</head>
+<body>
+
+<h1>Stage Select — Round 1</h1>
+<div class="sub">3 layout directions · all interactive: click maps / modes / goddess fall, drag difficulty</div>
+
+<!-- ============================ VARIANT A ============================ -->
+<h2>A — “Field Briefing” · dark register, full-bleed map</h2>
+<div class="sub">The selected map IS the screen. Thumbnail rail to switch zones, mode stack left, ops panel right.</div>
+<div class="stage" id="vA">
+  <div class="bigmap"><img id="vA-big" src=""><div class="shade"></div></div>
+  <div class="hdr"><div class="t">MISSION SELECT</div><div class="s">CHOOSE OPERATION ZONE</div><div class="bar"></div></div>
+  <div class="topright">
+    <div class="opchip"><img src="../../assets/characters/snow-white/portrait-sq.png">
+      <div><span class="k">OPERATOR</span><span class="v">SNOW WHITE</span></div></div>
+    <div class="backchip dark"><span>← BACK</span></div>
+  </div>
+
+  <div class="modes" id="vA-modes">
+    <div class="mode sel" data-mode="std"><div class="t">STANDARD</div>
+      <div class="d">Survive 11 waves of Raptures to complete the mission.</div></div>
+    <div class="mode" data-mode="end"><div class="t">ENDLESS</div>
+      <div class="d">No wave limit. How long can you survive the endless horde?</div></div>
+    <div class="hazard" id="vA-haz">
+      <div class="stripes"></div><div class="sk">☠</div>
+      <div class="tx"><div class="t">GODDESS FALL</div><div class="d">Hardcore protocol. She descends.</div></div>
+      <div class="sw"><i></i></div>
+    </div>
+  </div>
+
+  <div class="mapname"><div class="n" id="vA-nm">ARK OUTSKIRTS</div><div class="s" id="vA-sb">DAY</div></div>
+  <div class="rail" id="vA-rail"></div>
+
+  <div class="ops">
+    <div class="cap">THREAT LEVEL</div>
+    <div class="diffrow"><span class="lbl">DIFFICULTY</span>
+      <input type="range" min="1" max="100" value="1" id="vA-diff"><span class="val" id="vA-dv">×1</span></div>
+    <div class="scalerow">
+      <div class="scalecell"><span class="k">ENEMY HP</span><span class="v" id="vA-hp">×1</span></div>
+      <div class="scalecell"><span class="k">ENEMY ATK</span><span class="v" id="vA-atk">×1</span></div>
+      <div class="scalecell"><span class="k">CORES</span><span class="v" id="vA-core">×1</span></div>
+    </div>
+    <div class="cta" id="vA-start">MISSION START</div>
+  </div>
+  <div class="scan"></div>
+</div>
+
+<!-- ============================ VARIANT B ============================ -->
+<h2>B — “Admin Dossier” · light register, continuation of character select</h2>
+<div class="sub">Map cards left like the character grid, white ops dossier right with live preview. Same page language as char select.</div>
+<div class="stage" id="vB">
+  <div class="hdr"><div class="t">MISSION SELECT</div><div class="s">CHOOSE OPERATION ZONE</div><div class="bar"></div></div>
+  <div class="topright">
+    <div class="opchip light"><img src="../../assets/characters/snow-white/portrait-sq.png">
+      <div><span class="k">OPERATOR</span><span class="v">SNOW WHITE</span></div></div>
+    <div class="backchip"><span>← BACK</span></div>
+  </div>
+
+  <div class="mapsgrid" id="vB-grid"></div>
+
+  <div class="dossier">
+    <div class="preview"><img id="vB-big" src="">
+      <div class="nm"><div class="n" id="vB-nm">ARK OUTSKIRTS</div><div class="s" id="vB-sb">DAY</div></div></div>
+    <div class="dbody">
+      <div class="seg" id="vB-modes">
+        <div class="opt sel" data-mode="std">STANDARD<span class="d">11 waves · mission clear</span></div>
+        <div class="opt" data-mode="end">ENDLESS<span class="d">no wave limit</span></div>
+      </div>
+      <div class="diffrow"><span class="lbl">DIFFICULTY</span>
+        <input type="range" min="1" max="100" value="1" id="vB-diff"><span class="val" id="vB-dv">×1</span></div>
+      <div class="scalerow">
+        <div class="scalecell"><span class="k">ENEMY HP</span><span class="v" id="vB-hp">×1</span></div>
+        <div class="scalecell"><span class="k">ENEMY ATK</span><span class="v" id="vB-atk">×1</span></div>
+        <div class="scalecell"><span class="k">CORES</span><span class="v" id="vB-core">×1</span></div>
+      </div>
+      <div class="hazard" id="vB-haz">
+        <div class="stripes"></div><div class="sk">☠</div>
+        <div class="tx"><div class="t">GODDESS FALL</div><div class="d">Hardcore protocol. She descends.</div></div>
+        <div class="sw"><i></i></div>
+      </div>
+      <div class="cta" id="vB-start">MISSION START</div>
+    </div>
+  </div>
+  <div class="scan"></div>
+</div>
+
+<!-- ============================ VARIANT C ============================ -->
+<h2>C — “Split Op Order” · dark register, big carousel hero (closest to current flow)</h2>
+<div class="sub">One large chamfered preview with prev/next arrows + dots, all controls in a right column.</div>
+<div class="stage" id="vC">
+  <div class="hdr"><div class="t">MISSION SELECT</div><div class="s">CHOOSE OPERATION ZONE</div><div class="bar"></div></div>
+  <div class="topright">
+    <div class="opchip"><img src="../../assets/characters/snow-white/portrait-sq.png">
+      <div><span class="k">OPERATOR</span><span class="v">SNOW WHITE</span></div></div>
+    <div class="backchip dark"><span>← BACK</span></div>
+  </div>
+
+  <div class="heropane">
+    <img id="vC-big" src=""><div class="shade"></div>
+    <div class="mapinfo"><div class="n" id="vC-nm">ARK OUTSKIRTS</div><div class="s" id="vC-sb">DAY</div></div>
+    <div class="dots" id="vC-dots"></div>
+    <div class="navarrow" style="left:14px;" id="vC-prev">◀</div>
+    <div class="navarrow" style="right:36px;" id="vC-next">▶</div>
+  </div>
+
+  <div class="col">
+    <div class="panel">
+      <div class="cap">OPERATION MODE</div>
+      <div class="modegrid" id="vC-modes">
+        <div class="mode sel" data-mode="std"><div class="t">STANDARD</div><div class="d">11 waves · mission clear</div></div>
+        <div class="mode" data-mode="end"><div class="t">ENDLESS</div><div class="d">No wave limit</div></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="cap">THREAT LEVEL</div>
+      <div class="diffrow"><span class="lbl">DIFFICULTY</span>
+        <input type="range" min="1" max="100" value="1" id="vC-diff"><span class="val" id="vC-dv">×1</span></div>
+      <div class="scalerow">
+        <div class="scalecell"><span class="k">ENEMY HP</span><span class="v" id="vC-hp">×1</span></div>
+        <div class="scalecell"><span class="k">ENEMY ATK</span><span class="v" id="vC-atk">×1</span></div>
+        <div class="scalecell"><span class="k">CORES</span><span class="v" id="vC-core">×1</span></div>
+      </div>
+    </div>
+    <div class="hazard" id="vC-haz" style="background:var(--panel);">
+      <div class="stripes"></div><div class="sk">☠</div>
+      <div class="tx"><div class="t">GODDESS FALL</div><div class="d">Hardcore protocol. She descends.</div></div>
+      <div class="sw"><i></i></div>
+    </div>
+    <div class="cta" id="vC-start">MISSION START</div>
+  </div>
+  <div class="scan"></div>
+</div>
+
+<script>
+const MAPS=[
+ {name:"ARK OUTSKIRTS",  sub:"DAY",   img:"../../assets/backgrounds/forest.jpg"},
+ {name:"ARK OUTSKIRTS",  sub:"NIGHT", img:"../../assets/backgrounds/rapturefield2.jpg"},
+ {name:"THE FROZEN NORTH",sub:"DAY",  img:"../../assets/backgrounds/snow-day.jpg"},
+ {name:"THE FROZEN NORTH",sub:"NIGHT",img:"../../assets/backgrounds/snow-night.jpg"},
+ {name:"STORMBRINGER",   sub:"NIGHT", img:"../../assets/backgrounds/rapturefield1.jpg"},
+];
+const scaling=d=>({hp:d, atk:1+0.25*(d-1), core:d});
+const fmt=v=>"×"+(v===Math.round(v)?v:v.toFixed(2));
+
+function wireDiff(p){
+  const slider=document.getElementById(p+"-diff");
+  const upd=()=>{const d=+slider.value, s=scaling(d);
+    document.getElementById(p+"-dv").textContent="×"+d;
+    document.getElementById(p+"-hp").textContent=fmt(s.hp);
+    document.getElementById(p+"-atk").textContent=fmt(s.atk);
+    document.getElementById(p+"-core").textContent=fmt(s.core);};
+  slider.addEventListener("input",upd); upd();
+}
+function wireModes(p){
+  const wrap=document.getElementById(p+"-modes");
+  wrap.querySelectorAll("[data-mode]").forEach(el=>el.addEventListener("click",()=>{
+    wrap.querySelectorAll("[data-mode]").forEach(o=>o.classList.remove("sel"));
+    el.classList.add("sel");}));
+}
+function wireHazard(p){
+  const h=document.getElementById(p+"-haz"), start=document.getElementById(p+"-start");
+  h.addEventListener("click",()=>{h.classList.toggle("on");
+    start.classList.toggle("danger",h.classList.contains("on"));
+    start.textContent=h.classList.contains("on")?"SHE DESCENDS":"MISSION START";});
+}
+function setMap(p,i){
+  document.getElementById(p+"-big").src=MAPS[i].img;
+  document.getElementById(p+"-nm").textContent=MAPS[i].name;
+  document.getElementById(p+"-sb").textContent=MAPS[i].sub;
+}
+
+/* A: thumbnail rail */
+(()=>{const rail=document.getElementById("vA-rail");
+  MAPS.forEach((m,i)=>{const t=document.createElement("div"); t.className="thumb"+(i===0?" sel":"");
+    t.innerHTML=`<img src="${m.img}"><div class="nm">${m.name}<em>${m.sub}</em></div>`;
+    t.addEventListener("click",()=>{rail.querySelectorAll(".thumb").forEach(o=>o.classList.remove("sel"));
+      t.classList.add("sel"); setMap("vA",i);});
+    rail.appendChild(t);});
+  setMap("vA",0); wireDiff("vA"); wireModes("vA"); wireHazard("vA");})();
+
+/* B: card grid */
+(()=>{const grid=document.getElementById("vB-grid");
+  MAPS.forEach((m,i)=>{const c=document.createElement("div"); c.className="mcard"+(i===0?" sel":"");
+    c.innerHTML=`<img src="${m.img}"><div class="nm">${m.name}<em>${m.sub}</em></div>`;
+    c.addEventListener("click",()=>{grid.querySelectorAll(".mcard").forEach(o=>o.classList.remove("sel"));
+      c.classList.add("sel"); setMap("vB",i);});
+    grid.appendChild(c);});
+  setMap("vB",0); wireDiff("vB"); wireModes("vB"); wireHazard("vB");})();
+
+/* C: carousel */
+(()=>{let idx=0; const dots=document.getElementById("vC-dots");
+  MAPS.forEach((m,i)=>{const d=document.createElement("i"); if(i===0)d.className="sel";
+    d.addEventListener("click",()=>go(i)); dots.appendChild(d);});
+  function go(i){idx=(i+MAPS.length)%MAPS.length; setMap("vC",idx);
+    dots.querySelectorAll("i").forEach((d,j)=>d.classList.toggle("sel",j===idx));}
+  document.getElementById("vC-prev").addEventListener("click",()=>go(idx-1));
+  document.getElementById("vC-next").addEventListener("click",()=>go(idx+1));
+  go(0); wireDiff("vC"); wireModes("vC"); wireHazard("vC");})();
+</script>
+</body>
+</html>

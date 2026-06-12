@@ -21,3 +21,11 @@ NIKKE-GODOT - Copy/
 
 # Export PCK files (too large for GitHub)
 *.pck
+
+# Installed-but-unused addons (not enabled in project.godot, nothing references them)
+addons/MetroidvaniaSystem/
+addons/godot_mcp/
+addons/godot_projectile_engine/
+addons/health_hitbox_hurtbox/
+addons/rokojori_action_library/
+addons/scatter2d/

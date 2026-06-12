@@ -1,9 +1,9 @@
-extends Node
+﻿extends Node
 
 ## Scarlet ally behavior - Melee DPS with combo slashes
 
 func configure(ally, _registry) -> void:
-	var hp_mult := 1.0 + (ally.player_level - 1) * 0.25
+	var hp_mult: float = 1.0 + (ally.player_level - 1) * 0.25
 	ally.max_hp = int(60 * hp_mult)
 	ally.move_speed = 280.0
 	ally.attack_damage = ally._get_scaled_damage(10)
@@ -37,7 +37,7 @@ func should_use_special(ally) -> bool:
 	return nearby_count >= 3
 
 func perform_special(ally) -> void:
-	var direction := ally._last_direction.normalized()
+	var direction: Vector2 = ally._last_direction.normalized()
 	if direction.length() < 0.5:
 		direction = Vector2.RIGHT
 	var wave = ProjectileCache.create_scarlet_wave()

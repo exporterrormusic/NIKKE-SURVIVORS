@@ -205,7 +205,7 @@ func _refresh_list() -> void:
 		row_style.bg_color = UI.ENTRY_BG
 		row_style.border_color = UI.ENTRY_BORDER
 		row_style.set_border_width_all(1)
-		row_style.set_corner_radius_all(4)
+		row_style.set_corner_radius_all(0)
 		if is_active:
 			row_style.bg_color = Color(0.15, 0.25, 0.15, 0.9) # Green tint
 			row_style.border_color = UI.COLOR_UNLOCKED
@@ -253,7 +253,7 @@ func _refresh_list() -> void:
 func _update_toggle_visuals(btn: Button) -> void:
 	var style = StyleBoxFlat.new()
 	style.set_border_width_all(2)
-	style.set_corner_radius_all(4)
+	style.set_corner_radius_all(0)
 	
 	if btn.button_pressed:
 		btn.text = "ON"

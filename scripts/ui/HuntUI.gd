@@ -94,7 +94,7 @@ func _create_panel_style() -> StyleBoxFlat:
 	style.bg_color = PANEL_BG
 	style.border_color = BORDER_COLOR
 	style.set_border_width_all(2)
-	style.set_corner_radius_all(6)
+	style.set_corner_radius_all(0)
 	return style
 
 func _create_arrow_script() -> GDScript:

@@ -1,6 +1,10 @@
-[gd_scene load_steps=2 format=3 uid="uid://chuntv1ii8li4"]
+[gd_scene format=3 uid="uid://chuntv1ii8li4"]
 
-[ext_resource type="Script" uid="uid://dnnafthi8xsv6" path="res://scripts/ui/ShopMenu.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/ui/ShopMenu.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/ui/components/NikkeCardButton.gd" id="2_card"]
+[ext_resource type="Script" path="res://scripts/ui/components/CorePillButton.gd" id="3_pill"]
+[ext_resource type="Script" path="res://scripts/ui/components/NikkeTabBar.gd" id="4_tabs"]
+[ext_resource type="Script" path="res://scripts/ui/components/NikkeGreebles.gd" id="5_greebles"]
 
 [node name="ShopMenu" type="Control"]
 layout_mode = 3
@@ -10,3 +14,303 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_script")
+
+[node name="PageBg" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.929, 0.937, 0.949, 1)
+
+[node name="HeaderTitle" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 66.0
+offset_top = 36.0
+offset_right = 900.0
+offset_bottom = 110.0
+mouse_filter = 2
+text = "SHOP"
+
+[node name="HeaderSub" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 69.0
+offset_top = 112.0
+offset_right = 900.0
+offset_bottom = 140.0
+mouse_filter = 2
+text = "OUTPOST SUPPLY // PERMANENT UPGRADES"
+
+[node name="HeaderBar" type="ColorRect" parent="."]
+layout_mode = 0
+offset_left = 69.0
+offset_top = 150.0
+offset_right = 150.0
+offset_bottom = 154.0
+mouse_filter = 2
+color = Color(0.208, 0.773, 0.949, 1)
+
+[node name="TopRightStrip" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -700.0
+offset_top = 33.0
+offset_right = -36.0
+offset_bottom = 90.0
+grow_horizontal = 0
+alignment = 2
+theme_override_constants/separation = 18
+
+[node name="CorePill" type="Button" parent="TopRightStrip"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 57)
+layout_mode = 2
+script = ExtResource("3_pill")
+light_register = true
+show_plus = false
+
+[node name="BackButton" type="Button" parent="TopRightStrip"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(190, 57)
+layout_mode = 2
+script = ExtResource("2_card")
+card_style = "white_blue"
+title_text = "← BACK"
+title_size = 21
+
+[node name="TabBar" type="HBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 70.0
+offset_top = 177.0
+offset_right = 711.0
+offset_bottom = 228.0
+script = ExtResource("4_tabs")
+tab_titles = PackedStringArray("UPGRADES")
+
+[node name="ListColumn" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = -1
+anchor_bottom = 1.0
+offset_left = 66.0
+offset_top = 252.0
+offset_right = 711.0
+offset_bottom = -90.0
+grow_vertical = 2
+theme_override_constants/separation = 21
+
+[node name="ItemList" type="VBoxContainer" parent="ListColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="ResetButton" type="Button" parent="ListColumn"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 66)
+layout_mode = 2
+text = "↺  RESET & REFUND ALL"
+
+[node name="DetailPanel" type="Panel" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1149.0
+offset_top = 177.0
+offset_right = -54.0
+offset_bottom = -90.0
+grow_horizontal = 0
+grow_vertical = 2
+
+[node name="DetailContent" type="Control" parent="DetailPanel"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Watermark" type="Label" parent="DetailPanel/DetailContent"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -560.0
+offset_top = -520.0
+offset_right = -20.0
+offset_bottom = 40.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 2
+text = "▲"
+horizontal_alignment = 2
+vertical_alignment = 2
+
+[node name="RoleLabel" type="Label" parent="DetailPanel/DetailContent"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 45.0
+offset_top = 40.0
+offset_right = 700.0
+offset_bottom = 66.0
+mouse_filter = 2
+text = "PERMANENT UPGRADE"
+
+[node name="NameLabel" type="Label" parent="DetailPanel/DetailContent"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 45.0
+offset_top = 66.0
+offset_right = 900.0
+offset_bottom = 168.0
+mouse_filter = 2
+text = "ATTACK"
+
+[node name="DescLabel" type="Label" parent="DetailPanel/DetailContent"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 45.0
+offset_top = 184.0
+offset_right = 700.0
+offset_bottom = 280.0
+mouse_filter = 2
+autowrap_mode = 3
+text = "+25% Attack Damage per level. Applies to every Nikke, every run."
+
+[node name="LvRow" type="HBoxContainer" parent="DetailPanel/DetailContent"]
+layout_mode = 0
+offset_left = 45.0
+offset_top = 290.0
+offset_right = 800.0
+offset_bottom = 400.0
+mouse_filter = 2
+theme_override_constants/separation = 27
+
+[node name="LvNow" type="Label" parent="DetailPanel/DetailContent/LvRow"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+vertical_alignment = 2
+text = "LV 00"
+
+[node name="LvArrow" type="Label" parent="DetailPanel/DetailContent/LvRow"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+vertical_alignment = 2
+text = "▶"
+
+[node name="LvNext" type="Label" parent="DetailPanel/DetailContent/LvRow"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+vertical_alignment = 2
+text = "LV 01"
+
+[node name="BonusRow" type="HBoxContainer" parent="DetailPanel/DetailContent"]
+layout_mode = 0
+offset_left = 45.0
+offset_top = 420.0
+offset_right = 900.0
+offset_bottom = 500.0
+mouse_filter = 2
+theme_override_constants/separation = 54
+
+[node name="CurCell" type="VBoxContainer" parent="DetailPanel/DetailContent/BonusRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="CurCap" type="Label" parent="DetailPanel/DetailContent/BonusRow/CurCell"]
+layout_mode = 2
+mouse_filter = 2
+text = "CURRENT BONUS"
+
+[node name="CurBonus" type="Label" parent="DetailPanel/DetailContent/BonusRow/CurCell"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+text = "+0%"
+
+[node name="NextCell" type="VBoxContainer" parent="DetailPanel/DetailContent/BonusRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="NextCap" type="Label" parent="DetailPanel/DetailContent/BonusRow/NextCell"]
+layout_mode = 2
+mouse_filter = 2
+text = "NEXT LEVEL"
+
+[node name="NextBonus" type="Label" parent="DetailPanel/DetailContent/BonusRow/NextCell"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+text = "+25%"
+
+[node name="Cost10Cell" type="VBoxContainer" parent="DetailPanel/DetailContent/BonusRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Cost10Cap" type="Label" parent="DetailPanel/DetailContent/BonusRow/Cost10Cell"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+text = "NEXT 10 COST"
+
+[node name="Cost10Label" type="Label" parent="DetailPanel/DetailContent/BonusRow/Cost10Cell"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+text = "◆ 55"
+
+[node name="BuyRow" type="HBoxContainer" parent="DetailPanel/DetailContent"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 45.0
+offset_top = -132.0
+offset_right = -45.0
+offset_bottom = -45.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_constants/separation = 21
+
+[node name="BuyButton" type="Button" parent="DetailPanel/DetailContent/BuyRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 87)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "◆ 1   BUY"
+
+[node name="Buy10Button" type="Button" parent="DetailPanel/DetailContent/BuyRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(255, 87)
+layout_mode = 2
+text = "◆ 55   ×10"
+
+[node name="Greebles" type="Control" parent="."]
+layout_mode = 0
+offset_left = 68.0
+offset_top = 1042.0
+offset_right = 520.0
+offset_bottom = 1066.0
+script = ExtResource("5_greebles")
+serial_text = "SUPPLY TERMINAL // ARK SYS V2.4"
+tint = Color(0.165, 0.18, 0.208, 0.3)

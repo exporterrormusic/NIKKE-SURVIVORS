@@ -1,0 +1,409 @@
+[gd_scene format=3 uid="uid://c7nepkaq3ju6j"]
+
+[ext_resource type="Script" path="res://scripts/ui/MissionSelect.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/ui/components/OperatorChip.gd" id="2_opchip"]
+[ext_resource type="Script" path="res://scripts/ui/components/NikkeCardButton.gd" id="3_card"]
+[ext_resource type="Script" path="res://scripts/ui/components/ZoneCarousel.gd" id="4_carousel"]
+[ext_resource type="Script" path="res://scripts/ui/components/HazardToggle.gd" id="5_hazard"]
+
+[sub_resource type="Gradient" id="g_shade_h"]
+offsets = PackedFloat32Array(0, 0.34, 0.6, 1)
+colors = PackedColorArray(0.039, 0.051, 0.071, 0.88, 0.039, 0.051, 0.071, 0.45, 0.039, 0.051, 0.071, 0.12, 0.039, 0.051, 0.071, 0.55)
+
+[sub_resource type="GradientTexture2D" id="gt_shade_h"]
+gradient = SubResource("g_shade_h")
+fill_from = Vector2(0, 0)
+fill_to = Vector2(1, 0)
+
+[sub_resource type="Gradient" id="g_shade_v"]
+offsets = PackedFloat32Array(0, 1)
+colors = PackedColorArray(0.039, 0.051, 0.071, 0.85, 0.039, 0.051, 0.071, 0)
+
+[sub_resource type="GradientTexture2D" id="gt_shade_v"]
+gradient = SubResource("g_shade_v")
+fill_from = Vector2(0, 1)
+fill_to = Vector2(0, 0.7)
+
+[sub_resource type="Gradient" id="g_vignette"]
+offsets = PackedFloat32Array(0.38, 1)
+colors = PackedColorArray(0.627, 0.039, 0.02, 0, 0.627, 0.039, 0.02, 0.55)
+
+[sub_resource type="GradientTexture2D" id="gt_vignette"]
+gradient = SubResource("g_vignette")
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[node name="MissionSelect" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="PageBg" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.055, 0.067, 0.086, 1)
+
+[node name="BigMap" type="TextureRect" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+modulate = Color(0.8, 0.8, 0.84, 1)
+expand_mode = 1
+stretch_mode = 6
+
+[node name="ShadeH" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = SubResource("gt_shade_h")
+expand_mode = 1
+
+[node name="ShadeV" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = SubResource("gt_shade_v")
+expand_mode = 1
+
+[node name="ArmFX" type="Control" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+modulate = Color(1, 1, 1, 0)
+
+[node name="Vignette" type="TextureRect" parent="ArmFX"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = SubResource("gt_vignette")
+expand_mode = 1
+
+[node name="Pulse" type="ColorRect" parent="ArmFX"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+modulate = Color(1, 1, 1, 0.4)
+color = Color(0.91, 0.224, 0.18, 0.07)
+
+[node name="GlitchLine" type="ColorRect" parent="ArmFX"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 0
+offset_left = 0.0
+offset_top = -10.0
+offset_right = 1920.0
+offset_bottom = -6.0
+mouse_filter = 2
+color = Color(1, 0.31, 0.27, 0.45)
+
+[node name="HeaderTitle" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 66.0
+offset_top = 36.0
+offset_right = 900.0
+offset_bottom = 110.0
+mouse_filter = 2
+text = "MISSION SELECT"
+
+[node name="HeaderSub" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 69.0
+offset_top = 112.0
+offset_right = 900.0
+offset_bottom = 140.0
+mouse_filter = 2
+text = "CHOOSE OPERATION ZONE"
+
+[node name="HeaderBar" type="ColorRect" parent="."]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 69.0
+offset_top = 150.0
+offset_right = 150.0
+offset_bottom = 154.0
+mouse_filter = 2
+color = Color(0.208, 0.773, 0.949, 1)
+
+[node name="TopRightStrip" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -700.0
+offset_top = 33.0
+offset_right = -36.0
+offset_bottom = 90.0
+grow_horizontal = 0
+alignment = 2
+theme_override_constants/separation = 18
+
+[node name="OperatorChip" type="PanelContainer" parent="TopRightStrip"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 57)
+layout_mode = 2
+script = ExtResource("2_opchip")
+
+[node name="BackButton" type="Button" parent="TopRightStrip"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(190, 57)
+layout_mode = 2
+script = ExtResource("3_card")
+card_style = "dark"
+title_text = "← BACK"
+title_size = 21
+
+[node name="Modes" type="VBoxContainer" parent="."]
+layout_mode = 0
+offset_left = 66.0
+offset_top = 192.0
+offset_right = 516.0
+offset_bottom = 700.0
+theme_override_constants/separation = 15
+
+[node name="ModeList" type="VBoxContainer" parent="Modes"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="GoddessToggle" type="Button" parent="Modes"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 84)
+layout_mode = 2
+script = ExtResource("5_hazard")
+
+[node name="MapNameLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 69.0
+offset_top = 692.0
+offset_right = 1150.0
+offset_bottom = 788.0
+mouse_filter = 2
+text = "ARK OUTSKIRTS"
+
+[node name="MapSubRow" type="HBoxContainer" parent="."]
+layout_mode = 0
+offset_left = 72.0
+offset_top = 792.0
+offset_right = 1150.0
+offset_bottom = 826.0
+mouse_filter = 2
+theme_override_constants/separation = 21
+
+[node name="MapSubLabel" type="Label" parent="MapSubRow"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+text = "DAY"
+
+[node name="ZoneCounter" type="Label" parent="MapSubRow"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+text = "ZONE 01 // 05"
+
+[node name="Carousel" type="Control" parent="."]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 66.0
+offset_top = 840.0
+offset_right = 1275.0
+offset_bottom = 984.0
+script = ExtResource("4_carousel")
+
+[node name="PrevArrow" type="Button" parent="."]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 9.0
+offset_top = 861.0
+offset_right = 60.0
+offset_bottom = 963.0
+text = "◀"
+
+[node name="NextArrow" type="Button" parent="."]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 1215.0
+offset_top = 861.0
+offset_right = 1266.0
+offset_bottom = 963.0
+text = "▶"
+
+[node name="OpsPanel" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -606.0
+offset_top = -446.0
+offset_right = -54.0
+offset_bottom = -66.0
+grow_horizontal = 0
+grow_vertical = 0
+
+[node name="OpsMargin" type="MarginContainer" parent="OpsPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 30
+theme_override_constants/margin_right = 30
+theme_override_constants/margin_top = 27
+theme_override_constants/margin_bottom = 30
+
+[node name="OpsBox" type="VBoxContainer" parent="OpsPanel/OpsMargin"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="OpsCap" type="Label" parent="OpsPanel/OpsMargin/OpsBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "THREAT LEVEL"
+
+[node name="DiffRow" type="HBoxContainer" parent="OpsPanel/OpsMargin/OpsBox"]
+layout_mode = 2
+theme_override_constants/separation = 21
+
+[node name="DiffLabel" type="Label" parent="OpsPanel/OpsMargin/OpsBox/DiffRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "DIFFICULTY"
+
+[node name="DiffSlider" type="HSlider" parent="OpsPanel/OpsMargin/OpsBox/DiffRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(180, 36)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+min_value = 1.0
+max_value = 100.0
+step = 1.0
+value = 1.0
+
+[node name="DiffValue" type="Label" parent="OpsPanel/OpsMargin/OpsBox/DiffRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(111, 0)
+layout_mode = 2
+horizontal_alignment = 2
+text = "×1"
+
+[node name="ScaleRow" type="HBoxContainer" parent="OpsPanel/OpsMargin/OpsBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="HpCell" type="VBoxContainer" parent="OpsPanel/OpsMargin/OpsBox/ScaleRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+alignment = 1
+theme_override_constants/separation = 2
+
+[node name="HpCap" type="Label" parent="OpsPanel/OpsMargin/OpsBox/ScaleRow/HpCell"]
+layout_mode = 2
+horizontal_alignment = 1
+text = "ENEMY HP"
+
+[node name="HpScale" type="Label" parent="OpsPanel/OpsMargin/OpsBox/ScaleRow/HpCell"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+text = "×1"
+
+[node name="AtkCell" type="VBoxContainer" parent="OpsPanel/OpsMargin/OpsBox/ScaleRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+alignment = 1
+theme_override_constants/separation = 2
+
+[node name="AtkCap" type="Label" parent="OpsPanel/OpsMargin/OpsBox/ScaleRow/AtkCell"]
+layout_mode = 2
+horizontal_alignment = 1
+text = "ENEMY ATK"
+
+[node name="AtkScale" type="Label" parent="OpsPanel/OpsMargin/OpsBox/ScaleRow/AtkCell"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+text = "×1"
+
+[node name="CoreCell" type="VBoxContainer" parent="OpsPanel/OpsMargin/OpsBox/ScaleRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+alignment = 1
+theme_override_constants/separation = 2
+
+[node name="CoreCap" type="Label" parent="OpsPanel/OpsMargin/OpsBox/ScaleRow/CoreCell"]
+layout_mode = 2
+horizontal_alignment = 1
+text = "CORES"
+
+[node name="CoreScale" type="Label" parent="OpsPanel/OpsMargin/OpsBox/ScaleRow/CoreCell"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+text = "×1"
+
+[node name="StartButton" type="Button" parent="OpsPanel/OpsMargin/OpsBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 90)
+layout_mode = 2
+text = "MISSION START"
+
+[node name="ArmBanner" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -300.0
+offset_top = 124.0
+offset_right = 300.0
+offset_bottom = 170.0
+grow_horizontal = 2
+mouse_filter = 2
+
+[node name="ArmBannerLabel" type="Label" parent="ArmBanner"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+text = "⚠ SHE DESCENDS PROTOCOL ARMED ⚠"

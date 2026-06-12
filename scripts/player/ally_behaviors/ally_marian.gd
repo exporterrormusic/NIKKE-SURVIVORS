@@ -1,11 +1,11 @@
-extends Node
+﻿extends Node
 
 ## Marian ally behavior - Minigun with continuous beam
 
 var active_beam: Node2D = null
 
 func configure(ally, _registry) -> void:
-	var hp_mult := 1.0 + (ally.player_level - 1) * 0.25
+	var hp_mult: float = 1.0 + (ally.player_level - 1) * 0.25
 	ally.max_hp = int(50 * hp_mult)
 	ally.move_speed = 200.0
 	ally.attack_damage = ally._get_scaled_damage(2)
@@ -59,7 +59,7 @@ func perform_burst(ally) -> void:
 	var MarianBeamScript = load("res://scripts/characters/effects/MarianBeam.gd")
 	if not MarianBeamScript:
 		return
-	var direction := ally._last_direction.normalized()
+	var direction: Vector2 = ally._last_direction.normalized()
 	if direction.length() < 0.5:
 		direction = Vector2.RIGHT
 	var beam = Node2D.new()

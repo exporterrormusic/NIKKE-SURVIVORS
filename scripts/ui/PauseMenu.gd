@@ -1,7 +1,11 @@
 extends CanvasLayer
 class_name PauseMenu
-## Pause/Game Over menu with consistent UI styling.
-## Shows different options based on whether player is alive or dead.
+## Pause / results overlay (dark field register, approved mockup
+## docs/mockups/pause_results_v2.html). Pause = center terminal: live field
+## telemetry left, command column center, damage log right. Defeat/victory =
+## after-action report: full-height Nikke burst strip left, verdict + score +
+## report cells right; reward bar on victory, damage log on defeat.
+## Static chrome lives in PauseMenu.tscn; this script wires data + signals.
 
 signal restart_requested
 signal resume_requested
@@ -9,376 +13,395 @@ signal settings_requested
 signal character_select_requested
 signal quit_requested
 
-# Menu modes
 enum MenuMode {PAUSE, DEFEAT, VICTORY}
 
-const UIThemeScript = preload("res://scripts/ui/UITheme.gd")
-const UISounds = preload("res://scripts/ui/UISoundManager.gd")
+const UI := preload("res://scripts/ui/UITheme.gd")
+const UISounds := preload("res://scripts/ui/UISoundManager.gd")
 
-# Menu state
 var _menu_mode: int = MenuMode.PAUSE
-var _container: Control = null
-var _panel: Panel = null
-var _button_container: VBoxContainer = null
-var _title_label: Label = null
-var _buttons: Dictionary = {}
-var _stats_panel: Node = null # StatsPanel instance
-var _damage_log_panel: Node = null # DamageLogPanel instance
+var _cheats_menu: Node = null
+var _hidden_hud: Array = []  # CanvasLayers hidden while the overlay is up
+
+@onready var _pause_layout: Control = %PauseLayout
+@onready var _results_layout: Control = %ResultsLayout
+@onready var _mid_column: VBoxContainer = %MidColumn
+@onready var _cheats_host: CenterContainer = %CheatsHost
+
+# Pause layout
+@onready var _pause_title: Label = %PauseTitle
+@onready var _pause_sub: Label = %PauseSub
+@onready var _telemetry_cap: Label = %TelemetryCap
+@onready var _op_portrait: TextureRect = %OpPortrait
+@onready var _op_name: Label = %OpName
+@onready var _op_squad: Label = %OpSquad
+@onready var _pause_cells = %PauseCells  # KVCellGrid (untyped: indexing lag)
+@onready var _log_cap: Label = %LogCap
+@onready var _pause_log = %PauseLog     # NikkeDamageLog
+@onready var _resume_btn: Button = %ResumeBtn
+@onready var _restart_btn: Button = %RestartBtn
+@onready var _char_select_btn: Button = %CharSelectBtn
+@onready var _settings_btn: Button = %SettingsBtn
+@onready var _cheats_btn: Button = %CheatsBtn
+@onready var _quit_btn: Button = %QuitBtn
+
+# Results layout
+@onready var _result_art = %ResultArt   # CoverArtRect
+@onready var _nikke_cap: Label = %NikkeCap
+@onready var _result_nikke_name: Label = %ResultNikkeName
+@onready var _verdict_label: Label = %VerdictLabel
+@onready var _verdict_sub: Label = %VerdictSub
+@onready var _verdict_bar: ColorRect = %VerdictBar
+@onready var _score_cap: Label = %ScoreCap
+@onready var _score_value: Label = %ScoreValue
+@onready var _gf_chip: PanelContainer = %GfChip
+@onready var _gf_label: Label = %GfLabel
+@onready var _report_cells = %ReportCells  # KVCellGrid
+@onready var _reward_bar: PanelContainer = %RewardBar
+@onready var _reward_icon: Label = %RewardIcon
+@onready var _reward_cap: Label = %RewardCap
+@onready var _reward_value: Label = %RewardValue
+@onready var _loss_log_panel: PanelContainer = %LossLogPanel
+@onready var _loss_log_cap: Label = %LossLogCap
+@onready var _loss_log = %LossLog       # NikkeDamageLog
+@onready var _result_primary_btn = %ResultPrimaryBtn  # PauseCommandButton (untyped: custom props)
+@onready var _result_char_select_btn: Button = %ResultCharSelectBtn
+@onready var _result_menu_btn: Button = %ResultMenuBtn
+
+const WIN_TEXT := Color(0.482, 0.878, 0.604, 1.0)
+const WIN_BAR := Color(0.247, 0.682, 0.369, 1.0)
+const LOSS_TEXT := Color(1.0, 0.42, 0.38, 1.0)
+
 
 func _ready() -> void:
 	layer = 125 # Higher than Queen Explosion (120)
 	visible = false
-	# Process even when game is paused
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	_build_ui()
 
-func _build_ui() -> void:
-	# Full-screen darkened overlay
-	_container = Control.new()
-	_container.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_container.mouse_filter = Control.MOUSE_FILTER_STOP
-	add_child(_container)
-	
-	# Dark overlay background
-	var overlay := ColorRect.new()
-	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	overlay.color = Color(0.0, 0.0, 0.0, 0.7)
-	_container.add_child(overlay)
-	
-	# Center the main buttons panel on screen
-	var center_wrapper := CenterContainer.new()
-	center_wrapper.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_container.add_child(center_wrapper)
-	
-	# Center panel (buttons) - this is what gets centered
-	_panel = Panel.new()
-	_panel.custom_minimum_size = Vector2(400, 520) # Increased height for extra button
-	_apply_panel_style(_panel)
-	center_wrapper.add_child(_panel)
-	
-	# VBox for content
-	var vbox := VBoxContainer.new()
-	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	vbox.offset_left = 32
-	vbox.offset_right = -32
-	vbox.offset_top = 32
-	vbox.offset_bottom = -32
-	vbox.add_theme_constant_override("separation", 16)
-	_panel.add_child(vbox)
-	
-	# Title
-	_title_label = Label.new()
-	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_title_label.add_theme_font_size_override("font_size", 32)
-	_title_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
-	vbox.add_child(_title_label)
-	
-	# Spacer
-	var spacer := Control.new()
-	spacer.custom_minimum_size.y = 20
-	vbox.add_child(spacer)
-	
-	# Button container
-	_button_container = VBoxContainer.new()
-	_button_container.add_theme_constant_override("separation", 12)
-	_button_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.add_child(_button_container)
-	
-	# Stats panel (positioned to the right of center, not centered with it)
-	if ResourceLoader.exists("res://scripts/ui/StatsPanel.gd"):
-		var stats_script = load("res://scripts/ui/StatsPanel.gd")
-		_stats_panel = Panel.new()
-		_stats_panel.set_script(stats_script)
-		_stats_panel.custom_minimum_size = Vector2(400, 520)
-		# Position stats panel to the right of center
-		_stats_panel.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
-		_stats_panel.offset_left = -420
-		_stats_panel.offset_right = -20
-		_stats_panel.offset_top = -260
-		_stats_panel.offset_bottom = 260
-		_container.add_child(_stats_panel)
-	
-	# Damage log panel (positioned to the left of center, mirroring stats panel)
-	if ResourceLoader.exists("res://scripts/ui/DamageLogPanel.gd"):
-		var log_script = load("res://scripts/ui/DamageLogPanel.gd")
-		_damage_log_panel = Panel.new()
-		_damage_log_panel.set_script(log_script)
-		_damage_log_panel.custom_minimum_size = Vector2(400, 520)
-		# Position damage log panel to the left of center
-		_damage_log_panel.set_anchors_preset(Control.PRESET_CENTER_LEFT)
-		_damage_log_panel.offset_left = 20
-		_damage_log_panel.offset_right = 420
-		_damage_log_panel.offset_top = -260
-		_damage_log_panel.offset_bottom = 260
-		_container.add_child(_damage_log_panel)
+	_style_chrome()
 
-	
-func _apply_panel_style(panel: Panel) -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.1, 0.14, 0.98)
-	style.border_color = Color(0.95, 0.95, 0.98, 0.9)
-	style.set_border_width_all(3)
-	style.set_corner_radius_all(12)
-	panel.add_theme_stylebox_override("panel", style)
+	_resume_btn.pressed.connect(_on_resume_pressed)
+	_restart_btn.pressed.connect(_on_restart_pressed)
+	_char_select_btn.pressed.connect(_on_character_select_pressed)
+	_settings_btn.pressed.connect(_on_settings_pressed)
+	_cheats_btn.pressed.connect(_on_cheats_pressed)
+	_quit_btn.pressed.connect(_on_quit_pressed)
+	_result_primary_btn.pressed.connect(_on_restart_pressed)
+	_result_char_select_btn.pressed.connect(_on_character_select_pressed)
+	_result_menu_btn.pressed.connect(_on_quit_pressed)
 
-func _create_button(text: String, callback: Callable, is_primary: bool = false, is_danger: bool = false) -> Button:
-	var btn := Button.new()
-	btn.text = text
-	btn.custom_minimum_size = Vector2(280, 50)
-	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	
-	# Normal style
-	var normal := StyleBoxFlat.new()
-	if is_danger:
-		normal.bg_color = Color(0.6, 0.15, 0.15, 0.95)
-		normal.border_color = Color(0.9, 0.3, 0.3, 0.9)
-	elif is_primary:
-		normal.bg_color = Color(0.15, 0.5, 0.15, 0.95)
-		normal.border_color = Color(0.3, 0.8, 0.3, 0.9)
-	else:
-		normal.bg_color = Color(0.12, 0.15, 0.2, 0.95)
-		normal.border_color = Color(0.5, 0.55, 0.65, 0.8)
-	normal.set_border_width_all(2)
-	normal.set_corner_radius_all(8)
-	btn.add_theme_stylebox_override("normal", normal)
-	
-	# Hover style
-	var hover := StyleBoxFlat.new()
-	if is_danger:
-		hover.bg_color = Color(0.75, 0.2, 0.2, 1.0)
-		hover.border_color = Color(1.0, 0.4, 0.4)
-	elif is_primary:
-		hover.bg_color = Color(0.2, 0.65, 0.2, 1.0)
-		hover.border_color = Color(0.4, 1.0, 0.4)
-	else:
-		hover.bg_color = Color(0.18, 0.22, 0.28, 1.0)
-		hover.border_color = Color(0.7, 0.75, 0.85, 1.0)
-	hover.set_border_width_all(3)
-	hover.set_corner_radius_all(8)
-	btn.add_theme_stylebox_override("hover", hover)
-	
-	# Pressed style
-	var pressed := StyleBoxFlat.new()
-	pressed.bg_color = normal.bg_color.darkened(0.2)
-	pressed.border_color = normal.border_color
-	pressed.set_border_width_all(2)
-	pressed.set_corner_radius_all(8)
-	btn.add_theme_stylebox_override("pressed", pressed)
-	
-	btn.add_theme_font_size_override("font_size", 18)
-	btn.add_theme_color_override("font_color", Color(0.95, 0.95, 0.98))
-	
-	btn.pressed.connect(callback)
-	return btn
-	# (Skipping unmodified lines until _rebuild_buttons)
 
-func _rebuild_buttons() -> void:
-	# Clear existing buttons
-	for child in _button_container.get_children():
-		child.queue_free()
-	_buttons.clear()
-	
-	if _menu_mode == MenuMode.VICTORY:
-		# Victory menu: Show reward + RESTART, CHARACTER SELECTION, SETTINGS, QUIT
-		_title_label.text = "VICTORY!"
-		_title_label.add_theme_color_override("font_color", Color(0.4, 1.0, 0.4))
-		
-		# Reward label
-		var reward_label := Label.new()
-		reward_label.text = "+1 Pristine Rapture Core"
-		reward_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		reward_label.add_theme_font_size_override("font_size", 20)
-		reward_label.add_theme_color_override("font_color", Color(0.6, 0.9, 1.0))
-		_button_container.add_child(reward_label)
-		
-		# Spacer
-		var spacer := Control.new()
-		spacer.custom_minimum_size.y = 10
-		_button_container.add_child(spacer)
-		
-		var restart_btn := _create_button("PLAY AGAIN", _on_restart_pressed, true)
-		_button_container.add_child(restart_btn)
-		_buttons["restart"] = restart_btn
-		
-		var char_select_btn := _create_button("CHARACTER SELECTION", _on_character_select_pressed)
-		_button_container.add_child(char_select_btn)
-		_buttons["character_select"] = char_select_btn
-		
-		var settings_btn := _create_button("SETTINGS", _on_settings_pressed)
-		_button_container.add_child(settings_btn)
-		_buttons["settings"] = settings_btn
-		
-		var quit_btn := _create_button("MAIN MENU", _on_quit_pressed, false, true)
-		_button_container.add_child(quit_btn)
-		_buttons["quit"] = quit_btn
-	elif _menu_mode == MenuMode.DEFEAT:
-		# Defeat menu: RESTART, CHARACTER SELECTION, SETTINGS, QUIT
-		_title_label.text = "DEFEATED"
-		_title_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
-		
-		var restart_btn := _create_button("RESTART", _on_restart_pressed, true)
-		_button_container.add_child(restart_btn)
-		_buttons["restart"] = restart_btn
-		
-		var char_select_btn := _create_button("CHARACTER SELECTION", _on_character_select_pressed)
-		_button_container.add_child(char_select_btn)
-		_buttons["character_select"] = char_select_btn
-		
-		var settings_btn := _create_button("SETTINGS", _on_settings_pressed)
-		_button_container.add_child(settings_btn)
-		_buttons["settings"] = settings_btn
-		
-		var quit_btn := _create_button("MAIN MENU", _on_quit_pressed, false, true)
-		_button_container.add_child(quit_btn)
-		_buttons["quit"] = quit_btn
-	else:
-		# Pause menu: RESUME, RESTART, CHARACTER SELECTION, SETTINGS, QUIT, CHEATS
-		_title_label.text = "PAUSED"
-		_title_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
-		
-		var resume_btn := _create_button("RESUME", _on_resume_pressed, true)
-		_button_container.add_child(resume_btn)
-		_buttons["resume"] = resume_btn
-		
-		var restart_btn := _create_button("RESTART", _on_restart_pressed)
-		_button_container.add_child(restart_btn)
-		_buttons["restart"] = restart_btn
-		
-		var char_select_btn := _create_button("CHARACTER SELECTION", _on_character_select_pressed)
-		_button_container.add_child(char_select_btn)
-		_buttons["character_select"] = char_select_btn
-		
-		var cheats_btn := _create_button("CHEATS", _on_cheats_pressed)
-		_button_container.add_child(cheats_btn)
-		_buttons["cheats"] = cheats_btn
-		
-		var settings_btn := _create_button("SETTINGS", _on_settings_pressed)
-		_button_container.add_child(settings_btn)
-		_buttons["settings"] = settings_btn
-		
-		var quit_btn := _create_button("MAIN MENU", _on_quit_pressed, false, true)
-		_button_container.add_child(quit_btn)
-		_buttons["quit"] = quit_btn
+func _style_chrome() -> void:
+	_pause_title.add_theme_font_override("font", UI.FONT_TITLE_OBLIQUE)
+	_pause_title.add_theme_font_size_override("font_size", 69)
+	_pause_title.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
+	UI.style_subtitle_label(_pause_sub, 18, Color(1, 1, 1, 0.6))
 
-func _grab_initial_focus() -> void:
-	if _button_container and _button_container.get_child_count() > 0:
-		var btn = _button_container.get_child(0)
-		if btn is Control:
-			btn.grab_focus()
+	for cap in [_telemetry_cap, _log_cap, _loss_log_cap]:
+		UI.style_subtitle_label(cap, 16, Color(1, 1, 1, 0.55))
 
-func _on_cheats_pressed() -> void:
-	var CheatsMenuScript = load("res://scripts/ui/CheatsMenu.gd")
-	if CheatsMenuScript:
-		var menu = CheatsMenuScript.new()
-		
-		# Hide main panel
-		if _panel: _panel.visible = false
-		# Keep Stats Panel visible (requested by user)
-		# if _stats_panel: _stats_panel.visible = false
-		
-		# Add menu to the center wrapper so it replaces the panel
-		# We need to find the center_wrapper. It's the parent of _panel.
-		var center_wrapper = _panel.get_parent()
-		center_wrapper.add_child(menu)
-		
-		menu.close_requested.connect(func():
-			# Restore Pause Menu
-			if _panel: _panel.visible = true
-			# Stats panel stayed visible, so just refresh if needed
-			_refresh_stats_panel()
-		)
+	_op_name.add_theme_font_override("font", UI.FONT_TITLE_OBLIQUE)
+	_op_name.add_theme_font_size_override("font_size", 39)
+	_op_name.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
+	UI.style_subtitle_label(_op_squad, 15, Color(1, 1, 1, 0.55))
+
+	_verdict_label.add_theme_font_override("font", UI.FONT_TITLE_OBLIQUE)
+	_verdict_label.add_theme_font_size_override("font_size", 99)
+	UI.style_subtitle_label(_verdict_sub, 18, Color(1, 1, 1, 0.7))
+
+	UI.style_subtitle_label(_nikke_cap, 16, Color(1, 1, 1, 0.65))
+	_result_nikke_name.add_theme_font_override("font", UI.FONT_TITLE_OBLIQUE)
+	_result_nikke_name.add_theme_font_size_override("font_size", 51)
+	_result_nikke_name.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
+
+	UI.style_subtitle_label(_score_cap, 16, Color(1, 1, 1, 0.55))
+	_score_value.add_theme_font_override("font", UI.FONT_TITLE_OBLIQUE)
+	_score_value.add_theme_font_size_override("font_size", 84)
+	_score_value.add_theme_color_override("font_color", UI.ACCENT_SECONDARY)
+
+	UI.style_subtitle_label(_gf_label, 16, Color(1.0, 0.706, 0.682, 1.0))
+
+	_reward_icon.add_theme_font_size_override("font_size", 33)
+	_reward_icon.add_theme_color_override("font_color", UI.ACCENT_CYAN)
+	UI.style_subtitle_label(_reward_cap, 14, Color(1, 1, 1, 0.6))
+	_reward_value.add_theme_font_override("font", UI.FONT_BOLD)
+	_reward_value.add_theme_font_size_override("font_size", 24)
+	_reward_value.add_theme_color_override("font_color", Color(0.749, 0.914, 0.984, 1.0))
+
+
+# =============================================================================
+# SHOW / HIDE (API used by Level.gd and bosses)
+# =============================================================================
 
 func show_pause() -> void:
-	if not _container or not _button_container:
-		_build_ui()
-		
 	_menu_mode = MenuMode.PAUSE
-	_rebuild_buttons()
-	_refresh_stats_panel()
-	_refresh_damage_log()
+	_pause_layout.visible = true
+	_results_layout.visible = false
+	_mid_column.visible = true
+	_close_cheats()
+	_refresh_telemetry()
+	_pause_log.refresh()
+	_hide_game_hud()
 	visible = true
 	get_tree().paused = true
-	
-	if _panel: _panel.visible = true
-	if _stats_panel: _stats_panel.visible = true
-	if _damage_log_panel: _damage_log_panel.visible = true
-	
-	# Auto-focus first button
 	call_deferred("_grab_initial_focus")
+
 
 func show_defeat() -> void:
-	_menu_mode = MenuMode.DEFEAT
-	_rebuild_buttons()
-	_refresh_stats_panel()
-	_refresh_damage_log()
-	visible = true
-	get_tree().paused = true
-	
-	if _damage_log_panel: _damage_log_panel.visible = true
-	
-	# Auto-focus first button
-	call_deferred("_grab_initial_focus")
+	_show_results(MenuMode.DEFEAT)
+
 
 func show_victory() -> void:
-	_menu_mode = MenuMode.VICTORY
-	_rebuild_buttons()
-	_refresh_stats_panel()
-	_refresh_damage_log()
+	_show_results(MenuMode.VICTORY)
+
+
+func _show_results(mode: int) -> void:
+	_menu_mode = mode
+	_pause_layout.visible = false
+	_results_layout.visible = true
+	_close_cheats()
+	_refresh_results()
+	_hide_game_hud()
 	visible = true
 	get_tree().paused = true
-	
-	if _damage_log_panel: _damage_log_panel.visible = true
-	
-	# Auto-focus first button
 	call_deferred("_grab_initial_focus")
 
-func _refresh_stats_panel() -> void:
-	if _stats_panel and _stats_panel.has_method("set_live_stats"):
-		_stats_panel.set_live_stats()
-
-func _refresh_damage_log() -> void:
-	if _damage_log_panel and _damage_log_panel.has_method("refresh"):
-		_damage_log_panel.refresh()
 
 func hide_menu() -> void:
 	visible = false
+	_restore_game_hud()
 	get_tree().paused = false
-	
+
 	# Fix: Reset enemy time scale in case it got stuck (e.g. paused during hitstop)
 	if GameManager:
 		GameManager.enemy_time_scale = 1.0
 
+
+## The overlay replaces the in-game HUD entirely (approved mockup shows no HUD
+## chrome). HUD pieces live on many separate CanvasLayers (10-126, music player
+## sits ABOVE 125), so hide every positive-layer CanvasLayer except ourselves
+## and restore the exact set on close. Negative layers are world backgrounds.
+func _hide_game_hud() -> void:
+	if not _hidden_hud.is_empty():
+		return
+	var stack: Array = [get_tree().root]
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		if node == self:
+			continue
+		if node is CanvasLayer and not node is ParallaxBackground:
+			if node.visible and node.layer >= 0:
+				_hidden_hud.append(node)
+				node.visible = false
+			continue
+		for child in node.get_children():
+			stack.append(child)
+
+
+func _restore_game_hud() -> void:
+	for hud_layer in _hidden_hud:
+		if is_instance_valid(hud_layer):
+			hud_layer.visible = true
+	_hidden_hud.clear()
+
+
+func _grab_initial_focus() -> void:
+	if _menu_mode == MenuMode.PAUSE:
+		_resume_btn.grab_focus()
+	else:
+		_result_primary_btn.grab_focus()
+
+
+# =============================================================================
+# DATA
+# =============================================================================
+
+func _nikke_data():  # -> CharacterData (untyped: members accessed dynamically)
+	var registry = CharacterRegistry.get_instance()
+	if registry == null or GameManager == null:
+		return null
+	var char_id: String = registry.get_character_id(GameManager.player_character_index)
+	if char_id.is_empty():
+		return null
+	return registry.get_character(char_id)
+
+
+func _refresh_telemetry() -> void:
+	var data = _nikke_data()
+	if data:
+		_op_name.text = str(data.display_name).to_upper()
+		_op_portrait.texture = data.get_portrait()
+		var squad := str(data.squad)
+		_op_squad.visible = not squad.is_empty()
+		_op_squad.text = "SQUAD // %s" % squad.to_upper()
+	_pause_cells.set_cells(_telemetry_cells(false))
+
+
+func _refresh_results() -> void:
+	var is_win := _menu_mode == MenuMode.VICTORY
+	var data = _nikke_data()
+	if data:
+		_result_nikke_name.text = str(data.display_name).to_upper()
+		var registry = CharacterRegistry.get_instance()
+		var char_id: String = registry.get_character_id(GameManager.player_character_index)
+		var burst_path := "res://assets/characters/%s/burst.png" % char_id.replace("_", "-")
+		if ResourceLoader.exists(burst_path):
+			_result_art.texture = load(burst_path)
+		else:
+			_result_art.texture = data.get_portrait()
+
+	if is_win:
+		_verdict_label.text = "MISSION COMPLETE"
+		_verdict_sub.text = "ALL HOSTILES NEUTRALIZED // AREA SECURED"
+		_verdict_label.add_theme_color_override("font_color", WIN_TEXT)
+		_verdict_bar.color = WIN_BAR
+		_result_primary_btn.title_text = "PLAY AGAIN"
+	else:
+		_verdict_label.text = "NIKKE DOWN"
+		_verdict_sub.text = "SIGNAL LOST // OPERATION FAILED"
+		_verdict_label.add_theme_color_override("font_color", LOSS_TEXT)
+		_verdict_bar.color = UI.COLOR_DANGER
+		_result_primary_btn.title_text = "RETRY MISSION"
+
+	_score_value.text = _format_score(GameManager.current_score if GameManager else 0)
+	_gf_chip.visible = GameManager != null and GameManager.goddess_fall_mode
+	_report_cells.set_cells(_telemetry_cells(true))
+
+	_reward_bar.visible = is_win
+	_loss_log_panel.visible = not is_win
+	if not is_win:
+		_loss_log.refresh()
+
+
+func _telemetry_cells(for_results: bool) -> Array:
+	var score := 0
+	var wave := 0
+	var time := 0.0
+	var diff := 1.0
+	var kills := 0
+	var bosses := 0
+	var damage := 0
+	if GameManager:
+		score = GameManager.current_score
+		wave = GameManager.current_wave
+		time = GameManager.run_time
+		diff = GameManager.difficulty_multiplier
+		var stats: Dictionary = GameManager.get_run_stats()
+		for val in stats.get("normal_kills_by_character", {}).values():
+			kills += val
+		for val in stats.get("boss_kills_by_character", {}).values():
+			bosses += val
+		for val in stats.get("damage_by_character", {}).values():
+			damage += val
+
+	@warning_ignore("integer_division")
+	var time_text := "%d:%02d" % [int(time) / 60, int(time) % 60]
+	var diff_text := "×%d" % roundi(diff) if is_equal_approx(diff, roundf(diff)) else "×%.1f" % diff
+
+	if for_results:
+		return [
+			{"k": "WAVE REACHED", "v": str(wave)},
+			{"k": "SURVIVAL TIME", "v": time_text},
+			{"k": "DIFFICULTY", "v": diff_text},
+			{"k": "KILLS", "v": _format_score(kills)},
+			{"k": "BOSSES", "v": str(bosses)},
+			{"k": "DAMAGE DEALT", "v": _abbrev(damage)},
+		]
+	return [
+		{"k": "SCORE", "v": _format_score(score)},
+		{"k": "WAVE", "v": str(wave)},
+		{"k": "TIME", "v": time_text},
+		{"k": "DIFFICULTY", "v": diff_text},
+		{"k": "KILLS", "v": _format_score(kills)},
+		{"k": "BOSSES", "v": str(bosses)},
+	]
+
+
+static func _format_score(value: int) -> String:
+	var str_val := str(value)
+	var result := ""
+	var count := 0
+	for i in range(str_val.length() - 1, -1, -1):
+		if count > 0 and count % 3 == 0:
+			result = "," + result
+		result = str_val[i] + result
+		count += 1
+	return result
+
+
+static func _abbrev(value: int) -> String:
+	if value >= 1000000:
+		return "%.1fM" % (value / 1000000.0)
+	if value >= 1000:
+		return "%.1fK" % (value / 1000.0)
+	return str(value)
+
+
+# =============================================================================
+# INPUT / BUTTONS
+# =============================================================================
+
 func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
 		return
-	
 	# Only allow ESC to close if it's a pause menu (not defeat/victory)
 	if event.is_action_pressed("ui_cancel") and _menu_mode == MenuMode.PAUSE:
+		if _cheats_menu != null:
+			return # CheatsMenu handles its own close
 		UISounds.play_back()
 		hide_menu()
 		get_viewport().set_input_as_handled()
 
-func _on_restart_pressed() -> void:
-	UISounds.play_confirm()
-	hide_menu()
-	restart_requested.emit()
 
 func _on_resume_pressed() -> void:
 	UISounds.play_back()
 	hide_menu()
 	resume_requested.emit()
 
+
+func _on_restart_pressed() -> void:
+	UISounds.play_confirm()
+	hide_menu()
+	restart_requested.emit()
+
+
 func _on_settings_pressed() -> void:
 	# Hide pause menu so it doesn't show behind settings
 	visible = false
 	settings_requested.emit()
+
 
 func _on_character_select_pressed() -> void:
 	# No sound for pause menu options - they have their own transitions
 	hide_menu()
 	character_select_requested.emit()
 
+
 func _on_quit_pressed() -> void:
 	UISounds.play_back()
 	hide_menu()
 	quit_requested.emit()
+
+
+func _on_cheats_pressed() -> void:
+	var CheatsMenuScript = load("res://scripts/ui/CheatsMenu.gd")
+	if CheatsMenuScript == null:
+		return
+	UISounds.play_select()
+	_cheats_menu = CheatsMenuScript.new()
+	_mid_column.visible = false
+	_cheats_host.visible = true
+	_cheats_host.add_child(_cheats_menu)
+	_cheats_menu.close_requested.connect(func():
+		_close_cheats()
+		_mid_column.visible = true
+		_refresh_telemetry() # Cheats can change run state
+		_pause_log.refresh()
+		call_deferred("_grab_initial_focus")
+	)
+
+
+func _close_cheats() -> void:
+	if _cheats_menu and is_instance_valid(_cheats_menu):
+		_cheats_menu.queue_free()
+	_cheats_menu = null
+	_cheats_host.visible = false

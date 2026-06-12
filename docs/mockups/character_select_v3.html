@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SOV Character Select — Round 3 (C2-A refined, light vs dark)</title>
+<style>
+  :root{
+    --bg-deep:#0E1116; --cyan:#35C5F2; --cyan-deep:#1F8FE0; --yellow:#FFD23F; --red:#E8392E;
+    --text:#F0F4F8; --muted:#97A0AC;
+    --admin-bg:#EDEFF2; --admin-hair:#D8DCE1; --admin-text:#2A2E35; --admin-dim:#8A9099;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#070a0e; color:var(--text);
+    font-family:"Pretendard","Segoe UI",system-ui,sans-serif; padding:40px;}
+  h1{font-family:"Arial Narrow",sans-serif; font-size:32px; font-style:italic;
+    text-transform:uppercase; margin-bottom:4px;}
+  .sub{color:var(--muted); text-transform:uppercase; letter-spacing:.25em; font-size:12px;
+    margin-bottom:30px;}
+  h2{font-family:"Arial Narrow",sans-serif; font-size:21px; font-style:italic;
+    text-transform:uppercase; margin:44px 0 6px; border-left:4px solid var(--cyan); padding-left:12px;}
+  .note{color:var(--muted); font-size:14px; margin-bottom:14px; max-width:940px; line-height:1.5;}
+
+  .stage{position:relative; width:1280px; height:720px; overflow:hidden;
+    background:var(--bg-deep); border:1px solid #2a3340; margin-bottom:10px;}
+  .scan{position:absolute; inset:0; pointer-events:none; z-index:50;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,.02) 0 1px, transparent 1px 4px);}
+
+  /* hero art in the middle gap, masked both edges */
+  .hero{position:absolute; left:560px; width:340px; top:0; height:100%;
+    object-fit:cover; z-index:1;
+    -webkit-mask-image:linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent);
+    mask-image:linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent);}
+
+  .hdr{position:absolute; left:44px; top:24px; z-index:5;}
+  .hdr .t{font-family:"Arial Narrow",sans-serif; font-weight:800; font-style:italic; font-size:40px;}
+  .hdr .s{font-size:12px; letter-spacing:.3em; text-transform:uppercase;}
+  .hdr .bar{width:54px; height:3px; background:var(--cyan); margin-top:8px;}
+  .topright{position:absolute; right:24px; top:22px; display:flex; gap:12px; z-index:5;}
+  .pill{display:flex; align-items:center; gap:8px; padding:6px 14px 6px 10px;
+    font-size:14px; font-weight:700; height:38px;}
+  .pill .gem{color:#ff4d4d;} .pill .plus{color:var(--cyan); font-weight:800;}
+  .backchip{display:flex; align-items:center; height:38px; padding:0 18px;
+    transform:skewX(-6deg); font-weight:800; font-size:14px;}
+  .backchip span{transform:skewX(6deg);}
+
+  .grid{position:absolute; left:44px; top:118px; width:530px; display:flex;
+    flex-wrap:wrap; gap:14px; z-index:2;}
+  .ccard{position:relative; width:122px; height:192px; cursor:pointer; flex:none;}
+  .ccard .frame{position:absolute; inset:0; overflow:hidden;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%);}
+  .ccard img{width:100%; height:152px; object-fit:cover; display:block; background:#222a34;}
+  .ccard .nm{position:absolute; left:0; right:0; bottom:0; height:40px; display:flex;
+    align-items:center; justify-content:center; font-size:12.5px; font-weight:800;
+    letter-spacing:.04em; text-transform:uppercase;}
+  .ccard .wpn{position:absolute; top:4px; left:4px; font-size:9px; font-weight:800;
+    background:rgba(0,0,0,.7); color:#fff; padding:2px 6px; letter-spacing:.1em;}
+  .ccard.locked img{filter:grayscale(1) brightness(.45);}
+  .ccard.locked .cost{position:absolute; top:52%; left:0; right:0; text-align:center;
+    transform:translateY(-50%); font-weight:800;}
+  .ccard.locked .cost .gem{color:#ff4d4d; font-size:16px;}
+  .ccard.locked .cost .n{color:#fff; font-size:19px; margin-left:4px;}
+  .ccard.locked .cost .u{display:block; font-size:9px; letter-spacing:.18em; color:#ffd23f; margin-top:3px;}
+  .ccard.sel .frame{outline:2px solid var(--yellow); outline-offset:2px;}
+  .ccard.sel::before,.ccard.sel::after{content:""; position:absolute; width:16px; height:16px;
+    border:3px solid var(--yellow); z-index:3;}
+  .ccard.sel::before{top:-7px; left:-7px; border-right:none; border-bottom:none;}
+  .ccard.sel::after{bottom:-7px; right:-7px; border-left:none; border-top:none;}
+
+  .dark .ccard .frame{background:#161c25; border:1px solid rgba(255,255,255,.12);}
+  .dark .ccard .nm{background:rgba(0,0,0,.78); color:#e8eef4;}
+  .dark .pill{background:rgba(0,0,0,.55); color:#fff;}
+  .dark .backchip{background:rgba(0,0,0,.55); color:#fff;}
+  .light .ccard .frame{background:#fff; box-shadow:0 1px 5px rgba(0,0,0,.16);}
+  .light .ccard .nm{background:#fff; color:var(--admin-text);}
+  .light .pill{background:#fff; color:var(--admin-text); box-shadow:0 1px 4px rgba(0,0,0,.18);}
+  .light .backchip{background:#fff; color:var(--admin-text); box-shadow:0 1px 4px rgba(0,0,0,.18);}
+
+  /* detail panel — text only, larger type */
+  .detail{position:absolute; right:36px; top:118px; width:350px; bottom:44px; z-index:2;
+    padding:24px 26px; display:flex; flex-direction:column;}
+  .detail .nm{font-family:'Arial Narrow'; font-weight:800; font-style:italic; font-size:40px;}
+  .detail .role{font-size:13px; letter-spacing:.2em; text-transform:uppercase; margin-top:2px;}
+  .statrow{display:flex; align-items:center; gap:10px; font-size:14px; font-weight:700; margin-bottom:9px;}
+  .statrow .k{width:46px; letter-spacing:.08em;}
+  .statrow .bar{flex:1; height:9px; position:relative; background:rgba(128,140,155,.28);}
+  .statrow .bar i{position:absolute; inset:0 auto 0 0; display:block;}
+  .statrow .v{width:36px; text-align:right;}
+  .sk{margin-top:14px;}
+  .sk .t{font-size:15px; font-weight:800; letter-spacing:.05em;}
+  .sk .d{font-size:13.5px; line-height:1.5; margin-top:4px;}
+  .cta{display:flex; align-items:center; justify-content:center; gap:10px; height:56px;
+    background:linear-gradient(180deg,#5BD2F7,#1F8FE0); border-bottom:3px solid #15679f;
+    color:#fff; font-weight:800; font-size:20px; font-style:italic; cursor:pointer;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%);}
+  .randbtn{position:absolute; left:44px; bottom:40px; width:170px; height:42px; z-index:2;
+    display:flex; align-items:center; justify-content:center;
+    font-weight:800; font-size:14px; letter-spacing:.06em; cursor:pointer;}
+</style>
+</head>
+<body>
+
+<h1>Character Select — Round 3</h1>
+<div class="sub">C2-A refined: burst art centered in the gap, masked both edges, bigger text · dark vs light</div>
+
+<!-- ====================== DARK ====================== -->
+<h2>FINAL-DARK · dark register</h2>
+<div class="stage dark">
+  <img class="hero" src="../../assets/characters/scarlet/burst.png">
+
+  <div class="hdr" style="color:#fff;"><div class="t">CHARACTERS</div>
+    <div class="s" style="color:var(--muted);">SELECT YOUR NIKKE // SQUAD FILE</div><div class="bar"></div></div>
+  <div class="topright"><div class="backchip"><span>← BACK</span></div>
+    <div class="pill"><span class="gem">◆</span> 43 <span class="plus">+</span></div></div>
+
+  <div id="grid-dark" class="grid"></div>
+  <div class="randbtn" style="background:rgba(0,0,0,.6); color:#fff; border:1px solid rgba(255,255,255,.2);">⟳ RANDOM</div>
+
+  <div class="detail" style="background:rgba(8,11,16,.7); border:1px solid rgba(90,160,200,.3); backdrop-filter:blur(2px);">
+    <div class="nm">SCARLET</div>
+    <div class="role" style="color:var(--cyan);">ATTACKER // SWORD OF THE ARK</div>
+    <div style="margin-top:14px;">
+      <div class="statrow"><span class="k">HP</span><div class="bar"><i style="width:55%;background:#4ade80;"></i></div><span class="v">11</span></div>
+      <div class="statrow"><span class="k">ATK</span><div class="bar"><i style="width:80%;background:#ff6a5e;"></i></div><span class="v">16</span></div>
+      <div class="statrow"><span class="k">SPD</span><div class="bar"><i style="width:64%;background:#5fa8e8;"></i></div><span class="v">32</span></div>
+      <div class="statrow"><span class="k">CRIT</span><div class="bar"><i style="width:25%;background:#ffd23f;"></i></div><span class="v">25</span></div>
+    </div>
+    <div style="height:1px; background:rgba(255,255,255,.14); margin:14px 0;"></div>
+    <div class="sk"><div class="t" style="color:#ffb45e;">⚡ SPECIAL — SCARLET FLASH</div>
+      <div class="d" style="color:#bcc6d2;">Unleash a lightning-fast iaido slash that cuts through all enemies in a wide arc.</div></div>
+    <div class="sk"><div class="t" style="color:#b08aff;">✦ BURST — DOOM SLAYER</div>
+      <div class="d" style="color:#bcc6d2;">For 10 seconds, every attack chains lightning to 3 nearby enemies.</div></div>
+    <div style="flex:1;"></div>
+    <div class="cta">▶ DEPLOY — SELECT STAGE</div>
+  </div>
+  <div class="scan"></div>
+</div>
+
+<!-- ====================== LIGHT ====================== -->
+<h2>FINAL-LIGHT · light admin register</h2>
+<div class="stage light" style="background:var(--admin-bg);">
+  <img class="hero" src="../../assets/characters/scarlet/burst.png">
+
+  <div class="hdr" style="color:var(--admin-text);"><div class="t">CHARACTERS</div>
+    <div class="s" style="color:var(--admin-dim);">SELECT YOUR NIKKE // SQUAD FILE</div><div class="bar"></div></div>
+  <div class="topright"><div class="backchip"><span>← BACK</span></div>
+    <div class="pill"><span class="gem">◆</span> 43 <span class="plus">+</span></div></div>
+
+  <div id="grid-light" class="grid"></div>
+  <div class="randbtn" style="background:#fff; color:var(--admin-text); box-shadow:0 1px 4px rgba(0,0,0,.16);">⟳ RANDOM</div>
+
+  <div class="detail" style="background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.16); color:var(--admin-text);">
+    <div class="nm">SCARLET</div>
+    <div class="role" style="color:var(--cyan-deep);">ATTACKER // SWORD OF THE ARK</div>
+    <div style="margin-top:14px;">
+      <div class="statrow"><span class="k">HP</span><div class="bar"><i style="width:55%;background:#36b35f;"></i></div><span class="v">11</span></div>
+      <div class="statrow"><span class="k">ATK</span><div class="bar"><i style="width:80%;background:#e8392e;"></i></div><span class="v">16</span></div>
+      <div class="statrow"><span class="k">SPD</span><div class="bar"><i style="width:64%;background:#1F8FE0;"></i></div><span class="v">32</span></div>
+      <div class="statrow"><span class="k">CRIT</span><div class="bar"><i style="width:25%;background:#d9a514;"></i></div><span class="v">25</span></div>
+    </div>
+    <div style="height:1px; background:var(--admin-hair); margin:14px 0;"></div>
+    <div class="sk"><div class="t" style="color:#c77700;">⚡ SPECIAL — SCARLET FLASH</div>
+      <div class="d" style="color:#4a4f57;">Unleash a lightning-fast iaido slash that cuts through all enemies in a wide arc.</div></div>
+    <div class="sk"><div class="t" style="color:#7a3fd6;">✦ BURST — DOOM SLAYER</div>
+      <div class="d" style="color:#4a4f57;">For 10 seconds, every attack chains lightning to 3 nearby enemies.</div></div>
+    <div style="flex:1;"></div>
+    <div class="cta">▶ DEPLOY — SELECT STAGE</div>
+  </div>
+  <div class="scan" style="opacity:.4;"></div>
+</div>
+
+<script>
+const CHARS = [
+  ["snow-white","Snow White",0,"AR"],
+  ["scarlet","Scarlet",0,"SWORD"],
+  ["kilo","Kilo",0,"MG"],
+  ["rapunzel","Rapunzel",3,"RL"],
+  ["commander","Commander",3,"SMG"],
+  ["nayuta","Nayuta",5,"SR"],
+  ["marian","Marian",5,"BEAM"],
+  ["crown","Crown",8,"SG"],
+  ["cecil","Cecil",8,"SR"],
+  ["sin","Sin",8,"SCYTHE"],
+  ["wells","Wells",12,"AR"],
+];
+function card(c, selected){
+  const [folder,name,cost,wpn] = c; const locked = cost>0;
+  return `<div class="ccard ${locked?"locked":""} ${selected?"sel":""}">
+    <div class="frame">
+      <img src="../../assets/characters/${folder}/portrait-sq.png">
+      <div class="wpn">${wpn}</div>
+      ${locked?`<div class="cost"><span class="gem">◆</span><span class="n">${cost}</span><span class="u">UNLOCK</span></div>`:""}
+      <div class="nm">${name}</div>
+    </div></div>`;
+}
+document.getElementById("grid-dark").innerHTML = CHARS.map((c,i)=>card(c,i===1)).join("");
+document.getElementById("grid-light").innerHTML = CHARS.map((c,i)=>card(c,i===1)).join("");
+</script>
+</body>
+</html>

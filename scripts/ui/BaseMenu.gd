@@ -78,7 +78,7 @@ func _create_menu_button(text: String, bg_color: Color = UI.BG_MID, border_color
 	normal.bg_color = bg_color
 	normal.border_color = border_color
 	normal.set_border_width_all(2)
-	normal.set_corner_radius_all(8)
+	normal.set_corner_radius_all(0)
 	btn.add_theme_stylebox_override("normal", normal)
 	
 	var hover := normal.duplicate()

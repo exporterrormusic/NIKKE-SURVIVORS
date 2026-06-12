@@ -133,6 +133,9 @@ func _ease_out_back(t: float) -> float:
 
 # Static helper to spawn a damage number
 static func spawn(parent: Node, pos: Vector2, value: int, type: NumberType = NumberType.DAMAGE) -> FloatingDamageNumber:
+	# Readability setting: suppress damage/crit numbers (heals always show)
+	if type != NumberType.HEAL and SettingsManager and not SettingsManager.damage_numbers_enabled:
+		return null
 	# OPTIMIZATION: Delegate to EffectPool to prevent GC stutter
 	if EffectPool.get_instance():
 		return EffectPool.get_instance().spawn_damage_number(parent, pos, value, type)

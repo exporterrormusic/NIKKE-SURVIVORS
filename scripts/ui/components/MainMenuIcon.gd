@@ -52,8 +52,21 @@ func _draw() -> void:
 			_draw_quit(center, icon_size, color)
 		"characters":
 			_draw_characters(center, icon_size, color)
+		"notice":
+			_draw_diamond(center, icon_size, color)
 		_:
 			_draw_play(center, icon_size, color)
+
+
+func _draw_diamond(center: Vector2, icon_size: float, color: Color) -> void:
+	var r := icon_size * 0.32
+	var points := PackedVector2Array([
+		center + Vector2(0, -r),
+		center + Vector2(r, 0),
+		center + Vector2(0, r),
+		center + Vector2(-r, 0)
+	])
+	draw_polygon(points, PackedColorArray([color]))
 
 
 func _draw_crown(center: Vector2, icon_size: float, color: Color) -> void:

@@ -3,11 +3,11 @@
 [ext_resource type="Script" uid="uid://bowpsorovuryt" path="res://scripts/player/PlayerHudCluster.gd" id="1"]
 
 [node name="PlayerHudCluster" type="Control"]
-custom_minimum_size = Vector2(405, 143)
+custom_minimum_size = Vector2(495, 124)
 layout_mode = 3
 anchors_preset = 0
-offset_right = 405.0
-offset_bottom = 143.0
+offset_right = 495.0
+offset_bottom = 124.0
 mouse_filter = 2
 script = ExtResource("1")
 
@@ -23,16 +23,16 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 9.0
-offset_top = 9.0
-offset_right = -9.0
-offset_bottom = -9.0
+offset_left = 17.0
+offset_top = 17.0
+offset_right = -17.0
+offset_bottom = -17.0
 size_flags_horizontal = 3
-theme_override_constants/separation = 10
+theme_override_constants/separation = 16
 
 [node name="PortraitShake" type="Control" parent="OuterFrame/Root"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(117, 117)
+custom_minimum_size = Vector2(90, 90)
 layout_mode = 2
 
 [node name="PortraitFrame" type="Panel" parent="OuterFrame/Root/PortraitShake"]
@@ -51,7 +51,7 @@ layout_mode = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
-color = Color(0.109804, 0.109804, 0.172549, 0.92)
+color = Color(0.04, 0.05, 0.07, 0.92)
 
 [node name="PortraitTexture" type="TextureRect" parent="OuterFrame/Root/PortraitShake/PortraitFrame"]
 unique_name_in_owner = true
@@ -71,109 +71,61 @@ stretch_mode = 6
 [node name="BarColumn" type="VBoxContainer" parent="OuterFrame/Root"]
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 3
-theme_override_constants/separation = 4
+size_flags_vertical = 4
+theme_override_constants/separation = 11
 
-[node name="TopRow" type="HBoxContainer" parent="OuterFrame/Root/BarColumn"]
+[node name="HPRow" type="HBoxContainer" parent="OuterFrame/Root/BarColumn"]
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 3
-theme_override_constants/separation = 4
+theme_override_constants/separation = 12
 
-[node name="HPBadge" type="ColorRect" parent="OuterFrame/Root/BarColumn/TopRow"]
+[node name="HPLabel" type="Label" parent="OuterFrame/Root/BarColumn/HPRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(58, 36)
+custom_minimum_size = Vector2(52, 0)
 layout_mode = 2
-size_flags_vertical = 3
-
-[node name="HPBadgeLabel" type="Label" parent="OuterFrame/Root/BarColumn/TopRow/HPBadge"]
-unique_name_in_owner = true
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 20
 text = "HP"
-horizontal_alignment = 1
-vertical_alignment = 1
 
-[node name="HPBar" type="ProgressBar" parent="OuterFrame/Root/BarColumn/TopRow"]
+[node name="HPBar" type="ProgressBar" parent="OuterFrame/Root/BarColumn/HPRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(199, 36)
+custom_minimum_size = Vector2(0, 20)
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 3
+size_flags_vertical = 4
 max_value = 1.0
 value = 1.0
 show_percentage = false
+
+[node name="HPValue" type="Label" parent="OuterFrame/Root/BarColumn/HPRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(84, 0)
+layout_mode = 2
+horizontal_alignment = 2
+text = "0 / 0"
 
 [node name="BurstRow" type="HBoxContainer" parent="OuterFrame/Root/BarColumn"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 3
-theme_override_constants/separation = 4
+theme_override_constants/separation = 12
 
-[node name="BurstBadge" type="ColorRect" parent="OuterFrame/Root/BarColumn/BurstRow"]
+[node name="BurstLabel" type="Label" parent="OuterFrame/Root/BarColumn/BurstRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(58, 36)
+custom_minimum_size = Vector2(52, 0)
 layout_mode = 2
-size_flags_vertical = 3
-color = Color(1, 0.85, 0.25, 1)
-
-[node name="BurstBadgeLabel" type="Label" parent="OuterFrame/Root/BarColumn/BurstRow/BurstBadge"]
-unique_name_in_owner = true
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 15
 text = "BURST"
-horizontal_alignment = 1
-vertical_alignment = 1
 
 [node name="BurstBar" type="ProgressBar" parent="OuterFrame/Root/BarColumn/BurstRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(199, 36)
+custom_minimum_size = Vector2(0, 20)
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 3
+size_flags_vertical = 4
 max_value = 1.0
 show_percentage = false
 
-[node name="StaminaRow" type="HBoxContainer" parent="OuterFrame/Root/BarColumn"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-theme_override_constants/separation = 4
-
-[node name="StaminaBadge" type="ColorRect" parent="OuterFrame/Root/BarColumn/StaminaRow"]
+[node name="BurstValue" type="Label" parent="OuterFrame/Root/BarColumn/BurstRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(58, 36)
+custom_minimum_size = Vector2(84, 0)
 layout_mode = 2
-size_flags_vertical = 3
-color = Color(0.35, 0.75, 1, 1)
-
-[node name="StaminaBadgeLabel" type="Label" parent="OuterFrame/Root/BarColumn/StaminaRow/StaminaBadge"]
-unique_name_in_owner = true
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 15
-text = "STAM"
-horizontal_alignment = 1
-vertical_alignment = 1
-
-[node name="StaminaBar" type="ProgressBar" parent="OuterFrame/Root/BarColumn/StaminaRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(199, 36)
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-max_value = 1.0
-value = 1.0
-show_percentage = false
+horizontal_alignment = 2
+text = "0%"

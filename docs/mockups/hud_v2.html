@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SOV In-Game HUD — Round 2 (V3 refined)</title>
+<style>
+  :root{
+    --cyan:#35C5F2; --cyan-deep:#1F8FE0; --yellow:#FFD23F; --red:#E8392E;
+    --green:#4ADE80; --muted:#97A0AC;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#070a0e; color:#F0F4F8;
+    font-family:"Pretendard","Segoe UI",system-ui,sans-serif; padding:40px;}
+  h1{font-family:"Arial Narrow",sans-serif; font-size:32px; font-style:italic;
+    text-transform:uppercase; margin-bottom:4px;}
+  .sub{color:var(--muted); text-transform:uppercase; letter-spacing:.25em; font-size:12px;
+    margin-bottom:18px;}
+  .note{color:var(--muted); font-size:13px; line-height:1.6; max-width:1280px; margin-bottom:8px;}
+  .note b{color:#dfe6ee;}
+
+  .stage{position:relative; width:1280px; height:720px; overflow:hidden;
+    background:#0E1116; border:1px solid #2a3340; margin-bottom:10px;}
+  .game{position:absolute; inset:0;}
+  .game img{width:100%; height:100%; object-fit:cover; filter:brightness(.9);}
+
+  .panel{background:rgba(10,13,18,.5); position:absolute;}
+  .panel::before,.panel::after{content:""; position:absolute; width:16px; height:16px;}
+  .panel::before{left:0; top:0; border-left:2px solid rgba(255,255,255,.75); border-top:2px solid rgba(255,255,255,.75);}
+  .panel::after{right:0; bottom:0; border-right:2px solid rgba(255,255,255,.75); border-bottom:2px solid rgba(255,255,255,.75);}
+
+  .bar{position:relative; height:13px; background:rgba(10,13,18,.75); overflow:hidden;}
+  .bar i{position:absolute; left:0; top:0; bottom:0;}
+  .bar.hp i{width:78%; background:var(--green);}
+  .bar.burst i{width:45%; background:var(--yellow);}
+
+  /* player cluster: portrait + HP/BURST rows; value text OUTSIDE the bars (right column) */
+  .cluster{left:20px; top:20px; width:330px; padding:11px 13px; display:flex; gap:11px;}
+  .cluster .por{width:60px; height:60px; flex:none; overflow:hidden; position:relative;
+    border:1px solid rgba(255,255,255,.35);}
+  .cluster .por img{width:100%; height:100%; object-fit:cover; object-position:top;}
+  .cluster .por .lv{position:absolute; left:0; bottom:0; right:0; text-align:center;
+    background:rgba(10,13,18,.85); font-size:8.5px; font-weight:800; color:var(--yellow); padding:1px 0;}
+  .cluster .bars{flex:1; display:flex; flex-direction:column; gap:7px; justify-content:center;}
+  .brow{display:flex; align-items:center; gap:8px;}
+  .brow .k{width:34px; font-size:7.5px; font-weight:800; opacity:.6; letter-spacing:.14em;}
+  .brow .bar{flex:1;}
+  .brow .val{width:56px; text-align:right; font-family:"Arial Narrow"; font-weight:800;
+    font-style:italic; font-size:14px; text-shadow:0 1px 3px rgba(0,0,0,.9); white-space:nowrap;}
+  .brow .val.burst{color:var(--yellow);}
+
+  .xpline{position:absolute; left:20px; top:118px; width:330px; display:flex; align-items:center; gap:8px;}
+  .xpline .lv{padding:2px 9px; border:1px solid var(--yellow); color:var(--yellow);
+    font-size:9px; font-weight:800; letter-spacing:.08em; background:rgba(10,13,18,.6);}
+  .xpline .bar{flex:1; height:7px;}
+  .xpline .bar i{width:34%; background:var(--cyan-deep);}
+
+  .wave{position:absolute; left:50%; top:18px; transform:translateX(-50%) skewX(-6deg);
+    padding:6px 28px; background:rgba(10,13,18,.7); border:1px solid rgba(255,255,255,.2); text-align:center;}
+  .wave > div{transform:skewX(6deg);}
+  .wave .t{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:21px;}
+  .wave .tm{font-size:10.5px; font-weight:800; letter-spacing:.22em; color:var(--cyan);}
+
+  .map{position:absolute; right:20px; top:20px; width:148px; height:148px;
+    background:rgba(10,13,18,.5);}
+  .map::before{content:""; position:absolute; left:0; top:0; width:18px; height:18px;
+    border-left:2px solid rgba(255,255,255,.75); border-top:2px solid rgba(255,255,255,.75);}
+  .map::after{content:""; position:absolute; right:0; bottom:0; width:18px; height:18px;
+    border-right:2px solid rgba(255,255,255,.75); border-bottom:2px solid rgba(255,255,255,.75);}
+  .map .dot{position:absolute; left:50%; top:50%; width:6px; height:6px; background:var(--cyan);
+    transform:translate(-50%,-50%) rotate(45deg);}
+
+  .score{position:absolute; right:20px; bottom:86px; text-align:right;}
+  .score .k{font-size:9px; letter-spacing:.3em; font-weight:800; opacity:.65;}
+  .score .v{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:36px;
+    text-shadow:0 2px 8px rgba(0,0,0,.85);}
+
+  .cores{right:20px; bottom:26px; padding:8px 14px; display:flex; align-items:center; gap:10px;}
+  .cores.panel::before{border-color:rgba(232,57,46,.8);}
+  .cores.panel::after{border-color:rgba(232,57,46,.8);}
+  .cores .ic{width:14px; height:14px; background:radial-gradient(circle at 35% 35%, #ff8a7a, #b81f15); border-radius:50%;}
+  .cores .n{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:20px; color:#ffb4ae;}
+
+  .music{left:20px; bottom:24px; width:240px; padding:8px 12px;}
+  .music .t{font-size:10px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .music .row{display:flex; gap:14px; margin-top:4px; font-size:10px; opacity:.7; font-weight:800;}
+
+  /* boss bar — V3 bracket style: red brackets, name chip row, hazard-edged bar, % outside right */
+  .bosswrap{position:absolute; left:50%; bottom:54px; transform:translateX(-50%); width:560px;}
+  .bossname{display:flex; align-items:center; gap:10px; margin-bottom:5px;}
+  .bossname .chip{transform:skewX(-6deg); padding:3px 14px; background:rgba(120,8,4,.85);
+    border:1px solid var(--red); font-size:10px; font-weight:800; letter-spacing:.2em; color:#ffb4ae;}
+  .bossname .chip span{display:inline-block; transform:skewX(6deg);}
+  .bossname .ln{flex:1; height:1px; background:rgba(232,57,46,.45);}
+  .bossrow{display:flex; align-items:center; gap:10px;}
+  .bossbar{position:relative; flex:1; height:16px; background:rgba(10,13,18,.7);}
+  .bossbar::before{content:""; position:absolute; left:0; top:0; width:14px; height:14px;
+    border-left:2px solid var(--red); border-top:2px solid var(--red); z-index:2;}
+  .bossbar::after{content:""; position:absolute; right:0; bottom:0; width:14px; height:14px;
+    border-right:2px solid var(--red); border-bottom:2px solid var(--red); z-index:2;}
+  .bossbar i{position:absolute; left:2px; top:2px; bottom:2px; width:62%;
+    background:linear-gradient(180deg,#f0584d,#b81f15);}
+  .bossrow .pct{width:52px; font-family:"Arial Narrow"; font-weight:800; font-style:italic;
+    font-size:18px; color:#ff8c84; text-shadow:0 1px 4px rgba(0,0,0,.9);}
+</style>
+</head>
+<body>
+
+<h1>In-Game HUD — Round 2 · V3 refined</h1>
+<div class="sub">stamina bar removed · bar values moved OUTSIDE the bars · boss bar in bracket style</div>
+<div class="note">
+  Changes from round 1: <b>no stamina bar</b> (sprint needs no gauge) — cluster is two rows, HP + BURST;
+  values sit in their own right column (oblique numerals, never over the fill); boss bar gets the V3
+  treatment — skewed name chip + red corner brackets + % outside the bar.
+</div>
+
+<div class="stage">
+  <div class="game"><img src="../../assets/backgrounds/forest.jpg"></div>
+
+  <div class="panel cluster">
+    <div class="por"><img src="../../assets/characters/snow-white/portrait-sq.png"><div class="lv">LV 12</div></div>
+    <div class="bars">
+      <div class="brow"><span class="k">HP</span><div class="bar hp"><i></i></div><span class="val">78/100</span></div>
+      <div class="brow"><span class="k">BURST</span><div class="bar burst"><i></i></div><span class="val burst">45%</span></div>
+    </div>
+  </div>
+  <div class="xpline"><span class="lv">LV 12</span><div class="bar"><i></i></div></div>
+
+  <div class="wave"><div><div class="t">WAVE 27</div><div class="tm">18:42</div></div></div>
+
+  <div class="map"><div class="dot"></div></div>
+
+  <div class="score"><div class="k">SCORE</div><div class="v">1,284,650</div></div>
+  <div class="panel cores"><div class="ic"></div><span class="n">43</span></div>
+
+  <div class="panel music">
+    <div class="t">♪ UNYIELDING (Snow White's Theme)</div>
+    <div class="row"><span>⏮ PREV</span><span>⏸</span><span>NEXT ⏭</span></div>
+  </div>
+
+  <div class="bosswrap">
+    <div class="bossname"><div class="chip"><span>☠ RAPTURE QUEEN N-01</span></div><div class="ln"></div></div>
+    <div class="bossrow"><div class="bossbar"><i></i></div><span class="pct">62%</span></div>
+  </div>
+</div>
+
+</body>
+</html>

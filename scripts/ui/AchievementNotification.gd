@@ -44,7 +44,7 @@ func _build_ui() -> void:
 	style.bg_color = UI.ENTRY_BG
 	style.set_border_width_all(3)
 	style.border_color = UI.ACCENT_SECONDARY
-	style.set_corner_radius_all(8)
+	style.set_corner_radius_all(0)
 	style.content_margin_left = 20
 	style.content_margin_right = 20
 	style.content_margin_top = 12

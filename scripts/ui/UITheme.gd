@@ -1,7 +1,9 @@
 extends Node
 ## UI theme constants and colors.
-## Now an autoload singleton - access globally as UITheme.ACCENT_PRIMARYoviding consistent styling across all menus.
-## Combines NIKKE's sleek sci-fi aesthetic with Holocure's chunky, fun feel.
+## Autoload singleton - access globally as UITheme.ACCENT_PRIMARY etc.
+## NIKKE design language: flat, hard-edged "tactical terminal" minimalism.
+## Two registers: dark translucent "field" screens (menu/HUD) and near-white
+## "admin" screens (shop/settings/detail). See docs/UI_REDESIGN_NIKKE.md.
 
 # =============================================================================
 # FONTS - Lazily loaded to avoid blocking startup
@@ -28,39 +30,70 @@ static var FONT_MEDIUM: Font:
 			_font_medium = load("res://resources/fonts/pretendard_medium.tres")
 		return _font_medium
 
+# NIKKE signature ~10-degree forward lean for headers/callouts
+static var _font_title_oblique: FontVariation = null
+
+static var FONT_TITLE_OBLIQUE: Font:
+	get:
+		if _font_title_oblique == null:
+			_font_title_oblique = FontVariation.new()
+			_font_title_oblique.base_font = FONT_TITLE
+			_font_title_oblique.variation_transform = Transform2D(Vector2(1.0, 0.0), Vector2(-0.18, 1.0), Vector2.ZERO)
+		return _font_title_oblique
+
 # =============================================================================
 # COLOR PALETTE - NIKKE-inspired with vibrant accents
 # =============================================================================
 
-# Backgrounds (dark, subdued - lets content pop)
-const BG_DEEP := Color(0.04, 0.055, 0.08, 1.0)          # #0A0E14 - Deepest layer
-const BG_MID := Color(0.082, 0.11, 0.157, 1.0)          # #151C28 - Panels, cards
-const BG_LIGHT := Color(0.118, 0.157, 0.212, 1.0)       # #1E2836 - Hover states
-const BG_OVERLAY := Color(0.0, 0.0, 0.0, 0.5)           # Dark overlay for modals
+# Backgrounds - dark "field" register (menus, HUD, alerts)
+const BG_DEEP := Color(0.055, 0.067, 0.086, 1.0)        # #0E1116 - Deepest layer
+const BG_MID := Color(0.11, 0.129, 0.165, 1.0)          # #1C212A - Panels, cards
+const BG_LIGHT := Color(0.149, 0.173, 0.212, 1.0)       # #262C36 - Hover/raised
+const BG_OVERLAY := Color(0.0, 0.0, 0.0, 0.6)           # Popup scrim
+const BG_GLASS := Color(0.0, 0.0, 0.0, 0.5)             # Translucent HUD glass panels
+
+# Light "admin" register (shop, settings, achievements, character detail)
+const ADMIN_BG := Color(0.929, 0.937, 0.949, 1.0)       # #EDEFF2 - Page background
+const ADMIN_CARD := Color(1.0, 1.0, 1.0, 1.0)           # #FFFFFF - Card surface
+const ADMIN_HAIRLINE := Color(0.847, 0.863, 0.882, 1.0) # #D8DCE1 - 1px dividers
+const ADMIN_TEXT := Color(0.165, 0.18, 0.208, 1.0)      # #2A2E35 - Body text
+const ADMIN_TEXT_DIM := Color(0.541, 0.565, 0.6, 1.0)   # #8A9099 - Secondary text
 
 # Entry/Card backgrounds (for list items, cards)
 const ENTRY_BG := Color(0.1, 0.1, 0.14, 0.95)           # List item background
 const ENTRY_BORDER := Color(0.95, 0.95, 0.98, 0.9)      # List item border
 const ENTRY_SEPARATOR := Color(0.95, 0.95, 0.98, 0.3)   # Separator lines
 
-# Primary Accent - Clean white (main accent)
+# Primary Accent - Clean white (text emphasis, selected borders)
 const ACCENT_PRIMARY := Color(0.95, 0.95, 0.98, 1.0)      # Near-white - Selected, important
 const ACCENT_PRIMARY_DIM := Color(0.75, 0.75, 0.8, 1.0)   # Dimmed version
 const ACCENT_PRIMARY_GLOW := Color(0.9, 0.9, 0.95, 0.3)   # For glow effects
 const ACCENT_HOVER := Color(1.0, 1.0, 1.0, 1.0)           # Bright white for hovers
 
-# Secondary Accent - Warm amber/gold (highlights)
-const ACCENT_SECONDARY := Color(1.0, 0.714, 0.15, 1.0)  # #FFB627 - Gold highlights
-const ACCENT_SECONDARY_DIM := Color(0.85, 0.6, 0.1, 1.0)
+# Signature cyan - CTAs, gauges, active selection (the NIKKE blue)
+const ACCENT_CYAN := Color(0.208, 0.773, 0.949, 1.0)      # #35C5F2
+const ACCENT_CYAN_BRIGHT := Color(0.357, 0.824, 0.969, 1.0) # #5BD2F7 - gradient top
+const ACCENT_CYAN_DEEP := Color(0.122, 0.561, 0.878, 1.0)   # #1F8FE0 - gradient bottom
+const ACCENT_CYAN_DIM := Color(0.16, 0.55, 0.68, 1.0)
+const ACCENT_CYAN_GLOW := Color(0.208, 0.773, 0.949, 0.4)
+
+# Secondary Accent - Selection/highlight yellow
+const ACCENT_SECONDARY := Color(1.0, 0.824, 0.247, 1.0) # #FFD23F - Selected tabs, highlights
+const ACCENT_SECONDARY_DIM := Color(0.85, 0.67, 0.15, 1.0)
 const RANK_GOLD := Color(0.996, 0.843, 0.392, 1.0)      # Leaderboard rank gold
 
-# Tertiary Accent - Soft pink/coral (special elements)
-const ACCENT_TERTIARY := Color(1.0, 0.42, 0.615, 1.0)   # #FF6B9D - Pink accents
+# Tertiary Accent - repointed to cyan (pink retired in NIKKE refresh)
+const ACCENT_TERTIARY := Color(0.208, 0.773, 0.949, 1.0) # = ACCENT_CYAN
+
+# Rarity tiers
+const RARITY_SSR := Color(0.973, 0.639, 0.231, 1.0)     # #F8A33B - warm gold
+const RARITY_SR := Color(0.627, 0.42, 0.878, 1.0)       # #A06BE0 - violet
+const RARITY_R := Color(0.373, 0.659, 0.91, 1.0)        # #5FA8E8 - steel blue
 
 # Semantic Colors
 const COLOR_SUCCESS := Color(0.29, 0.87, 0.5, 1.0)      # #4ADE80 - HP, confirms
-const COLOR_DANGER := Color(1.0, 0.34, 0.34, 1.0)       # #FF5757 - Damage, cancel
-const COLOR_WARNING := Color(1.0, 0.6, 0.2, 1.0)        # Orange warning
+const COLOR_DANGER := Color(0.91, 0.224, 0.18, 1.0)     # #E8392E - Alert red, damage, cancel
+const COLOR_WARNING := Color(1.0, 0.341, 0.133, 1.0)    # #FF5722 - Orange warning
 const COLOR_UNLOCKED := Color(0.392, 0.86, 0.549, 1.0)  # Green for unlocked items
 const COLOR_LOCKED := Color(0.4, 0.4, 0.45, 1.0)        # Gray for locked items
 const COLOR_CORE := Color(1.0, 0.3, 0.3, 1.0)           # Red for Pristine Rapture Cores
@@ -242,10 +275,16 @@ const VFX_VENETIAN_EDGE := Color(0.6, 0.8, 1.0, 0.15)
 const VFX_STRIPE_RED := Color(1.0, 0.2, 0.15, 0.18)
 const VFX_STRIPE_DARK := Color(0.0, 0.0, 0.0, 0.12)
 
-# Hologram scanlines
-const VFX_SCANLINE := Color(1.0, 0.8, 0.8, 0.04)
-const VFX_SCANLINE_SWEEP := Color(1.0, 0.7, 0.6, 1.0)  # Alpha applied dynamically
-const VFX_SCANLINE_EDGE := Color(1.0, 0.7, 0.6, 0.12)
+# Hologram scanlines (cyan terminal tint)
+const VFX_SCANLINE := Color(0.7, 0.9, 1.0, 0.04)
+const VFX_SCANLINE_SWEEP := Color(0.55, 0.85, 1.0, 1.0)  # Alpha applied dynamically
+const VFX_SCANLINE_EDGE := Color(0.55, 0.85, 1.0, 0.12)
+
+# Hazard stripes (45-degree caution/alert ribbons)
+const HAZARD_YELLOW := Color(1.0, 0.824, 0.247, 1.0)    # Caution stripe
+const HAZARD_BLACK := Color(0.07, 0.075, 0.09, 1.0)     # Caution counter-stripe
+const HAZARD_RED := Color(0.91, 0.224, 0.18, 1.0)       # Boss/alert stripe
+const HAZARD_WHITE := Color(0.95, 0.95, 0.98, 1.0)      # Alert counter-stripe
 
 # =============================================================================
 # SHOP MENU COLORS
@@ -455,29 +494,41 @@ const SHADOW_PURPLE := Color(0.4, 0.2, 0.6, 0.8)        # Purple shadow for head
 const SHADOW_HEADER := Color(0.4, 0.2, 0.6, 0.3)        # Header panel shadow
 
 # =============================================================================
-# SIZING - Holocure-inspired chunky feel
+# SIZING - NIKKE flat tactical-terminal feel
 # =============================================================================
 
-# Border widths (thicker for that chunky feel)
-const BORDER_THIN := 2
-const BORDER_NORMAL := 3
-const BORDER_THICK := 4
-const BORDER_CHUNKY := 5
+# Border widths (thin hairlines, 2-3px accent bars)
+const BORDER_THIN := 1
+const BORDER_NORMAL := 2
+const BORDER_THICK := 3
+const BORDER_CHUNKY := 4
 
-# Corner radii
+# Corner radii - sharp 90-degree corners are the load-bearing NIKKE rule.
+# All legacy radius tiers collapse to 0; CORNER_TILE is the one sanctioned
+# exception (dark glass icon tiles get mild rounding).
 const CORNER_NONE := 0
-const CORNER_SMALL := 4
-const CORNER_MEDIUM := 8
-const CORNER_LARGE := 12
+const CORNER_SMALL := 0
+const CORNER_MEDIUM := 0
+const CORNER_LARGE := 0
+const CORNER_TILE := 6
 
-# Shadows (visible depth like Holocure)
-const SHADOW_OFFSET := Vector2(3, 3)
-const SHADOW_SIZE := 4
-const SHADOW_COLOR := Color(0.0, 0.0, 0.0, 0.4)
+# Signature 45-degree chamfer size (one cut corner per card)
+const CHAMFER_SIZE := 12.0
 
-# Hover scale (bouncy like Holocure)
-const HOVER_SCALE := 1.05
-const HOVER_DURATION := 0.15
+# Shadows (flat layering - 1-2px hard edge at most, no soft blur)
+const SHADOW_OFFSET := Vector2(2, 2)
+const SHADOW_SIZE := 2
+const SHADOW_COLOR := Color(0.0, 0.0, 0.0, 0.45)
+
+# Hover/press (snappy, mobile-first - no bouncy overshoot)
+const HOVER_SCALE := 1.02
+const HOVER_DURATION := 0.12
+const PRESS_SCALE := 0.96
+
+# Motion language: fast slide-ins with strong ease-out, staggered lists
+const SLIDE_DURATION := 0.2
+const SLIDE_DISTANCE := 32.0
+const STAGGER_DELAY := 0.03
 
 # =============================================================================
 # STYLE FACTORY METHODS
@@ -584,26 +635,20 @@ static func create_primary_button_style_hover() -> StyleBoxFlat:
 
 
 static func create_button_style_focus() -> StyleBoxFlat:
-	# Explicit focus style - Solid White to match "Hover" aesthetic
+	# NIKKE selection treatment: sharp yellow outline, no fill swap
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(1.0, 1.0, 1.0, 1.0) # 100% White BG (Solid)
-	style.draw_center = true
-	style.border_color = Color(1.0, 1.0, 1.0, 1.0) # Bright White border
-	style.set_border_width_all(4)
-	style.set_corner_radius_all(CORNER_MEDIUM)
-	
-	# Glow effect
-	style.shadow_color = Color(1.0, 1.0, 1.0, 0.6)
-	style.shadow_size = 12
+	style.draw_center = false
+	style.border_color = ACCENT_SECONDARY
+	style.set_border_width_all(BORDER_NORMAL)
+	style.set_corner_radius_all(CORNER_NONE)
 	return style
 
 
 static func apply_focus_style_recursively(node: Node) -> void:
 	if node is Button:
 		node.add_theme_stylebox_override("focus", create_button_style_focus())
-		# Ensure text remains readable on white background
-		node.add_theme_color_override("font_color_focus", TEXT_DARK)
-	
+		node.add_theme_color_override("font_color_focus", TEXT_PRIMARY)
+
 	for child in node.get_children():
 		apply_focus_style_recursively(child)
 
@@ -620,26 +665,23 @@ static func create_danger_button_style() -> StyleBoxFlat:
 
 
 static func create_tab_style_active() -> StyleBoxFlat:
+	# NIKKE tabs: flat text labels with a thick yellow underline highlight
 	var style := StyleBoxFlat.new()
-	style.bg_color = ACCENT_PRIMARY
-	style.border_color = Color(0.5, 0.9, 1.0, 1.0)
+	style.bg_color = Color(1.0, 1.0, 1.0, 0.06)
+	style.border_color = ACCENT_SECONDARY
 	style.set_border_width_all(0)
 	style.border_width_bottom = BORDER_THICK
-	style.set_corner_radius_all(0)
-	style.corner_radius_top_left = CORNER_SMALL
-	style.corner_radius_top_right = CORNER_SMALL
+	style.set_corner_radius_all(CORNER_NONE)
 	return style
 
 
 static func create_tab_style_inactive() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = BG_MID
-	style.border_color = BORDER_DEFAULT
+	style.bg_color = Color(0, 0, 0, 0)
+	style.border_color = DIVIDER_SUBTLE
 	style.set_border_width_all(0)
 	style.border_width_bottom = BORDER_THIN
-	style.set_corner_radius_all(0)
-	style.corner_radius_top_left = CORNER_SMALL
-	style.corner_radius_top_right = CORNER_SMALL
+	style.set_corner_radius_all(CORNER_NONE)
 	return style
 
 
@@ -689,7 +731,7 @@ static func apply_hover_effect(control: Control, tween: Tween = null) -> Tween:
 		tween.kill()
 	tween = control.create_tween()
 	tween.set_ease(Tween.EASE_OUT)
-	tween.set_trans(Tween.TRANS_BACK)  # Bouncy like Holocure
+	tween.set_trans(Tween.TRANS_CUBIC)  # Snappy, no bouncy overshoot
 	tween.tween_property(control, "scale", Vector2(HOVER_SCALE, HOVER_SCALE), HOVER_DURATION)
 	return tween
 
@@ -699,7 +741,7 @@ static func remove_hover_effect(control: Control, tween: Tween = null) -> Tween:
 		tween.kill()
 	tween = control.create_tween()
 	tween.set_ease(Tween.EASE_OUT)
-	tween.set_trans(Tween.TRANS_BACK)
+	tween.set_trans(Tween.TRANS_CUBIC)
 	tween.tween_property(control, "scale", Vector2.ONE, HOVER_DURATION)
 	return tween
 
@@ -708,8 +750,24 @@ static func apply_press_effect(control: Control) -> Tween:
 	var tween := control.create_tween()
 	tween.set_ease(Tween.EASE_OUT)
 	tween.set_trans(Tween.TRANS_QUAD)
-	tween.tween_property(control, "scale", Vector2(0.95, 0.95), 0.05)
+	tween.tween_property(control, "scale", Vector2(PRESS_SCALE, PRESS_SCALE), 0.05)
 	tween.tween_property(control, "scale", Vector2.ONE, 0.1)
+	return tween
+
+
+## Staggered slide-in for list/menu items: each item slides SLIDE_DISTANCE px
+## from `direction` with a STAGGER_DELAY * index delay. Call after items exist.
+static func apply_slide_in(control: Control, index: int = 0, direction: Vector2 = Vector2.LEFT) -> Tween:
+	var target_pos := control.position
+	control.position = target_pos + direction * SLIDE_DISTANCE
+	control.modulate.a = 0.0
+	var tween := control.create_tween()
+	tween.set_ease(Tween.EASE_OUT)
+	tween.set_trans(Tween.TRANS_CUBIC)
+	tween.set_parallel(true)
+	var delay := STAGGER_DELAY * index
+	tween.tween_property(control, "position", target_pos, SLIDE_DURATION).set_delay(delay)
+	tween.tween_property(control, "modulate:a", 1.0, SLIDE_DURATION).set_delay(delay)
 	return tween
 
 
@@ -750,7 +808,7 @@ static func create_progress_bar_fill(color: Color) -> StyleBoxFlat:
 	style.bg_color = color
 	style.border_color = color.lightened(0.2)
 	style.set_border_width_all(0)
-	style.set_corner_radius_all(CORNER_SMALL - 1)
+	style.set_corner_radius_all(CORNER_NONE)
 	return style
 
 
@@ -765,3 +823,185 @@ static func get_separator_color() -> Color:
 static func get_separator_highlight_color() -> Color:
 	return ACCENT_PRIMARY.darkened(0.3)
 
+
+# =============================================================================
+# NIKKE STYLE FACTORY - canonical styleboxes for the UI refresh
+# =============================================================================
+
+const ChamferStyleBoxScript := preload("res://scripts/ui/components/ChamferStyleBox.gd")
+
+## Card/panel with one 45-degree chamfered corner - the NIKKE signature shape.
+## corner: 0=top-left, 1=top-right, 2=bottom-right, 3=bottom-left
+static func create_chamfer_card(
+	bg_color: Color = BG_MID,
+	border_color: Color = Color(0, 0, 0, 0),
+	border_width: int = 0,
+	corner: int = 2,
+	chamfer: float = CHAMFER_SIZE
+) -> StyleBox:
+	var style: StyleBox = ChamferStyleBoxScript.new()
+	style.set("bg_color", bg_color)
+	style.set("border_color", border_color)
+	style.set("border_width", border_width)
+	style.set("chamfer_corner", corner)
+	style.set("chamfer", chamfer)
+	return style
+
+
+## Primary CTA slab: solid cyan, sharp corners, darker 2px bottom edge (keycap).
+static func create_cta_style_normal() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = ACCENT_CYAN
+	style.set_corner_radius_all(CORNER_NONE)
+	style.border_color = ACCENT_CYAN_DEEP
+	style.set_border_width_all(0)
+	style.border_width_bottom = 2
+	return style
+
+
+static func create_cta_style_hover() -> StyleBoxFlat:
+	var style := create_cta_style_normal()
+	style.bg_color = ACCENT_CYAN_BRIGHT
+	return style
+
+
+static func create_cta_style_pressed() -> StyleBoxFlat:
+	var style := create_cta_style_normal()
+	style.bg_color = ACCENT_CYAN_DEEP
+	style.border_width_bottom = 0
+	return style
+
+
+static func create_cta_style_disabled() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.714, 0.733, 0.761, 1.0)  # Solid gray, not transparent
+	style.set_corner_radius_all(CORNER_NONE)
+	return style
+
+
+## Secondary button: light fill, charcoal text, thin border. Same geometry as CTA.
+static func create_secondary_cta_style_normal() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.96, 0.965, 0.975, 1.0)
+	style.border_color = Color(0.784, 0.804, 0.827, 1.0)  # #C8CDD3
+	style.set_border_width_all(BORDER_THIN)
+	style.set_corner_radius_all(CORNER_NONE)
+	return style
+
+
+static func create_secondary_cta_style_hover() -> StyleBoxFlat:
+	var style := create_secondary_cta_style_normal()
+	style.bg_color = Color(1.0, 1.0, 1.0, 1.0)
+	style.border_color = Color(0.6, 0.63, 0.66, 1.0)
+	return style
+
+
+## Destructive/spend confirmation: alert red, same geometry as CTA.
+static func create_danger_cta_style_normal() -> StyleBoxFlat:
+	var style := create_cta_style_normal()
+	style.bg_color = COLOR_DANGER
+	style.border_color = COLOR_DANGER.darkened(0.3)
+	return style
+
+
+## Panel with a 2-3px accent bar on one edge (section headers, selected rows).
+## edge: SIDE_LEFT or SIDE_TOP (NIKKE uses left for rows, top for headers)
+static func create_accent_edge_style(
+	bg_color: Color = BG_MID,
+	accent_color: Color = ACCENT_CYAN,
+	edge: int = SIDE_LEFT,
+	accent_width: int = 3
+) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = bg_color
+	style.border_color = accent_color
+	style.set_border_width_all(0)
+	style.set_border_width(edge as Side, accent_width)
+	style.set_corner_radius_all(CORNER_NONE)
+	return style
+
+
+## White admin-register card (light screens: shop, settings, detail panels).
+static func create_admin_card_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = ADMIN_CARD
+	style.set_corner_radius_all(CORNER_NONE)
+	style.shadow_color = SHADOW_COLOR
+	style.shadow_size = SHADOW_SIZE
+	style.shadow_offset = SHADOW_OFFSET
+	return style
+
+
+## Translucent dark glass panel (field register: HUD widgets, lobby tiles).
+static func create_glass_style(alpha: float = 0.5) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.0, 0.0, 0.0, alpha)
+	style.set_corner_radius_all(CORNER_NONE)
+	return style
+
+
+## Dark glass icon tile (the one sanctioned mild rounding).
+static func create_icon_tile_style() -> StyleBoxFlat:
+	var style := create_glass_style(0.55)
+	style.set_corner_radius_all(CORNER_TILE)
+	return style
+
+
+## Thin gauge with cyan outer glow (Full Burst bar, XP, pity counters).
+static func create_gauge_bg_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.0, 0.0, 0.0, 0.6)
+	style.border_color = Color(1.0, 1.0, 1.0, 0.15)
+	style.set_border_width_all(BORDER_THIN)
+	style.set_corner_radius_all(CORNER_NONE)
+	return style
+
+
+static func create_gauge_fill_style(color: Color = ACCENT_CYAN, glow: bool = true) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = color
+	style.set_corner_radius_all(CORNER_NONE)
+	if glow:
+		style.shadow_color = Color(color.r, color.g, color.b, 0.45)
+		style.shadow_size = 5
+		style.shadow_offset = Vector2.ZERO
+	return style
+
+
+## White popup card on scrim: sharp corners, title row + hairline handled by caller.
+static func create_popup_card_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = ADMIN_CARD
+	style.set_corner_radius_all(CORNER_NONE)
+	style.shadow_color = Color(0, 0, 0, 0.6)
+	style.shadow_size = 4
+	style.shadow_offset = Vector2(0, 2)
+	return style
+
+
+## Apply NIKKE header treatment to a Label: condensed all-caps oblique title.
+static func style_header_label(label: Label, size: int = 48, color: Color = TEXT_PRIMARY) -> void:
+	label.add_theme_font_override("font", FONT_TITLE_OBLIQUE)
+	label.add_theme_font_size_override("font_size", size)
+	label.add_theme_color_override("font_color", color)
+	label.text = label.text.to_upper()
+
+
+# Letter-spaced variation of FONT_BOLD for subtitle/microcopy labels
+static var _font_subtitle: FontVariation = null
+
+static var FONT_SUBTITLE: Font:
+	get:
+		if _font_subtitle == null:
+			_font_subtitle = FontVariation.new()
+			_font_subtitle.base_font = FONT_BOLD
+			_font_subtitle.spacing_glyph = 2  # Wide tracking
+		return _font_subtitle
+
+
+## Apply the tiny letter-spaced English subtitle under a header (paired-label signature).
+static func style_subtitle_label(label: Label, size: int = 14, color: Color = TEXT_MUTED) -> void:
+	label.add_theme_font_override("font", FONT_SUBTITLE)
+	label.add_theme_font_size_override("font_size", size)
+	label.add_theme_color_override("font_color", color)
+	label.text = label.text.to_upper()

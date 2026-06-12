@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SOV Shop — Round 1 (3 layout directions)</title>
+<style>
+  :root{
+    --cyan:#35C5F2; --cyan-deep:#1F8FE0; --yellow:#FFD23F; --red:#E8392E;
+    --muted:#97A0AC;
+    --admin-bg:#EDEFF2; --admin-hair:#D8DCE1; --admin-text:#2A2E35; --admin-dim:#8A9099;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#070a0e; color:#F0F4F8;
+    font-family:"Pretendard","Segoe UI",system-ui,sans-serif; padding:40px;}
+  h1{font-family:"Arial Narrow",sans-serif; font-size:32px; font-style:italic;
+    text-transform:uppercase; margin-bottom:4px;}
+  h2{font-family:"Arial Narrow",sans-serif; font-size:24px; font-style:italic;
+    text-transform:uppercase; margin:46px 0 4px;}
+  .sub{color:var(--muted); text-transform:uppercase; letter-spacing:.25em; font-size:12px;
+    margin-bottom:18px;}
+
+  .stage{position:relative; width:1280px; height:720px; overflow:hidden;
+    background:var(--admin-bg); border:1px solid #2a3340; margin-bottom:10px;
+    color:var(--admin-text);}
+  .scan{position:absolute; inset:0; pointer-events:none; z-index:50; opacity:.4;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px);}
+
+  .hdr{position:absolute; left:44px; top:24px; z-index:5;}
+  .hdr .t{font-family:"Arial Narrow",sans-serif; font-weight:800; font-style:italic; font-size:40px;}
+  .hdr .s{font-size:12px; letter-spacing:.3em; text-transform:uppercase; color:var(--admin-dim); margin-top:2px;}
+  .hdr .bar{width:54px; height:3px; background:var(--cyan); margin-top:8px;}
+  .topright{position:absolute; right:24px; top:22px; display:flex; gap:12px; z-index:5;}
+  .pill{display:flex; align-items:center; gap:8px; background:#fff; color:var(--admin-text);
+    box-shadow:0 1px 4px rgba(0,0,0,.18); padding:6px 16px; font-size:15px;
+    font-weight:800; height:38px;}
+  .pill .gem{color:#ff4d4d;}
+  .backchip{display:flex; align-items:center; height:38px; padding:0 18px;
+    transform:skewX(-6deg); background:#fff; color:var(--admin-text);
+    box-shadow:0 1px 4px rgba(0,0,0,.18); font-weight:800; font-size:14px; cursor:pointer;}
+  .backchip span{transform:skewX(6deg);}
+  .greeble{position:absolute; left:46px; bottom:20px; display:flex; align-items:center;
+    gap:14px; opacity:.35; font-size:9px; letter-spacing:.22em; font-weight:700;}
+  .greeble .bars{display:flex; gap:2px; align-items:flex-end;}
+  .greeble .bars i{display:block; width:2px; background:#2A2E35;}
+
+  /* flat glyph icon tile (replaces emoji) */
+  .tile{width:54px; height:54px; flex:none; display:flex; align-items:center; justify-content:center;
+    background:#22272f; color:#fff; font-size:26px; font-weight:800;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%);}
+  .tile.atk{color:#ffd23f;} .tile.hp{color:#ff6b61;} .tile.spd{color:#7fe0a8;}
+  .tile.crit{color:#ffa54d;} .tile.xp{color:#5BD2F7;}
+
+  .costbtn{display:flex; align-items:center; gap:8px; height:46px; padding:0 18px;
+    background:linear-gradient(180deg,#5BD2F7,#1F8FE0); border-bottom:3px solid #15679f;
+    color:#fff; font-weight:800; font-size:16px; cursor:pointer; user-select:none;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%);}
+  .costbtn .gem{color:#ffd9d6;}
+  .costbtn.broke{background:#aeb6c0; border-bottom-color:#8a929c; cursor:not-allowed;}
+  .costbtn.broke .gem{color:#e8d4d2;}
+  .lvtag{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:24px;
+    color:var(--admin-dim); width:84px; text-align:right;}
+  .lvtag b{color:var(--admin-text); font-size:30px;}
+
+  .resetbtn{display:flex; align-items:center; justify-content:center; gap:8px; height:44px;
+    background:#fff; border:1px solid #c4271c; color:#c4271c; font-weight:800; font-size:13px;
+    letter-spacing:.12em; cursor:pointer; user-select:none; padding:0 20px;}
+  .resetbtn:hover{background:#fdf0ef;}
+
+  .flashred{animation:flashred .3s;}
+  @keyframes flashred{0%{background-color:#ffd6d2;}100%{background-color:transparent;}}
+
+  /* ============ A: LEDGER ROWS ============ */
+  #vA .rows{position:absolute; left:44px; top:128px; width:760px; z-index:3;
+    display:flex; flex-direction:column; gap:10px;}
+  #vA .row{display:flex; align-items:center; gap:16px; background:#fff; padding:12px 18px;
+    box-shadow:0 1px 5px rgba(0,0,0,.14); cursor:pointer;}
+  #vA .row .tx{flex:1;}
+  #vA .row .tx .n{font-weight:800; font-size:17px; letter-spacing:.04em;}
+  #vA .row .tx .d{font-size:12.5px; color:var(--admin-dim); margin-top:1px;}
+  #vA .row .tx .b{font-size:11px; color:var(--cyan-deep); font-weight:800; margin-top:2px;}
+  #vA .summary{position:absolute; right:36px; top:128px; width:404px; bottom:60px; z-index:3;
+    background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.16); padding:22px 26px;
+    display:flex; flex-direction:column;}
+  #vA .summary .cap{font-size:11px; letter-spacing:.28em; color:var(--admin-dim);
+    font-weight:800; margin-bottom:14px;}
+  #vA .summary .kv{display:flex; justify-content:space-between; font-size:14px;
+    padding:7px 0; border-bottom:1px solid var(--admin-hair);}
+  #vA .summary .kv b{font-family:"Arial Narrow"; font-style:italic; font-size:19px;}
+  #vA .summary .bonuses{margin-top:18px;}
+  #vA .summary .bn{display:flex; justify-content:space-between; font-size:13.5px; padding:5px 0;}
+  #vA .summary .bn .v{font-weight:800; color:var(--cyan-deep);}
+  #vA .summary .resetbtn{margin-top:auto;}
+
+  /* ============ B: CARD GRID ============ */
+  #vB .investrow{position:absolute; left:44px; top:120px; right:36px; display:flex;
+    justify-content:space-between; align-items:center; z-index:3;}
+  #vB .investrow .inv{font-size:12px; letter-spacing:.22em; color:var(--admin-dim); font-weight:800;}
+  #vB .investrow .inv b{color:var(--admin-text); font-size:15px;}
+  #vB .grid{position:absolute; left:44px; top:162px; right:36px; bottom:120px; z-index:3;
+    display:flex; gap:16px;}
+  #vB .card{flex:1; background:#fff; box-shadow:0 1px 6px rgba(0,0,0,.15); padding:22px 18px 18px;
+    display:flex; flex-direction:column; align-items:center; text-align:center;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%);}
+  #vB .card .tile{width:72px; height:72px; font-size:34px;}
+  #vB .card .n{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:27px; margin-top:14px;}
+  #vB .card .lv{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:40px; margin-top:4px;}
+  #vB .card .lv em{font-style:italic; font-size:18px; color:var(--admin-dim);}
+  #vB .card .bonus{font-size:12px; font-weight:800; color:var(--cyan-deep); margin-top:2px;
+    letter-spacing:.06em; min-height:16px;}
+  #vB .card .d{font-size:12.5px; color:var(--admin-dim); margin-top:10px; flex:1;}
+  #vB .card .costbtn{width:100%; justify-content:center;}
+  #vB .bottomrow{position:absolute; right:36px; bottom:56px; z-index:3;}
+
+  /* ============ C: TERMINAL SPLIT ============ */
+  #vC .list{position:absolute; left:44px; top:128px; width:430px; z-index:3;
+    display:flex; flex-direction:column; gap:8px;}
+  #vC .item{position:relative; display:flex; align-items:center; gap:14px; background:#fff;
+    padding:9px 14px; box-shadow:0 1px 4px rgba(0,0,0,.12); cursor:pointer;}
+  #vC .item .tile{width:42px; height:42px; font-size:20px;}
+  #vC .item .n{flex:1; font-weight:800; font-size:15px;}
+  #vC .item .lv{font-family:"Arial Narrow"; font-style:italic; font-weight:800; font-size:18px;
+    color:var(--admin-dim);}
+  #vC .item.sel{outline:2px solid var(--yellow); outline-offset:2px;}
+  #vC .item.sel::before{content:""; position:absolute; left:0; top:0; bottom:0; width:4px;
+    background:var(--yellow);}
+  #vC .list .resetbtn{margin-top:14px;}
+  #vC .detail{position:absolute; right:36px; top:128px; width:730px; bottom:60px; z-index:3;
+    background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.16); padding:30px 36px; overflow:hidden;}
+  #vC .detail .wm{position:absolute; right:-30px; bottom:-40px; font-size:300px; opacity:.05;
+    font-weight:800; pointer-events:none;}
+  #vC .detail .n{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:52px;}
+  #vC .detail .role{font-size:12px; letter-spacing:.26em; color:var(--cyan-deep);
+    font-weight:800; text-transform:uppercase;}
+  #vC .detail .d{font-size:16px; color:#4a4f57; margin-top:18px; max-width:420px;}
+  #vC .lvrow{display:flex; align-items:baseline; gap:18px; margin-top:26px;}
+  #vC .lvrow .now{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:62px;}
+  #vC .lvrow .arrow{font-size:26px; color:var(--admin-dim);}
+  #vC .lvrow .next{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:38px;
+    color:var(--cyan-deep);}
+  #vC .bonusrow{display:flex; gap:36px; margin-top:8px;}
+  #vC .bonusrow .bcell .k{font-size:10px; letter-spacing:.22em; color:var(--admin-dim); font-weight:800;}
+  #vC .bonusrow .bcell .v{font-size:21px; font-weight:800;}
+  #vC .bonusrow .bcell .v.next{color:var(--cyan-deep);}
+  #vC .buyrow{position:absolute; left:36px; right:36px; bottom:30px; display:flex; gap:14px;}
+  #vC .buyrow .costbtn{flex:1; height:58px; justify-content:center; font-size:19px; font-style:italic;}
+  #vC .buyrow .x10{flex:none; width:160px;}
+</style>
+</head>
+<body>
+
+<h1>Shop — Round 1</h1>
+<div class="sub">Light admin register (approved split) · real cost curve wired in · click to buy, watch cores drain · flat glyph tiles replace emoji</div>
+
+<!-- ============ A ============ -->
+<h2>A — “Requisition Ledger” · rows + summary panel</h2>
+<div class="sub">5 list rows like a NIKKE cash-shop ledger, right panel = totals, live bonuses, reset &amp; refund.</div>
+<div class="stage" id="vA">
+  <div class="hdr"><div class="t">SHOP</div><div class="s">OUTPOST SUPPLY // PERMANENT UPGRADES</div><div class="bar"></div></div>
+  <div class="topright">
+    <div class="pill"><span class="gem">◆</span><span class="cores">250</span></div>
+    <div class="backchip"><span>← BACK</span></div>
+  </div>
+  <div class="rows"></div>
+  <div class="summary">
+    <div class="cap">REQUISITION SUMMARY</div>
+    <div class="kv"><span>TOTAL LEVELS</span><b class="tot-lv">0</b></div>
+    <div class="kv"><span>CORES INVESTED</span><b>◆ <span class="tot-sp">0</span></b></div>
+    <div class="bonuses">
+      <div class="cap" style="margin-bottom:6px;">ACTIVE BONUSES</div>
+      <div class="bnlist"></div>
+    </div>
+    <div class="resetbtn">↺ RESET &amp; REFUND ALL</div>
+  </div>
+  <div class="greeble"><div class="bars"></div><span>SUPPLY TERMINAL // ARK SYS V2.4</span></div>
+  <div class="scan"></div>
+</div>
+
+<!-- ============ B ============ -->
+<h2>B — “Supply Cards” · 5-up card grid (closest to current structure)</h2>
+<div class="sub">One chamfered white card per upgrade, big level numeral, live bonus line, cost slab. Refund chip bottom-right.</div>
+<div class="stage" id="vB">
+  <div class="hdr"><div class="t">SHOP</div><div class="s">OUTPOST SUPPLY // PERMANENT UPGRADES</div><div class="bar"></div></div>
+  <div class="topright">
+    <div class="pill"><span class="gem">◆</span><span class="cores">250</span></div>
+    <div class="backchip"><span>← BACK</span></div>
+  </div>
+  <div class="investrow">
+    <div class="inv">CORES INVESTED // <b>◆ <span class="tot-sp">0</span></b></div>
+    <div class="inv">TOTAL LEVELS // <b class="tot-lv">0</b></div>
+  </div>
+  <div class="grid"></div>
+  <div class="bottomrow"><div class="resetbtn">↺ RESET &amp; REFUND ALL</div></div>
+  <div class="greeble"><div class="bars"></div><span>SUPPLY TERMINAL // ARK SYS V2.4</span></div>
+  <div class="scan"></div>
+</div>
+
+<!-- ============ C ============ -->
+<h2>C — “Supply Terminal” · list + big detail (room for buy ×10, cost preview)</h2>
+<div class="sub">Select an upgrade on the left, detail shows current → next bonus and cost; BUY and BUY ×10 slabs.</div>
+<div class="stage" id="vC">
+  <div class="hdr"><div class="t">SHOP</div><div class="s">OUTPOST SUPPLY // PERMANENT UPGRADES</div><div class="bar"></div></div>
+  <div class="topright">
+    <div class="pill"><span class="gem">◆</span><span class="cores">250</span></div>
+    <div class="backchip"><span>← BACK</span></div>
+  </div>
+  <div class="list"></div>
+  <div class="detail">
+    <div class="wm">⌖</div>
+    <div class="role">PERMANENT UPGRADE</div>
+    <div class="n">ATTACK</div>
+    <div class="d">+25% Attack Damage per level. Applies to every operator, every run.</div>
+    <div class="lvrow"><span class="now">LV 00</span><span class="arrow">▶</span><span class="next">LV 01</span></div>
+    <div class="bonusrow">
+      <div class="bcell"><div class="k">CURRENT BONUS</div><div class="v cur">+0%</div></div>
+      <div class="bcell"><div class="k">NEXT LEVEL</div><div class="v next nxt">+25%</div></div>
+      <div class="bcell"><div class="k">NEXT 10 COST</div><div class="v c10">◆ 55</div></div>
+    </div>
+    <div class="buyrow">
+      <div class="costbtn buy1"><span class="gem">◆</span><span class="c1">1</span>&nbsp; BUY</div>
+      <div class="costbtn x10 buy10"><span class="gem">◆</span><span class="cb10">55</span>&nbsp; ×10</div>
+    </div>
+  </div>
+  <div class="greeble"><div class="bars"></div><span>SUPPLY TERMINAL // ARK SYS V2.4</span></div>
+  <div class="scan"></div>
+</div>
+
+<script>
+/* real data + real cost curve from ShopData.gd / ShopMenu.gd */
+const UPS=[
+ {id:"atk", name:"ATTACK",   tag:"atk",  glyph:"▲", desc:"+25% Attack Damage per level",   base:1, per:25, unit:"%"},
+ {id:"hp",  name:"HP",       tag:"hp",   glyph:"✚", desc:"+1 Max HP per level",            base:1, per:1,  unit:""},
+ {id:"speed",name:"SPEED",   tag:"spd",  glyph:"≫", desc:"+5% Movement Speed per level",   base:1, per:5,  unit:"%"},
+ {id:"crit",name:"CRITICAL", tag:"crit", glyph:"✦", desc:"+2% Critical Chance per level",  base:1, per:2,  unit:"%"},
+ {id:"xp",  name:"EXPERIENCE",tag:"xp",  glyph:"◈", desc:"+5% Experience Gain per level",  base:2, per:5,  unit:"%"},
+];
+const cost=(b,l)=> l<10 ? b+l : 11*Math.pow(2,l-10);
+const bonus=u=>"+"+(u.per*u.lv)+(u.unit||" HP".replace(" ",""))+(u.unit?"":" HP");
+const fmtBonus=u=> u.unit==="%" ? `+${u.per*u.lv}%` : `+${u.per*u.lv} HP`;
+const fmtNext=u=> u.unit==="%" ? `+${u.per*(u.lv+1)}%` : `+${u.per*(u.lv+1)} HP`;
+
+/* barcode greebles */
+document.querySelectorAll(".greeble .bars").forEach(b=>{
+  for(let i=0;i<46;i++){const x=document.createElement("i");
+    x.style.height=(6+Math.random()*10)+"px"; x.style.width=(Math.random()<.3?"3":"1.5")+"px";
+    b.appendChild(x);}});
+
+function mkState(){return {cores:250, ups:UPS.map(u=>({...u,lv:0}))};}
+
+/* ---------- A ---------- */
+(()=>{const S=mkState(), root=document.getElementById("vA");
+  const rows=root.querySelector(".rows"), bn=root.querySelector(".bnlist");
+  function spent(){let t=0; S.ups.forEach(u=>{for(let i=0;i<u.lv;i++)t+=cost(u.base,i);}); return t;}
+  function render(){
+    root.querySelector(".cores").textContent=S.cores;
+    root.querySelector(".tot-lv").textContent=S.ups.reduce((a,u)=>a+u.lv,0);
+    root.querySelector(".tot-sp").textContent=spent();
+    rows.innerHTML=""; bn.innerHTML="";
+    S.ups.forEach((u,i)=>{
+      const c=cost(u.base,u.lv), ok=S.cores>=c;
+      const r=document.createElement("div"); r.className="row";
+      r.innerHTML=`<div class="tile ${u.tag}">${u.glyph}</div>
+        <div class="tx"><div class="n">${u.name}</div><div class="d">${u.desc}</div>
+        <div class="b">NOW ${fmtBonus(u)}</div></div>
+        <div class="lvtag">LV <b>${String(u.lv).padStart(2,"0")}</b></div>
+        <div class="costbtn ${ok?"":"broke"}"><span class="gem">◆</span>${c}&nbsp; BUY</div>`;
+      r.querySelector(".costbtn").addEventListener("click",e=>{e.stopPropagation();
+        if(!ok){r.classList.remove("flashred");void r.offsetWidth;r.classList.add("flashred");return;}
+        S.cores-=c; u.lv++; render();});
+      rows.appendChild(r);
+      const bne=document.createElement("div"); bne.className="bn";
+      bne.innerHTML=`<span>${u.name}</span><span class="v">${fmtBonus(u)}</span>`;
+      bn.appendChild(bne);
+    });
+  }
+  root.querySelector(".resetbtn").addEventListener("click",()=>{
+    S.cores+=spent(); S.ups.forEach(u=>u.lv=0); render();});
+  render();})();
+
+/* ---------- B ---------- */
+(()=>{const S=mkState(), root=document.getElementById("vB");
+  const grid=root.querySelector(".grid");
+  function spent(){let t=0; S.ups.forEach(u=>{for(let i=0;i<u.lv;i++)t+=cost(u.base,i);}); return t;}
+  function render(){
+    root.querySelector(".cores").textContent=S.cores;
+    root.querySelector(".tot-lv").textContent=S.ups.reduce((a,u)=>a+u.lv,0);
+    root.querySelector(".tot-sp").textContent=spent();
+    grid.innerHTML="";
+    S.ups.forEach(u=>{
+      const c=cost(u.base,u.lv), ok=S.cores>=c;
+      const card=document.createElement("div"); card.className="card";
+      card.innerHTML=`<div class="tile ${u.tag}">${u.glyph}</div>
+        <div class="n">${u.name}</div>
+        <div class="lv">LV ${String(u.lv).padStart(2,"0")}<em> / 99</em></div>
+        <div class="bonus">${u.lv?("NOW "+fmtBonus(u)):"&nbsp;"}</div>
+        <div class="d">${u.desc}</div>
+        <div class="costbtn ${ok?"":"broke"}"><span class="gem">◆</span>${c}&nbsp; BUY</div>`;
+      card.querySelector(".costbtn").addEventListener("click",()=>{
+        if(!ok){card.classList.remove("flashred");void card.offsetWidth;card.classList.add("flashred");return;}
+        S.cores-=c; u.lv++; render();});
+      grid.appendChild(card);
+    });
+  }
+  root.querySelector(".resetbtn").addEventListener("click",()=>{
+    S.cores+=spent(); S.ups.forEach(u=>u.lv=0); render();});
+  render();})();
+
+/* ---------- C ---------- */
+(()=>{const S=mkState(), root=document.getElementById("vC");
+  let sel=0;
+  const list=root.querySelector(".list");
+  function spent(){let t=0; S.ups.forEach(u=>{for(let i=0;i<u.lv;i++)t+=cost(u.base,i);}); return t;}
+  function cost10(u){let t=0; for(let i=0;i<10;i++)t+=cost(u.base,u.lv+i); return t;}
+  function render(){
+    root.querySelector(".cores").textContent=S.cores;
+    list.innerHTML="";
+    S.ups.forEach((u,i)=>{
+      const it=document.createElement("div"); it.className="item"+(i===sel?" sel":"");
+      it.innerHTML=`<div class="tile ${u.tag}">${u.glyph}</div>
+        <div class="n">${u.name}</div><div class="lv">LV ${String(u.lv).padStart(2,"0")}</div>`;
+      it.addEventListener("click",()=>{sel=i; render();});
+      list.appendChild(it);
+    });
+    const rst=document.createElement("div"); rst.className="resetbtn";
+    rst.textContent="↺ RESET & REFUND ALL";
+    rst.addEventListener("click",()=>{S.cores+=spent(); S.ups.forEach(u=>u.lv=0); render();});
+    list.appendChild(rst);
+
+    const u=S.ups[sel], d=root.querySelector(".detail");
+    const c1=cost(u.base,u.lv), c10v=cost10(u);
+    d.querySelector(".wm").textContent=u.glyph;
+    d.querySelector(".n").textContent=u.name;
+    d.querySelector(".d").textContent=u.desc+". Applies to every operator, every run.";
+    d.querySelector(".now").textContent="LV "+String(u.lv).padStart(2,"0");
+    d.querySelector(".next").textContent="LV "+String(u.lv+1).padStart(2,"0");
+    d.querySelector(".cur").textContent=fmtBonus(u);
+    d.querySelector(".nxt").textContent=fmtNext(u);
+    d.querySelector(".c10").textContent="◆ "+c10v;
+    d.querySelector(".c1").textContent=c1;
+    d.querySelector(".cb10").textContent=c10v;
+    d.querySelector(".buy1").classList.toggle("broke",S.cores<c1);
+    d.querySelector(".buy10").classList.toggle("broke",S.cores<c10v);
+  }
+  root.querySelector(".buy1").addEventListener("click",()=>{
+    const u=S.ups[sel], c=cost(u.base,u.lv);
+    if(S.cores<c)return; S.cores-=c; u.lv++; render();});
+  root.querySelector(".buy10").addEventListener("click",()=>{
+    const u=S.ups[sel]; let t=cost10(u);
+    if(S.cores<t)return; S.cores-=t; u.lv+=10; render();});
+  render();})();
+</script>
+</body>
+</html>

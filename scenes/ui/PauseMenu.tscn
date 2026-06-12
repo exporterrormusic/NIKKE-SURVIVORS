@@ -1,0 +1,537 @@
+[gd_scene format=3 uid="uid://cpause_menu_scene"]
+
+[ext_resource type="Script" path="res://scripts/ui/PauseMenu.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/ui/components/KVCellGrid.gd" id="2_cells"]
+[ext_resource type="Script" path="res://scripts/ui/components/NikkeDamageLog.gd" id="3_dlog"]
+[ext_resource type="Script" path="res://scripts/ui/components/PauseCommandButton.gd" id="4_cmd"]
+[ext_resource type="Script" path="res://scripts/ui/components/CoverArtRect.gd" id="5_cover"]
+
+[sub_resource type="StyleBoxFlat" id="sb_glass"]
+bg_color = Color(0.063, 0.078, 0.102, 0.86)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 0.16)
+content_margin_left = 30.0
+content_margin_top = 24.0
+content_margin_right = 30.0
+content_margin_bottom = 24.0
+
+[sub_resource type="StyleBoxFlat" id="sb_glass2"]
+bg_color = Color(0.063, 0.078, 0.102, 0.86)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 0.16)
+content_margin_left = 27.0
+content_margin_top = 21.0
+content_margin_right = 27.0
+content_margin_bottom = 21.0
+
+[sub_resource type="StyleBoxFlat" id="sb_report"]
+bg_color = Color(0.063, 0.078, 0.102, 0.86)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 0.16)
+content_margin_left = 6.0
+content_margin_top = 3.0
+content_margin_right = 6.0
+content_margin_bottom = 3.0
+
+[sub_resource type="StyleBoxFlat" id="sb_reward"]
+bg_color = Color(0.122, 0.561, 0.878, 0.16)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.208, 0.773, 0.949, 0.45)
+content_margin_left = 27.0
+content_margin_top = 18.0
+content_margin_right = 27.0
+content_margin_bottom = 18.0
+
+[sub_resource type="StyleBoxFlat" id="sb_gfchip"]
+bg_color = Color(0.47, 0.03, 0.016, 0.85)
+skew = Vector2(-0.105, 0)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.91, 0.224, 0.18, 1)
+content_margin_left = 24.0
+content_margin_top = 8.0
+content_margin_right = 24.0
+content_margin_bottom = 8.0
+
+[sub_resource type="Gradient" id="g_fade_h"]
+offsets = PackedFloat32Array(0, 0.55, 1)
+colors = PackedColorArray(0.027, 0.039, 0.055, 0, 0.027, 0.039, 0.055, 0, 0.027, 0.039, 0.055, 0.92)
+
+[sub_resource type="GradientTexture2D" id="gt_fade_h"]
+gradient = SubResource("g_fade_h")
+fill_from = Vector2(0, 0)
+fill_to = Vector2(1, 0)
+
+[sub_resource type="Gradient" id="g_fade_v"]
+offsets = PackedFloat32Array(0, 1)
+colors = PackedColorArray(0.027, 0.039, 0.055, 0.78, 0.027, 0.039, 0.055, 0)
+
+[sub_resource type="GradientTexture2D" id="gt_fade_v"]
+gradient = SubResource("g_fade_v")
+fill_from = Vector2(0, 1)
+fill_to = Vector2(0, 0.72)
+
+[node name="PauseMenu" type="CanvasLayer"]
+layer = 125
+visible = false
+script = ExtResource("1_script")
+
+[node name="Overlay" type="Control" parent="."]
+unique_name_in_owner = true
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Dim" type="ColorRect" parent="Overlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.027, 0.039, 0.055, 0.74)
+
+[node name="PauseLayout" type="Control" parent="Overlay"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="TelemetryPanel" type="PanelContainer" parent="Overlay/PauseLayout"]
+layout_mode = 1
+anchors_preset = -1
+anchor_bottom = 1.0
+offset_left = 81.0
+offset_top = 135.0
+offset_right = 621.0
+offset_bottom = -135.0
+grow_vertical = 2
+theme_override_styles/panel = SubResource("sb_glass")
+
+[node name="TelemetryCol" type="VBoxContainer" parent="Overlay/PauseLayout/TelemetryPanel"]
+layout_mode = 2
+theme_override_constants/separation = 18
+
+[node name="TelemetryCap" type="Label" parent="Overlay/PauseLayout/TelemetryPanel/TelemetryCol"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "FIELD TELEMETRY"
+
+[node name="OpRow" type="HBoxContainer" parent="Overlay/PauseLayout/TelemetryPanel/TelemetryCol"]
+layout_mode = 2
+theme_override_constants/separation = 21
+
+[node name="OpPortrait" type="TextureRect" parent="Overlay/PauseLayout/TelemetryPanel/TelemetryCol/OpRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(88, 88)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 6
+
+[node name="OpText" type="VBoxContainer" parent="Overlay/PauseLayout/TelemetryPanel/TelemetryCol/OpRow"]
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_constants/separation = 1
+
+[node name="OpName" type="Label" parent="Overlay/PauseLayout/TelemetryPanel/TelemetryCol/OpRow/OpText"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "MARIAN"
+
+[node name="OpSquad" type="Label" parent="Overlay/PauseLayout/TelemetryPanel/TelemetryCol/OpRow/OpText"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "SQUAD // —"
+
+[node name="PauseCells" type="GridContainer" parent="Overlay/PauseLayout/TelemetryPanel/TelemetryCol"]
+unique_name_in_owner = true
+layout_mode = 2
+columns = 2
+script = ExtResource("2_cells")
+
+[node name="MidColumn" type="VBoxContainer" parent="Overlay/PauseLayout"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -285.0
+offset_top = -388.0
+offset_right = 285.0
+offset_bottom = 388.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 15
+
+[node name="PauseTitle" type="Label" parent="Overlay/PauseLayout/MidColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "PAUSED"
+horizontal_alignment = 1
+
+[node name="PauseSub" type="Label" parent="Overlay/PauseLayout/MidColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "OPERATION SUSPENDED"
+horizontal_alignment = 1
+
+[node name="TitleGap" type="Control" parent="Overlay/PauseLayout/MidColumn"]
+custom_minimum_size = Vector2(0, 12)
+layout_mode = 2
+
+[node name="ResumeBtn" type="Button" parent="Overlay/PauseLayout/MidColumn"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 96)
+layout_mode = 2
+script = ExtResource("4_cmd")
+command_style = "primary"
+title_text = "RESUME"
+key_hint = "ESC"
+
+[node name="RestartBtn" type="Button" parent="Overlay/PauseLayout/MidColumn"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 87)
+layout_mode = 2
+script = ExtResource("4_cmd")
+title_text = "RESTART MISSION"
+
+[node name="CharSelectBtn" type="Button" parent="Overlay/PauseLayout/MidColumn"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 87)
+layout_mode = 2
+script = ExtResource("4_cmd")
+title_text = "CHARACTER SELECT"
+
+[node name="SettingsBtn" type="Button" parent="Overlay/PauseLayout/MidColumn"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 87)
+layout_mode = 2
+script = ExtResource("4_cmd")
+title_text = "SETTINGS"
+
+[node name="CheatsBtn" type="Button" parent="Overlay/PauseLayout/MidColumn"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 87)
+layout_mode = 2
+script = ExtResource("4_cmd")
+title_text = "CHEATS"
+
+[node name="QuitBtn" type="Button" parent="Overlay/PauseLayout/MidColumn"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 87)
+layout_mode = 2
+script = ExtResource("4_cmd")
+command_style = "danger"
+title_text = "ABANDON — MAIN MENU"
+
+[node name="LogPanel" type="PanelContainer" parent="Overlay/PauseLayout"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -621.0
+offset_top = 135.0
+offset_right = -81.0
+offset_bottom = -135.0
+grow_horizontal = 0
+grow_vertical = 2
+theme_override_styles/panel = SubResource("sb_glass")
+
+[node name="LogCol" type="VBoxContainer" parent="Overlay/PauseLayout/LogPanel"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="LogCap" type="Label" parent="Overlay/PauseLayout/LogPanel/LogCol"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "DAMAGE LOG // RECENT HITS"
+
+[node name="PauseLogScroll" type="ScrollContainer" parent="Overlay/PauseLayout/LogPanel/LogCol"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="PauseLog" type="VBoxContainer" parent="Overlay/PauseLayout/LogPanel/LogCol/PauseLogScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+script = ExtResource("3_dlog")
+
+[node name="ResultsLayout" type="Control" parent="Overlay"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="ArtStrip" type="Control" parent="Overlay/ResultsLayout"]
+layout_mode = 1
+anchors_preset = -1
+anchor_bottom = 1.0
+offset_right = 630.0
+grow_vertical = 2
+clip_contents = true
+mouse_filter = 2
+
+[node name="ResultArt" type="Control" parent="Overlay/ResultsLayout/ArtStrip"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("5_cover")
+focus_y = 0.2
+chamfer = 0.0
+
+[node name="ArtFadeH" type="TextureRect" parent="Overlay/ResultsLayout/ArtStrip"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = SubResource("gt_fade_h")
+expand_mode = 1
+
+[node name="ArtFadeV" type="TextureRect" parent="Overlay/ResultsLayout/ArtStrip"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = SubResource("gt_fade_v")
+expand_mode = 1
+
+[node name="NameBlock" type="VBoxContainer" parent="Overlay/ResultsLayout/ArtStrip"]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 54.0
+offset_top = -165.0
+offset_right = 570.0
+offset_bottom = -51.0
+grow_vertical = 0
+theme_override_constants/separation = 3
+
+[node name="NikkeCap" type="Label" parent="Overlay/ResultsLayout/ArtStrip/NameBlock"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "NIKKE"
+
+[node name="ResultNikkeName" type="Label" parent="Overlay/ResultsLayout/ArtStrip/NameBlock"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "MARIAN"
+
+[node name="ReportCol" type="VBoxContainer" parent="Overlay/ResultsLayout"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 705.0
+offset_top = 84.0
+offset_right = -81.0
+offset_bottom = -81.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 24
+mouse_filter = 2
+
+[node name="VerdictBlock" type="VBoxContainer" parent="Overlay/ResultsLayout/ReportCol"]
+layout_mode = 2
+theme_override_constants/separation = 9
+
+[node name="VerdictLabel" type="Label" parent="Overlay/ResultsLayout/ReportCol/VerdictBlock"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "MISSION COMPLETE"
+
+[node name="VerdictSub" type="Label" parent="Overlay/ResultsLayout/ReportCol/VerdictBlock"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "ALL HOSTILES NEUTRALIZED // QUEEN DOWN"
+
+[node name="VerdictBar" type="ColorRect" parent="Overlay/ResultsLayout/ReportCol/VerdictBlock"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(111, 6)
+layout_mode = 2
+size_flags_horizontal = 0
+color = Color(0.247, 0.682, 0.369, 1)
+
+[node name="ScoreRow" type="HBoxContainer" parent="Overlay/ResultsLayout/ReportCol"]
+layout_mode = 2
+theme_override_constants/separation = 42
+
+[node name="ScoreBlock" type="VBoxContainer" parent="Overlay/ResultsLayout/ReportCol/ScoreRow"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="ScoreCap" type="Label" parent="Overlay/ResultsLayout/ReportCol/ScoreRow/ScoreBlock"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "FINAL SCORE"
+
+[node name="ScoreValue" type="Label" parent="Overlay/ResultsLayout/ReportCol/ScoreRow/ScoreBlock"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "0"
+
+[node name="GfChip" type="PanelContainer" parent="Overlay/ResultsLayout/ReportCol/ScoreRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 8
+theme_override_styles/panel = SubResource("sb_gfchip")
+
+[node name="GfLabel" type="Label" parent="Overlay/ResultsLayout/ReportCol/ScoreRow/GfChip"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "☠  GODDESS FALL RUN"
+
+[node name="ReportPanel" type="PanelContainer" parent="Overlay/ResultsLayout/ReportCol"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("sb_report")
+
+[node name="ReportCells" type="GridContainer" parent="Overlay/ResultsLayout/ReportCol/ReportPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+columns = 3
+script = ExtResource("2_cells")
+value_size = 42
+
+[node name="MidSlot" type="VBoxContainer" parent="Overlay/ResultsLayout/ReportCol"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 24
+
+[node name="RewardBar" type="PanelContainer" parent="Overlay/ResultsLayout/ReportCol/MidSlot"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 0
+theme_override_styles/panel = SubResource("sb_reward")
+
+[node name="RewardRow" type="HBoxContainer" parent="Overlay/ResultsLayout/ReportCol/MidSlot/RewardBar"]
+layout_mode = 2
+theme_override_constants/separation = 21
+
+[node name="RewardIcon" type="Label" parent="Overlay/ResultsLayout/ReportCol/MidSlot/RewardBar/RewardRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "✦"
+
+[node name="RewardText" type="VBoxContainer" parent="Overlay/ResultsLayout/ReportCol/MidSlot/RewardBar/RewardRow"]
+layout_mode = 2
+theme_override_constants/separation = 1
+
+[node name="RewardCap" type="Label" parent="Overlay/ResultsLayout/ReportCol/MidSlot/RewardBar/RewardRow/RewardText"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "REWARD SECURED"
+
+[node name="RewardValue" type="Label" parent="Overlay/ResultsLayout/ReportCol/MidSlot/RewardBar/RewardRow/RewardText"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "+1 PRISTINE RAPTURE CORE"
+
+[node name="LossLogPanel" type="PanelContainer" parent="Overlay/ResultsLayout/ReportCol/MidSlot"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("sb_glass2")
+
+[node name="LossLogCol" type="VBoxContainer" parent="Overlay/ResultsLayout/ReportCol/MidSlot/LossLogPanel"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="LossLogCap" type="Label" parent="Overlay/ResultsLayout/ReportCol/MidSlot/LossLogPanel/LossLogCol"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "DAMAGE LOG // WHAT HAPPENED"
+
+[node name="LossLogScroll" type="ScrollContainer" parent="Overlay/ResultsLayout/ReportCol/MidSlot/LossLogPanel/LossLogCol"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="LossLog" type="VBoxContainer" parent="Overlay/ResultsLayout/ReportCol/MidSlot/LossLogPanel/LossLogCol/LossLogScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+script = ExtResource("3_dlog")
+
+[node name="CmdRow" type="HBoxContainer" parent="Overlay/ResultsLayout/ReportCol"]
+layout_mode = 2
+theme_override_constants/separation = 18
+
+[node name="ResultPrimaryBtn" type="Button" parent="Overlay/ResultsLayout/ReportCol/CmdRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 96)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 1.3
+script = ExtResource("4_cmd")
+command_style = "primary"
+title_text = "PLAY AGAIN"
+
+[node name="ResultCharSelectBtn" type="Button" parent="Overlay/ResultsLayout/ReportCol/CmdRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 96)
+layout_mode = 2
+size_flags_horizontal = 3
+script = ExtResource("4_cmd")
+title_text = "CHARACTER SELECT"
+
+[node name="ResultMenuBtn" type="Button" parent="Overlay/ResultsLayout/ReportCol/CmdRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 96)
+layout_mode = 2
+size_flags_horizontal = 3
+script = ExtResource("4_cmd")
+command_style = "danger"
+title_text = "MAIN MENU"
+
+[node name="CheatsHost" type="CenterContainer" parent="Overlay"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2

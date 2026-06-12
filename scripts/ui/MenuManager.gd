@@ -35,7 +35,6 @@ const SCENE_PATHS := {
 	"achievements": ScenePaths.ACHIEVEMENTS,
 	"leaderboard": ScenePaths.LEADERBOARD,
 	"shop": ScenePaths.SHOP,
-	"mode_select": ScenePaths.MODE_SELECT,
 }
 
 # Current menu stack (for back navigation)
@@ -438,37 +437,6 @@ func show_shop_menu() -> void:
 		menu.back_requested.connect(_on_back_requested)
 
 
-func show_mode_select() -> void:
-	var scene := _get_or_load_scene("mode_select")
-	if not scene:
-		# Fallback: go directly to character select if mode select fails
-		show_character_select()
-		return
-	var menu := scene.instantiate() as Control
-	_push_menu(menu)
-	
-	if menu.has_signal("standard_selected"):
-		menu.standard_selected.connect(_on_standard_mode_selected)
-	if menu.has_signal("back_requested"):
-		menu.back_requested.connect(_on_back_requested)
-
-
-func _on_standard_mode_selected() -> void:
-	# Standard mode selected
-	print("[MenuManager] Standard mode selected")
-	
-	# Pop mode select and show character select
-	if _current_menu:
-		_current_menu.queue_free()
-		_current_menu = null
-	# Don't pop from stack, just replace with character select
-	if _menu_stack.size() > 0:
-		_current_menu = _menu_stack.pop_back()
-		_current_menu.visible = true
-	# Now push character select
-	show_character_select()
-
-
 
 
 func _show_menu(menu: Control) -> void:
@@ -511,7 +479,9 @@ func _clear_stack() -> void:
 
 func _on_play_selected() -> void:
 	print("[MenuManager] _on_play_selected")
-	show_mode_select()
+	# Mode select removed from the flow (UI refresh): PLAY goes straight to
+	# character select; mode/stage choices live in the stage phase.
+	show_character_select()
 
 
 func _on_settings_selected() -> void:

@@ -1,318 +1,202 @@
 extends Control
 class_name MainMenu
-## Main menu screen with navigation options.
-## Emits signals for menu transitions and handles keyboard navigation.
+## Main menu screen - NIKKE lobby layout (V1-A, see docs/UI_REDESIGN_NIKKE.md).
+## Layout lives in MainMenu.tscn; this script only wires signals, popups,
+## focus navigation, and the clean-mode toggle.
 
 const UI := preload("res://scripts/ui/UITheme.gd")
-const UISounds := preload("res://scripts/ui/UISoundManager.gd")
+const NikkePopupScript := preload("res://scripts/ui/components/NikkePopup.gd")
 
 signal play_selected
 signal achievements_selected
 signal settings_selected
-
 signal leaderboards_selected
 signal shop_selected
 
-const MENU_OPTIONS: Array[Dictionary] = [
-	{"id": "LEADERBOARDS", "icon": "leaderboards", "label": "LEADERBOARDS"},
-	{"id": "ACHIEVEMENTS", "icon": "achievements", "label": "ACHIEVEMENTS"},
-	{"id": "SHOP", "icon": "shop", "label": "SHOP"},
-	{"id": "PLAY", "icon": "play", "label": "PLAY", "is_play": true},
-	{"id": "THE OUTPOST", "icon": "outpost", "label": "THE OUTPOST"},
-	{"id": "SETTINGS", "icon": "settings", "label": "SETTINGS"},
-	{"id": "QUIT", "icon": "quit", "label": "QUIT", "accent": UI.COLOR_DANGER}
-]
-
-const TITLE_TEXT := "KINGDOM CLEANUP"
-const SUBTITLE_TEXT := "A NIKKE FAN GAME"
 const VERSION_TEXT := "v0.2B"
+const SERIAL_TEXT := "SOV-2026 // ARK SYS %s"
 
-@onready var _button_row: HBoxContainer = get_node_or_null("%ButtonRow")
-@onready var _menu_bar: Panel = get_node_or_null("%MenuBar") # Added reference to parent panel
-@onready var _title_label: Label = get_node_or_null("%TitleLabel")
-@onready var _subtitle_label: Label = get_node_or_null("%SubtitleLabel")
-@onready var _version_label: Label = get_node_or_null("%VersionLabel")
-@onready var _coming_soon_dialog: AcceptDialog = get_node_or_null("%ComingSoonDialog")
+@onready var _logo: TextureRect = %GameLogo
+@onready var _greebles: Control = %Greebles
+@onready var _left_column: Control = %LeftColumn
+@onready var _shop_button: Button = %ShopButton
+@onready var _leaderboards_button: Button = %LeaderboardsButton
+@onready var _achievements_button: Button = %AchievementsButton
+@onready var _settings_button: Button = %SettingsButton
+@onready var _play_button: Button = %PlayButton
+@onready var _quit_button: Button = %QuitButton
+@onready var _top_strip: HBoxContainer = %TopRightStrip
+@onready var _notice_button: Button = %NoticeButton
+@onready var _core_pill: Button = %CorePill
 
-var _buttons: Array[Button] = []
-var _selected_index: int = 3 # Default to PLAY (center button)
+var _active_popup: Control = null
+var _notice_read: bool = false
 
-# Clean Mode / UI Toggle State
-# 0 = All Visible (Default)
-# 1 = Hide Menu + Patch (Logo Visible)
-# 2 = Hide Patch + Logo (Menu Visible)
-# 3 = Hide All (Blinds Only)
+# Clean Mode (Shift+Q): 0 = all visible, 1 = logo only, 2 = menu only, 3 = art only
 var _clean_mode_state: int = 0
-var _logo_node: Control = null
-var _patch_notes_panel: PanelContainer = null
+
 
 func _ready() -> void:
-	_setup_title()
-	_setup_patch_notes()
-	_setup_buttons()
-	_connect_signals()
-	_update_selection()
-	
+	_greebles.set("serial_text", SERIAL_TEXT % VERSION_TEXT.to_upper())
+	call_deferred("_align_greebles_to_logo")
+
+	_connect_buttons()
+	_setup_focus_navigation()
+
 	# If we are the root scene (loaded via change_scene), register with MenuManager
-	# to ensure signals are connected and navigation works
 	if MenuManager and get_tree().current_scene == self:
 		call_deferred("_register_with_manager")
-	
-	# Auto-focus the default button (PLAY) for controller support
+
 	call_deferred("_grab_initial_focus")
-	
-	# Restore focus when becoming visible (e.g., returning from another menu)
 	visibility_changed.connect(_on_visibility_changed)
+
 
 func _register_with_manager() -> void:
 	MenuManager.register_root_main_menu(self)
 
 
-func _setup_title() -> void:
-	print("[MainMenu] Setting up title...")
-	
-	# Attempt to load logo
-	var logo_path = ScenePaths.LOGO
-	if not ResourceLoader.exists(logo_path):
-		print("[MainMenu] ERROR: Logo file not found at ", logo_path)
+## The logo PNG has transparent padding, so the drawn art is narrower than the
+## TextureRect. Measure the texture's opaque bounds and match the greeble strip
+## (barcode + serial) to the visible logo width.
+func _align_greebles_to_logo() -> void:
+	var tex: Texture2D = _logo.texture
+	if tex == null:
 		return
-		
-	var tex = load(logo_path)
-	print("[MainMenu] Logo loaded: ", tex)
-	
-	var logo = TextureRect.new()
-	logo.texture = tex
-	logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	logo.custom_minimum_size = Vector2(600, 200)
-	logo.name = "GameLogo"
-	
-	# Store reference for Clean Mode toggle
-	_logo_node = logo
-	
-	if _title_label:
-		print("[MainMenu] Found TitleLabel, replacing with logo.")
-		_title_label.visible = false
-		if _subtitle_label:
-			_subtitle_label.visible = false
-			
-		var parent = _title_label.get_parent()
-		if parent:
-			parent.add_child(logo)
-			parent.move_child(logo, _title_label.get_index())
-			# Center in container
-			logo.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-			logo.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	else:
-		print("[MainMenu] TitleLabel NOT found. Adding logo to root securely.")
-		# Fallback: Add to MainMenu directly at top center
-		add_child(logo)
-		logo.set_anchors_preset(Control.PRESET_CENTER_TOP)
-		logo.position.y = 40 # Add some margin from top
+	var img := tex.get_image()
+	if img == null:
+		return
+	var used := img.get_used_rect()
+	if used.size.x <= 0:
+		return
+
+	# Map texture-space opaque rect into the TextureRect's drawn rect
+	# (stretch_mode = keep aspect centered)
+	var tex_size := Vector2(tex.get_width(), tex.get_height())
+	var draw_scale := minf(_logo.size.x / tex_size.x, _logo.size.y / tex_size.y)
+	var drawn_origin: Vector2 = _logo.position + (_logo.size - tex_size * draw_scale) * 0.5
+	var left := drawn_origin.x + used.position.x * draw_scale
+	var width := used.size.x * draw_scale
+
+	_greebles.position.x = left
+	_greebles.size.x = width
+	_greebles.queue_redraw()
 
 
-func _setup_patch_notes() -> void:
-	"""Create a patch notes box directly beneath the logo."""
-	var patch_path := ScenePaths.PATCH_NOTES
-	
-	# Load patch notes from file
-	var patch_text := ""
-	var file := FileAccess.open(patch_path, FileAccess.READ)
-	if file:
-		patch_text = file.get_as_text()
-		file.close()
-	
-	if patch_text.is_empty():
-		print("[MainMenu] No patch notes found at ", patch_path)
+func _connect_buttons() -> void:
+	_play_button.pressed.connect(_on_menu_pressed.bind(play_selected))
+	_shop_button.pressed.connect(_on_menu_pressed.bind(shop_selected))
+	_leaderboards_button.pressed.connect(_on_menu_pressed.bind(leaderboards_selected))
+	_achievements_button.pressed.connect(_on_menu_pressed.bind(achievements_selected))
+	_settings_button.pressed.connect(_on_menu_pressed.bind(settings_selected))
+	_core_pill.pressed.connect(_on_menu_pressed.bind(shop_selected))
+	_notice_button.pressed.connect(_show_patch_notes)
+	_quit_button.pressed.connect(_show_quit_confirmation)
+
+
+func _on_menu_pressed(menu_signal: Signal) -> void:
+	AudioManager.play_ui_select()
+	menu_signal.emit()
+
+
+func _setup_focus_navigation() -> void:
+	var left_chain: Array[Button] = [
+		_shop_button, _leaderboards_button, _achievements_button, _settings_button
+	]
+	for i in left_chain.size():
+		var btn := left_chain[i]
+		btn.focus_neighbor_top = left_chain[wrapi(i - 1, 0, left_chain.size())].get_path()
+		btn.focus_neighbor_bottom = left_chain[wrapi(i + 1, 0, left_chain.size())].get_path()
+		btn.focus_neighbor_right = _play_button.get_path()
+
+	_play_button.focus_neighbor_left = _shop_button.get_path()
+	_play_button.focus_neighbor_bottom = _quit_button.get_path()
+	_play_button.focus_neighbor_top = _notice_button.get_path()
+	_quit_button.focus_neighbor_top = _play_button.get_path()
+	_quit_button.focus_neighbor_left = _settings_button.get_path()
+	_notice_button.focus_neighbor_bottom = _play_button.get_path()
+	_notice_button.focus_neighbor_right = _core_pill.get_path()
+	_core_pill.focus_neighbor_left = _notice_button.get_path()
+	_core_pill.focus_neighbor_bottom = _play_button.get_path()
+
+
+func _grab_initial_focus() -> void:
+	if is_visible_in_tree() and _active_popup == null:
+		_play_button.grab_focus()
+
+
+func _on_visibility_changed() -> void:
+	if is_visible_in_tree():
+		call_deferred("_grab_initial_focus")
+
+
+# =============================================================================
+# POPUPS
+# =============================================================================
+
+func _open_popup(popup: Control) -> void:
+	_active_popup = popup
+	popup.closed.connect(func():
+		_active_popup = null
+		call_deferred("_grab_initial_focus")
+	)
+	popup.open(self)
+
+
+func _show_patch_notes() -> void:
+	if _active_popup:
 		return
-	
-	# Create the patch notes panel
-	var panel := PanelContainer.new()
-	panel.name = "PatchNotesPanel"
-	
-	# Store reference for Clean Mode toggle
-	_patch_notes_panel = panel
-	
-	# Position will be set after logo is laid out
-	# First add to scene, then position using deferred call
-	var ui_root := get_node_or_null("UiRoot")
-	if ui_root:
-		ui_root.add_child(panel)
-	else:
-		add_child(panel)
-	
-	# Defer positioning until logo layout is complete
-	call_deferred("_position_patch_notes_panel", panel)
-	
-	# Style the panel
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.05, 0.05, 0.1, 0.9) # Dark translucent
-	panel_style.border_color = UI.ACCENT_PRIMARY
-	panel_style.set_border_width_all(2)
-	panel_style.set_corner_radius_all(10)
-	panel_style.set_content_margin_all(16) # More padding
-	panel.add_theme_stylebox_override("panel", panel_style)
-	
-	# VBox for title and content
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
-	panel.add_child(vbox)
-	
-	# Title label
-	var title := Label.new()
-	title.text = "PATCH NOTES"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 20) # Larger title
-	title.add_theme_color_override("font_color", UI.ACCENT_SECONDARY)
-	vbox.add_child(title)
-	
-	# Separator line
-	var sep := HSeparator.new()
-	sep.modulate = Color(1, 1, 1, 0.3)
-	vbox.add_child(sep)
-	
-	# Content label with scrolling
+	AudioManager.play_ui_select()
+
+	_notice_read = true
+	if _notice_button.has_method("set_dot_visible"):
+		_notice_button.set_dot_visible(false)
+
+	var popup := NikkePopupScript.create("Patch Notes", "Latest updates // %s" % VERSION_TEXT)
+	popup.card_min_size = Vector2(720, 560)
+
 	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0, 360)
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	vbox.add_child(scroll)
-	
 	var content := Label.new()
-	content.text = patch_text
-	content.add_theme_font_size_override("font_size", 16) # Larger text
-	content.add_theme_color_override("font_color", UI.TEXT_SECONDARY)
+	content.text = _load_patch_notes()
+	content.add_theme_font_override("font", UI.FONT_MEDIUM)
+	content.add_theme_font_size_override("font_size", 16)
+	content.add_theme_color_override("font_color", UI.ADMIN_TEXT)
 	content.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(content)
-	
-	print("[MainMenu] Patch notes panel created successfully")
+	popup.add_content(scroll)
+
+	popup.add_close_button()
+	_open_popup(popup)
 
 
-func _position_patch_notes_panel(panel: PanelContainer) -> void:
-	"""Position the patch notes panel centered under the logo."""
-	# Find the logo
-	var logo := get_node_or_null("GameLogo")
-	if not logo:
-		# Try UiRoot
-		var ui_root := get_node_or_null("UiRoot")
-		if ui_root:
-			logo = ui_root.get_node_or_null("GameLogo")
-	
-	# Get logo position and size
-	var panel_width := 400
-	var top_position := 260 # Default: Below logo (50 + 200 + 10px gap)
-	var logo_center_x: float = size.x / 2 # Default to screen center
-	
-	if logo:
-		# Get logo's center position
-		var logo_rect: Rect2 = logo.get_global_rect()
-		logo_center_x = logo_rect.position.x + logo_rect.size.x / 2
-		top_position = int(logo_rect.position.y + logo_rect.size.y + 10) # 10px below logo
-	
-	# Menu bar is at bottom - 279, so leave margin above it
-	var bottom_margin := 300
-	
-	# Position panel centered under logo
-	panel.position.x = logo_center_x - panel_width / 2
-	panel.position.y = top_position
-	panel.size.x = panel_width
-	panel.size.y = size.y - top_position - bottom_margin
+func _load_patch_notes() -> String:
+	var file := FileAccess.open(ScenePaths.PATCH_NOTES, FileAccess.READ)
+	if file:
+		var text := file.get_as_text()
+		file.close()
+		if not text.is_empty():
+			return text
+	return "No patch notes available."
 
 
-func _setup_buttons() -> void:
-	_buttons.clear()
-	print("[MainMenu] Setting up buttons, looking in: ", _button_row)
-	
-	# Find existing buttons in the row
-	for option in MENU_OPTIONS:
-		var button_name: String = option["id"]
-		var button: Button = _button_row.get_node_or_null(button_name) as Button
-		if button:
-			print("[MainMenu] Found button: ", button_name)
-			_buttons.append(button)
-			
-			# Connect mouse signals
-			if not button.pressed.is_connected(_on_button_pressed.bind(option["id"])):
-				button.pressed.connect(_on_button_pressed.bind(option["id"]))
-				print("[MainMenu] Connected pressed signal for: ", button_name)
-			if not button.mouse_entered.is_connected(_on_button_hovered.bind(_buttons.size() - 1)):
-				button.mouse_entered.connect(_on_button_hovered.bind(_buttons.size() - 1))
-			
-			# Connect controller focus signals to sync selection state
-			if not button.focus_entered.is_connected(_on_button_hovered.bind(_buttons.size() - 1)):
-				button.focus_entered.connect(_on_button_hovered.bind(_buttons.size() - 1))
-		else:
-			print("[MainMenu] Button NOT found: ", button_name)
-	
-	print("[MainMenu] Total buttons found: ", _buttons.size())
-
-
-func _connect_signals() -> void:
-	# Any additional signal connections
-	pass
-
-
-func _on_button_pressed(option_id: String) -> void:
-	# Prevent re-triggering if we just closed a dialog
-	if _input_consumed_this_frame:
-		_input_consumed_this_frame = false
+func _show_quit_confirmation() -> void:
+	if _active_popup:
 		return
-	
-	print("[MainMenu] Button pressed: ", option_id)
-	# Play appropriate sound
-	match option_id:
-		"PLAY":
-			AudioManager.play_ui_select()
-		"QUIT":
-			AudioManager.play_ui_back()
-		_:
-			AudioManager.play_ui_select()
-	
-	match option_id:
-		"PLAY":
-			print("[MainMenu] Emitting play_selected")
-			play_selected.emit()
-		"ACHIEVEMENTS":
-			print("[MainMenu] Emitting achievements_selected")
-			achievements_selected.emit()
-		"SETTINGS":
-			print("[MainMenu] Emitting settings_selected")
-			settings_selected.emit()
-		"QUIT":
-			print("[MainMenu] Showing quit confirmation")
-			_show_quit_confirmation()
-		"LEADERBOARDS":
-			print("[MainMenu] Emitting leaderboards_selected")
-			leaderboards_selected.emit()
-		"SHOP":
-			print("[MainMenu] Emitting shop_selected")
-			shop_selected.emit()
-		"THE OUTPOST":
-			print("[MainMenu] Showing Outpost coming soon popup")
-			_show_outpost_coming_soon()
-		_:
-			print("[MainMenu] Unknown option, showing coming soon")
-			_show_coming_soon()
+	AudioManager.play_ui_back()
+
+	var popup := NikkePopupScript.create("Quit Game?", "Confirm exit // commander")
+	popup.add_text("Leave the battlefield and return to your desktop?")
+	popup.add_button("CANCEL", "secondary").pressed.connect(popup.close)
+	popup.add_button("QUIT", "danger").pressed.connect(func(): get_tree().quit())
+	_open_popup(popup)
 
 
-func _on_button_hovered(index: int) -> void:
-	_selected_index = index
-	_update_selection()
-
-
-func _update_selection() -> void:
-	for i in range(_buttons.size()):
-		var button := _buttons[i]
-		if button.has_method("set_selected"):
-			button.set_selected(i == _selected_index)
-
-
-var _quit_dialog: Control = null
-var _quit_cancel_btn: Button = null
-
-var _outpost_dialog: Control = null
-var _input_consumed_this_frame: bool = false
+# =============================================================================
+# INPUT / CLEAN MODE
+# =============================================================================
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Clean Mode Shortcut (Shift + Q)
@@ -321,364 +205,23 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
-	# If outpost dialog is open, handle its input first
-	if _outpost_dialog and _outpost_dialog.visible:
-		if event.is_action_pressed("ui_cancel") or event.is_action_pressed("ui_accept"):
-			_hide_outpost_dialog()
-			get_viewport().set_input_as_handled()
-			# CRITICAL: Prevent this same input from triggering anything else this frame
-			set_deferred("_input_consumed_this_frame", true)
+	# Popups consume their own input (NikkePopup handles ui_cancel)
+	if _active_popup:
 		return
-	
-	# If quit dialog is open, handle its input first
-	if _quit_dialog and _quit_dialog.visible:
-		if event.is_action_pressed("ui_cancel"):
-			_hide_quit_dialog()
-			get_viewport().set_input_as_handled()
-		return
-	
-	# Only handle ui_cancel for quit confirmation on main menu
-	# DO NOT handle ui_accept or ui_left/right here - buttons handle those via focus system
+
 	if event.is_action_pressed("ui_cancel"):
-		# On main menu, Escape/B shows quit confirmation
 		_show_quit_confirmation()
 		get_viewport().set_input_as_handled()
 
+
 func _cycle_clean_mode() -> void:
-	"""
-	Cycles through visibility states for UI elements.
-	State 0: Menu(V) Patch(V) Logo(V) [Default]
-	State 1: Menu(H) Patch(H) Logo(V)
-	State 2: Menu(V) Patch(H) Logo(H)
-	State 3: Menu(H) Patch(H) Logo(H) [Only Blinds]
-	"""
 	_clean_mode_state = (_clean_mode_state + 1) % 4
-	
-	print("[MainMenu] UI Clean Mode -> %d" % _clean_mode_state)
-	
-	# Defaults
-	var show_menu := true
-	var show_patch := true
-	var show_logo := true
-	
-	match _clean_mode_state:
-		1:
-			show_menu = false
-			show_patch = false
-			show_logo = true
-		2:
-			show_menu = true
-			show_patch = false
-			show_logo = false
-		3:
-			show_menu = false
-			show_patch = false
-			show_logo = false
-		_:
-			# State 0 (Reset)
-			show_menu = true
-			show_patch = true
-			show_logo = true
-	
-	# Apply to the CONTAINER PANEL (MenuBar), not just the button row
-	if _menu_bar:
-		_menu_bar.visible = show_menu
-	elif _button_row:
-		# Fallback if _menu_bar missing for some reason
-		_button_row.visible = show_menu
-		
-	if _patch_notes_panel:
-		_patch_notes_panel.visible = show_patch
-	if _logo_node:
-		_logo_node.visible = show_logo
-		
-	# Also update version label if present (often part of menu overlay)
-	if _version_label:
-		# If Menu is hidden, usually version is too? Or maybe keep it?
-		# User didn't specify, but hiding all "UI" usually implies version too.
-		# Let's link it to menu visibility.
-		_version_label.visible = show_menu
+	var show_menu := _clean_mode_state == 0 or _clean_mode_state == 2
+	var show_logo := _clean_mode_state == 0 or _clean_mode_state == 1
 
-func _show_quit_confirmation() -> void:
-	AudioManager.play_ui_back()
-	if _quit_dialog:
-		_quit_dialog.visible = true
-		if _quit_cancel_btn:
-			_quit_cancel_btn.grab_focus.call_deferred()
-		return
-
-	
-	# Create overlay
-	_quit_dialog = Control.new()
-	_quit_dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_quit_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
-	add_child(_quit_dialog)
-	
-	# Dark background
-	var overlay := ColorRect.new()
-	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	overlay.color = UI.BG_OVERLAY
-	overlay.gui_input.connect(func(event):
-		if event is InputEventMouseButton and event.pressed:
-			_hide_quit_dialog()
-	)
-	_quit_dialog.add_child(overlay)
-	
-	# Panel
-	var panel := Panel.new()
-	panel.custom_minimum_size = Vector2(400, 200)
-	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.offset_left = -200
-	panel.offset_right = 200
-	panel.offset_top = -100
-	panel.offset_bottom = 100
-	
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = UI.BG_MID
-	panel_style.border_color = UI.ACCENT_PRIMARY
-	panel_style.set_border_width_all(3)
-	panel_style.set_corner_radius_all(12)
-	panel.add_theme_stylebox_override("panel", panel_style)
-	_quit_dialog.add_child(panel)
-	
-	# VBox for content
-	var vbox := VBoxContainer.new()
-	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	vbox.offset_left = 32
-	vbox.offset_right = -32
-	vbox.offset_top = 24
-	vbox.offset_bottom = -24
-	vbox.add_theme_constant_override("separation", 20)
-	panel.add_child(vbox)
-	
-	# Title
-	var title := Label.new()
-	title.text = "QUIT GAME?"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 28)
-	title.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
-	vbox.add_child(title)
-	
-	# Spacer
-	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(spacer)
-	
-	# Button container
-	var btn_row := HBoxContainer.new()
-	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	btn_row.add_theme_constant_override("separation", 24)
-	vbox.add_child(btn_row)
-	
-	# Cancel button
-	var cancel_btn := _create_dialog_button("CANCEL", false)
-	cancel_btn.pressed.connect(_hide_quit_dialog)
-	btn_row.add_child(cancel_btn)
-	_quit_cancel_btn = cancel_btn
-	
-	# Initial focus
-	cancel_btn.grab_focus.call_deferred()
-
-	
-	# Quit button
-	var quit_btn := _create_dialog_button("QUIT", true)
-	quit_btn.pressed.connect(func(): get_tree().quit())
-	btn_row.add_child(quit_btn)
-
-
-func _create_dialog_button(text: String, is_danger: bool) -> Button:
-	var btn := Button.new()
-	btn.text = text
-	btn.custom_minimum_size = Vector2(140, 45)
-	
-	var normal := StyleBoxFlat.new()
-	if is_danger:
-		normal.bg_color = UI.BTN_BACK_BG
-		normal.border_color = UI.COLOR_DANGER
-	else:
-		normal.bg_color = UI.BG_MID
-		normal.border_color = UI.BORDER_DEFAULT
-	normal.set_border_width_all(2)
-	normal.set_corner_radius_all(8)
-	btn.add_theme_stylebox_override("normal", normal)
-	
-	var hover := StyleBoxFlat.new()
-	if is_danger:
-		hover.bg_color = UI.BTN_BACK_HOVER_BG
-		hover.border_color = UI.COLOR_DANGER
-	else:
-		hover.bg_color = UI.BG_LIGHT
-		hover.border_color = UI.BORDER_HIGHLIGHT
-	hover.set_border_width_all(3)
-	hover.set_corner_radius_all(8)
-	btn.add_theme_stylebox_override("hover", hover)
-	
-	btn.add_theme_font_size_override("font_size", 16)
-	btn.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
-	
-	return btn
-
-
-func _hide_quit_dialog() -> void:
-	AudioManager.play_ui_back()
-	if _quit_dialog:
-		_quit_dialog.visible = false
-		call_deferred("_grab_initial_focus")
-
-
-func _move_selection(direction: int) -> void:
-	if _buttons.is_empty():
-		return
-	_selected_index = wrapi(_selected_index + direction, 0, _buttons.size())
-	_update_selection()
-
-
-func _activate_current() -> void:
-	if _selected_index < 0 or _selected_index >= MENU_OPTIONS.size():
-		return
-	var option_id: String = MENU_OPTIONS[_selected_index]["id"]
-	_on_button_pressed(option_id)
-
-
-func _show_coming_soon() -> void:
-	if _coming_soon_dialog:
-		_coming_soon_dialog.popup_centered()
-
-
-func _show_outpost_coming_soon() -> void:
-	if _outpost_dialog:
-		_outpost_dialog.visible = true
-		return
-	
-	# Create overlay
-	_outpost_dialog = Control.new()
-	_outpost_dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_outpost_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
-	add_child(_outpost_dialog)
-	
-	# Dark background
-	var overlay := ColorRect.new()
-	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	overlay.color = UI.BG_OVERLAY
-	overlay.gui_input.connect(func(event):
-		if event is InputEventMouseButton and event.pressed:
-			_hide_outpost_dialog()
-	)
-	_outpost_dialog.add_child(overlay)
-	
-	# Panel
-	var panel := Panel.new()
-	panel.custom_minimum_size = Vector2(450, 220)
-	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.offset_left = -225
-	panel.offset_right = 225
-	panel.offset_top = -110
-	panel.offset_bottom = 110
-	
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = UI.BG_MID
-	panel_style.border_color = UI.ACCENT_PRIMARY
-	panel_style.set_border_width_all(3)
-	panel_style.set_corner_radius_all(12)
-	panel.add_theme_stylebox_override("panel", panel_style)
-	_outpost_dialog.add_child(panel)
-	
-	# VBox for content
-	var vbox := VBoxContainer.new()
-	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	vbox.offset_left = 32
-	vbox.offset_right = -32
-	vbox.offset_top = 24
-	vbox.offset_bottom = -24
-	vbox.add_theme_constant_override("separation", 16)
-	panel.add_child(vbox)
-	
-	# Title
-	var title := Label.new()
-	title.text = "COMING SOON!"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 36)
-	title.add_theme_color_override("font_color", UI.ACCENT_SECONDARY)
-	vbox.add_child(title)
-	
-	# Description
-	var desc := Label.new()
-	desc.text = "The Outpost is still under construction."
-	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	desc.add_theme_font_size_override("font_size", 18)
-	desc.add_theme_color_override("font_color", UI.TEXT_SECONDARY)
-	vbox.add_child(desc)
-	
-	# Spacer
-	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(spacer)
-	
-	# Close button
-	var btn_container := HBoxContainer.new()
-	btn_container.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_child(btn_container)
-	
-	var close_btn := _create_dialog_button("CLOSE", false)
-	close_btn.pressed.connect(_hide_outpost_dialog)
-	btn_container.add_child(close_btn)
-
-
-func _hide_outpost_dialog() -> void:
-	AudioManager.play_ui_back()
-	if _outpost_dialog:
-		_outpost_dialog.visible = false
-
-
-# --- Debug Functions ---
-
-func _debug_unlock_all() -> void:
-	## Debug: Unlock all stages (F3)
-	if not GameManager:
-		print("[DEBUG] GameManager not available")
-		return
-	
-	# Unlock all stages
-	for stage in StageRegistry.STAGES:
-		var stage_id: String = stage["id"]
-		if stage_id not in GameManager.stages_cleared:
-			GameManager.stages_cleared.append(stage_id)
-	
-	GameManager.save_game()
-	
-	# Show feedback
-	print("[DEBUG] All stages unlocked!")
-	_show_debug_notification("DEBUG: All stages unlocked!")
-
-
-func _show_debug_notification(text: String) -> void:
-	# Create a temporary notification label
-	var label := Label.new()
-	label.text = text
-	label.add_theme_font_size_override("font_size", 24)
-	label.add_theme_color_override("font_color", UI.COLOR_SUCCESS)
-	label.add_theme_color_override("font_shadow_color", UI.SHADOW_COLOR)
-	label.add_theme_constant_override("shadow_offset_x", 2)
-	label.add_theme_constant_override("shadow_offset_y", 2)
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	label.position.y = 120
-	add_child(label)
-	
-	# Fade out and remove
-	var tween := create_tween()
-	tween.tween_property(label, "modulate:a", 0.0, 1.5).set_delay(1.0)
-	tween.tween_callback(label.queue_free)
-
-
-func _grab_initial_focus() -> void:
-	if _buttons.size() > _selected_index and _selected_index >= 0:
-		_buttons[_selected_index].grab_focus()
-	elif not _buttons.is_empty():
-		_buttons[0].grab_focus()
-
-
-func _on_visibility_changed() -> void:
-	if is_visible_in_tree():
-		# Small delay to ensure everything is set up
-		call_deferred("_grab_initial_focus")
+	_left_column.visible = show_menu
+	_play_button.visible = show_menu
+	_quit_button.visible = show_menu
+	_top_strip.visible = show_menu
+	_logo.visible = show_logo
+	_greebles.visible = show_logo

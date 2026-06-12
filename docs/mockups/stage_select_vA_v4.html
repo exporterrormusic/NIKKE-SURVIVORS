@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SOV Stage Select — Round 4 (looping carousel)</title>
+<style>
+  :root{
+    --cyan:#35C5F2; --cyan-deep:#1F8FE0; --yellow:#FFD23F; --red:#E8392E;
+    --muted:#97A0AC; --field-bg:#0E1116;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#070a0e; color:#F0F4F8;
+    font-family:"Pretendard","Segoe UI",system-ui,sans-serif; padding:40px;}
+  h1{font-family:"Arial Narrow",sans-serif; font-size:32px; font-style:italic;
+    text-transform:uppercase; margin-bottom:4px;}
+  .sub{color:var(--muted); text-transform:uppercase; letter-spacing:.25em; font-size:12px;
+    margin-bottom:18px;}
+
+  .stage{position:relative; width:1280px; height:720px; overflow:hidden;
+    background:var(--field-bg); border:1px solid #2a3340; margin-bottom:10px;}
+  .scan{position:absolute; inset:0; pointer-events:none; z-index:60; opacity:.4;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px);}
+
+  .bigmap{position:absolute; inset:0; z-index:0;}
+  .bigmap img{width:100%; height:100%; object-fit:cover; filter:brightness(.78) saturate(.95);
+    transition:filter .5s;}
+  .bigmap .shade{position:absolute; inset:0;
+    background:linear-gradient(90deg, rgba(10,13,18,.88) 0%, rgba(10,13,18,.45) 34%, rgba(10,13,18,.12) 60%, rgba(10,13,18,.55) 100%),
+               linear-gradient(0deg, rgba(10,13,18,.85) 0%, transparent 30%);}
+
+  /* SHE DESCENDS arm FX — background-only: above the map art, BELOW all UI */
+  .armfx{position:absolute; inset:0; z-index:1; pointer-events:none; opacity:0; transition:opacity .6s;}
+  .armfx .vig{position:absolute; inset:0;
+    background:radial-gradient(ellipse at center, transparent 38%, rgba(160,10,5,.55) 100%);}
+  .armfx .pulse{position:absolute; inset:0; background:rgba(232,57,46,.07);
+    animation:redpulse 2.2s ease-in-out infinite;}
+  .armfx .glitch{position:absolute; left:0; right:0; height:3px; background:rgba(255,80,70,.35);
+    animation:glitchline 3.1s linear infinite;}
+  @keyframes redpulse{0%,100%{opacity:.4;} 50%{opacity:1;}}
+  @keyframes glitchline{0%{top:-5%; opacity:0;} 6%{opacity:1;} 18%{top:48%; opacity:.6;}
+    24%{top:52%; opacity:0;} 60%{top:78%; opacity:0;} 66%{top:80%; opacity:.8;} 74%{top:110%; opacity:0;} 100%{top:110%; opacity:0;}}
+  .armbanner{position:absolute; left:50%; top:88px; transform:translateX(-50%) skewX(-6deg); z-index:41;
+    padding:7px 26px; background:rgba(120,8,4,.85); border:1px solid #E8392E; font-weight:800;
+    font-size:13px; letter-spacing:.3em; color:#ffb4ae; display:none; white-space:nowrap;}
+  .armbanner::before,.armbanner::after{content:""; position:absolute; top:0; bottom:0; width:10px;
+    background:repeating-linear-gradient(-45deg,#E8392E 0 6px,transparent 6px 12px);}
+  .armbanner::before{left:-16px;} .armbanner::after{right:-16px;}
+  .stage.armed .armfx{opacity:1;}
+  .stage.armed .armbanner{display:block;}
+  .stage.armed .bigmap img{filter:brightness(.5) saturate(1.3) hue-rotate(-18deg) contrast(1.08);}
+  .stage.armed .hdr .bar{background:var(--red);}
+  .stage.armed .mapname .s{color:#ff6b61;}
+
+  .hdr{position:absolute; left:44px; top:24px; z-index:8;}
+  .hdr .t{font-family:"Arial Narrow",sans-serif; font-weight:800; font-style:italic; font-size:40px;}
+  .hdr .s{font-size:12px; letter-spacing:.3em; text-transform:uppercase; opacity:.65; margin-top:2px;}
+  .hdr .bar{width:54px; height:3px; background:var(--cyan); margin-top:8px; transition:background .3s;}
+  .topright{position:absolute; right:24px; top:22px; display:flex; gap:12px; z-index:8;}
+  .opchip{display:flex; align-items:center; gap:10px; height:38px; padding:0 16px 0 6px;
+    background:rgba(14,17,22,.72); border:1px solid rgba(255,255,255,.22); font-size:12px;}
+  .opchip img{width:30px; height:30px; object-fit:cover; object-position:top;}
+  .opchip .k{letter-spacing:.18em; opacity:.6; font-size:9px; display:block;}
+  .opchip .v{font-weight:800; letter-spacing:.04em;}
+  .backchip{display:flex; align-items:center; height:38px; padding:0 18px;
+    transform:skewX(-6deg); background:rgba(14,17,22,.72); color:#fff;
+    border:1px solid rgba(255,255,255,.22); font-weight:800; font-size:14px; cursor:pointer;}
+  .backchip span{transform:skewX(6deg);}
+
+  .modes{position:absolute; left:44px; top:128px; width:300px; z-index:6;
+    display:flex; flex-direction:column; gap:10px;}
+  .mode{position:relative; padding:14px 18px; cursor:pointer; user-select:none;
+    background:rgba(20,24,31,.78); border:1px solid rgba(255,255,255,.18);
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%);}
+  .mode .t{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:24px;}
+  .mode .d{font-size:11px; opacity:.65; margin-top:3px; line-height:1.45;}
+  .mode.sel{background:rgba(31,143,224,.28); border-color:var(--cyan);}
+  .mode.sel::before{content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--cyan);}
+  .mode.sel .t{color:var(--cyan);}
+
+  .hazard{position:relative; display:flex; align-items:center; gap:12px; padding:12px 16px;
+    border:1px solid rgba(232,57,46,.55); cursor:pointer; user-select:none; overflow:hidden;
+    margin-top:6px; background:rgba(20,24,31,.78);}
+  .hazard .stripes{position:absolute; left:0; top:0; bottom:0; width:8px;
+    background:repeating-linear-gradient(-45deg,#E8392E 0 7px,#14181F 7px 14px);}
+  .hazard .sk{font-size:22px; color:#E8392E; margin-left:8px;}
+  .hazard .tx .t{font-weight:800; font-size:15px; letter-spacing:.06em; color:#ff6b61;}
+  .hazard .tx .d{font-size:10.5px; opacity:.6; margin-top:1px;}
+  .hazard .sw{margin-left:auto; width:42px; height:20px; border:1px solid rgba(232,57,46,.6); position:relative;}
+  .hazard .sw i{position:absolute; top:2px; left:2px; width:14px; height:14px; background:#5a6470; transition:all .15s;}
+  .hazard.on{background:rgba(120,10,5,.45); border-color:#E8392E;
+    box-shadow:inset 0 0 24px rgba(232,57,46,.25);}
+  .hazard.on .sw i{left:24px; background:#E8392E;}
+  .hazard.on .tx .t{color:#fff;}
+
+  /* map name — follows the lowered carousel, stays clear of the mode stack */
+  .mapname{position:absolute; left:46px; bottom:170px; z-index:5;}
+  .mapname .n{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:54px;
+    text-shadow:0 2px 12px rgba(0,0,0,.6);}
+  .mapname .s{font-size:13px; letter-spacing:.34em; color:var(--cyan); font-weight:800; margin-top:2px;}
+  .mapname .s em{font-style:normal; color:#fff; opacity:.45; letter-spacing:.2em; margin-left:14px; font-size:10px;}
+
+  .thumb{position:relative; width:160px; height:76px; cursor:pointer; flex:none;
+    transform:skewX(-6deg); overflow:hidden; border:1px solid rgba(255,255,255,.25);
+    background:#10141a; transition:border-color .15s, opacity .25s, transform .25s;}
+  .thumb img{width:118%; height:100%; object-fit:cover; transform:skewX(6deg) translateX(-9%);
+    filter:brightness(.62) saturate(.85); transition:filter .2s;}
+  .thumb .nm{position:absolute; left:0; right:0; bottom:0; padding:3px 8px; font-size:8.5px;
+    font-weight:800; letter-spacing:.03em; background:rgba(10,13,18,.78);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .thumb .nm em{font-style:normal; color:var(--cyan); margin-left:5px; font-size:8px;}
+  .thumb.sel{border:2px solid var(--yellow);}
+  .thumb.sel img{filter:brightness(.95) saturate(1);}
+
+  /* center carousel — lowered, infinite loop */
+  .carwin{position:absolute; left:44px; right:430px; bottom:64px; height:96px; z-index:6;
+    overflow:hidden; mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);}
+  .carstrip{position:absolute; top:50%; left:0; display:flex; gap:10px; align-items:center;
+    transform:translateY(-50%); transition:margin-left .35s cubic-bezier(.16,1,.3,1);}
+  .carstrip.snap{transition:none;}
+  .carwin .thumb{opacity:.5; transform:skewX(-6deg) scale(.86);}
+  .carwin .thumb.sel{opacity:1; transform:skewX(-6deg) scale(1.04);}
+  .cararrow{position:absolute; bottom:78px; width:34px; height:68px; z-index:8;
+    display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:16px;
+    background:rgba(10,13,18,.8); border:1px solid rgba(255,255,255,.3); user-select:none;}
+  .cararrow:hover{background:rgba(31,143,224,.5);}
+
+  /* ops panel */
+  .ops{position:absolute; right:36px; bottom:44px; width:368px; z-index:6;
+    background:rgba(16,20,26,.84); border:1px solid rgba(255,255,255,.16); padding:18px 20px;}
+  .ops .cap{font-size:10px; letter-spacing:.3em; opacity:.55; font-weight:800; margin-bottom:10px;}
+  .diffrow{display:flex; align-items:center; gap:14px;}
+  .diffrow .lbl{font-size:11px; letter-spacing:.22em; font-weight:800;}
+  .diffrow input[type=range]{flex:1; -webkit-appearance:none; height:6px; background:rgba(128,140,155,.35); outline:none;}
+  .diffrow input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:14px; height:24px;
+    background:var(--cyan); cursor:pointer; border:none;}
+  .diffrow .val{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:30px;
+    width:74px; text-align:right; color:var(--cyan);}
+  .scalerow{display:flex; margin-top:10px;}
+  .scalecell{flex:1; text-align:center; padding:7px 0 8px; border-right:1px solid rgba(128,140,155,.25);}
+  .scalecell:last-child{border-right:none;}
+  .scalecell .k{font-size:9px; letter-spacing:.22em; opacity:.55; display:block;}
+  .scalecell .v{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:22px;}
+  .cta{display:flex; align-items:center; justify-content:center; height:60px; margin-top:16px;
+    background:linear-gradient(180deg,#5BD2F7,#1F8FE0); border-bottom:3px solid #15679f;
+    color:#fff; font-weight:800; font-size:21px; font-style:italic; cursor:pointer;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%);
+    letter-spacing:.04em; user-select:none; transition:background .3s;}
+  .cta.danger{background:linear-gradient(180deg,#f0584d,#b81f15); border-bottom-color:#7d120b;
+    animation:ctapulse 1.6s ease-in-out infinite;}
+  @keyframes ctapulse{0%,100%{filter:brightness(1);} 50%{filter:brightness(1.25);}}
+</style>
+</head>
+<body>
+
+<h1>Stage Select — Round 4 · looping carousel</h1>
+<div class="sub">Carousel lowered · infinite wrap (left side never empty) · opens on a random zone</div>
+
+<div class="stage" id="a2">
+  <div class="bigmap"><img id="a2-big" src=""><div class="shade"></div></div>
+  <div class="armfx"><div class="vig"></div><div class="pulse"></div><div class="glitch"></div></div>
+  <div class="armbanner">⚠ SHE DESCENDS PROTOCOL ARMED ⚠</div>
+  <div class="hdr"><div class="t">MISSION SELECT</div><div class="s">CHOOSE OPERATION ZONE</div><div class="bar"></div></div>
+  <div class="topright">
+    <div class="opchip"><img src="../../assets/characters/snow-white/portrait-sq.png">
+      <div><span class="k">OPERATOR</span><span class="v">SNOW WHITE</span></div></div>
+    <div class="backchip"><span>← BACK</span></div>
+  </div>
+
+  <div class="modes">
+    <div class="mode sel" data-mode="std"><div class="t">STANDARD</div>
+      <div class="d">Survive 11 waves of Raptures to complete the mission.</div></div>
+    <div class="mode" data-mode="end"><div class="t">ENDLESS</div>
+      <div class="d">No wave limit. How long can you survive the endless horde?</div></div>
+    <div class="hazard" id="a2-haz">
+      <div class="stripes"></div><div class="sk">☠</div>
+      <div class="tx"><div class="t">GODDESS FALL</div><div class="d">Hardcore protocol. She descends.</div></div>
+      <div class="sw"><i></i></div>
+    </div>
+  </div>
+
+  <div class="mapname"><div class="n" id="a2-nm"></div>
+    <div class="s"><span id="a2-sb"></span><em id="a2-zc"></em></div></div>
+  <div class="carwin"><div class="carstrip" id="a2-strip"></div></div>
+  <div class="cararrow" style="left:6px;" id="a2-prev">◀</div>
+  <div class="cararrow" style="right:436px;" id="a2-next">▶</div>
+
+  <div class="ops">
+    <div class="cap">THREAT LEVEL</div>
+    <div class="diffrow"><span class="lbl">DIFFICULTY</span>
+      <input type="range" min="1" max="100" value="1" id="a2-diff"><span class="val" id="a2-dv">×1</span></div>
+    <div class="scalerow">
+      <div class="scalecell"><span class="k">ENEMY HP</span><span class="v" id="a2-hp">×1</span></div>
+      <div class="scalecell"><span class="k">ENEMY ATK</span><span class="v" id="a2-atk">×1</span></div>
+      <div class="scalecell"><span class="k">CORES</span><span class="v" id="a2-core">×1</span></div>
+    </div>
+    <div class="cta" id="a2-start">MISSION START</div>
+  </div>
+  <div class="scan"></div>
+</div>
+
+<script>
+const MAPS=[
+ {name:"ARK OUTSKIRTS",  sub:"DAY",   img:"../../assets/backgrounds/forest.jpg"},
+ {name:"ARK OUTSKIRTS",  sub:"NIGHT", img:"../../assets/backgrounds/rapturefield2.jpg"},
+ {name:"THE FROZEN NORTH",sub:"DAY",  img:"../../assets/backgrounds/snow-day.jpg"},
+ {name:"THE FROZEN NORTH",sub:"NIGHT",img:"../../assets/backgrounds/snow-night.jpg"},
+ {name:"STORMBRINGER",   sub:"NIGHT", img:"../../assets/backgrounds/rapturefield1.jpg"},
+ {name:"EDEN",           sub:"DEMO",  img:"../../assets/backgrounds/eden.jpg"},
+ {name:"THE KINGDOM",    sub:"DEMO",  img:"../../assets/backgrounds/kingdom.jpg"},
+ {name:"MUSHROOM HOLLOW",sub:"DEMO",  img:"../../assets/backgrounds/mushroom.jpg"},
+ {name:"THE ARK",        sub:"DEMO",  img:"../../assets/backgrounds/ark.jpg"},
+ {name:"ORBITAL",        sub:"DEMO",  img:"../../assets/backgrounds/space.jpg"},
+];
+const scaling=d=>({hp:d, atk:1+0.25*(d-1), core:d});
+const fmt=v=>"×"+(v===Math.round(v)?v:v.toFixed(2));
+
+(()=>{
+  const strip=document.getElementById("a2-strip");
+  const N=MAPS.length, COPIES=3, W=160, GAP=10;
+  const thumbs=[];
+  /* 3 copies of the list; we always live in the middle copy and snap back
+     invisibly after crossing a boundary — the rail is never empty on either side */
+  for(let c=0;c<COPIES;c++){
+    MAPS.forEach((m,i)=>{
+      const t=document.createElement("div"); t.className="thumb";
+      t.innerHTML=`<img src="${m.img}"><div class="nm">${m.name}<em>${m.sub}</em></div>`;
+      const dom=c*N+i;
+      t.addEventListener("click",()=>go(dom,true));
+      thumbs.push(t); strip.appendChild(t);
+    });
+  }
+  let pos=N+Math.floor(Math.random()*N); /* random starting zone, middle copy */
+
+  function center(animate){
+    strip.classList.toggle("snap",!animate);
+    const winW=document.querySelector(".carwin").clientWidth;
+    strip.style.marginLeft=(winW/2-(pos*(W+GAP)+W/2))+"px";
+    if(!animate) strip.offsetHeight; /* force reflow so the snap isn't animated */
+    strip.classList.remove("snap");
+  }
+  function refresh(){
+    const i=pos%N;
+    thumbs.forEach((t,j)=>t.classList.toggle("sel",j%N===i && Math.abs(j-pos)<N/2+1));
+    thumbs.forEach((t,j)=>t.classList.toggle("sel",j===pos));
+    document.getElementById("a2-big").src=MAPS[i].img;
+    document.getElementById("a2-nm").textContent=MAPS[i].name;
+    document.getElementById("a2-sb").textContent=MAPS[i].sub;
+    document.getElementById("a2-zc").textContent="ZONE "+String(i+1).padStart(2,"0")+" // "+String(N).padStart(2,"0");
+  }
+  function go(domIdx,fromClick){
+    pos=domIdx;
+    refresh(); center(true);
+    /* after the slide, if we left the middle copy, snap back by one copy */
+    setTimeout(()=>{
+      if(pos<N){pos+=N; refresh(); center(false);}
+      else if(pos>=2*N){pos-=N; refresh(); center(false);}
+    },370);
+  }
+  document.getElementById("a2-prev").addEventListener("click",()=>go(pos-1));
+  document.getElementById("a2-next").addEventListener("click",()=>go(pos+1));
+  refresh(); center(false);
+
+  const slider=document.getElementById("a2-diff");
+  const upd=()=>{const d=+slider.value, s=scaling(d);
+    document.getElementById("a2-dv").textContent="×"+d;
+    document.getElementById("a2-hp").textContent=fmt(s.hp);
+    document.getElementById("a2-atk").textContent=fmt(s.atk);
+    document.getElementById("a2-core").textContent=fmt(s.core);};
+  slider.addEventListener("input",upd); upd();
+
+  const stage=document.getElementById("a2");
+  stage.querySelectorAll("[data-mode]").forEach(el=>el.addEventListener("click",()=>{
+    stage.querySelectorAll("[data-mode]").forEach(o=>o.classList.remove("sel"));
+    el.classList.add("sel");}));
+
+  const h=document.getElementById("a2-haz"), start=document.getElementById("a2-start");
+  h.addEventListener("click",()=>{const on=h.classList.toggle("on");
+    stage.classList.toggle("armed",on);
+    start.classList.toggle("danger",on);
+    start.textContent=on?"SHE DESCENDS":"MISSION START";});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SOV Main Menu — Layout Round 3 (V1 refined ×3)</title>
+<style>
+  :root{
+    --bg-deep:#0E1116; --cyan:#35C5F2; --cyan-deep:#1F8FE0; --yellow:#FFD23F; --red:#E8392E;
+    --text:#F0F4F8; --muted:#97A0AC;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#070a0e; color:var(--text);
+    font-family:"Pretendard","Segoe UI",system-ui,sans-serif; padding:40px;}
+  h1{font-family:"Arial Narrow",sans-serif; font-size:32px; font-style:italic;
+    text-transform:uppercase; margin-bottom:4px;}
+  .sub{color:var(--muted); text-transform:uppercase; letter-spacing:.25em; font-size:12px;
+    margin-bottom:30px;}
+  h2{font-family:"Arial Narrow",sans-serif; font-size:21px; font-style:italic;
+    text-transform:uppercase; margin:44px 0 6px; border-left:4px solid var(--cyan); padding-left:12px;}
+  .note{color:var(--muted); font-size:14px; margin-bottom:14px; max-width:920px; line-height:1.5;}
+
+  .stage{position:relative; width:1280px; height:720px; overflow:hidden;
+    background:var(--bg-deep); border:1px solid #2a3340; margin-bottom:10px;}
+  .art{position:absolute; inset:0;}
+  .art div{position:absolute; top:-5%; height:110%; background-size:cover; background-position:center;
+    filter:saturate(.92) brightness(.85);}
+  .art .a1{left:-6%;  width:34%; clip-path:polygon(0 0,100% 0,82% 100%,0 100%);
+    background-image:url('../../assets/backgrounds/bunker-interior.jpg');}
+  .art .a2{left:22%;  width:36%; clip-path:polygon(18% 0,100% 0,82% 100%,0 100%);
+    background-image:url('../../assets/backgrounds/eden.jpg');}
+  .art .a3{left:52%;  width:36%; clip-path:polygon(18% 0,100% 0,82% 100%,0 100%);
+    background-image:url('../../assets/backgrounds/rapturefield1.jpg');}
+  .art .a4{left:82%;  width:26%; clip-path:polygon(18% 0,100% 0,100% 100%,0 100%);
+    background-image:url('../../assets/backgrounds/battlefield1.jpg');}
+  .dim{position:absolute; inset:0; background:rgba(2,4,8,.38);}
+  .scan{position:absolute; inset:0; pointer-events:none;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px);}
+  .logo{position:absolute; left:48px; top:30px; width:380px;}
+  .logo img{width:100%; display:block; filter:drop-shadow(0 2px 6px rgba(0,0,0,.6));}
+  .greeble{position:absolute; font-size:9px; letter-spacing:.18em; color:rgba(255,255,255,.34);
+    text-transform:uppercase;}
+  .barcode{display:inline-block; height:14px; width:74px; margin-right:8px; vertical-align:middle;
+    background:repeating-linear-gradient(90deg, rgba(255,255,255,.4) 0 2px, transparent 2px 5px,
+      rgba(255,255,255,.4) 5px 6px, transparent 6px 10px);}
+  .version{position:absolute; right:18px; bottom:12px; color:rgba(255,255,255,.45); font-size:13px;}
+
+  /* top-right system strip: NOTICE chip + core pill */
+  .topright{position:absolute; right:24px; top:20px; display:flex; gap:12px; align-items:center;}
+  .pill{display:flex; align-items:center; gap:8px; background:rgba(0,0,0,.55);
+    padding:6px 14px 6px 8px; font-size:13px; font-weight:600; height:34px;}
+  .pill .gem{width:14px; height:14px; background:var(--red); transform:rotate(45deg) scale(.8);}
+  .pill .plusbtn{color:var(--cyan); font-weight:800; margin-left:4px;}
+  .chipcard{position:relative; transform:skewX(-6deg); height:34px; display:flex; align-items:center;
+    padding:0 16px; background:linear-gradient(180deg,#ffffff,#e9f2fa);
+    box-shadow:0 2px 5px rgba(0,0,0,.4); cursor:pointer;}
+  .chipcard .in{transform:skewX(6deg); color:#1F8FE0; font-weight:800; font-size:13px;
+    display:flex; gap:7px; align-items:center;}
+  .chipcard .dot{position:absolute; top:-4px; right:-4px; width:11px; height:11px; border-radius:50%;
+    background:var(--red); border:2px solid rgba(255,255,255,.85); transform:skewX(6deg);}
+
+  /* cards */
+  .card{position:absolute; transform:skewX(-6deg); box-shadow:0 2px 6px rgba(0,0,0,.45); cursor:pointer;}
+  .card .in{transform:skewX(6deg); display:flex; align-items:center; gap:12px; height:100%; padding:0 20px;}
+  .card .ic{font-size:22px; line-height:1;}
+  .card .t{font-weight:800; font-size:19px; letter-spacing:.02em;}
+  .card .s{font-size:9px; letter-spacing:.22em; text-transform:uppercase; opacity:.6; display:block;}
+  .dot{position:absolute; top:-5px; right:-5px; width:13px; height:13px; border-radius:50%;
+    background:var(--red); border:2px solid rgba(255,255,255,.85); transform:skewX(6deg);}
+  .c-whitedark{background:linear-gradient(180deg,rgba(255,255,255,.92),rgba(232,238,244,.88)); color:#2A2E35;}
+  .c-whitedark .chip{background:#15191f; color:#fff; width:54px; height:54px; display:flex;
+    align-items:center; justify-content:center; font-size:26px; border-radius:6px;}
+  .c-blue{background:linear-gradient(180deg,#5BD2F7 0%,#2DA8E8 55%,#1F8FE0 100%); color:#fff;
+    border-bottom:3px solid #15679f;}
+  .c-dark{background:linear-gradient(180deg,rgba(30,36,46,.92),rgba(16,20,27,.92));
+    color:var(--cyan); border:1px solid rgba(90,160,200,.35);}
+  .c-dark .t{color:#cfe7f5;}
+  .c-darkred{background:linear-gradient(180deg,rgba(40,24,24,.92),rgba(22,12,12,.92));
+    border:1px solid rgba(232,57,46,.4);}
+  .c-darkred .t{color:#ffb3ad;} .c-darkred .ic{color:#ff8d85;}
+  .play .t{font-size:32px; font-style:italic;}
+  .small .t{font-size:14px;} .small .ic{font-size:16px;}
+</style>
+</head>
+<body>
+
+<h1>Main Menu — Round 3 · V1 refined</h1>
+<div class="sub">NOTICE → top-right chip · OUTPOST removed · SETTINGS in left column · more logo breathing room</div>
+
+<!-- ============ V1-A ============ -->
+<h2>V1-A · Straight stagger</h2>
+<p class="note">Left column starts well below the logo, alternating ±12px stagger. PLAY upper-right
+with QUIT directly beneath it (grouped exit/entry zone).</p>
+<div class="stage">
+  <div class="art"><div class="a1"></div><div class="a2"></div><div class="a3"></div><div class="a4"></div></div>
+  <div class="dim"></div>
+  <div class="logo"><img src="../../assets/ui/logo.png"></div>
+  <div class="greeble" style="left:50px; top:150px;"><span class="barcode"></span> SOV-2026 // ARK SYS V2.4</div>
+  <div class="topright">
+    <div class="chipcard"><div class="in">◆ NOTICE</div><span class="dot"></span></div>
+    <div class="pill"><span class="gem"></span> 43 <span class="plusbtn">+</span></div>
+  </div>
+
+  <div class="card c-blue" style="left:48px; top:280px; width:235px; height:64px;">
+    <div class="in"><span class="ic">▦</span><div><span class="t">SHOP</span>
+    <span class="s">PRISTINE CORE EXCHANGE</span></div></div><span class="dot"></span></div>
+  <div class="card c-dark" style="left:60px; top:364px; width:235px; height:64px;">
+    <div class="in"><span class="ic">▤</span><span class="t">LEADERBOARDS</span></div></div>
+  <div class="card c-dark" style="left:48px; top:448px; width:235px; height:64px;">
+    <div class="in"><span class="ic">★</span><span class="t">ACHIEVEMENTS</span></div><span class="dot"></span></div>
+  <div class="card c-dark" style="left:60px; top:532px; width:235px; height:64px;">
+    <div class="in"><span class="ic">⚙</span><span class="t">SETTINGS</span></div></div>
+
+  <div class="card c-whitedark play" style="right:48px; top:320px; width:320px; height:100px;">
+    <div class="in"><span class="chip">▶</span><div><span class="t">PLAY</span>
+    <span class="s" style="color:#5a626c;">SELECT NIKKE &amp; DEPLOY</span></div></div></div>
+  <div class="card c-darkred small" style="right:60px; top:444px; width:170px; height:46px;">
+    <div class="in"><span class="ic">✕</span><span class="t">QUIT</span></div></div>
+
+  <div class="version">v0.2B</div>
+  <div class="scan"></div>
+</div>
+
+<!-- ============ V1-B ============ -->
+<h2>V1-B · Cascade indent, PLAY low</h2>
+<p class="note">Left cards step right as they descend (diagonal cascade echoing the card skew).
+PLAY anchored lower-right — closer to where NIKKE's Ark button sits — QUIT small beneath it.</p>
+<div class="stage">
+  <div class="art"><div class="a1"></div><div class="a2"></div><div class="a3"></div><div class="a4"></div></div>
+  <div class="dim"></div>
+  <div class="logo"><img src="../../assets/ui/logo.png"></div>
+  <div class="greeble" style="left:50px; top:150px;"><span class="barcode"></span> SOV-2026 // ARK SYS V2.4</div>
+  <div class="topright">
+    <div class="chipcard"><div class="in">◆ NOTICE</div><span class="dot"></span></div>
+    <div class="pill"><span class="gem"></span> 43 <span class="plusbtn">+</span></div>
+  </div>
+
+  <div class="card c-blue" style="left:48px; top:290px; width:235px; height:64px;">
+    <div class="in"><span class="ic">▦</span><div><span class="t">SHOP</span>
+    <span class="s">PRISTINE CORE EXCHANGE</span></div></div><span class="dot"></span></div>
+  <div class="card c-dark" style="left:64px; top:374px; width:235px; height:64px;">
+    <div class="in"><span class="ic">▤</span><span class="t">LEADERBOARDS</span></div></div>
+  <div class="card c-dark" style="left:80px; top:458px; width:235px; height:64px;">
+    <div class="in"><span class="ic">★</span><span class="t">ACHIEVEMENTS</span></div><span class="dot"></span></div>
+  <div class="card c-dark" style="left:96px; top:542px; width:235px; height:64px;">
+    <div class="in"><span class="ic">⚙</span><span class="t">SETTINGS</span></div></div>
+
+  <div class="card c-whitedark play" style="right:48px; bottom:160px; width:330px; height:104px;">
+    <div class="in"><span class="chip">▶</span><div><span class="t">PLAY</span>
+    <span class="s" style="color:#5a626c;">SELECT NIKKE &amp; DEPLOY</span></div></div></div>
+  <div class="card c-darkred small" style="right:60px; bottom:92px; width:170px; height:46px;">
+    <div class="in"><span class="ic">✕</span><span class="t">QUIT</span></div></div>
+
+  <div class="version">v0.2B</div>
+  <div class="scan"></div>
+</div>
+
+<!-- ============ V1-C ============ -->
+<h2>V1-C · Compact left block, PLAY centered-right, QUIT top-right</h2>
+<p class="note">Left column tighter (56px pitch, smaller cards) leaving the most open art. QUIT
+joins the system strip top-right (chip-sized, red) so the right side is purely the big PLAY card
+at vertical center.</p>
+<div class="stage">
+  <div class="art"><div class="a1"></div><div class="a2"></div><div class="a3"></div><div class="a4"></div></div>
+  <div class="dim"></div>
+  <div class="logo"><img src="../../assets/ui/logo.png"></div>
+  <div class="greeble" style="left:50px; top:150px;"><span class="barcode"></span> SOV-2026 // ARK SYS V2.4</div>
+  <div class="topright">
+    <div class="chipcard"><div class="in">◆ NOTICE</div><span class="dot"></span></div>
+    <div class="pill"><span class="gem"></span> 43 <span class="plusbtn">+</span></div>
+    <div class="chipcard" style="background:linear-gradient(180deg,rgba(40,24,24,.95),rgba(22,12,12,.95));
+      border:1px solid rgba(232,57,46,.4);"><div class="in" style="color:#ff8d85;">✕ QUIT</div></div>
+  </div>
+
+  <div class="card c-blue" style="left:48px; top:300px; width:220px; height:56px;">
+    <div class="in"><span class="ic">▦</span><div><span class="t" style="font-size:17px;">SHOP</span>
+    <span class="s">PRISTINE CORE EXCHANGE</span></div></div><span class="dot"></span></div>
+  <div class="card c-dark" style="left:58px; top:372px; width:220px; height:56px;">
+    <div class="in"><span class="ic">▤</span><span class="t" style="font-size:17px;">LEADERBOARDS</span></div></div>
+  <div class="card c-dark" style="left:48px; top:444px; width:220px; height:56px;">
+    <div class="in"><span class="ic">★</span><span class="t" style="font-size:17px;">ACHIEVEMENTS</span></div><span class="dot"></span></div>
+  <div class="card c-dark" style="left:58px; top:516px; width:220px; height:56px;">
+    <div class="in"><span class="ic">⚙</span><span class="t" style="font-size:17px;">SETTINGS</span></div></div>
+
+  <div class="card c-whitedark play" style="right:48px; top:50%; margin-top:-56px; width:340px; height:112px;">
+    <div class="in"><span class="chip">▶</span><div><span class="t">PLAY</span>
+    <span class="s" style="color:#5a626c;">SELECT NIKKE &amp; DEPLOY</span></div></div></div>
+
+  <div class="version">v0.2B</div>
+  <div class="scan"></div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SOV Pause + Results — Round 1</title>
+<style>
+  :root{
+    --cyan:#35C5F2; --cyan-deep:#1F8FE0; --yellow:#FFD23F; --red:#E8392E;
+    --green:#3FAE5E; --muted:#97A0AC; --field-bg:#0E1116;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#070a0e; color:#F0F4F8;
+    font-family:"Pretendard","Segoe UI",system-ui,sans-serif; padding:40px;}
+  h1{font-family:"Arial Narrow",sans-serif; font-size:32px; font-style:italic;
+    text-transform:uppercase; margin-bottom:4px;}
+  h2{font-family:"Arial Narrow",sans-serif; font-size:24px; font-style:italic;
+    text-transform:uppercase; margin:46px 0 4px;}
+  .sub{color:var(--muted); text-transform:uppercase; letter-spacing:.25em; font-size:12px;
+    margin-bottom:18px;}
+
+  .stage{position:relative; width:1280px; height:720px; overflow:hidden;
+    background:var(--field-bg); border:1px solid #2a3340; margin-bottom:10px;}
+  .scan{position:absolute; inset:0; pointer-events:none; z-index:60; opacity:.4;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px);}
+
+  /* fake frozen gameplay behind the overlay */
+  .game{position:absolute; inset:0; z-index:0;}
+  .game img{width:100%; height:100%; object-fit:cover; filter:brightness(.85) saturate(.9);}
+  .game .blur{position:absolute; inset:0; backdrop-filter:blur(3px) brightness(.55) saturate(.6);}
+  .dim{position:absolute; inset:0; z-index:1; background:rgba(7,10,14,.55);}
+
+  /* shared chrome */
+  .hdr{position:absolute; left:54px; top:38px; z-index:8;}
+  .hdr .t{font-family:"Arial Narrow",sans-serif; font-weight:800; font-style:italic; font-size:52px;
+    line-height:1; text-shadow:0 2px 14px rgba(0,0,0,.7);}
+  .hdr .s{font-size:12px; letter-spacing:.3em; text-transform:uppercase; opacity:.65; margin-top:6px;}
+  .hdr .bar{width:54px; height:3px; background:var(--cyan); margin-top:10px;}
+
+  /* command buttons (chamfered slabs) */
+  .cmd{position:relative; display:flex; align-items:center; padding:0 22px; height:58px;
+    cursor:pointer; user-select:none; background:rgba(20,24,31,.86);
+    border:1px solid rgba(255,255,255,.18); font-weight:800; font-size:18px;
+    font-family:"Arial Narrow",sans-serif; font-style:italic; letter-spacing:.04em;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%);
+    transition:background .12s, border-color .12s;}
+  .cmd:hover{border-color:var(--cyan);}
+  .cmd .key{margin-left:auto; font-family:"Pretendard",sans-serif; font-style:normal; font-weight:600;
+    font-size:10px; letter-spacing:.2em; opacity:.4;}
+  .cmd.primary{background:linear-gradient(180deg,#5BD2F7,#1F8FE0); border:none;
+    border-bottom:3px solid #15679f; color:#fff; height:64px; font-size:21px;}
+  .cmd.danger{background:rgba(120,10,5,.5); border-color:rgba(232,57,46,.55); color:#ff8c84;}
+  .cmd.danger:hover{border-color:var(--red);}
+  .cmd.sel{border:2px solid var(--yellow);}
+
+  /* telemetry cells */
+  .cells{display:flex; flex-wrap:wrap;}
+  .cell{flex:1 1 33%; padding:10px 0 12px; text-align:center;
+    border-right:1px solid rgba(128,140,155,.22); border-bottom:1px solid rgba(128,140,155,.22);}
+  .cell .k{font-size:9px; letter-spacing:.24em; opacity:.55; font-weight:800; display:block; margin-bottom:2px;}
+  .cell .v{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:26px;}
+  .cell .v em{font-style:italic; font-size:14px; opacity:.55; margin-left:2px;}
+
+  .panelcap{font-size:10px; letter-spacing:.3em; opacity:.55; font-weight:800; margin-bottom:10px;}
+
+  /* damage log rows */
+  .dlog{display:flex; flex-direction:column; gap:5px; overflow:hidden;}
+  .dlrow{display:flex; align-items:center; gap:10px; padding:7px 12px;
+    background:rgba(20,24,31,.7); border-left:3px solid #5a6470; font-size:12px;}
+  .dlrow .t{opacity:.45; width:38px; font-variant-numeric:tabular-nums;}
+  .dlrow .src{flex:1; font-weight:600;}
+  .dlrow .typ{opacity:.45; font-size:10.5px;}
+  .dlrow .amt{font-weight:800; width:42px; text-align:right; font-variant-numeric:tabular-nums;}
+  .dlrow.sev{border-left-color:var(--red);} .dlrow.sev .amt{color:#ff6b61;}
+  .dlrow.mod{border-left-color:#e8923f;} .dlrow.mod .amt{color:#f0a95c;}
+  .dlrow.min .amt{color:#aab4c0;}
+
+  .opchip{display:flex; align-items:center; gap:10px; height:38px; padding:0 16px 0 6px;
+    background:rgba(14,17,22,.72); border:1px solid rgba(255,255,255,.22); font-size:12px;}
+  .opchip img{width:30px; height:30px; object-fit:cover; object-position:top;}
+  .opchip .k{letter-spacing:.18em; opacity:.6; font-size:9px; display:block;}
+  .opchip .v{font-weight:800; letter-spacing:.04em;}
+
+  .gfchip{display:inline-flex; align-items:center; gap:8px; padding:5px 14px;
+    background:rgba(120,8,4,.85); border:1px solid var(--red); font-weight:800;
+    font-size:11px; letter-spacing:.22em; color:#ffb4ae; transform:skewX(-6deg);}
+  .gfchip span{transform:skewX(6deg); display:flex; gap:8px; align-items:center;}
+
+  /* ============ P1: command rail left + telemetry right ============ */
+  .p1 .rail{position:absolute; left:54px; top:150px; bottom:64px; width:330px; z-index:6;
+    display:flex; flex-direction:column; gap:10px;}
+  .p1 .rail .gap{flex:1;}
+  .p1 .telem{position:absolute; right:54px; top:150px; bottom:64px; width:430px; z-index:6;
+    display:flex; flex-direction:column; gap:14px;}
+  .p1 .tbox{background:rgba(16,20,26,.86); border:1px solid rgba(255,255,255,.16); padding:16px 18px;}
+  .p1 .ophead{display:flex; align-items:center; gap:14px; margin-bottom:12px;}
+  .p1 .ophead img{width:54px; height:54px; object-fit:cover; object-position:top;
+    border:1px solid rgba(255,255,255,.25);}
+  .p1 .ophead .nm{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:26px;}
+  .p1 .ophead .sq{font-size:10px; letter-spacing:.24em; opacity:.55;}
+  .p1 .tbox.log{flex:1; display:flex; flex-direction:column; min-height:0;}
+
+  /* ============ P2: centered column (current layout, redressed) ============ */
+  .p2 .mid{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:380px; z-index:6; display:flex; flex-direction:column; gap:10px;}
+  .p2 .mid .ttl{text-align:center; font-family:"Arial Narrow"; font-weight:800;
+    font-style:italic; font-size:46px; margin-bottom:8px; text-shadow:0 2px 14px rgba(0,0,0,.7);}
+  .p2 .mid .ttl small{display:block; font-family:"Pretendard"; font-style:normal; font-weight:600;
+    font-size:11px; letter-spacing:.3em; opacity:.6; margin-top:4px;}
+  .p2 .side{position:absolute; top:90px; bottom:90px; width:360px; z-index:6;
+    background:rgba(16,20,26,.86); border:1px solid rgba(255,255,255,.16); padding:18px 20px;
+    display:flex; flex-direction:column;}
+  .p2 .side.l{left:54px;} .p2 .side.r{right:54px;}
+  .p2 .side .dlog{flex:1;}
+
+  /* ============ P3: bottom command dock ============ */
+  .p3 .dock{position:absolute; left:54px; right:54px; bottom:56px; z-index:6;
+    display:flex; gap:12px;}
+  .p3 .dock .cmd{flex:1; justify-content:center; height:66px;}
+  .p3 .dock .cmd.primary{flex:1.4;}
+  .p3 .strip{position:absolute; left:54px; right:54px; top:150px; z-index:6;
+    background:rgba(16,20,26,.86); border:1px solid rgba(255,255,255,.16);
+    display:flex; align-items:stretch;}
+  .p3 .strip .opbox{display:flex; align-items:center; gap:14px; padding:14px 22px;
+    border-right:1px solid rgba(128,140,155,.22);}
+  .p3 .strip .opbox img{width:58px; height:58px; object-fit:cover; object-position:top;
+    border:1px solid rgba(255,255,255,.25);}
+  .p3 .strip .opbox .nm{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:24px;}
+  .p3 .strip .opbox .sq{font-size:9px; letter-spacing:.24em; opacity:.55;}
+  .p3 .strip .cells{flex:1;}
+  .p3 .strip .cell{border-bottom:none;}
+  .p3 .logwrap{position:absolute; left:54px; right:54px; top:260px; bottom:150px; z-index:6;
+    background:rgba(16,20,26,.86); border:1px solid rgba(255,255,255,.16); padding:16px 20px;
+    display:flex; flex-direction:column;}
+  .p3 .logwrap .dlog{flex:1; flex-direction:row; flex-wrap:wrap; align-content:flex-start;}
+  .p3 .logwrap .dlrow{width:calc(50% - 4px);}
+
+  /* ============ R1: after-action report (full art strip) ============ */
+  .r1 .artstrip{position:absolute; left:0; top:0; bottom:0; width:420px; z-index:2; overflow:hidden;}
+  .r1 .artstrip img{width:100%; height:100%; object-fit:cover; object-position:center 20%;}
+  .r1 .artstrip .fade{position:absolute; inset:0;
+    background:linear-gradient(90deg, transparent 55%, rgba(7,10,14,.92) 100%),
+               linear-gradient(0deg, rgba(7,10,14,.75) 0%, transparent 26%);}
+  .r1 .verdict{position:absolute; left:470px; top:74px; z-index:6;}
+  .r1 .verdict .v{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:84px;
+    line-height:1; letter-spacing:.01em;}
+  .r1 .verdict .s{font-size:13px; letter-spacing:.34em; font-weight:800; margin-top:8px; opacity:.7;}
+  .r1 .verdict .bar{width:74px; height:4px; margin-top:14px;}
+  .r1.win .verdict .v{color:#7be09a;} .r1.win .verdict .bar{background:var(--green);}
+  .r1.loss .verdict .v{color:#ff6b61;} .r1.loss .verdict .bar{background:var(--red);}
+  .r1 .scoreblock{position:absolute; left:470px; top:230px; z-index:6;}
+  .r1 .scoreblock .k{font-size:11px; letter-spacing:.3em; opacity:.55; font-weight:800;}
+  .r1 .scoreblock .v{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:64px;
+    color:var(--yellow); line-height:1.05;}
+  .r1 .gfslot{position:absolute; left:470px; top:330px; z-index:6;}
+  .r1 .report{position:absolute; left:470px; right:54px; top:392px; z-index:6;
+    background:rgba(16,20,26,.86); border:1px solid rgba(255,255,255,.16);}
+  .r1 .report .cell{padding:14px 0 16px;}
+  .r1 .report .cell .v{font-size:30px;}
+  .r1 .reward{position:absolute; left:470px; right:54px; top:506px; z-index:6;
+    display:flex; align-items:center; gap:14px; padding:12px 18px;
+    background:rgba(31,143,224,.16); border:1px solid rgba(53,197,242,.45);}
+  .r1 .reward .ic{font-size:22px; color:var(--cyan);}
+  .r1 .reward .tx .k{font-size:9px; letter-spacing:.26em; opacity:.6; font-weight:800;}
+  .r1 .reward .tx .v{font-weight:800; font-size:16px; color:#bfe9fb;}
+  .r1.loss .reward{display:none;}
+  .r1 .cmds{position:absolute; left:470px; right:54px; bottom:54px; z-index:6;
+    display:flex; gap:12px;}
+  .r1 .cmds .cmd{flex:1; justify-content:center;}
+  .r1 .cmds .cmd.primary{flex:1.3;}
+  .r1 .opname{position:absolute; left:36px; bottom:34px; z-index:6;}
+  .r1 .opname .k{font-size:10px; letter-spacing:.3em; opacity:.65; font-weight:800;}
+  .r1 .opname .v{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:34px;
+    text-shadow:0 2px 12px rgba(0,0,0,.8);}
+
+  /* ============ R2: centered verdict card ============ */
+  .r2 .card{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:720px; z-index:6; background:rgba(13,16,21,.94); border:1px solid rgba(255,255,255,.18);}
+  .r2 .card .banner{position:relative; padding:26px 0 22px; text-align:center; overflow:hidden;}
+  .r2 .card .banner .v{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:62px; line-height:1;}
+  .r2 .card .banner .s{font-size:11px; letter-spacing:.32em; font-weight:800; opacity:.7; margin-top:6px;}
+  .r2.win .banner{background:linear-gradient(180deg, rgba(63,174,94,.3), transparent);}
+  .r2.win .banner .v{color:#7be09a;}
+  .r2.loss .banner{background:linear-gradient(180deg, rgba(232,57,46,.3), transparent);}
+  .r2.loss .banner .v{color:#ff6b61;}
+  .r2 .card .scorebar{display:flex; align-items:baseline; justify-content:center; gap:16px;
+    padding:4px 0 14px; border-bottom:1px solid rgba(128,140,155,.22);}
+  .r2 .card .scorebar .k{font-size:11px; letter-spacing:.3em; opacity:.55; font-weight:800;}
+  .r2 .card .scorebar .v{font-family:"Arial Narrow"; font-weight:800; font-style:italic;
+    font-size:46px; color:var(--yellow);}
+  .r2 .card .body{display:flex;}
+  .r2 .card .portrait{width:190px; flex:none; position:relative; overflow:hidden;}
+  .r2 .card .portrait img{position:absolute; inset:0; width:100%; height:100%;
+    object-fit:cover; object-position:center 12%;}
+  .r2 .card .portrait .nm{position:absolute; left:0; right:0; bottom:0; padding:6px 10px;
+    background:rgba(10,13,18,.85); font-weight:800; font-size:13px; letter-spacing:.06em;}
+  .r2 .card .bodycells{flex:1;}
+  .r2 .card .cell{flex:1 1 33%; padding:16px 0 18px;}
+  .r2 .gfrow{display:flex; justify-content:center; padding:12px 0;}
+  .r2 .cmds{display:flex; gap:10px; padding:16px;}
+  .r2 .cmds .cmd{flex:1; justify-content:center; height:54px; font-size:16px;}
+  .r2 .cmds .cmd.primary{flex:1.3; height:54px; font-size:17px;}
+
+  .toggle{display:inline-flex; margin-bottom:12px; cursor:pointer; user-select:none;
+    border:1px solid #2a3340; font-size:12px; font-weight:800; letter-spacing:.12em;}
+  .toggle div{padding:8px 22px; color:var(--muted);}
+  .toggle div.on{background:#1c2430; color:#fff;}
+
+  .note{color:var(--muted); font-size:13px; line-height:1.6; max-width:1280px; margin-bottom:8px;}
+  .note b{color:#dfe6ee;}
+</style>
+</head>
+<body>
+
+<h1>Pause + Results — Round 1</h1>
+<div class="sub">Dark field register · overlay sits on frozen gameplay · P = pause layouts · R = results layouts</div>
+<div class="note">
+  All variants keep current behavior: pause shows live stats + damage log; defeat/victory add verdict + reward.
+  Buttons map 1:1 to existing signals (resume / restart / character select / cheats / settings / main menu).
+</div>
+
+<!-- ==================== P1 ==================== -->
+<h2>P1 — Command Rail</h2>
+<div class="sub">commands left · operator telemetry + damage log right · gameplay visible in the middle</div>
+<div class="stage p1">
+  <div class="game"><img src="../../assets/backgrounds/rapturefield2.jpg"><div class="blur"></div></div>
+  <div class="dim"></div>
+  <div class="hdr">
+    <div class="t">TACTICAL PAUSE</div>
+    <div class="s">OPERATION SUSPENDED // FIELD COMMAND</div>
+    <div class="bar"></div>
+  </div>
+  <div class="rail">
+    <div class="cmd primary">RESUME OPERATION<span class="key">ESC</span></div>
+    <div class="cmd">RESTART MISSION</div>
+    <div class="cmd">CHARACTER SELECT</div>
+    <div class="cmd">SETTINGS</div>
+    <div class="cmd">CHEATS</div>
+    <div class="gap"></div>
+    <div class="cmd danger">ABANDON — MAIN MENU</div>
+  </div>
+  <div class="telem">
+    <div class="tbox">
+      <div class="panelcap">FIELD TELEMETRY</div>
+      <div class="ophead">
+        <img src="../../assets/characters/marian/portrait-sq.png">
+        <div><div class="nm">MARIAN</div><div class="sq">SQUAD // WHITE KNIGHT</div></div>
+      </div>
+      <div class="cells">
+        <div class="cell"><span class="k">SCORE</span><span class="v">1,284,650</span></div>
+        <div class="cell"><span class="k">WAVE</span><span class="v">27</span></div>
+        <div class="cell"><span class="k">TIME</span><span class="v">18:42</span></div>
+        <div class="cell"><span class="k">KILLS</span><span class="v">3,482</span></div>
+        <div class="cell"><span class="k">BOSSES</span><span class="v">4</span></div>
+        <div class="cell"><span class="k">DIFFICULTY</span><span class="v">×12</span></div>
+      </div>
+    </div>
+    <div class="tbox log">
+      <div class="panelcap">DAMAGE LOG // RECENT HITS</div>
+      <div class="dlog">
+        <div class="dlrow sev"><span class="t">18:21</span><span class="src">Queen N-01</span><span class="typ">(beam)</span><span class="amt">-58</span></div>
+        <div class="dlrow mod"><span class="t">18:05</span><span class="src">Spitter</span><span class="typ">(projectile)</span><span class="amt">-21</span></div>
+        <div class="dlrow min"><span class="t">17:48</span><span class="src">Rapture Drone</span><span class="typ">(contact)</span><span class="amt">-12</span></div>
+        <div class="dlrow mod"><span class="t">17:31</span><span class="src">Charger</span><span class="typ">(slam)</span><span class="amt">-26</span></div>
+        <div class="dlrow min"><span class="t">17:12</span><span class="src">Rapture Drone</span><span class="typ">(contact)</span><span class="amt">-9</span></div>
+        <div class="dlrow min"><span class="t">16:58</span><span class="src">Spitter</span><span class="typ">(projectile)</span><span class="amt">-11</span></div>
+        <div class="dlrow sev"><span class="t">16:30</span><span class="src">Queen N-01</span><span class="typ">(slam)</span><span class="amt">-64</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="scan"></div>
+</div>
+
+<!-- ==================== P2 ==================== -->
+<h2>P2 — Center Terminal</h2>
+<div class="sub">closest to current layout · stats left, commands center, damage log right — all redressed</div>
+<div class="stage p2">
+  <div class="game"><img src="../../assets/backgrounds/rapturefield2.jpg"><div class="blur"></div></div>
+  <div class="dim"></div>
+  <div class="side l">
+    <div class="panelcap">FIELD TELEMETRY</div>
+    <div style="display:flex; align-items:center; gap:14px; margin-bottom:14px;">
+      <img src="../../assets/characters/marian/portrait-sq.png" style="width:58px;height:58px;object-fit:cover;object-position:top;border:1px solid rgba(255,255,255,.25);">
+      <div>
+        <div style="font-family:'Arial Narrow';font-weight:800;font-style:italic;font-size:26px;">MARIAN</div>
+        <div style="font-size:9px;letter-spacing:.24em;opacity:.55;">SQUAD // WHITE KNIGHT</div>
+      </div>
+    </div>
+    <div class="cells">
+      <div class="cell" style="flex-basis:50%;"><span class="k">SCORE</span><span class="v">1,284,650</span></div>
+      <div class="cell" style="flex-basis:50%;"><span class="k">WAVE</span><span class="v">27</span></div>
+      <div class="cell" style="flex-basis:50%;"><span class="k">TIME</span><span class="v">18:42</span></div>
+      <div class="cell" style="flex-basis:50%;"><span class="k">DIFFICULTY</span><span class="v">×12</span></div>
+      <div class="cell" style="flex-basis:50%;"><span class="k">KILLS</span><span class="v">3,482</span></div>
+      <div class="cell" style="flex-basis:50%;"><span class="k">BOSSES</span><span class="v">4</span></div>
+    </div>
+  </div>
+  <div class="mid">
+    <div class="ttl">PAUSED<small>OPERATION SUSPENDED</small></div>
+    <div class="cmd primary">RESUME OPERATION<span class="key">ESC</span></div>
+    <div class="cmd">RESTART MISSION</div>
+    <div class="cmd">CHARACTER SELECT</div>
+    <div class="cmd">SETTINGS</div>
+    <div class="cmd">CHEATS</div>
+    <div class="cmd danger">ABANDON — MAIN MENU</div>
+  </div>
+  <div class="side r">
+    <div class="panelcap">DAMAGE LOG // RECENT HITS</div>
+    <div class="dlog">
+      <div class="dlrow sev"><span class="t">18:21</span><span class="src">Queen N-01</span><span class="typ">(beam)</span><span class="amt">-58</span></div>
+      <div class="dlrow mod"><span class="t">18:05</span><span class="src">Spitter</span><span class="typ">(projectile)</span><span class="amt">-21</span></div>
+      <div class="dlrow min"><span class="t">17:48</span><span class="src">Rapture Drone</span><span class="typ">(contact)</span><span class="amt">-12</span></div>
+      <div class="dlrow mod"><span class="t">17:31</span><span class="src">Charger</span><span class="typ">(slam)</span><span class="amt">-26</span></div>
+      <div class="dlrow min"><span class="t">17:12</span><span class="src">Rapture Drone</span><span class="typ">(contact)</span><span class="amt">-9</span></div>
+      <div class="dlrow min"><span class="t">16:58</span><span class="src">Spitter</span><span class="typ">(projectile)</span><span class="amt">-11</span></div>
+      <div class="dlrow sev"><span class="t">16:30</span><span class="src">Queen N-01</span><span class="typ">(slam)</span><span class="amt">-64</span></div>
+      <div class="dlrow min"><span class="t">16:18</span><span class="src">Rapture Drone</span><span class="typ">(contact)</span><span class="amt">-8</span></div>
+    </div>
+  </div>
+  <div class="scan"></div>
+</div>
+
+<!-- ==================== P3 ==================== -->
+<h2>P3 — Bottom Command Dock</h2>
+<div class="sub">telemetry strip top · wide two-column damage log middle · commands docked along the bottom</div>
+<div class="stage p3">
+  <div class="game"><img src="../../assets/backgrounds/rapturefield2.jpg"><div class="blur"></div></div>
+  <div class="dim"></div>
+  <div class="hdr">
+    <div class="t">TACTICAL PAUSE</div>
+    <div class="s">OPERATION SUSPENDED // FIELD COMMAND</div>
+    <div class="bar"></div>
+  </div>
+  <div class="strip">
+    <div class="opbox">
+      <img src="../../assets/characters/marian/portrait-sq.png">
+      <div><div class="nm">MARIAN</div><div class="sq">SQUAD // WHITE KNIGHT</div></div>
+    </div>
+    <div class="cells">
+      <div class="cell" style="flex-basis:16%;"><span class="k">SCORE</span><span class="v">1,284,650</span></div>
+      <div class="cell" style="flex-basis:16%;"><span class="k">WAVE</span><span class="v">27</span></div>
+      <div class="cell" style="flex-basis:16%;"><span class="k">TIME</span><span class="v">18:42</span></div>
+      <div class="cell" style="flex-basis:16%;"><span class="k">KILLS</span><span class="v">3,482</span></div>
+      <div class="cell" style="flex-basis:16%;"><span class="k">BOSSES</span><span class="v">4</span></div>
+      <div class="cell" style="flex-basis:16%;"><span class="k">DIFFICULTY</span><span class="v">×12</span></div>
+    </div>
+  </div>
+  <div class="logwrap">
+    <div class="panelcap">DAMAGE LOG // RECENT HITS</div>
+    <div class="dlog">
+      <div class="dlrow sev"><span class="t">18:21</span><span class="src">Queen N-01</span><span class="typ">(beam)</span><span class="amt">-58</span></div>
+      <div class="dlrow mod"><span class="t">18:05</span><span class="src">Spitter</span><span class="typ">(projectile)</span><span class="amt">-21</span></div>
+      <div class="dlrow min"><span class="t">17:48</span><span class="src">Rapture Drone</span><span class="typ">(contact)</span><span class="amt">-12</span></div>
+      <div class="dlrow mod"><span class="t">17:31</span><span class="src">Charger</span><span class="typ">(slam)</span><span class="amt">-26</span></div>
+      <div class="dlrow min"><span class="t">17:12</span><span class="src">Rapture Drone</span><span class="typ">(contact)</span><span class="amt">-9</span></div>
+      <div class="dlrow min"><span class="t">16:58</span><span class="src">Spitter</span><span class="typ">(projectile)</span><span class="amt">-11</span></div>
+      <div class="dlrow sev"><span class="t">16:30</span><span class="src">Queen N-01</span><span class="typ">(slam)</span><span class="amt">-64</span></div>
+      <div class="dlrow min"><span class="t">16:18</span><span class="src">Rapture Drone</span><span class="typ">(contact)</span><span class="amt">-8</span></div>
+      <div class="dlrow mod"><span class="t">15:54</span><span class="src">Charger</span><span class="typ">(slam)</span><span class="amt">-24</span></div>
+      <div class="dlrow min"><span class="t">15:36</span><span class="src">Spitter</span><span class="typ">(projectile)</span><span class="amt">-10</span></div>
+    </div>
+  </div>
+  <div class="dock">
+    <div class="cmd primary">RESUME<span class="key">ESC</span></div>
+    <div class="cmd">RESTART</div>
+    <div class="cmd">CHARACTER SELECT</div>
+    <div class="cmd">SETTINGS</div>
+    <div class="cmd">CHEATS</div>
+    <div class="cmd danger">MAIN MENU</div>
+  </div>
+  <div class="scan"></div>
+</div>
+
+<!-- ==================== R1 ==================== -->
+<h2>R1 — After-Action Report</h2>
+<div class="sub">full-height operator art strip (leaderboard-detail style) · verdict + score + report cells right · click toggle to flip</div>
+<div class="toggle" id="r1t"><div class="on" data-m="win">VICTORY</div><div data-m="loss">DEFEAT</div></div>
+<div class="stage r1 win" id="r1">
+  <div class="game"><img src="../../assets/backgrounds/rapturefield2.jpg"><div class="blur"></div></div>
+  <div class="dim"></div>
+  <div class="artstrip">
+    <img src="../../assets/characters/marian/burst.png">
+    <div class="fade"></div>
+  </div>
+  <div class="opname"><div class="k">OPERATOR</div><div class="v">MARIAN</div></div>
+  <div class="verdict">
+    <div class="v" id="r1v">MISSION COMPLETE</div>
+    <div class="s" id="r1s">ALL HOSTILES NEUTRALIZED // QUEEN DOWN</div>
+    <div class="bar"></div>
+  </div>
+  <div class="scoreblock">
+    <div class="k">FINAL SCORE</div>
+    <div class="v">1,284,650</div>
+  </div>
+  <div class="gfslot"><div class="gfchip"><span>&#9760;&nbsp; GODDESS FALL RUN</span></div></div>
+  <div class="report">
+    <div class="cells">
+      <div class="cell"><span class="k">WAVE REACHED</span><span class="v">27</span></div>
+      <div class="cell"><span class="k">SURVIVAL TIME</span><span class="v">18:42</span></div>
+      <div class="cell"><span class="k">DIFFICULTY</span><span class="v">×12</span></div>
+      <div class="cell"><span class="k">KILLS</span><span class="v">3,482</span></div>
+      <div class="cell"><span class="k">BOSSES</span><span class="v">4</span></div>
+      <div class="cell"><span class="k">DAMAGE DEALT</span><span class="v">8.4<em>M</em></span></div>
+    </div>
+  </div>
+  <div class="reward">
+    <div class="ic">&#10022;</div>
+    <div class="tx"><div class="k">REWARD SECURED</div><div class="v">+1 PRISTINE RAPTURE CORE</div></div>
+  </div>
+  <div class="cmds">
+    <div class="cmd primary">PLAY AGAIN</div>
+    <div class="cmd">CHARACTER SELECT</div>
+    <div class="cmd danger">MAIN MENU</div>
+  </div>
+  <div class="scan"></div>
+</div>
+
+<!-- ==================== R2 ==================== -->
+<h2>R2 — Verdict Card</h2>
+<div class="sub">centered report card with color banner · portrait pane inside the card · click toggle to flip</div>
+<div class="toggle" id="r2t"><div class="on" data-m="win">VICTORY</div><div data-m="loss">DEFEAT</div></div>
+<div class="stage r2 win" id="r2">
+  <div class="game"><img src="../../assets/backgrounds/rapturefield2.jpg"><div class="blur"></div></div>
+  <div class="dim"></div>
+  <div class="card">
+    <div class="banner">
+      <div class="v" id="r2v">MISSION COMPLETE</div>
+      <div class="s" id="r2s">ALL HOSTILES NEUTRALIZED // QUEEN DOWN</div>
+    </div>
+    <div class="scorebar"><span class="k">FINAL SCORE</span><span class="v">1,284,650</span></div>
+    <div class="body">
+      <div class="portrait">
+        <img src="../../assets/characters/marian/portrait-sq.png">
+        <div class="nm">MARIAN</div>
+      </div>
+      <div class="bodycells">
+        <div class="cells">
+          <div class="cell"><span class="k">WAVE</span><span class="v">27</span></div>
+          <div class="cell"><span class="k">TIME</span><span class="v">18:42</span></div>
+          <div class="cell"><span class="k">DIFFICULTY</span><span class="v">×12</span></div>
+          <div class="cell"><span class="k">KILLS</span><span class="v">3,482</span></div>
+          <div class="cell"><span class="k">BOSSES</span><span class="v">4</span></div>
+          <div class="cell"><span class="k">DAMAGE</span><span class="v">8.4<em>M</em></span></div>
+        </div>
+        <div class="gfrow"><div class="gfchip"><span>&#9760;&nbsp; GODDESS FALL RUN</span></div></div>
+        <div class="reward" id="r2reward" style="display:flex; align-items:center; gap:14px; margin:0 16px 4px; padding:10px 16px; background:rgba(31,143,224,.16); border:1px solid rgba(53,197,242,.45);">
+          <div style="font-size:20px; color:var(--cyan);">&#10022;</div>
+          <div><div style="font-size:9px;letter-spacing:.26em;opacity:.6;font-weight:800;">REWARD SECURED</div>
+          <div style="font-weight:800;font-size:15px;color:#bfe9fb;">+1 PRISTINE RAPTURE CORE</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="cmds">
+      <div class="cmd primary">PLAY AGAIN</div>
+      <div class="cmd">CHARACTER SELECT</div>
+      <div class="cmd danger">MAIN MENU</div>
+    </div>
+  </div>
+  <div class="scan"></div>
+</div>
+
+<script>
+function wireToggle(togId, stageId, vId, sId, rewardId){
+  var tog = document.getElementById(togId);
+  var stage = document.getElementById(stageId);
+  var v = document.getElementById(vId);
+  var s = document.getElementById(sId);
+  var reward = rewardId ? document.getElementById(rewardId) : null;
+  tog.addEventListener('click', function(e){
+    var m = e.target.getAttribute('data-m');
+    if(!m) return;
+    tog.querySelectorAll('div').forEach(function(d){ d.classList.toggle('on', d === e.target); });
+    stage.classList.toggle('win', m === 'win');
+    stage.classList.toggle('loss', m === 'loss');
+    if(m === 'win'){
+      v.textContent = 'MISSION COMPLETE';
+      s.textContent = 'ALL HOSTILES NEUTRALIZED // QUEEN DOWN';
+      if(reward) reward.style.display = 'flex';
+    } else {
+      v.textContent = 'OPERATOR DOWN';
+      s.textContent = 'SIGNAL LOST // OPERATION FAILED';
+      if(reward) reward.style.display = 'none';
+    }
+  });
+}
+wireToggle('r1t','r1','r1v','r1s', null);
+wireToggle('r2t','r2','r2v','r2s','r2reward');
+</script>
+
+</body>
+</html>

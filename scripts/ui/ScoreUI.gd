@@ -1,22 +1,15 @@
 extends Control
 class_name ScoreUI
-## Score counter UI displayed in top-right corner during gameplay.
-## Matches the HoloCure-style HUD aesthetic.
+## Score counter (dark field register, approved mockup docs/mockups/hud_v2.html):
+## frameless letter-spaced SCORE caption over oblique white numerals,
+## right-aligned in the bottom-right corner above the core counter.
 
-# Styling - matches PlayerHudCluster
-const FRAME_BACKGROUND := Color(0.08, 0.08, 0.12, 0.95)
-const FRAME_BORDER_COLOR := Color(0.95, 0.95, 1.0, 1.0)
-const FRAME_BORDER_WIDTH := 4
-const FRAME_CORNER_RADIUS := 8
-const TEXT_COLOR := Color(1.0, 1.0, 1.0, 1.0)
-const LABEL_COLOR := Color(0.7, 0.75, 0.85, 1.0)
-const SCORE_COLOR := Color(1.0, 0.85, 0.25, 1.0) # Gold/yellow like burst
+const UI := preload("res://scripts/ui/UITheme.gd")
 
 # Animation
 const SCORE_PULSE_SCALE := 1.15
 const SCORE_PULSE_DURATION := 0.15
 
-var _panel: Panel
 var _score_label: Label
 var _title_label: Label
 var _current_score: int = 0
@@ -43,70 +36,55 @@ func _process(_delta: float) -> void:
 		_update_display()
 
 func _build_ui() -> void:
-	# Main container - anchor to bottom right, above core counter
-	custom_minimum_size = Vector2(180, 70)
+	# Frameless block - anchored bottom right, above the core counter
 	set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	anchor_left = 1.0
 	anchor_right = 1.0
 	anchor_top = 1.0
 	anchor_bottom = 1.0
-	offset_left = -200
-	offset_right = -20
-	offset_top = -165 # Above core counter (which is at -85 to -20)
-	offset_bottom = -95
-	
-	# Panel background
-	_panel = Panel.new()
-	_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_panel.add_theme_stylebox_override("panel", _create_panel_style())
-	add_child(_panel)
-	
-	# VBox for content
+	offset_left = -420
+	offset_right = -30
+	offset_top = -216
+	offset_bottom = -126
+
 	var vbox := VBoxContainer.new()
 	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	vbox.offset_left = 12
-	vbox.offset_right = -12
-	vbox.offset_top = 6
-	vbox.offset_bottom = -6
 	vbox.add_theme_constant_override("separation", 0)
-	_panel.add_child(vbox)
-	
-	# Title label
+	add_child(vbox)
+
+	# Caption
 	_title_label = Label.new()
 	_title_label.text = "SCORE"
-	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_title_label.add_theme_font_size_override("font_size", 12)
-	_title_label.add_theme_color_override("font_color", LABEL_COLOR)
+	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	UI.style_subtitle_label(_title_label, 14, Color(1, 1, 1, 0.65))
+	_title_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	_title_label.add_theme_constant_override("shadow_offset_x", 1)
+	_title_label.add_theme_constant_override("shadow_offset_y", 1)
 	vbox.add_child(_title_label)
-	
-	# Score label
+
+	# Score numerals
 	_score_label = Label.new()
 	_score_label.text = "0"
-	_score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_score_label.add_theme_font_size_override("font_size", 28)
-	_score_label.add_theme_color_override("font_color", SCORE_COLOR)
+	_score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_score_label.add_theme_font_override("font", UI.FONT_TITLE_OBLIQUE)
+	_score_label.add_theme_font_size_override("font_size", 54)
+	_score_label.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
+	_score_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+	_score_label.add_theme_constant_override("shadow_offset_x", 2)
+	_score_label.add_theme_constant_override("shadow_offset_y", 3)
 	_score_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(_score_label)
-	
-	# FPS Label (outside the main panel, just above it)
+
+	# FPS Label (just above the score block)
 	_fps_label = Label.new()
 	_fps_label.text = "FPS: 60"
 	_fps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_fps_label.add_theme_font_size_override("font_size", 10)
 	_fps_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
 	_fps_label.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	# Position relative to bottom right, above score box
-	_fps_label.position = Vector2(-70, -180)
+	_fps_label.position = Vector2(-70, -230)
 	add_child(_fps_label)
 	_fps_label.visible = false
-
-func _create_panel_style() -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = FRAME_BACKGROUND
-	style.border_color = FRAME_BORDER_COLOR
-	style.set_border_width_all(FRAME_BORDER_WIDTH)
-	style.set_corner_radius_all(FRAME_CORNER_RADIUS)
-	return style
 
 func _set_score(new_score: int) -> void:
 	var old_score := _current_score

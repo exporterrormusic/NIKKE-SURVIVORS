@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SOV Achievements — Round 1 (2 layout directions)</title>
+<style>
+  :root{
+    --cyan:#35C5F2; --cyan-deep:#1F8FE0; --yellow:#FFD23F; --red:#E8392E;
+    --green:#3aa86a; --muted:#97A0AC;
+    --admin-bg:#EDEFF2; --admin-hair:#D8DCE1; --admin-text:#2A2E35; --admin-dim:#8A9099;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#070a0e; color:#F0F4F8;
+    font-family:"Pretendard","Segoe UI",system-ui,sans-serif; padding:40px;}
+  h1{font-family:"Arial Narrow",sans-serif; font-size:32px; font-style:italic;
+    text-transform:uppercase; margin-bottom:4px;}
+  h2{font-family:"Arial Narrow",sans-serif; font-size:24px; font-style:italic;
+    text-transform:uppercase; margin:46px 0 4px;}
+  .sub{color:var(--muted); text-transform:uppercase; letter-spacing:.25em; font-size:12px;
+    margin-bottom:18px;}
+
+  .stage{position:relative; width:1280px; height:720px; overflow:hidden;
+    background:var(--admin-bg); border:1px solid #2a3340; margin-bottom:10px;
+    color:var(--admin-text);}
+  .scan{position:absolute; inset:0; pointer-events:none; z-index:50; opacity:.4;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px);}
+
+  .hdr{position:absolute; left:44px; top:24px; z-index:5;}
+  .hdr .t{font-family:"Arial Narrow",sans-serif; font-weight:800; font-style:italic; font-size:40px;}
+  .hdr .s{font-size:12px; letter-spacing:.3em; text-transform:uppercase; color:var(--admin-dim); margin-top:2px;}
+  .hdr .bar{width:54px; height:3px; background:var(--cyan); margin-top:8px;}
+  .topright{position:absolute; right:24px; top:22px; display:flex; gap:12px; z-index:5;}
+  .backchip{display:flex; align-items:center; height:38px; padding:0 18px;
+    transform:skewX(-6deg); background:#fff; color:var(--admin-text);
+    box-shadow:0 1px 4px rgba(0,0,0,.18); font-weight:800; font-size:14px; cursor:pointer;}
+  .backchip span{transform:skewX(6deg);}
+  .greeble{position:absolute; left:46px; bottom:20px; display:flex; align-items:center;
+    gap:14px; opacity:.35; font-size:9px; letter-spacing:.22em; font-weight:700; z-index:4;}
+  .greeble .bars{display:flex; gap:2px; align-items:flex-end;}
+  .greeble .bars i{display:block; width:2px; background:#2A2E35;}
+
+  /* segmented completion filter */
+  .seg{display:flex; border:1px solid #c8cdd3; height:38px; background:#fff;}
+  .seg .opt{display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0 18px;
+    font-weight:800; font-size:12px; letter-spacing:.1em; color:var(--admin-dim); user-select:none;}
+  .seg .opt.sel{background:var(--admin-text); color:#fff;}
+
+  /* achievement rows */
+  .alist{display:flex; flex-direction:column; gap:8px; overflow-y:auto; padding-right:6px;}
+  .alist::-webkit-scrollbar{width:8px;} .alist::-webkit-scrollbar-thumb{background:#c4cad1;}
+  .arow{position:relative; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.12);
+    padding:12px 16px 12px 20px; flex:none;}
+  .arow::before{content:""; position:absolute; left:0; top:0; bottom:0; width:5px; background:#c4cad1;}
+  .arow.done::before{background:var(--green);}
+  .arow.prog::before{background:var(--cyan);}
+  .arow .at{display:flex; align-items:center; gap:10px;}
+  .arow .at .n{font-weight:800; font-size:15.5px; flex:1;}
+  .arow.done .at .n{color:#2c7a4e;}
+  .arow .chip{font-size:10px; font-weight:800; letter-spacing:.12em; padding:3px 10px; color:#fff;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%);}
+  .arow .chip.cleared{background:var(--green);}
+  .arow .chip.pct{background:#aab4c0; color:#fff;}
+  .arow .d{font-size:12.5px; color:var(--admin-dim); margin-top:3px;}
+  .arow .prow{display:flex; align-items:center; gap:12px; margin-top:8px;}
+  .arow .pbar{flex:1; height:7px; background:rgba(60,70,82,.18); position:relative;}
+  .arow .pbar i{position:absolute; left:0; top:0; bottom:0;
+    background:linear-gradient(90deg,#5BD2F7,#1F8FE0);}
+  .arow .pnum{font-size:11.5px; font-weight:800; color:var(--admin-dim); min-width:86px; text-align:right;}
+
+  /* ============ A: category rail ============ */
+  #vA .rail{position:absolute; left:44px; top:128px; width:300px; bottom:46px; z-index:4;
+    display:flex; flex-direction:column; gap:6px; overflow-y:auto; padding-right:6px;}
+  #vA .rail::-webkit-scrollbar{width:8px;} #vA .rail::-webkit-scrollbar-thumb{background:#c4cad1;}
+  #vA .rb{position:relative; display:flex; align-items:center; gap:12px; background:#fff;
+    padding:7px 12px; box-shadow:0 1px 4px rgba(0,0,0,.12); cursor:pointer; flex:none;}
+  #vA .rb .pic{width:42px; height:42px; flex:none; overflow:hidden; background:#222a34;
+    display:flex; align-items:center; justify-content:center; color:#ffd23f; font-size:20px;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%);}
+  #vA .rb .pic img{width:100%; height:100%; object-fit:cover; object-position:top;}
+  #vA .rb .n{flex:1; font-weight:800; font-size:13.5px;}
+  #vA .rb .cnt{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:17px;
+    color:var(--admin-dim);}
+  #vA .rb .cnt.full{color:var(--green);}
+  #vA .rb.locked .pic img{filter:grayscale(1) brightness(.5);}
+  #vA .rb.locked .n{color:var(--admin-dim);}
+  #vA .rb.sel{outline:2px solid var(--yellow); outline-offset:2px;}
+  #vA .rb.sel::before{content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--yellow);}
+  #vA .content{position:absolute; left:372px; top:128px; right:36px; bottom:46px; z-index:3;
+    background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.16); padding:20px 24px;
+    display:flex; flex-direction:column; gap:14px;}
+  #vA .crow{display:flex; align-items:center; gap:16px;}
+  #vA .ctitle{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:26px; flex:1;}
+  #vA .alist{flex:1;}
+  #vA .arow{box-shadow:none; border:1px solid var(--admin-hair);}
+
+  /* ============ B: portrait chip bar ============ */
+  #vB .chips{position:absolute; left:44px; top:124px; right:36px; display:flex; gap:10px; z-index:4;}
+  #vB .chip2{position:relative; width:88px; cursor:pointer; flex:none;}
+  #vB .chip2 .pic{width:88px; height:64px; overflow:hidden; background:#222a34;
+    display:flex; align-items:center; justify-content:center; color:#ffd23f; font-size:26px;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%);}
+  #vB .chip2 .pic img{width:100%; height:100%; object-fit:cover; object-position:50% 12%;}
+  #vB .chip2 .cnt{position:absolute; right:-4px; top:-6px; background:#2A2E35; color:#fff;
+    font-size:9.5px; font-weight:800; padding:2px 7px; z-index:2;}
+  #vB .chip2 .cnt.full{background:var(--green);}
+  #vB .chip2 .nm{font-size:9px; font-weight:800; letter-spacing:.06em; text-align:center;
+    margin-top:4px; color:var(--admin-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  #vB .chip2.locked .pic img{filter:grayscale(1) brightness(.5);}
+  #vB .chip2.sel .pic{outline:2px solid var(--yellow); outline-offset:2px;}
+  #vB .content{position:absolute; left:44px; top:248px; right:36px; bottom:46px; z-index:3;
+    background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.16); padding:20px 24px;
+    display:flex; flex-direction:column; gap:14px;}
+  #vB .crow{display:flex; align-items:center; gap:16px;}
+  #vB .ctitle{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:26px; flex:1;}
+  #vB .alist{flex:1; display:grid; grid-template-columns:1fr 1fr; gap:10px; align-content:start;}
+  #vB .arow{box-shadow:none; border:1px solid var(--admin-hair);}
+</style>
+</head>
+<body>
+
+<h1>Achievements — Round 1</h1>
+<div class="sub">Light admin register · real achievement data · click categories &amp; filters · green = cleared, cyan = in progress</div>
+
+<!-- ============ A ============ -->
+<h2>A — “Commendations Rail” · settings-style left rail + list</h2>
+<div class="sub">GENERAL + one rail row per operator (portrait, n/m count, locked dimmed); right card with segmented filter.</div>
+<div class="stage" id="vA">
+  <div class="hdr"><div class="t">ACHIEVEMENTS</div><div class="s">COMMENDATIONS // SERVICE MEDALS</div><div class="bar"></div></div>
+  <div class="topright"><div class="backchip"><span>← BACK</span></div></div>
+  <div class="rail"></div>
+  <div class="content">
+    <div class="crow">
+      <div class="ctitle">GENERAL</div>
+      <div class="seg">
+        <div class="opt sel" data-f="ALL">ALL</div>
+        <div class="opt" data-f="COMPLETE">COMPLETE</div>
+        <div class="opt" data-f="INCOMPLETE">INCOMPLETE</div>
+      </div>
+    </div>
+    <div class="alist"></div>
+  </div>
+  <div class="greeble"><div class="bars"></div><span>COMMENDATIONS // ARK SYS V2.4</span></div>
+  <div class="scan"></div>
+</div>
+
+<!-- ============ B ============ -->
+<h2>B — “Medal Wall” · portrait chip bar on top + two-column list</h2>
+<div class="sub">Horizontal operator chips with count badges; achievements in a 2-col grid below (more visible at once).</div>
+<div class="stage" id="vB">
+  <div class="hdr"><div class="t">ACHIEVEMENTS</div><div class="s">COMMENDATIONS // SERVICE MEDALS</div><div class="bar"></div></div>
+  <div class="topright"><div class="backchip"><span>← BACK</span></div></div>
+  <div class="chips"></div>
+  <div class="content">
+    <div class="crow">
+      <div class="ctitle">GENERAL</div>
+      <div class="seg">
+        <div class="opt sel" data-f="ALL">ALL</div>
+        <div class="opt" data-f="COMPLETE">COMPLETE</div>
+        <div class="opt" data-f="INCOMPLETE">INCOMPLETE</div>
+      </div>
+    </div>
+    <div class="alist"></div>
+  </div>
+  <div class="greeble"><div class="bars"></div><span>COMMENDATIONS // ARK SYS V2.4</span></div>
+  <div class="scan"></div>
+</div>
+
+<script>
+const CHARS=[
+ {code:"GENERAL", n:"GENERAL", img:null},
+ {code:"snow-white", n:"SNOW WHITE"}, {code:"scarlet", n:"SCARLET"},
+ {code:"rapunzel", n:"RAPUNZEL"}, {code:"nayuta", n:"NAYUTA"},
+ {code:"commander", n:"COMMANDER"}, {code:"marian", n:"MARIAN"},
+ {code:"crown", n:"CROWN", locked:true}, {code:"kilo", n:"KILO"},
+ {code:"cecil", n:"CECIL", locked:true}, {code:"sin", n:"SIN"}, {code:"wells", n:"WELLS"},
+];
+const ACH={
+ GENERAL:[
+  {t:"First Blood", d:"Complete a Stage 1 map", u:true},
+  {t:"Boss Slayer", d:"Defeat a boss enemy", u:true},
+  {t:"Abandoned Wishes", d:"Reach Wave 10", u:true},
+  {t:"Massacre", d:"Defeat 100,000 enemies total", u:false, p:42180, m:100000},
+  {t:"World Traveler", d:"Play on all maps", u:false, p:3, m:5},
+  {t:"Untouchable", d:"Complete a wave without taking damage", u:false, p:0, m:1},
+  {t:"She Descends", d:"Spawn N01", u:false, p:0, m:1},
+  {t:"Look Commander, No Hands!", d:"Defeat Wave 11 without firing any bullets, rockets, or pellets", u:false, p:0, m:1},
+ ],
+};
+CHARS.slice(1).forEach(c=>{
+  const dn=c.n.charAt(0)+c.n.slice(1).toLowerCase();
+  const list=[];
+  if(c.locked!==undefined||["crown","cecil","sin","wells","nayuta","marian","kilo","commander"].includes(c.code))
+    list.push({t:`Unlock ${dn} in SHOP`, d:`Unlock ${dn} using Pristine Rapture Cores in the main menu shop`, u:!c.locked, p:c.locked?0:1, m:1});
+  list.push({t:`Kill 10,000 Raptures as ${dn}`, d:`Defeat 10,000 enemies while playing as ${dn}`, u:false, p:c.code==="snow-white"?4210:0, m:10000});
+  list.push({t:`Purchase all skills for ${dn}`, d:`Buy all 12 skill nodes for ${dn} during a single match`, u:false, p:0, m:1});
+  list.push({t:`Win a game with ${dn}`, d:`Complete a run playing ${dn}`, u:c.code==="snow-white", p:c.code==="snow-white"?1:0, m:1});
+  ACH[c.code]=list;
+});
+const img=c=>`../../assets/characters/${c}/portrait-sq.png`;
+const fmt=v=>v.toString().replace(/\B(?=(\d{3})+(?!\d))/g,",");
+
+document.querySelectorAll(".greeble .bars").forEach(b=>{
+  for(let i=0;i<46;i++){const x=document.createElement("i");
+    x.style.height=(6+Math.random()*10)+"px"; x.style.width=(Math.random()<.3?"3":"1.5")+"px";
+    b.appendChild(x);}});
+
+function counts(code){
+  const l=ACH[code]||[]; return [l.filter(a=>a.u).length, l.length];
+}
+function arow(a){
+  const r=document.createElement("div");
+  const pct=a.m>1?Math.round((a.p||0)/a.m*100):0;
+  r.className="arow "+(a.u?"done":(a.p>0?"prog":""));
+  r.innerHTML=`<div class="at"><div class="n">${a.t}</div>
+      ${a.u?'<div class="chip cleared">✓ CLEARED</div>':(a.m>1?`<div class="chip pct">${pct}%</div>`:"")}</div>
+    <div class="d">${a.d}</div>
+    ${!a.u&&a.m>1?`<div class="prow"><div class="pbar"><i style="width:${pct}%"></i></div>
+      <div class="pnum">${fmt(a.p||0)} / ${fmt(a.m)}</div></div>`:""}`;
+  return r;
+}
+function wire(id, buildCats){
+  const root=document.getElementById(id);
+  let cat="GENERAL", filter="ALL";
+  const list=root.querySelector(".alist"), title=root.querySelector(".ctitle");
+  function render(){
+    title.textContent=CHARS.find(c=>c.code===cat).n;
+    list.innerHTML="";
+    let l=(ACH[cat]||[]).slice();
+    if(filter==="COMPLETE")l=l.filter(a=>a.u);
+    if(filter==="INCOMPLETE")l=l.filter(a=>!a.u);
+    l.sort((a,b)=> (b.u-a.u) || ((b.p||0)/(b.m||1) - (a.p||0)/(a.m||1)));
+    l.forEach(a=>list.appendChild(arow(a)));
+    buildCats(root, cat, code=>{cat=code; render();});
+  }
+  root.querySelectorAll(".seg .opt").forEach(o=>o.addEventListener("click",()=>{
+    root.querySelectorAll(".seg .opt").forEach(x=>x.classList.remove("sel"));
+    o.classList.add("sel"); filter=o.dataset.f; render();}));
+  render();
+}
+
+/* A rail */
+wire("vA",(root,cat,onPick)=>{
+  const rail=root.querySelector(".rail"); rail.innerHTML="";
+  CHARS.forEach(c=>{
+    const [u,t]=counts(c.code);
+    const b=document.createElement("div");
+    b.className="rb"+(c.code===cat?" sel":"")+(c.locked?" locked":"");
+    b.innerHTML=`<div class="pic">${c.img===null?"♕":`<img src="${img(c.code)}">`}</div>
+      <div class="n">${c.n}</div><div class="cnt${u===t&&t>0?" full":""}">${u}/${t}</div>`;
+    b.addEventListener("click",()=>onPick(c.code));
+    rail.appendChild(b);
+  });
+});
+
+/* B chips */
+wire("vB",(root,cat,onPick)=>{
+  const bar=root.querySelector(".chips"); bar.innerHTML="";
+  CHARS.forEach(c=>{
+    const [u,t]=counts(c.code);
+    const b=document.createElement("div");
+    b.className="chip2"+(c.code===cat?" sel":"")+(c.locked?" locked":"");
+    b.innerHTML=`<div class="cnt${u===t&&t>0?" full":""}">${u}/${t}</div>
+      <div class="pic">${c.img===null?"♕":`<img src="${img(c.code)}">`}</div>
+      <div class="nm">${c.n}</div>`;
+    b.addEventListener("click",()=>onPick(c.code));
+    bar.appendChild(b);
+  });
+});
+</script>
+</body>
+</html>

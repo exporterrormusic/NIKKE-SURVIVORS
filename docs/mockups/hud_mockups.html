@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SOV In-Game HUD — Round 1</title>
+<style>
+  :root{
+    --cyan:#35C5F2; --cyan-deep:#1F8FE0; --yellow:#FFD23F; --red:#E8392E;
+    --green:#4ADE80; --muted:#97A0AC;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#070a0e; color:#F0F4F8;
+    font-family:"Pretendard","Segoe UI",system-ui,sans-serif; padding:40px;}
+  h1{font-family:"Arial Narrow",sans-serif; font-size:32px; font-style:italic;
+    text-transform:uppercase; margin-bottom:4px;}
+  h2{font-family:"Arial Narrow",sans-serif; font-size:24px; font-style:italic;
+    text-transform:uppercase; margin:46px 0 4px;}
+  .sub{color:var(--muted); text-transform:uppercase; letter-spacing:.25em; font-size:12px;
+    margin-bottom:18px;}
+  .note{color:var(--muted); font-size:13px; line-height:1.6; max-width:1280px; margin-bottom:8px;}
+  .note b{color:#dfe6ee;}
+
+  .stage{position:relative; width:1280px; height:720px; overflow:hidden;
+    background:#0E1116; border:1px solid #2a3340; margin-bottom:10px;}
+  .game{position:absolute; inset:0;}
+  .game img{width:100%; height:100%; object-fit:cover; filter:brightness(.9);}
+
+  .bar{position:relative; height:14px; background:rgba(10,13,18,.75); overflow:hidden;}
+  .bar i{position:absolute; left:0; top:0; bottom:0;}
+  .bar.hp i{width:78%; background:var(--green);}
+  .bar.burst i{width:45%; background:var(--yellow);}
+  .bar.stam i{width:92%; background:var(--cyan);}
+  .bar .v{position:absolute; right:6px; top:50%; transform:translateY(-50%);
+    font-size:9px; font-weight:800; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.8);}
+
+  /* ============ V1: GLASS TACTICAL — chamfered glass panels, accent edges ============ */
+  .v1 .cluster{position:absolute; left:20px; top:20px; width:300px; padding:10px 12px 12px;
+    background:rgba(10,13,18,.66); border:1px solid rgba(255,255,255,.14);
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%);
+    display:flex; gap:11px;}
+  .v1 .cluster .por{width:64px; height:64px; flex:none; overflow:hidden;
+    border:1px solid rgba(255,255,255,.3); position:relative;}
+  .v1 .cluster .por img{width:100%; height:100%; object-fit:cover; object-position:top;}
+  .v1 .cluster .por .lv{position:absolute; left:0; bottom:0; right:0; text-align:center;
+    background:rgba(10,13,18,.85); font-size:8.5px; font-weight:800; letter-spacing:.1em;
+    color:var(--yellow); padding:1px 0;}
+  .v1 .cluster .bars{flex:1; display:flex; flex-direction:column; gap:5px; justify-content:center;}
+  .v1 .brow{display:flex; align-items:center; gap:7px;}
+  .v1 .brow .k{width:14px; font-size:8px; font-weight:800; opacity:.6; letter-spacing:.05em;}
+  .v1 .brow .bar{flex:1;}
+  .v1 .xp{position:absolute; left:20px; top:118px; width:300px; display:flex; align-items:center; gap:8px;}
+  .v1 .xp .lvchip{padding:2px 10px; background:var(--yellow); color:#1a1d22; font-weight:800;
+    font-size:10px; font-style:italic; transform:skewX(-6deg);}
+  .v1 .xp .bar{flex:1; height:8px;}
+  .v1 .xp .bar i{width:34%; background:var(--cyan-deep);}
+
+  .v1 .wave{position:absolute; left:50%; top:18px; transform:translateX(-50%); width:340px; text-align:center;}
+  .v1 .wave .t{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:24px;
+    letter-spacing:.06em; text-shadow:0 2px 8px rgba(0,0,0,.8);}
+  .v1 .wave .timer{position:relative; margin-top:4px; height:18px;
+    background:rgba(10,13,18,.72); border:1px solid rgba(255,255,255,.18);
+    clip-path:polygon(8px 0,calc(100% - 8px) 0,100% 100%,0 100%);}
+  .v1 .wave .timer i{position:absolute; left:0; top:0; bottom:0; width:22%; background:rgba(53,197,242,.45);}
+  .v1 .wave .timer .tm{position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-weight:800; letter-spacing:.12em;}
+
+  .v1 .map{position:absolute; right:20px; top:20px; width:150px; height:150px;
+    background:rgba(10,13,18,.6); border:1px solid rgba(255,255,255,.2);
+    clip-path:polygon(0 0,100% 0,100% 100%,14px 100%,0 calc(100% - 14px));}
+  .v1 .map .n{position:absolute; top:4px; left:50%; transform:translateX(-50%);
+    font-size:9px; font-weight:800; color:var(--cyan);}
+  .v1 .map .dot{position:absolute; left:50%; top:50%; width:6px; height:6px; background:var(--cyan);
+    transform:translate(-50%,-50%) rotate(45deg);}
+
+  .v1 .score{position:absolute; right:20px; bottom:84px; text-align:right;}
+  .v1 .score .k{font-size:9px; letter-spacing:.3em; font-weight:800; opacity:.6;}
+  .v1 .score .v{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:34px;
+    text-shadow:0 2px 8px rgba(0,0,0,.8);}
+  .v1 .cores{position:absolute; right:20px; bottom:20px; display:flex; align-items:center; gap:10px;
+    padding:8px 14px; background:rgba(10,13,18,.66); border:1px solid rgba(232,57,46,.5);
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%);}
+  .v1 .cores .ic{width:14px; height:14px; background:radial-gradient(circle at 35% 35%, #ff8a7a, #b81f15);
+    border-radius:50%;}
+  .v1 .cores .k{font-size:8px; letter-spacing:.22em; font-weight:800; color:#ff8c84; display:block;}
+  .v1 .cores .n{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:20px; color:#ffb4ae;}
+
+  .v1 .music{position:absolute; left:20px; bottom:20px; width:250px; padding:8px 12px;
+    background:rgba(10,13,18,.66); border:1px solid rgba(255,255,255,.14);}
+  .v1 .music .t{font-size:10px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .v1 .music .row{display:flex; gap:14px; margin-top:5px; font-size:10px; opacity:.7; font-weight:800;}
+
+  /* ============ V2: FRAMELESS — no boxes, floating bars + text with shadows ============ */
+  .v2 .cluster{position:absolute; left:24px; top:22px; width:290px; display:flex; gap:12px;}
+  .v2 .cluster .por{width:58px; height:58px; flex:none; overflow:hidden; position:relative;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%);}
+  .v2 .cluster .por img{width:100%; height:100%; object-fit:cover; object-position:top;
+    filter:drop-shadow(0 2px 6px rgba(0,0,0,.8));}
+  .v2 .cluster .bars{flex:1; display:flex; flex-direction:column; gap:6px; justify-content:center;}
+  .v2 .bar{height:12px; background:rgba(10,13,18,.55); clip-path:polygon(0 0,100% 0,calc(100% - 6px) 100%,0 100%);}
+  .v2 .bar.burst{height:8px; width:82%;}
+  .v2 .bar.stam{height:8px; width:64%;}
+  .v2 .lvline{position:absolute; left:24px; top:96px; display:flex; align-items:center; gap:8px; width:290px;}
+  .v2 .lvline .lv{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:18px;
+    color:var(--yellow); text-shadow:0 2px 6px rgba(0,0,0,.9);}
+  .v2 .lvline .bar{flex:1; height:5px;}
+  .v2 .lvline .bar i{width:34%; background:var(--cyan);}
+
+  .v2 .wave{position:absolute; left:50%; top:16px; transform:translateX(-50%); text-align:center;}
+  .v2 .wave .t{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:30px;
+    letter-spacing:.04em; text-shadow:0 2px 10px rgba(0,0,0,.85);}
+  .v2 .wave .tm{font-size:13px; font-weight:800; letter-spacing:.24em; opacity:.85;
+    text-shadow:0 2px 6px rgba(0,0,0,.9); margin-top:1px;}
+  .v2 .wave .gauge{width:280px; height:4px; background:rgba(255,255,255,.18); margin-top:6px;}
+  .v2 .wave .gauge i{display:block; height:100%; width:22%; background:var(--cyan);}
+
+  .v2 .map{position:absolute; right:24px; top:22px; width:140px; height:140px;
+    background:rgba(10,13,18,.42); outline:1px solid rgba(255,255,255,.22); outline-offset:-1px;}
+  .v2 .map::before{content:""; position:absolute; left:-1px; top:-1px; width:18px; height:18px;
+    border-left:3px solid var(--yellow); border-top:3px solid var(--yellow);}
+  .v2 .map::after{content:""; position:absolute; right:-1px; bottom:-1px; width:18px; height:18px;
+    border-right:3px solid var(--yellow); border-bottom:3px solid var(--yellow);}
+  .v2 .map .dot{position:absolute; left:50%; top:50%; width:6px; height:6px; background:var(--cyan);
+    transform:translate(-50%,-50%) rotate(45deg);}
+
+  .v2 .score{position:absolute; right:24px; bottom:78px; text-align:right;}
+  .v2 .score .k{font-size:10px; letter-spacing:.34em; font-weight:800; opacity:.7;
+    text-shadow:0 1px 4px rgba(0,0,0,.9);}
+  .v2 .score .v{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:40px;
+    text-shadow:0 2px 10px rgba(0,0,0,.9);}
+  .v2 .cores{position:absolute; right:24px; bottom:24px; display:flex; align-items:baseline; gap:8px;}
+  .v2 .cores .ic{width:13px; height:13px; background:radial-gradient(circle at 35% 35%, #ff8a7a, #b81f15);
+    border-radius:50%; align-self:center;}
+  .v2 .cores .n{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:26px;
+    color:#ffb4ae; text-shadow:0 2px 8px rgba(0,0,0,.9);}
+
+  .v2 .music{position:absolute; left:24px; bottom:24px; font-size:10px; opacity:.85;
+    text-shadow:0 1px 4px rgba(0,0,0,.9);}
+  .v2 .music .row{display:flex; gap:12px; margin-top:3px; font-weight:800; opacity:.75;}
+
+  /* ============ V3: BRACKET FRAME — NIKKE target-box corner brackets ============ */
+  .v3 .panel{background:rgba(10,13,18,.5); position:absolute;}
+  .v3 .panel::before,.v3 .panel::after{content:""; position:absolute; width:16px; height:16px;}
+  .v3 .panel::before{left:0; top:0; border-left:2px solid rgba(255,255,255,.75); border-top:2px solid rgba(255,255,255,.75);}
+  .v3 .panel::after{right:0; bottom:0; border-right:2px solid rgba(255,255,255,.75); border-bottom:2px solid rgba(255,255,255,.75);}
+  .v3 .cluster{left:20px; top:20px; width:300px; padding:11px 13px; display:flex; gap:11px;}
+  .v3 .cluster .por{width:62px; height:62px; flex:none; overflow:hidden; position:relative;
+    border:1px solid rgba(255,255,255,.35);}
+  .v3 .cluster .por img{width:100%; height:100%; object-fit:cover; object-position:top;}
+  .v3 .cluster .por .lv{position:absolute; left:0; bottom:0; right:0; text-align:center;
+    background:rgba(10,13,18,.85); font-size:8.5px; font-weight:800; color:var(--yellow); padding:1px 0;}
+  .v3 .cluster .bars{flex:1; display:flex; flex-direction:column; gap:5px; justify-content:center;}
+  .v3 .brow{display:flex; align-items:center; gap:7px;}
+  .v3 .brow .k{width:30px; font-size:7.5px; font-weight:800; opacity:.6; letter-spacing:.14em;}
+  .v3 .brow .bar{flex:1; height:12px;}
+  .v3 .xpline{position:absolute; left:20px; top:122px; width:300px; display:flex; align-items:center; gap:8px;}
+  .v3 .xpline .lv{padding:2px 9px; border:1px solid var(--yellow); color:var(--yellow);
+    font-size:9px; font-weight:800; letter-spacing:.08em;}
+  .v3 .xpline .bar{flex:1; height:7px;}
+  .v3 .xpline .bar i{width:34%; background:var(--cyan-deep);}
+
+  .v3 .wave{position:absolute; left:50%; top:18px; transform:translateX(-50%) skewX(-6deg);
+    padding:6px 28px; background:rgba(10,13,18,.7); border:1px solid rgba(255,255,255,.2); text-align:center;}
+  .v3 .wave > div{transform:skewX(6deg);}
+  .v3 .wave .t{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:21px;}
+  .v3 .wave .tm{font-size:10.5px; font-weight:800; letter-spacing:.22em; color:var(--cyan);}
+
+  .v3 .map{position:absolute; right:20px; top:20px; width:148px; height:148px;
+    background:rgba(10,13,18,.5);}
+  .v3 .map::before{content:""; position:absolute; left:0; top:0; width:18px; height:18px;
+    border-left:2px solid rgba(255,255,255,.75); border-top:2px solid rgba(255,255,255,.75);}
+  .v3 .map::after{content:""; position:absolute; right:0; bottom:0; width:18px; height:18px;
+    border-right:2px solid rgba(255,255,255,.75); border-bottom:2px solid rgba(255,255,255,.75);}
+  .v3 .map .dot{position:absolute; left:50%; top:50%; width:6px; height:6px; background:var(--cyan);
+    transform:translate(-50%,-50%) rotate(45deg);}
+
+  .v3 .score{position:absolute; right:20px; bottom:86px; text-align:right;}
+  .v3 .score .k{font-size:9px; letter-spacing:.3em; font-weight:800; opacity:.65;}
+  .v3 .score .v{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:36px;
+    text-shadow:0 2px 8px rgba(0,0,0,.85);}
+  .v3 .cores{position:absolute; right:20px; bottom:26px; padding:8px 14px; display:flex;
+    align-items:center; gap:10px;}
+  .v3 .cores.panel::before{border-color:rgba(232,57,46,.8);}
+  .v3 .cores.panel::after{border-color:rgba(232,57,46,.8);}
+  .v3 .cores .ic{width:14px; height:14px; background:radial-gradient(circle at 35% 35%, #ff8a7a, #b81f15); border-radius:50%;}
+  .v3 .cores .n{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:20px; color:#ffb4ae;}
+
+  .v3 .music{position:absolute; left:20px; bottom:24px; width:240px; padding:8px 12px;}
+  .v3 .music .t{font-size:10px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .v3 .music .row{display:flex; gap:14px; margin-top:4px; font-size:10px; opacity:.7; font-weight:800;}
+
+  /* boss bar sample (shared, shown on V1) */
+  .bossbar{position:absolute; left:50%; bottom:56px; transform:translateX(-50%); width:520px;}
+  .bossbar .nm{display:flex; justify-content:space-between; font-size:10px; font-weight:800;
+    letter-spacing:.2em; color:#ff8c84; margin-bottom:3px; text-shadow:0 1px 4px rgba(0,0,0,.9);}
+  .bossbar .bar{height:14px; border:1px solid rgba(232,57,46,.6);
+    clip-path:polygon(6px 0,calc(100% - 6px) 0,100% 100%,0 100%);}
+  .bossbar .bar i{width:62%; background:linear-gradient(180deg,#f0584d,#b81f15);}
+</style>
+</head>
+<body>
+
+<h1>In-Game HUD — Round 1</h1>
+<div class="sub">3 style directions · same element positions as current HUD (HoloCure-proven) · all values live</div>
+<div class="note">
+  Elements covered: player cluster (portrait + HP / BURST / STAMINA), LV + XP, wave + timer, minimap,
+  score + Pristine Core counter, music player, boss health bar (shown on V1 only).
+  Mockup is 1280×720 — build scales ×1.5. <b>HUD must stay readable during combat — less chrome than the menus.</b>
+</div>
+
+<!-- ==================== V1 ==================== -->
+<h2>V1 — Glass Tactical</h2>
+<div class="sub">chamfered dark glass tiles · accent edges · the pause-menu vocabulary at HUD scale</div>
+<div class="stage v1">
+  <div class="game"><img src="../../assets/backgrounds/forest.jpg"></div>
+  <div class="cluster">
+    <div class="por"><img src="../../assets/characters/snow-white/portrait-sq.png"><div class="lv">LV 12</div></div>
+    <div class="bars">
+      <div class="brow"><span class="k">HP</span><div class="bar hp"><i></i><span class="v">78 / 100</span></div></div>
+      <div class="brow"><span class="k">BR</span><div class="bar burst"><i></i><span class="v">45%</span></div></div>
+      <div class="brow"><span class="k">ST</span><div class="bar stam"><i></i></div></div>
+    </div>
+  </div>
+  <div class="xp"><span class="lvchip">LV 12</span><div class="bar"><i></i></div></div>
+  <div class="wave">
+    <div class="t">WAVE 27</div>
+    <div class="timer"><i></i><div class="tm">18:42</div></div>
+  </div>
+  <div class="map"><div class="n">N</div><div class="dot"></div></div>
+  <div class="score"><div class="k">SCORE</div><div class="v">1,284,650</div></div>
+  <div class="cores"><div class="ic"></div><div><span class="k">PRISTINE CORE</span><span class="n">43</span></div></div>
+  <div class="music">
+    <div class="t">♪ UNYIELDING (Snow White's Theme)</div>
+    <div class="row"><span>⏮ PREV</span><span>⏸</span><span>NEXT ⏭</span></div>
+  </div>
+  <div class="bossbar">
+    <div class="nm"><span>☠ RAPTURE QUEEN N-01</span><span>62%</span></div>
+    <div class="bar"><i></i></div>
+  </div>
+</div>
+
+<!-- ==================== V2 ==================== -->
+<h2>V2 — Frameless Minimal</h2>
+<div class="sub">no boxes — floating skewed bars + shadowed text · maximum gameplay visibility</div>
+<div class="stage v2">
+  <div class="game"><img src="../../assets/backgrounds/forest.jpg"></div>
+  <div class="cluster">
+    <div class="por"><img src="../../assets/characters/snow-white/portrait-sq.png"></div>
+    <div class="bars">
+      <div class="bar hp"><i></i><span class="v">78 / 100</span></div>
+      <div class="bar burst"><i></i></div>
+      <div class="bar stam"><i></i></div>
+    </div>
+  </div>
+  <div class="lvline"><span class="lv">LV 12</span><div class="bar"><i></i></div></div>
+  <div class="wave">
+    <div class="t">WAVE 27</div>
+    <div class="tm">18:42</div>
+    <div class="gauge"><i></i></div>
+  </div>
+  <div class="map"><div class="dot"></div></div>
+  <div class="score"><div class="k">SCORE</div><div class="v">1,284,650</div></div>
+  <div class="cores"><div class="ic"></div><span class="n">43</span></div>
+  <div class="music">
+    <div>♪ UNYIELDING (Snow White's Theme)</div>
+    <div class="row"><span>⏮</span><span>⏸</span><span>⏭</span></div>
+  </div>
+</div>
+
+<!-- ==================== V3 ==================== -->
+<h2>V3 — Bracket Frames</h2>
+<div class="sub">NIKKE target-box corner brackets on translucent panels · skewed wave banner</div>
+<div class="stage v3">
+  <div class="game"><img src="../../assets/backgrounds/forest.jpg"></div>
+  <div class="panel cluster">
+    <div class="por"><img src="../../assets/characters/snow-white/portrait-sq.png"><div class="lv">LV 12</div></div>
+    <div class="bars">
+      <div class="brow"><span class="k">HP</span><div class="bar hp"><i></i><span class="v">78 / 100</span></div></div>
+      <div class="brow"><span class="k">BURST</span><div class="bar burst"><i></i><span class="v">45%</span></div></div>
+      <div class="brow"><span class="k">STAM</span><div class="bar stam"><i></i></div></div>
+    </div>
+  </div>
+  <div class="xpline"><span class="lv">LV 12</span><div class="bar"><i></i></div></div>
+  <div class="wave"><div><div class="t">WAVE 27</div><div class="tm">18:42</div></div></div>
+  <div class="map"><div class="dot"></div></div>
+  <div class="score"><div class="k">SCORE</div><div class="v">1,284,650</div></div>
+  <div class="panel cores"><div class="ic"></div><span class="n">43</span></div>
+  <div class="panel music">
+    <div class="t">♪ UNYIELDING (Snow White's Theme)</div>
+    <div class="row"><span>⏮ PREV</span><span>⏸</span><span>NEXT ⏭</span></div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -127,11 +127,10 @@ func _handle_attacks() -> void:
 			else:
 				attack_timer = _player.attack_cooldown
 
-	# Special attack (thrust)
-	if Input.is_action_just_pressed("thrust") and attack_timer <= 0 and _player.stamina >= _player.attack_stamina_cost:
+	# Special attack (thrust) - independent of attack cooldown so it works while firing
+	if Input.is_action_just_pressed("thrust") and _player.stamina >= _player.attack_stamina_cost:
 		if controller.use_special(aim_direction):
 			_player.stamina -= _player.attack_stamina_cost
-			attack_timer = _player.attack_cooldown
 
 
 func _input(event: InputEvent) -> void:

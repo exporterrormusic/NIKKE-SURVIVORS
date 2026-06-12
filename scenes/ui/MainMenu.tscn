@@ -1,18 +1,11 @@
-[gd_scene load_steps=6 format=3 uid="uid://c450rthss5kki"]
+[gd_scene load_steps=7 format=3 uid="uid://c450rthss5kki"]
 
-[ext_resource type="Script" uid="uid://c7wf2ffqix7uk" path="res://scripts/ui/MainMenu.gd" id="1"]
-[ext_resource type="Script" uid="uid://c1v7n25tr3lec" path="res://scripts/ui/components/VenetianBlindsBackground.gd" id="2"]
-[ext_resource type="Script" uid="uid://uv7r3ogedfth" path="res://scripts/ui/components/MainMenuOptionButton.gd" id="3"]
-[ext_resource type="Script" uid="uid://mi2gc0lgx5kb" path="res://scripts/ui/components/MainMenuIcon.gd" id="4"]
-
-[sub_resource type="StyleBoxFlat" id="2"]
-bg_color = Color(0.04, 0.055, 0.08, 0.95)
-border_width_top = 3
-border_width_bottom = 3
-border_color = Color(0.75, 0.75, 0.8, 0.8)
-shadow_color = Color(0, 0, 0, 0.35)
-shadow_size = 3
-shadow_offset = Vector2(2, 2)
+[ext_resource type="Script" path="res://scripts/ui/MainMenu.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/ui/components/VenetianBlindsBackground.gd" id="2"]
+[ext_resource type="Script" path="res://scripts/ui/components/NikkeCardButton.gd" id="3"]
+[ext_resource type="Script" path="res://scripts/ui/components/NikkeGreebles.gd" id="4"]
+[ext_resource type="Script" path="res://scripts/ui/components/CorePillButton.gd" id="5"]
+[ext_resource type="Texture2D" path="res://assets/ui/logo.png" id="6"]
 
 [node name="MainMenu" type="Control"]
 process_mode = 3
@@ -44,36 +37,32 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = 1.0
-offset_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 
-[node name="MenuBar" type="Panel" parent="UiRoot"]
+[node name="GameLogo" type="TextureRect" parent="UiRoot"]
 unique_name_in_owner = true
-layout_mode = 1
-anchors_preset = -1
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_top = -279.0
-offset_bottom = -87.0
-grow_horizontal = 2
-theme_override_styles/panel = SubResource("2")
+layout_mode = 0
+offset_left = 72.0
+offset_top = 45.0
+offset_right = 642.0
+offset_bottom = 235.0
+mouse_filter = 2
+texture = ExtResource("6")
+expand_mode = 1
+stretch_mode = 5
 
-[node name="MenuMargin" type="Control" parent="UiRoot/MenuBar"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 24.0
-offset_top = 16.0
-offset_right = -24.0
-offset_bottom = -16.0
-grow_horizontal = 2
-grow_vertical = 2
+[node name="Greebles" type="Control" parent="UiRoot"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 72.0
+offset_top = 252.0
+offset_right = 642.0
+offset_bottom = 280.0
+script = ExtResource("4")
 
-[node name="ButtonRow" type="HBoxContainer" parent="UiRoot/MenuBar/MenuMargin"]
+[node name="LeftColumn" type="Control" parent="UiRoot"]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -81,316 +70,130 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/separation = 12
-alignment = 1
+mouse_filter = 2
 
-[node name="LEADERBOARDS" type="Button" parent="UiRoot/MenuBar/MenuMargin/ButtonRow"]
-custom_minimum_size = Vector2(130, 130)
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
+[node name="ShopButton" type="Button" parent="UiRoot/LeftColumn"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 72.0
+offset_top = 420.0
+offset_right = 424.0
+offset_bottom = 516.0
 script = ExtResource("3")
-option_id = "LEADERBOARDS"
-icon_type = "leaderboards"
-label_text = "LEADERBOARDS"
-accent_color = Color(1, 0.714, 0.15, 1)
-
-[node name="Content" type="VBoxContainer" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/LEADERBOARDS"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 6.0
-offset_top = 6.0
-offset_right = -6.0
-offset_bottom = -6.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-theme_override_constants/separation = 4
-alignment = 1
-
-[node name="Icon" type="Control" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/LEADERBOARDS/Content"]
-custom_minimum_size = Vector2(0, 32)
-layout_mode = 2
-size_flags_vertical = 3
-mouse_filter = 2
-script = ExtResource("4")
-icon_type = "leaderboards"
-base_color = Color(1, 0.85, 0.4, 1)
-
-[node name="Label" type="Label" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/LEADERBOARDS/Content"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 11
-text = "LEADERBOARDS"
-horizontal_alignment = 1
-
-[node name="ACHIEVEMENTS" type="Button" parent="UiRoot/MenuBar/MenuMargin/ButtonRow"]
-custom_minimum_size = Vector2(130, 130)
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-theme_override_colors/icon_normal_color = Color(1, 1, 1, 1)
-script = ExtResource("3")
-option_id = "ACHIEVEMENTS"
-icon_type = "achievements"
-label_text = "ACHIEVEMENTS"
-accent_color = Color(0.94, 0.96, 0.97, 1)
-
-[node name="Content" type="VBoxContainer" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/ACHIEVEMENTS"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 6.0
-offset_top = 6.0
-offset_right = -6.0
-offset_bottom = -6.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-theme_override_constants/separation = 4
-alignment = 1
-
-[node name="Icon" type="Control" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/ACHIEVEMENTS/Content"]
-custom_minimum_size = Vector2(0, 32)
-layout_mode = 2
-size_flags_vertical = 3
-mouse_filter = 2
-script = ExtResource("4")
-icon_type = "achievements"
-
-[node name="Label" type="Label" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/ACHIEVEMENTS/Content"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 11
-text = "ACHIEVEMENTS"
-horizontal_alignment = 1
-
-[node name="SHOP" type="Button" parent="UiRoot/MenuBar/MenuMargin/ButtonRow"]
-custom_minimum_size = Vector2(130, 130)
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-script = ExtResource("3")
-option_id = "SHOP"
+card_style = "blue"
+title_text = "SHOP"
+subtitle_text = "PRISTINE CORE EXCHANGE"
 icon_type = "shop"
-label_text = "SHOP"
-accent_color = Color(0.29, 0.87, 0.5, 1)
+title_size = 28
+icon_size = 32
 
-[node name="Content" type="VBoxContainer" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/SHOP"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 6.0
-offset_top = 6.0
-offset_right = -6.0
-offset_bottom = -6.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-theme_override_constants/separation = 4
-alignment = 1
-
-[node name="Icon" type="Control" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/SHOP/Content"]
-custom_minimum_size = Vector2(0, 32)
-layout_mode = 2
-size_flags_vertical = 3
-mouse_filter = 2
-script = ExtResource("4")
-icon_type = "shop"
-base_color = Color(0.29, 0.87, 0.5, 1)
-
-[node name="Label" type="Label" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/SHOP/Content"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 12
-text = "SHOP"
-horizontal_alignment = 1
-
-[node name="PLAY" type="Button" parent="UiRoot/MenuBar/MenuMargin/ButtonRow"]
-custom_minimum_size = Vector2(150, 130)
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-script = ExtResource("3")
-accent_color = Color(0.376471, 0.376471, 0.376471, 1)
-play_option = true
-
-[node name="Content" type="VBoxContainer" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/PLAY"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 8.0
-offset_top = 6.0
-offset_right = -8.0
-offset_bottom = -6.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-theme_override_constants/separation = 4
-alignment = 1
-
-[node name="Icon" type="Control" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/PLAY/Content"]
-custom_minimum_size = Vector2(0, 32)
-layout_mode = 2
-size_flags_vertical = 3
-mouse_filter = 2
-script = ExtResource("4")
-base_color = Color(0.4, 0.4, 0.4, 1)
-
-[node name="Label" type="Label" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/PLAY/Content"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 16
-text = "PLAY"
-horizontal_alignment = 1
-
-[node name="THE OUTPOST" type="Button" parent="UiRoot/MenuBar/MenuMargin/ButtonRow"]
-custom_minimum_size = Vector2(130, 130)
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-script = ExtResource("3")
-option_id = "THE OUTPOST"
-icon_type = "outpost"
-label_text = "THE OUTPOST"
-accent_color = Color(0.5, 0.75, 1, 1)
-
-[node name="Content" type="VBoxContainer" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/THE OUTPOST"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 6.0
-offset_top = 6.0
-offset_right = -6.0
-offset_bottom = -6.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-theme_override_constants/separation = 4
-alignment = 1
-
-[node name="Icon" type="Control" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/THE OUTPOST/Content"]
-custom_minimum_size = Vector2(0, 32)
-layout_mode = 2
-size_flags_vertical = 3
-mouse_filter = 2
-script = ExtResource("4")
-icon_type = "outpost"
-base_color = Color(0.5, 0.75, 1, 1)
-
-[node name="Label" type="Label" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/THE OUTPOST/Content"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 11
-text = "THE OUTPOST"
-horizontal_alignment = 1
-
-[node name="SETTINGS" type="Button" parent="UiRoot/MenuBar/MenuMargin/ButtonRow"]
-custom_minimum_size = Vector2(130, 130)
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-script = ExtResource("3")
-option_id = "SETTINGS"
-icon_type = "settings"
-label_text = "SETTINGS"
-accent_color = Color(0.94, 0.96, 0.97, 1)
-
-[node name="Content" type="VBoxContainer" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/SETTINGS"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 8.0
-offset_top = 6.0
-offset_right = -8.0
-offset_bottom = -6.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-theme_override_constants/separation = 4
-alignment = 1
-
-[node name="Icon" type="Control" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/SETTINGS/Content"]
-custom_minimum_size = Vector2(0, 32)
-layout_mode = 2
-size_flags_vertical = 3
-mouse_filter = 2
-script = ExtResource("4")
-icon_type = "settings"
-
-[node name="Label" type="Label" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/SETTINGS/Content"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 12
-text = "SETTINGS"
-horizontal_alignment = 1
-
-[node name="QUIT" type="Button" parent="UiRoot/MenuBar/MenuMargin/ButtonRow"]
-custom_minimum_size = Vector2(130, 130)
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-script = ExtResource("3")
-option_id = "QUIT"
-icon_type = "quit"
-label_text = "QUIT"
-accent_color = Color(1, 0.34, 0.34, 1)
-danger_option = true
-
-[node name="Content" type="VBoxContainer" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/QUIT"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 8.0
-offset_top = 6.0
-offset_right = -8.0
-offset_bottom = -6.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-theme_override_constants/separation = 4
-alignment = 1
-
-[node name="Icon" type="Control" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/QUIT/Content"]
-custom_minimum_size = Vector2(0, 32)
-layout_mode = 2
-size_flags_vertical = 3
-mouse_filter = 2
-script = ExtResource("4")
-icon_type = "quit"
-base_color = Color(1, 0.34, 0.34, 1)
-selected_color = Color(1, 0.5, 0.5, 1)
-
-[node name="Label" type="Label" parent="UiRoot/MenuBar/MenuMargin/ButtonRow/QUIT/Content"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 12
-text = "QUIT"
-horizontal_alignment = 1
-
-[node name="VersionLabel" type="Label" parent="UiRoot"]
+[node name="LeaderboardsButton" type="Button" parent="UiRoot/LeftColumn"]
 unique_name_in_owner = true
-modulate = Color(0.627451, 0.627451, 0.709804, 1)
+layout_mode = 0
+offset_left = 90.0
+offset_top = 546.0
+offset_right = 442.0
+offset_bottom = 642.0
+script = ExtResource("3")
+card_style = "dark"
+title_text = "LEADERBOARDS"
+icon_type = "leaderboards"
+title_size = 26
+icon_size = 30
+
+[node name="AchievementsButton" type="Button" parent="UiRoot/LeftColumn"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 72.0
+offset_top = 672.0
+offset_right = 424.0
+offset_bottom = 768.0
+script = ExtResource("3")
+card_style = "dark"
+title_text = "ACHIEVEMENTS"
+icon_type = "achievements"
+title_size = 26
+icon_size = 30
+
+[node name="SettingsButton" type="Button" parent="UiRoot/LeftColumn"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 90.0
+offset_top = 798.0
+offset_right = 442.0
+offset_bottom = 894.0
+script = ExtResource("3")
+card_style = "dark"
+title_text = "SETTINGS"
+icon_type = "settings"
+title_size = 26
+icon_size = 30
+
+[node name="PlayButton" type="Button" parent="UiRoot"]
+unique_name_in_owner = true
 layout_mode = 1
-anchors_preset = 3
+anchors_preset = 1
 anchor_left = 1.0
-anchor_top = 1.0
 anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = -67.0
-offset_top = -38.0
-offset_right = -3.0
-offset_bottom = -9.0
+offset_left = -552.0
+offset_top = 480.0
+offset_right = -72.0
+offset_bottom = 630.0
 grow_horizontal = 0
-grow_vertical = 0
-theme_override_font_sizes/font_size = 20
-text = "v0.2B"
-horizontal_alignment = 1
+script = ExtResource("3")
+card_style = "white_ark"
+title_text = "PLAY"
+subtitle_text = "SELECT NIKKE & DEPLOY"
+icon_type = "play"
+title_size = 46
+icon_size = 40
 
-[node name="ComingSoonDialog" type="AcceptDialog" parent="."]
+[node name="QuitButton" type="Button" parent="UiRoot"]
 unique_name_in_owner = true
-title = "Coming Soon"
-initial_position = 1
-size = Vector2i(520, 220)
-dialog_text = "This feature isn't available yet."
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -345.0
+offset_top = 666.0
+offset_right = -90.0
+offset_bottom = 735.0
+grow_horizontal = 0
+script = ExtResource("3")
+card_style = "dark_red"
+title_text = "QUIT"
+icon_type = "quit"
+title_size = 22
+icon_size = 24
+
+[node name="TopRightStrip" type="HBoxContainer" parent="UiRoot"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -480.0
+offset_top = 30.0
+offset_right = -36.0
+offset_bottom = 80.0
+grow_horizontal = 0
+alignment = 2
+theme_override_constants/separation = 18
+
+[node name="NoticeButton" type="Button" parent="UiRoot/TopRightStrip"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(200, 50)
+layout_mode = 2
+script = ExtResource("3")
+card_style = "white_blue"
+title_text = "NOTICE"
+icon_type = "notice"
+show_dot = true
+title_size = 20
+icon_size = 20
+
+[node name="CorePill" type="Button" parent="UiRoot/TopRightStrip"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 50)
+layout_mode = 2
+script = ExtResource("5")

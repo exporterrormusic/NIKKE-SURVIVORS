@@ -1,33 +1,9 @@
-[gd_scene load_steps=7 format=3 uid="uid://bjh3ukxgt4ftl"]
+[gd_scene format=3 uid="uid://bjh3ukxgt4ftl"]
 
-[ext_resource type="Script" uid="uid://jsffv2l0bksl" path="res://scripts/ui/LeaderboardMenu.gd" id="1"]
-[ext_resource type="Script" uid="uid://c1v7n25tr3lec" path="res://scripts/ui/components/VenetianBlindsBackground.gd" id="2"]
-[ext_resource type="FontFile" path="res://resources/fonts/futura_condensed_extra_bold.tres" id="3"]
-[ext_resource type="FontFile" path="res://resources/fonts/pretendard_bold.tres" id="4"]
-
-[sub_resource type="StyleBoxFlat" id="letterbox_style"]
-bg_color = Color(0.04, 0.055, 0.08, 0.95)
-border_width_top = 3
-border_width_bottom = 3
-border_color = Color(0.75, 0.75, 0.8, 0.8)
-shadow_color = Color(0, 0, 0, 0.35)
-shadow_size = 3
-shadow_offset = Vector2(2, 2)
-
-[sub_resource type="StyleBoxFlat" id="panel_style"]
-bg_color = Color(0.04, 0.055, 0.08, 0.97)
-border_width_left = 4
-border_width_top = 4
-border_width_right = 4
-border_width_bottom = 4
-border_color = Color(0.95, 0.95, 0.98, 0.9)
-corner_radius_top_left = 12
-corner_radius_top_right = 12
-corner_radius_bottom_right = 12
-corner_radius_bottom_left = 12
-shadow_color = Color(0, 0, 0, 0.5)
-shadow_size = 6
-shadow_offset = Vector2(3, 3)
+[ext_resource type="Script" uid="uid://jsffv2l0bksl" path="res://scripts/ui/LeaderboardMenu.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/ui/components/NikkeCardButton.gd" id="2_card"]
+[ext_resource type="Script" path="res://scripts/ui/components/NikkeGreebles.gd" id="3_greebles"]
+[ext_resource type="Script" path="res://scripts/ui/components/CoverArtRect.gd" id="4_cover"]
 
 [node name="LeaderboardMenu" type="Control"]
 layout_mode = 3
@@ -36,18 +12,9 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1")
+script = ExtResource("1_script")
 
-[node name="Background" type="Control" parent="."]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-script = ExtResource("2")
-
-[node name="Overlay" type="ColorRect" parent="."]
+[node name="PageBg" type="ColorRect" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -55,120 +22,180 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0, 0, 0, 0.25)
+color = Color(0.929, 0.937, 0.949, 1)
 
-[node name="TopBar" type="Panel" parent="."]
-layout_mode = 1
-anchors_preset = -1
-anchor_right = 1.0
-offset_top = 24.0
-offset_bottom = 184.0
-grow_horizontal = 2
+[node name="HeaderTitle" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 66.0
+offset_top = 36.0
+offset_right = 1000.0
+offset_bottom = 110.0
 mouse_filter = 2
-theme_override_styles/panel = SubResource("letterbox_style")
-
-[node name="TitleLabel" type="Label" parent="TopBar"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 24.0
-offset_right = -24.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
-theme_override_colors/font_outline_color = Color(0.1, 0.1, 0.15, 1)
-theme_override_constants/outline_size = 3
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 90
 text = "LEADERBOARDS"
-horizontal_alignment = 1
-vertical_alignment = 1
 
-[node name="ContentPanel" type="Panel" parent="."]
+[node name="HeaderSub" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 69.0
+offset_top = 112.0
+offset_right = 1000.0
+offset_bottom = 140.0
+mouse_filter = 2
+text = "SERVICE RECORDS // BEST RUN PER NIKKE"
+
+[node name="HeaderBar" type="ColorRect" parent="."]
+layout_mode = 0
+offset_left = 69.0
+offset_top = 150.0
+offset_right = 150.0
+offset_bottom = 154.0
+mouse_filter = 2
+color = Color(0.208, 0.773, 0.949, 1)
+
+[node name="TopRightStrip" type="HBoxContainer" parent="."]
 layout_mode = 1
-anchors_preset = -1
+anchors_preset = 1
+anchor_left = 1.0
 anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 48.0
-offset_top = 220.0
-offset_right = -48.0
-offset_bottom = -80.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_styles/panel = SubResource("panel_style")
+offset_left = -400.0
+offset_top = 33.0
+offset_right = -36.0
+offset_bottom = 90.0
+grow_horizontal = 0
+alignment = 2
 
-[node name="ContentMargin" type="MarginContainer" parent="ContentPanel"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 16.0
-offset_top = 12.0
-offset_right = -16.0
-offset_bottom = -12.0
-grow_horizontal = 2
-grow_vertical = 2
-
-[node name="ContentVBox" type="VBoxContainer" parent="ContentPanel/ContentMargin"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-theme_override_constants/separation = 12
-
-[node name="InfoRow" type="HBoxContainer" parent="ContentPanel/ContentMargin/ContentVBox"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 12
-
-[node name="InfoSpacer" type="Control" parent="ContentPanel/ContentMargin/ContentVBox/InfoRow"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="TotalScoreLabel" type="Label" parent="ContentPanel/ContentMargin/ContentVBox/InfoRow"]
+[node name="BackButton" type="Button" parent="TopRightStrip"]
 unique_name_in_owner = true
-modulate = Color(0.784314, 0.792157, 0.878431, 1)
+custom_minimum_size = Vector2(190, 57)
 layout_mode = 2
-theme_override_fonts/font = ExtResource("4")
-theme_override_font_sizes/font_size = 24
-text = "Total Score: 0"
-horizontal_alignment = 2
-vertical_alignment = 1
+script = ExtResource("2_card")
+card_style = "white_blue"
+title_text = "← BACK"
+title_size = 21
 
-[node name="ColumnsScroll" type="ScrollContainer" parent="ContentPanel/ContentMargin/ContentVBox"]
+[node name="CardGrid" type="GridContainer" parent="."]
 unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-horizontal_scroll_mode = 0
+layout_mode = 0
+offset_left = 66.0
+offset_top = 192.0
+offset_right = 1311.0
+offset_bottom = 1020.0
+columns = 4
+theme_override_constants/h_separation = 18
+theme_override_constants/v_separation = 18
 
-[node name="ColumnsContainer" type="HBoxContainer" parent="ContentPanel/ContentMargin/ContentVBox/ColumnsScroll"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 2
-theme_override_constants/separation = 32
-
-[node name="LeftColumn" type="VBoxContainer" parent="ContentPanel/ContentMargin/ContentVBox/ColumnsScroll/ColumnsContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-
-[node name="RightColumn" type="VBoxContainer" parent="ContentPanel/ContentMargin/ContentVBox/ColumnsScroll/ColumnsContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-
-[node name="EmptyStateLabel" type="Label" parent="ContentPanel/ContentMargin/ContentVBox"]
+[node name="EmptyStateLabel" type="Label" parent="."]
 unique_name_in_owner = true
 visible = false
-modulate = Color(0.784314, 0.792157, 0.878431, 1)
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-theme_override_fonts/font = ExtResource("4")
-theme_override_font_sizes/font_size = 28
-text = "No leaderboard data available. Complete runs to populate this screen."
+layout_mode = 0
+offset_left = 66.0
+offset_top = 420.0
+offset_right = 1311.0
+offset_bottom = 500.0
+mouse_filter = 2
 horizontal_alignment = 1
-vertical_alignment = 1
+text = "NO SORTIES RECORDED YET — DEPLOY AND SURVIVE."
+
+[node name="DetailPanel" type="Panel" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -594.0
+offset_top = 192.0
+offset_right = -54.0
+offset_bottom = -90.0
+grow_horizontal = 0
+grow_vertical = 2
+
+[node name="DetailArt" type="Control" parent="DetailPanel"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = -1
+anchor_bottom = 1.0
+offset_left = 36.0
+offset_top = 36.0
+offset_right = 258.0
+offset_bottom = -36.0
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("4_cover")
+
+[node name="DetailName" type="Label" parent="DetailPanel"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 282.0
+offset_top = 36.0
+offset_right = 504.0
+offset_bottom = 96.0
+mouse_filter = 2
+text = "SNOW WHITE"
+
+[node name="DetailRank" type="Label" parent="DetailPanel"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 284.0
+offset_top = 100.0
+offset_right = 504.0
+offset_bottom = 150.0
+mouse_filter = 2
+autowrap_mode = 3
+text = "RANK 01 // BEST SORTIE"
+
+[node name="KvList" type="VBoxContainer" parent="DetailPanel"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 282.0
+offset_top = 168.0
+offset_right = 504.0
+offset_bottom = 620.0
+mouse_filter = 2
+theme_override_constants/separation = 6
+
+[node name="NoDataLabel" type="Label" parent="DetailPanel"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 0
+offset_left = 282.0
+offset_top = 300.0
+offset_right = 504.0
+offset_bottom = 380.0
+mouse_filter = 2
+autowrap_mode = 3
+horizontal_alignment = 1
+text = "NO SORTIES RECORDED YET"
+
+[node name="GfBand" type="PanelContainer" parent="DetailPanel"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = -1
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 282.0
+offset_top = -102.0
+offset_right = -36.0
+offset_bottom = -36.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 2
+
+[node name="GfLabel" type="Label" parent="DetailPanel/GfBand"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+text = "☠  GODDESS FALL RUN"
+
+[node name="Greebles" type="Control" parent="."]
+layout_mode = 0
+offset_left = 68.0
+offset_top = 1042.0
+offset_right = 520.0
+offset_bottom = 1066.0
+script = ExtResource("3_greebles")
+serial_text = "SERVICE RECORDS // ARK SYS V2.4"
+tint = Color(0.165, 0.18, 0.208, 0.3)

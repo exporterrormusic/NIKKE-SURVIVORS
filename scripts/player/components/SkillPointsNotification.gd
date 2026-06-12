@@ -63,7 +63,7 @@ static func create(parent: Node, position_offset: Vector2 = Vector2(35, 200)) ->
 	bg_style.bg_color = Color(0.02, 0.02, 0.04, 0.95)
 	bg_style.border_color = Color(1.0, 0.85, 0.2, 1.0)
 	bg_style.set_border_width_all(3)
-	bg_style.set_corner_radius_all(6)
+	bg_style.set_corner_radius_all(0)
 	bg_style.shadow_color = Color(1.0, 0.75, 0.0, 0.5)
 	bg_style.shadow_size = 5
 	bg.add_theme_stylebox_override("panel", bg_style)

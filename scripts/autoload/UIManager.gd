@@ -131,5 +131,5 @@ func create_panel_style(bg_color: Color = BG_MID, border_color: Color = Color(0.
 	style.bg_color = bg_color
 	style.border_color = border_color
 	style.set_border_width_all(3)
-	style.set_corner_radius_all(8)
+	style.set_corner_radius_all(0)
 	return style

@@ -10,12 +10,17 @@ const DEFAULT_MUSIC_VOLUME := 0.8
 const DEFAULT_SFX_VOLUME := 0.8
 const DEFAULT_RESOLUTION := Vector2i(1920, 1080)
 const DEFAULT_FULLSCREEN := false
+const DEFAULT_SCREEN_SHAKE := true
+const DEFAULT_DAMAGE_NUMBERS := true
 
 # Current settings (cached)
 var music_volume: float = DEFAULT_MUSIC_VOLUME
 var sfx_volume: float = DEFAULT_SFX_VOLUME
 var resolution: Vector2i = DEFAULT_RESOLUTION
 var fullscreen: bool = DEFAULT_FULLSCREEN
+# Gameplay readability toggles - read live by CombatJuice / FloatingDamageNumber
+var screen_shake_enabled: bool = DEFAULT_SCREEN_SHAKE
+var damage_numbers_enabled: bool = DEFAULT_DAMAGE_NUMBERS
 var nintendo_layout: bool = false # Controller A/B swap
 var key_bindings: Dictionary = {}
 var controller_bindings: Dictionary = {} # Joypad button bindings
@@ -85,6 +90,11 @@ func load_settings() -> void:
 	resolution = Vector2i(res_x, res_y)
 	fullscreen = video_data.get("fullscreen", DEFAULT_FULLSCREEN)
 	
+	# Gameplay
+	var gameplay_data = data.get("gameplay", {})
+	screen_shake_enabled = gameplay_data.get("screen_shake", DEFAULT_SCREEN_SHAKE)
+	damage_numbers_enabled = gameplay_data.get("damage_numbers", DEFAULT_DAMAGE_NUMBERS)
+
 	# Controls
 	var controls_data = data.get("controls", {})
 	nintendo_layout = controls_data.get("nintendo_layout", false)
@@ -114,6 +124,10 @@ func _perform_save() -> void:
 			"resolution_x": resolution.x,
 			"resolution_y": resolution.y,
 			"fullscreen": fullscreen
+		},
+		"gameplay": {
+			"screen_shake": screen_shake_enabled,
+			"damage_numbers": damage_numbers_enabled
 		},
 		"controls": {
 			"key_bindings": key_bindings,
@@ -296,6 +310,24 @@ func set_fullscreen(enabled: bool) -> void:
 	fullscreen = enabled
 	apply_video_settings()
 	save_settings()
+
+
+func set_screen_shake_enabled(enabled: bool) -> void:
+	screen_shake_enabled = enabled
+	save_settings()
+
+
+func is_screen_shake_enabled() -> bool:
+	return screen_shake_enabled
+
+
+func set_damage_numbers_enabled(enabled: bool) -> void:
+	damage_numbers_enabled = enabled
+	save_settings()
+
+
+func is_damage_numbers_enabled() -> bool:
+	return damage_numbers_enabled
 
 
 func set_key_binding(action: String, keycode: int) -> void:

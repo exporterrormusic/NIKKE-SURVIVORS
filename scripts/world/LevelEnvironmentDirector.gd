@@ -38,7 +38,7 @@ func initialize_stage_environment() -> Dictionary:
 	var biome: StringName
 	var time_id: StringName
 	
-	# Use GameManager.selected_biome and selected_time (set by map selector in StageSelector)
+	# Use GameManager.selected_biome and selected_time (set by the zone carousel in MissionSelect)
 	if GameManager.selected_biome != "" and GameManager.selected_time != "":
 		biome = StringName(GameManager.selected_biome)
 		time_id = StringName(GameManager.selected_time)

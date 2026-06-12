@@ -1,17 +1,14 @@
 extends Control
 
-## HoloCure-style XP Bar UI
-## Clean red fill, white border, level badge, smooth fill animations
-## Uses custom drawing to ensure border is always on top of fill
+## XP line (dark field register, approved mockup docs/mockups/hud_v2.html):
+## yellow-bordered LV chip + slim flat cyan bar. Sits under the player cluster.
 
 const UI := preload("res://scripts/ui/UITheme.gd")
 
-# Sizing
-const BAR_HEIGHT := 30.0
-const BORDER_WIDTH := 4.0
-const BADGE_WIDTH := 60.0
-const BADGE_PADDING := 8.0
-const CORNER_RADIUS := 4
+# Sizing (mockup ×1.5)
+const BAR_HEIGHT := 10.0
+const BADGE_WIDTH := 78.0
+const BADGE_PADDING := 12.0
 
 var _current_level: int = 1
 var _display_value: float = 0.0
@@ -20,98 +17,40 @@ var _max_value: float = 100.0
 var _fill_tween: Tween = null
 
 func _ready():
-	# Hide the ProgressBar child - we'll draw manually
+	# Hide the ProgressBar child - we draw manually
 	var progress_bar = get_node_or_null("ProgressBar")
 	if progress_bar:
 		progress_bar.visible = false
-	
+
 	queue_redraw()
 
 func _draw():
-	var bar_left := BADGE_WIDTH + BADGE_PADDING
-	var bar_width := size.x - bar_left
-	var bar_rect := Rect2(bar_left, 0, bar_width, size.y)
-	
-	# 1. Draw bar background
-	_draw_rounded_rect(bar_rect, UI.XP_BAR_BG, CORNER_RADIUS)
-	
-	# 2. Draw fill (inset by border width)
-	var fill_inset := BORDER_WIDTH
-	var fill_rect := Rect2(
-		bar_rect.position.x + fill_inset,
-		bar_rect.position.y + fill_inset,
-		bar_rect.size.x - fill_inset * 2,
-		bar_rect.size.y - fill_inset * 2
-	)
-	
-	var fill_percent := _display_value / _max_value if _max_value > 0 else 0.0
-	fill_percent = clampf(fill_percent, 0.0, 1.0)
-	
-	if fill_percent > 0.0:
-		var filled_width := fill_rect.size.x * fill_percent
-		var filled_rect := Rect2(fill_rect.position, Vector2(filled_width, fill_rect.size.y))
-		_draw_rounded_rect(filled_rect, UI.XP_BAR_FILL, maxi(1, CORNER_RADIUS - 2))
-	
-	# 3. Draw border ON TOP of everything
-	_draw_rounded_border(bar_rect, UI.XP_BAR_BORDER, CORNER_RADIUS, BORDER_WIDTH)
-	
-	# 4. Draw level badge
+	# LV chip: dark glass + 1px yellow border + yellow text
 	var badge_rect := Rect2(0, 0, BADGE_WIDTH, size.y)
-	_draw_rounded_rect(badge_rect, UI.XP_BAR_BG, CORNER_RADIUS)
-	_draw_rounded_border(badge_rect, UI.XP_BAR_BORDER, CORNER_RADIUS, BORDER_WIDTH)
-	
-	# 5. Draw level text
-	var font := get_theme_font("font")
-	if font == null:
-		font = ThemeDB.fallback_font
-	
+	draw_rect(badge_rect, Color(0.039, 0.051, 0.071, 0.6))
+	draw_rect(badge_rect, UI.ACCENT_SECONDARY, false, 1.0)
+
+	var font: Font = UI.FONT_BOLD
 	var level_text := "LV %d" % _current_level
-	var font_size := 14
+	var font_size := 15
 	var text_size := font.get_string_size(level_text, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size)
 	var text_pos := Vector2(
 		(badge_rect.size.x - text_size.x) / 2,
-		(badge_rect.size.y + text_size.y) / 2 - 2
+		(badge_rect.size.y + text_size.y) / 2 - 3
 	)
-	draw_string(font, text_pos, level_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, UI.TEXT_PRIMARY)
+	draw_string(font, text_pos, level_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, UI.ACCENT_SECONDARY)
 
-func _draw_rounded_rect(rect: Rect2, color: Color, radius: int) -> void:
-	# Simple rounded rectangle using polygon
-	var points := _get_rounded_rect_points(rect, radius)
-	draw_colored_polygon(points, color)
+	# Slim flat bar, vertically centered against the chip
+	var bar_left := BADGE_WIDTH + BADGE_PADDING
+	var bar_y := (size.y - BAR_HEIGHT) * 0.5
+	var bar_rect := Rect2(bar_left, bar_y, size.x - bar_left, BAR_HEIGHT)
+	draw_rect(bar_rect, Color(0.039, 0.051, 0.071, 0.75))
 
-func _draw_rounded_border(rect: Rect2, color: Color, radius: int, width: float) -> void:
-	# Draw border as lines
-	var points := _get_rounded_rect_points(rect, radius)
-	points.append(points[0])  # Close the loop
-	for i in range(points.size() - 1):
-		draw_line(points[i], points[i + 1], color, width, true)
-
-func _get_rounded_rect_points(rect: Rect2, radius: int) -> PackedVector2Array:
-	var points := PackedVector2Array()
-	var r := float(mini(radius, int(min(rect.size.x, rect.size.y) / 2)))
-	var segments_per_corner := 4
-	
-	# Top-left corner
-	for i in range(segments_per_corner + 1):
-		var angle := PI + (PI / 2.0) * float(i) / float(segments_per_corner)
-		points.append(Vector2(rect.position.x + r + cos(angle) * r, rect.position.y + r + sin(angle) * r))
-	
-	# Top-right corner
-	for i in range(segments_per_corner + 1):
-		var angle := PI * 1.5 + (PI / 2.0) * float(i) / float(segments_per_corner)
-		points.append(Vector2(rect.position.x + rect.size.x - r + cos(angle) * r, rect.position.y + r + sin(angle) * r))
-	
-	# Bottom-right corner
-	for i in range(segments_per_corner + 1):
-		var angle := 0.0 + (PI / 2.0) * float(i) / float(segments_per_corner)
-		points.append(Vector2(rect.position.x + rect.size.x - r + cos(angle) * r, rect.position.y + rect.size.y - r + sin(angle) * r))
-	
-	# Bottom-left corner
-	for i in range(segments_per_corner + 1):
-		var angle := PI / 2.0 + (PI / 2.0) * float(i) / float(segments_per_corner)
-		points.append(Vector2(rect.position.x + r + cos(angle) * r, rect.position.y + rect.size.y - r + sin(angle) * r))
-	
-	return points
+	var fill_percent := _display_value / _max_value if _max_value > 0 else 0.0
+	fill_percent = clampf(fill_percent, 0.0, 1.0)
+	if fill_percent > 0.0:
+		draw_rect(Rect2(bar_rect.position, Vector2(bar_rect.size.x * fill_percent, BAR_HEIGHT)),
+			UI.ACCENT_CYAN_DEEP)
 
 func set_level(level: int):
 	_current_level = level

@@ -2,12 +2,14 @@ extends Control
 class_name MiniMap
 ## Square mini-map UI displayed in top-right corner during gameplay.
 ## Shows player, bosses, super bosses, N01, and Pristine Rapture Cores.
+## Bracket-frame panel (approved HUD mockup docs/mockups/hud_v2.html).
+
+const BracketStyleBoxScript := preload("res://scripts/ui/components/BracketStyleBox.gd")
 
 # Styling
-const MAP_SIZE := 200.0 # Square size in pixels
+const MAP_SIZE := 222.0 # Square size in pixels
 const BORDER_WIDTH := 3.0
-const BACKGROUND_COLOR := Color(0.05, 0.08, 0.12, 0.85)
-const BORDER_COLOR := Color(0.3, 0.5, 0.7, 0.9)
+const BACKGROUND_COLOR := Color(0.039, 0.051, 0.071, 0.5)
 const GRID_COLOR := Color(0.2, 0.3, 0.4, 0.3)
 
 # Map range - large enough to show entire map
@@ -61,10 +63,10 @@ func _build_ui() -> void:
 	anchor_right = 1.0
 	anchor_top = 0.0
 	anchor_bottom = 0.0
-	offset_left = - MAP_SIZE - BORDER_WIDTH * 2 - 20
-	offset_right = -20
-	offset_top = 50
-	offset_bottom = 50 + MAP_SIZE + BORDER_WIDTH * 2
+	offset_left = - MAP_SIZE - BORDER_WIDTH * 2 - 30
+	offset_right = -30
+	offset_top = 30
+	offset_bottom = 30 + MAP_SIZE + BORDER_WIDTH * 2
 	
 	# Background panel (draws first)
 	_panel = Panel.new()
@@ -79,12 +81,9 @@ func _build_ui() -> void:
 	_draw_layer.draw.connect(_on_draw_layer_draw)
 	add_child(_draw_layer)
 
-func _create_panel_style() -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
+func _create_panel_style() -> StyleBox:
+	var style = BracketStyleBoxScript.new()
 	style.bg_color = BACKGROUND_COLOR
-	style.border_color = BORDER_COLOR
-	style.set_border_width_all(int(BORDER_WIDTH))
-	style.set_corner_radius_all(4)
 	return style
 
 func _on_draw_layer_draw() -> void:

@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SOV Shop — Round 2 (Supply Terminal + category tabs)</title>
+<style>
+  :root{
+    --cyan:#35C5F2; --cyan-deep:#1F8FE0; --yellow:#FFD23F; --red:#E8392E;
+    --muted:#97A0AC;
+    --admin-bg:#EDEFF2; --admin-hair:#D8DCE1; --admin-text:#2A2E35; --admin-dim:#8A9099;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#070a0e; color:#F0F4F8;
+    font-family:"Pretendard","Segoe UI",system-ui,sans-serif; padding:40px;}
+  h1{font-family:"Arial Narrow",sans-serif; font-size:32px; font-style:italic;
+    text-transform:uppercase; margin-bottom:4px;}
+  .sub{color:var(--muted); text-transform:uppercase; letter-spacing:.25em; font-size:12px;
+    margin-bottom:18px;}
+
+  .stage{position:relative; width:1280px; height:720px; overflow:hidden;
+    background:var(--admin-bg); border:1px solid #2a3340; margin-bottom:10px;
+    color:var(--admin-text);}
+  .scan{position:absolute; inset:0; pointer-events:none; z-index:50; opacity:.4;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px);}
+
+  .hdr{position:absolute; left:44px; top:24px; z-index:5;}
+  .hdr .t{font-family:"Arial Narrow",sans-serif; font-weight:800; font-style:italic; font-size:40px;}
+  .hdr .s{font-size:12px; letter-spacing:.3em; text-transform:uppercase; color:var(--admin-dim); margin-top:2px;}
+  .hdr .bar{width:54px; height:3px; background:var(--cyan); margin-top:8px;}
+  .topright{position:absolute; right:24px; top:22px; display:flex; gap:12px; z-index:5;}
+  .pill{display:flex; align-items:center; gap:8px; background:#fff; color:var(--admin-text);
+    box-shadow:0 1px 4px rgba(0,0,0,.18); padding:6px 16px; font-size:15px;
+    font-weight:800; height:38px;}
+  .pill .gem{color:#ff4d4d;}
+  .backchip{display:flex; align-items:center; height:38px; padding:0 18px;
+    transform:skewX(-6deg); background:#fff; color:var(--admin-text);
+    box-shadow:0 1px 4px rgba(0,0,0,.18); font-weight:800; font-size:14px; cursor:pointer;}
+  .backchip span{transform:skewX(6deg);}
+  .greeble{position:absolute; left:46px; bottom:20px; display:flex; align-items:center;
+    gap:14px; opacity:.35; font-size:9px; letter-spacing:.22em; font-weight:700;}
+  .greeble .bars{display:flex; gap:2px; align-items:flex-end;}
+  .greeble .bars i{display:block; width:2px; background:#2A2E35;}
+
+  /* category tabs — oblique NIKKE tabs over the list column */
+  .tabs{position:absolute; left:44px; top:118px; display:flex; gap:8px; z-index:4;}
+  .tab{padding:9px 26px; transform:skewX(-6deg); background:#dde1e6; color:var(--admin-dim);
+    font-weight:800; font-size:14px; letter-spacing:.08em; cursor:pointer; user-select:none;}
+  .tab span{display:block; transform:skewX(6deg);}
+  .tab.sel{background:#2A2E35; color:#fff; position:relative;}
+  .tab.sel::after{content:""; position:absolute; left:0; right:0; bottom:-4px; height:3px;
+    background:var(--yellow);}
+
+  .tile{width:42px; height:42px; flex:none; display:flex; align-items:center; justify-content:center;
+    background:#22272f; color:#fff; font-size:20px; font-weight:800;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%);}
+  .tile.atk{color:#ffd23f;} .tile.hp{color:#ff6b61;} .tile.spd{color:#7fe0a8;}
+  .tile.crit{color:#ffa54d;} .tile.xp{color:#5BD2F7;}
+  .tile.img{padding:0; overflow:hidden;}
+  .tile.img img{width:100%; height:100%; object-fit:cover; object-position:top;}
+
+  .list{position:absolute; left:44px; top:168px; width:430px; bottom:60px; z-index:3;
+    display:flex; flex-direction:column; gap:8px;}
+  .item{position:relative; display:flex; align-items:center; gap:14px; background:#fff;
+    padding:9px 14px; box-shadow:0 1px 4px rgba(0,0,0,.12); cursor:pointer;}
+  .item .n{flex:1; font-weight:800; font-size:15px;}
+  .item .n em{display:block; font-style:normal; font-size:10.5px; color:var(--admin-dim); font-weight:600;}
+  .item .lv{font-family:"Arial Narrow"; font-style:italic; font-weight:800; font-size:18px;
+    color:var(--admin-dim);}
+  .item .own{font-size:10px; font-weight:800; letter-spacing:.14em; color:#3aa86a;}
+  .item.sel{outline:2px solid var(--yellow); outline-offset:2px;}
+  .item.sel::before{content:""; position:absolute; left:0; top:0; bottom:0; width:4px;
+    background:var(--yellow);}
+  .resetbtn{display:flex; align-items:center; justify-content:center; gap:8px; height:44px;
+    background:#fff; border:1px solid #c4271c; color:#c4271c; font-weight:800; font-size:13px;
+    letter-spacing:.12em; cursor:pointer; user-select:none; margin-top:14px;}
+  .resetbtn:hover{background:#fdf0ef;}
+
+  .detail{position:absolute; right:36px; top:118px; width:730px; bottom:60px; z-index:3;
+    background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.16); padding:30px 36px; overflow:hidden;}
+  .detail .wm{position:absolute; right:-30px; bottom:-40px; font-size:300px; opacity:.05;
+    font-weight:800; pointer-events:none;}
+  .detail .role{font-size:12px; letter-spacing:.26em; color:var(--cyan-deep);
+    font-weight:800; text-transform:uppercase;}
+  .detail .n{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:52px;}
+  .detail .d{font-size:16px; color:#4a4f57; margin-top:18px; max-width:420px;}
+  .lvrow{display:flex; align-items:baseline; gap:18px; margin-top:26px;}
+  .lvrow .now{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:62px;}
+  .lvrow .arrow{font-size:26px; color:var(--admin-dim);}
+  .lvrow .next{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:38px;
+    color:var(--cyan-deep);}
+  .bonusrow{display:flex; gap:36px; margin-top:8px;}
+  .bcell .k{font-size:10px; letter-spacing:.22em; color:var(--admin-dim); font-weight:800;}
+  .bcell .v{font-size:21px; font-weight:800;}
+  .bcell .v.next{color:var(--cyan-deep);}
+  .buyrow{position:absolute; left:36px; right:36px; bottom:30px; display:flex; gap:14px;}
+  .costbtn{display:flex; align-items:center; gap:8px; height:58px; padding:0 18px;
+    background:linear-gradient(180deg,#5BD2F7,#1F8FE0); border-bottom:3px solid #15679f;
+    color:#fff; font-weight:800; font-size:19px; font-style:italic; cursor:pointer; user-select:none;
+    justify-content:center;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%);}
+  .costbtn .gem{color:#ffd9d6;}
+  .costbtn.broke{background:#aeb6c0; border-bottom-color:#8a929c; cursor:not-allowed;}
+  .buyrow .buy1{flex:1;}
+  .buyrow .x10{flex:none; width:170px;}
+
+  /* outfit preview mode */
+  .detail .preview{position:absolute; right:24px; top:24px; bottom:96px; width:300px;
+    overflow:hidden; display:none; clip-path:polygon(10% 0,100% 0,90% 100%,0 100%);
+    background:#1a1f27;}
+  .detail .preview img{width:100%; height:100%; object-fit:cover; object-position:top;}
+  .detail.outfit .preview{display:block;}
+  .detail.outfit .wm{display:none;}
+  .detail.outfit .lvrow,.detail.outfit .bonusrow{display:none;}
+  .detail .ownedtag{display:none; margin-top:26px; font-size:13px; font-weight:800;
+    letter-spacing:.18em; color:#3aa86a;}
+  .detail.outfit .ownedtag{display:block;}
+
+  /* confirm popup */
+  .scrim{position:absolute; inset:0; background:rgba(0,0,0,.55); z-index:40;
+    display:none; align-items:center; justify-content:center;}
+  .scrim.open{display:flex;}
+  .popup{width:480px; background:#fff; box-shadow:0 6px 30px rgba(0,0,0,.4); padding:28px 30px;}
+  .popup .pt{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:30px;}
+  .popup .ps{font-size:11px; letter-spacing:.26em; color:var(--admin-dim); font-weight:800;
+    text-transform:uppercase; margin-top:2px;}
+  .popup .pd{font-size:15px; color:#4a4f57; margin:18px 0 24px; line-height:1.5;}
+  .popup .prow{display:flex; gap:12px;}
+  .popup .pbtn{flex:1; height:50px; display:flex; align-items:center; justify-content:center;
+    font-weight:800; font-size:15px; cursor:pointer; user-select:none;}
+  .popup .cancel{background:#f2f3f5; border:1px solid #c8cdd3; color:var(--admin-text);}
+  .popup .danger{background:linear-gradient(180deg,#f0584d,#b81f15); border-bottom:3px solid #7d120b;
+    color:#fff; clip-path:polygon(0 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%);}
+</style>
+</head>
+<body>
+
+<h1>Shop — Round 2 · Supply Terminal with category tabs</h1>
+<div class="sub">UPGRADES tab is real · OUTFITS tab is a DEMO of future expansion (skins use burst art, not real items) · reset opens confirm popup · BUY ×10</div>
+
+<div class="stage" id="shop">
+  <div class="hdr"><div class="t">SHOP</div><div class="s">OUTPOST SUPPLY // PERMANENT UPGRADES</div><div class="bar"></div></div>
+  <div class="topright">
+    <div class="pill"><span class="gem">◆</span><span class="cores">250</span></div>
+    <div class="backchip"><span>← BACK</span></div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab sel" data-tab="up"><span>UPGRADES</span></div>
+    <div class="tab" data-tab="out"><span>OUTFITS&nbsp;·&nbsp;DEMO</span></div>
+  </div>
+
+  <div class="list"></div>
+
+  <div class="detail">
+    <div class="wm">▲</div>
+    <div class="preview"><img src=""></div>
+    <div class="role">PERMANENT UPGRADE</div>
+    <div class="n">ATTACK</div>
+    <div class="d"></div>
+    <div class="lvrow"><span class="now">LV 00</span><span class="arrow">▶</span><span class="next">LV 01</span></div>
+    <div class="bonusrow">
+      <div class="bcell"><div class="k">CURRENT BONUS</div><div class="v cur">+0%</div></div>
+      <div class="bcell"><div class="k">NEXT LEVEL</div><div class="v next nxt">+25%</div></div>
+      <div class="bcell"><div class="k">NEXT 10 COST</div><div class="v c10">◆ 55</div></div>
+    </div>
+    <div class="ownedtag">✔ OWNED — EQUIPPED</div>
+    <div class="buyrow">
+      <div class="costbtn buy1"><span class="gem">◆</span><span class="c1">1</span>&nbsp; BUY</div>
+      <div class="costbtn x10 buy10"><span class="gem">◆</span><span class="cb10">55</span>&nbsp; ×10</div>
+    </div>
+  </div>
+
+  <div class="scrim">
+    <div class="popup">
+      <div class="pt">Reset all upgrades?</div>
+      <div class="ps">Pristine core refund</div>
+      <div class="pd">Refund <b>◆ <span class="ref">0</span></b> Pristine Cores and reset every upgrade to LV 00? This cannot be undone (but refunds are always penalty-free).</div>
+      <div class="prow">
+        <div class="pbtn cancel">CANCEL</div>
+        <div class="pbtn danger">REFUND</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="greeble"><div class="bars"></div><span>SUPPLY TERMINAL // ARK SYS V2.4</span></div>
+  <div class="scan"></div>
+</div>
+
+<script>
+const UPS=[
+ {id:"atk", name:"ATTACK",   tag:"atk",  glyph:"▲", desc:"+25% Attack Damage per level",  base:1, per:25, unit:"%"},
+ {id:"hp",  name:"HP",       tag:"hp",   glyph:"✚", desc:"+1 Max HP per level",           base:1, per:1,  unit:"HP"},
+ {id:"speed",name:"SPEED",   tag:"spd",  glyph:"≫", desc:"+5% Movement Speed per level",  base:1, per:5,  unit:"%"},
+ {id:"crit",name:"CRITICAL", tag:"crit", glyph:"✦", desc:"+2% Critical Chance per level", base:1, per:2,  unit:"%"},
+ {id:"xp",  name:"EXPERIENCE",tag:"xp",  glyph:"◈", desc:"+5% Experience Gain per level", base:2, per:5,  unit:"%"},
+].map(u=>({...u,lv:0}));
+const OUTFITS=[
+ {name:"SNOW WHITE", sub:"Default Issue", img:"../../assets/characters/snow-white/burst.png", owned:true,  cost:0},
+ {name:"SCARLET",    sub:"Crimson Protocol (demo)", img:"../../assets/characters/scarlet/burst.png", owned:false, cost:120},
+ {name:"RAPUNZEL",   sub:"Golden Hour (demo)", img:"../../assets/characters/rapunzel/burst.png", owned:false, cost:120},
+];
+const cost=(b,l)=> l<10 ? b+l : 11*Math.pow(2,l-10);
+const fmtB=(u,l)=> u.unit==="%"?`+${u.per*l}%`:`+${u.per*l} HP`;
+
+let cores=250, tab="up", selUp=0, selOut=0;
+const $=s=>document.querySelector(s);
+const list=$(".list"), detail=$(".detail");
+
+document.querySelectorAll(".greeble .bars").forEach(b=>{
+  for(let i=0;i<46;i++){const x=document.createElement("i");
+    x.style.height=(6+Math.random()*10)+"px"; x.style.width=(Math.random()<.3?"3":"1.5")+"px";
+    b.appendChild(x);}});
+
+function spent(){let t=0; UPS.forEach(u=>{for(let i=0;i<u.lv;i++)t+=cost(u.base,i);}); return t;}
+function cost10(u){let t=0; for(let i=0;i<10;i++)t+=cost(u.base,u.lv+i); return t;}
+
+function render(){
+  $(".cores").textContent=cores;
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("sel",t.dataset.tab===tab));
+  list.innerHTML="";
+  if(tab==="up"){
+    detail.classList.remove("outfit");
+    UPS.forEach((u,i)=>{
+      const it=document.createElement("div"); it.className="item"+(i===selUp?" sel":"");
+      it.innerHTML=`<div class="tile ${u.tag}">${u.glyph}</div>
+        <div class="n">${u.name}</div><div class="lv">LV ${String(u.lv).padStart(2,"0")}</div>`;
+      it.addEventListener("click",()=>{selUp=i; render();});
+      list.appendChild(it);
+    });
+    const rst=document.createElement("div"); rst.className="resetbtn";
+    rst.textContent="↺ RESET & REFUND ALL";
+    rst.addEventListener("click",()=>{$(".ref").textContent=spent(); $(".scrim").classList.add("open");});
+    list.appendChild(rst);
+
+    const u=UPS[selUp], c1=cost(u.base,u.lv), c10v=cost10(u);
+    $(".wm").textContent=u.glyph;
+    $(".role").textContent="PERMANENT UPGRADE";
+    detail.querySelector(".n").textContent=u.name;
+    detail.querySelector(".d").textContent=u.desc+". Applies to every operator, every run.";
+    $(".now").textContent="LV "+String(u.lv).padStart(2,"0");
+    $(".next").textContent="LV "+String(u.lv+1).padStart(2,"0");
+    $(".cur").textContent=fmtB(u,u.lv);
+    $(".nxt").textContent=fmtB(u,u.lv+1);
+    $(".c10").textContent="◆ "+c10v;
+    $(".c1").textContent=c1; $(".cb10").textContent=c10v;
+    $(".buy1").style.display=""; $(".buy10").style.display="";
+    $(".buy1").classList.toggle("broke",cores<c1);
+    $(".buy10").classList.toggle("broke",cores<c10v);
+  } else {
+    detail.classList.add("outfit");
+    OUTFITS.forEach((o,i)=>{
+      const it=document.createElement("div"); it.className="item"+(i===selOut?" sel":"");
+      it.innerHTML=`<div class="tile img"><img src="${o.img}"></div>
+        <div class="n">${o.name}<em>${o.sub}</em></div>
+        ${o.owned?'<div class="own">OWNED</div>':`<div class="lv">◆ ${o.cost}</div>`}`;
+      it.addEventListener("click",()=>{selOut=i; render();});
+      list.appendChild(it);
+    });
+    const o=OUTFITS[selOut];
+    $(".role").textContent="OPERATOR OUTFIT // DEMO CATEGORY";
+    detail.querySelector(".n").textContent=o.sub.toUpperCase().replace(" (DEMO)","");
+    detail.querySelector(".d").textContent="Outfit for "+o.name+". (Demo content — shows how a future category lives in the same terminal: art preview replaces the stat block, EQUIP/BUY replaces the level buttons.)";
+    $(".preview img").src=o.img;
+    if(o.owned){
+      $(".buy1").style.display="none"; $(".buy10").style.display="none";
+    } else {
+      $(".buy1").style.display=""; $(".buy10").style.display="none";
+      $(".c1").textContent=o.cost;
+      $(".buy1").classList.toggle("broke",cores<o.cost);
+    }
+    detail.querySelector(".ownedtag").style.display=o.owned?"block":"none";
+  }
+}
+
+document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{tab=t.dataset.tab; render();}));
+$(".buy1").addEventListener("click",()=>{
+  if(tab==="up"){const u=UPS[selUp], c=cost(u.base,u.lv);
+    if(cores<c)return; cores-=c; u.lv++; render();}
+  else {const o=OUTFITS[selOut]; if(o.owned||cores<o.cost)return; cores-=o.cost; o.owned=true; render();}
+});
+$(".buy10").addEventListener("click",()=>{
+  const u=UPS[selUp], t=cost10(u);
+  if(cores<t)return; cores-=t; u.lv+=10; render();});
+$(".cancel").addEventListener("click",()=>$(".scrim").classList.remove("open"));
+$(".popup .danger").addEventListener("click",()=>{
+  cores+=spent(); UPS.forEach(u=>u.lv=0); $(".scrim").classList.remove("open"); render();});
+render();
+</script>
+</body>
+</html>

@@ -153,7 +153,7 @@ func _setup_defense_ui() -> void:
 	style.bg_color = Color(0.05, 0.08, 0.12, 0.9)
 	style.border_color = Color(0.9, 0.4, 0.2, 0.8)
 	style.set_border_width_all(2)
-	style.set_corner_radius_all(6)
+	style.set_corner_radius_all(0)
 	panel.add_theme_stylebox_override("panel", style)
 	_defense_ui.add_child(panel)
 	

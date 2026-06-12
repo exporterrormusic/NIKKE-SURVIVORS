@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SOV Main Menu Mockups — NIKKE Style</title>
+<style>
+  :root{
+    --bg-deep:#0E1116; --panel:#1C212A; --raised:#262C36;
+    --cyan:#35C5F2; --cyan-bright:#5BD2F7; --cyan-deep:#1F8FE0;
+    --yellow:#FFD23F; --red:#E8392E;
+    --text:#F0F4F8; --muted:#97A0AC;
+    --gold-dark:#6b5524; --gold:#c9a44a;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#070a0e; color:var(--text);
+    font-family:"Pretendard","Segoe UI",system-ui,sans-serif; padding:40px;}
+  h1,h2{font-family:"Arial Narrow","Pretendard",sans-serif; text-transform:uppercase;
+    letter-spacing:.04em;}
+  h1{font-size:34px; font-style:italic; margin-bottom:4px;}
+  .sub{color:var(--muted); text-transform:uppercase; letter-spacing:.25em; font-size:12px;
+    margin-bottom:36px;}
+  h2{font-size:22px; font-style:italic; margin:48px 0 6px; border-left:4px solid var(--cyan);
+    padding-left:12px;}
+  .note{color:var(--muted); font-size:14px; margin-bottom:16px; max-width:900px; line-height:1.5;}
+
+  /* ============ STAGE (one full-menu mockup) ============ */
+  .stage{position:relative; width:1280px; height:720px; overflow:hidden;
+    background:var(--bg-deep); border:1px solid #2a3340; margin-bottom:12px;}
+  /* diagonal art collage like the current venetian background */
+  .art{position:absolute; inset:0;}
+  .art div{position:absolute; top:-5%; height:110%; background-size:cover; background-position:center;
+    filter:saturate(.92) brightness(.85);}
+  .art .a1{left:-6%;  width:34%; clip-path:polygon(0 0,100% 0,82% 100%,0 100%);
+    background-image:url('../../assets/backgrounds/bunker-interior.jpg');}
+  .art .a2{left:22%;  width:36%; clip-path:polygon(18% 0,100% 0,82% 100%,0 100%);
+    background-image:url('../../assets/backgrounds/eden.jpg');}
+  .art .a3{left:52%;  width:36%; clip-path:polygon(18% 0,100% 0,82% 100%,0 100%);
+    background-image:url('../../assets/backgrounds/rapturefield1.jpg');}
+  .art .a4{left:82%;  width:26%; clip-path:polygon(18% 0,100% 0,100% 100%,0 100%);
+    background-image:url('../../assets/backgrounds/battlefield1.jpg');}
+  .dim{position:absolute; inset:0; background:rgba(2,4,8,.38);}
+  .scan{position:absolute; inset:0; pointer-events:none;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px);}
+
+  .logo{position:absolute; left:48px; top:30px; width:380px;}
+  .logo img{width:100%; display:block; filter:drop-shadow(0 2px 6px rgba(0,0,0,.6));}
+
+  /* greeble cluster */
+  .greeble{position:absolute; font-size:9px; letter-spacing:.18em; color:rgba(255,255,255,.34);
+    text-transform:uppercase;}
+  .barcode{display:inline-block; height:14px; width:74px; margin-right:8px; vertical-align:middle;
+    background:repeating-linear-gradient(90deg, rgba(255,255,255,.4) 0 2px, transparent 2px 5px,
+      rgba(255,255,255,.4) 5px 6px, transparent 6px 10px);}
+  .plus{color:rgba(255,255,255,.25); font-size:12px; position:absolute;}
+
+  .version{position:absolute; right:18px; bottom:12px; color:rgba(255,255,255,.45); font-size:13px;}
+
+  /* currency pills top right */
+  .currency{position:absolute; right:24px; top:20px; display:flex; gap:10px;}
+  .pill{display:flex; align-items:center; gap:8px; background:rgba(0,0,0,.55);
+    padding:5px 14px 5px 8px; font-size:13px; font-weight:600;}
+  .pill .gem{width:14px; height:14px; background:var(--red); transform:rotate(45deg) scale(.8);}
+  .pill .plusbtn{color:var(--cyan); font-weight:800; margin-left:4px;}
+
+  /* ============ NIKKE card vocabulary ============ */
+  .card{position:absolute; transform:skewX(-6deg); box-shadow:0 2px 6px rgba(0,0,0,.45);
+    cursor:pointer;}
+  .card .in{transform:skewX(6deg); display:flex; align-items:center; gap:12px; height:100%;
+    padding:0 20px;}
+  .card .ic{font-size:22px; line-height:1;}
+  .card .t{font-weight:800; font-size:19px; letter-spacing:.02em;}
+  .card .s{font-size:9px; letter-spacing:.22em; text-transform:uppercase; opacity:.6; display:block;}
+  .dot{position:absolute; top:-5px; right:-5px; width:13px; height:13px; border-radius:50%;
+    background:var(--red); border:2px solid rgba(255,255,255,.85); transform:skewX(6deg);}
+
+  /* style 1: white + blue text (Cash Shop) */
+  .c-whiteblue{background:linear-gradient(180deg,#ffffff,#e9f2fa); color:var(--cyan-deep);}
+  /* style 2: white frosted + dark text (Ark) */
+  .c-whitedark{background:linear-gradient(180deg,rgba(255,255,255,.92),rgba(232,238,244,.88));
+    color:#2A2E35;}
+  .c-whitedark .chip{background:#15191f; color:#fff; width:54px; height:54px; display:flex;
+    align-items:center; justify-content:center; font-size:26px; border-radius:6px;}
+  /* style 3: blue gradient + white (Shop) */
+  .c-blue{background:linear-gradient(180deg,#5BD2F7 0%,#2DA8E8 55%,#1F8FE0 100%); color:#fff;
+    border-bottom:3px solid #15679f;}
+  /* style 4: charcoal + blue text (Outpost) */
+  .c-dark{background:linear-gradient(180deg,rgba(30,36,46,.92),rgba(16,20,27,.92));
+    color:var(--cyan); border:1px solid rgba(90,160,200,.35);}
+  /* style 5: dark gold + white (Campaign) */
+  .c-gold{background:linear-gradient(180deg,#8a6f2f,#5d4a1d); color:#fff;
+    border:1px solid #c9a44a66;}
+  .techline{font-size:8px; color:rgba(140,200,240,.6); letter-spacing:.14em; display:block;}
+
+  /* ============ bottom bare-glyph nav (reference style) ============ */
+  .nav{position:absolute; bottom:26px; left:50%; transform:translateX(-50%);
+    display:flex; gap:58px; align-items:flex-end;}
+  .nav .item{display:flex; flex-direction:column; align-items:center; gap:7px; position:relative;
+    cursor:pointer; opacity:.92;}
+  .nav .g{font-size:30px; line-height:1; color:#fff;
+    text-shadow:0 1px 4px rgba(0,0,0,.8); font-weight:400;}
+  .nav .l{font-size:12px; font-weight:700; letter-spacing:.06em; color:#fff;
+    text-shadow:0 1px 3px rgba(0,0,0,.9);}
+  .nav .item .dot{top:-4px; right:6px; transform:none;}
+  .nav .item.quit .g, .nav .item.quit .l{color:#ff8d85;}
+  .nav .item.active::after{content:""; width:0; height:0; border-left:6px solid transparent;
+    border-right:6px solid transparent; border-top:7px solid var(--yellow); margin-top:2px;}
+
+  /* PLAY big slab */
+  .play-card{right:40px; bottom:96px; width:300px; height:92px;}
+  .play-card .t{font-size:34px; font-style:italic;}
+  .play-blue .t{font-size:34px; font-style:italic;}
+  .play-blue{right:40px; bottom:96px; width:300px; height:92px;}
+
+  /* ============ Option B bar ============ */
+  .bar{position:absolute; left:0; right:0; bottom:0; height:150px; background:rgba(0,0,0,.55);
+    display:flex; align-items:center; justify-content:center; gap:14px;
+    border-top:1px solid rgba(255,255,255,.14);}
+  .tile{width:128px; height:112px; background:rgba(10,13,18,.72); border:1px solid rgba(255,255,255,.14);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+    position:relative; cursor:pointer;}
+  .tile .g{font-size:28px; color:#fff;}
+  .tile .l{font-size:10px; font-weight:700; letter-spacing:.08em; color:#cfd6dd;}
+  .tile.quit .g,.tile.quit .l{color:#ff8d85;}
+  .tile.playslab{width:190px; height:120px;
+    background:linear-gradient(180deg,#5BD2F7 0%,#2DA8E8 55%,#1F8FE0 100%);
+    border:none; border-bottom:3px solid #15679f;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%);}
+  .tile.playslab .g{color:#fff; font-size:30px;}
+  .tile.playslab .l{color:#fff; font-size:16px; font-weight:800; font-style:italic; letter-spacing:.04em;}
+
+  /* notice tile */
+  .notice{left:48px; top:182px; height:46px; width:170px;}
+  .notice .t{font-size:15px;}
+
+  /* ============ vocabulary swatches ============ */
+  .vocab{display:flex; gap:18px; flex-wrap:wrap; margin:10px 0 6px;}
+  .sw{width:230px;}
+  .sw .demo{position:relative; height:64px; transform:skewX(-6deg); display:flex; align-items:center;
+    box-shadow:0 2px 6px rgba(0,0,0,.45);}
+  .sw .demo .in{transform:skewX(6deg); display:flex; align-items:center; gap:10px; padding:0 18px;}
+  .sw p{font-size:12px; color:var(--muted); margin-top:8px; line-height:1.45;}
+  .sw b{color:var(--text);}
+  table{border-collapse:collapse; font-size:13px; margin-top:10px;}
+  td,th{border:1px solid #2a3340; padding:7px 12px; text-align:left;}
+  th{background:#141a22; text-transform:uppercase; font-size:11px; letter-spacing:.08em;}
+  .lab{display:inline-block; background:#141a22; border:1px solid #2a3340; color:var(--yellow);
+    font-size:11px; padding:2px 8px; letter-spacing:.08em; margin-bottom:8px; text-transform:uppercase;}
+</style>
+</head>
+<body>
+
+<h1>Main Menu — NIKKE Style Mockups</h1>
+<div class="sub">Survivors of Victory · UI Refresh · pick A or B, plus a Play colorway</div>
+
+<!-- ====================== VOCABULARY ====================== -->
+<h2>0 · The 5-color NIKKE card vocabulary (from your reference)</h2>
+<p class="note">Recreated from the lobby screenshot. All cards lean ~6°, carry red notification
+dots, and stack on screen edges. Proposed role mapping below — this becomes the rulebook for
+every menu, not just this one.</p>
+<div class="vocab">
+  <div class="sw"><div class="demo c-whiteblue"><div class="in"><span class="ic">◆</span>
+    <span class="t" style="color:#1F8FE0;font-weight:800;">NOTICE</span></div><span class="dot"></span></div>
+    <p><b>White + blue text</b> — light utility entries: notices, cash-shop-like sub-entries, info.</p></div>
+  <div class="sw"><div class="demo c-whitedark"><div class="in"><span class="chip" style="width:40px;height:40px;font-size:20px;">▶</span>
+    <span class="t" style="font-weight:800;">PLAY</span></div></div>
+    <p><b>White frosted + dark chip</b> — the "Ark" treatment: THE main world-entry button.</p></div>
+  <div class="sw"><div class="demo c-blue"><div class="in"><span class="ic">▦</span>
+    <span class="t" style="font-weight:800;">SHOP</span></div><span class="dot"></span></div>
+    <p><b>Blue gradient + white</b> — primary feature tiles &amp; confirm CTAs.</p></div>
+  <div class="sw"><div class="demo c-dark"><div class="in"><span class="ic">⬡</span>
+    <div><span class="t" style="font-weight:800;">OUTPOST</span>
+    <span class="techline">DEFENSE 034% · LV.623 ▮▯▮▮▯</span></div></div></div>
+    <p><b>Charcoal + blue text</b> — secondary features with tech-detail subtext.</p></div>
+  <div class="sw"><div class="demo c-gold"><div class="in"><span class="ic">★</span>
+    <span class="t" style="font-weight:800;">EVENT</span></div><span class="dot"></span></div>
+    <p><b>Dark gold + white</b> — special/limited content (reserved for event modes later).</p></div>
+</div>
+<table>
+  <tr><th>Our menu item</th><th>Proposed style</th><th>Where</th></tr>
+  <tr><td>PLAY</td><td>White-frosted "Ark" card <i>or</i> blue gradient slab — <b>your pick below</b></td><td>Large, bottom-right</td></tr>
+  <tr><td>SHOP</td><td>Blue gradient card</td><td>Left edge stack</td></tr>
+  <tr><td>THE OUTPOST</td><td>Charcoal + blue, tech subtext, "COMING SOON"</td><td>Left edge stack</td></tr>
+  <tr><td>NOTICE (patch notes)</td><td>White + blue, red dot when unread</td><td>Under logo</td></tr>
+  <tr><td>Leaderboards / Achievements / Settings / Quit</td><td>Bare white glyphs + labels (no tiles)</td><td>Bottom nav row</td></tr>
+</table>
+
+<!-- ====================== OPTION A ====================== -->
+<h2>A · NIKKE lobby float (no chrome bar)</h2>
+<p class="note">MenuBar panel deleted. Edge cards left, bare-glyph nav bottom-center, big PLAY
+bottom-right. Background art owns the screen. Shown with the white "Ark-style" PLAY.</p>
+<div class="stage">
+  <div class="art"><div class="a1"></div><div class="a2"></div><div class="a3"></div><div class="a4"></div></div>
+  <div class="dim"></div>
+  <div class="logo"><img src="../../assets/ui/logo.png" alt="logo"></div>
+  <div class="greeble" style="left:50px; top:148px;"><span class="barcode"></span> SOV-2026 // ARK SYS V2.4</div>
+  <span class="plus" style="left:460px; top:60px;">+</span>
+  <span class="plus" style="left:500px; top:300px;">+</span>
+  <span class="plus" style="right:380px; top:520px;">+</span>
+
+  <div class="currency">
+    <div class="pill"><span class="gem"></span> 43 <span class="plusbtn">+</span></div>
+  </div>
+
+  <!-- left edge stack -->
+  <div class="card c-whiteblue notice"><div class="in"><span class="ic" style="color:#1F8FE0;">◆</span>
+    <span class="t" style="color:#1F8FE0;">NOTICE</span></div><span class="dot"></span></div>
+  <div class="card c-blue" style="left:40px; top:252px; width:210px; height:64px;">
+    <div class="in"><span class="ic">▦</span><div><span class="t">SHOP</span>
+    <span class="s">PRISTINE CORE EXCHANGE</span></div></div><span class="dot"></span></div>
+  <div class="card c-dark" style="left:34px; top:336px; width:226px; height:72px;">
+    <div class="in"><span class="ic">⬡</span><div><span class="t">OUTPOST</span>
+    <span class="techline">UNDER CONSTRUCTION ▮▯▮▮▯ 000%</span></div></div></div>
+
+  <!-- bottom bare-glyph nav -->
+  <div class="nav">
+    <div class="item"><span class="g">▤</span><span class="l">LEADERBOARDS</span><span class="dot"></span></div>
+    <div class="item"><span class="g">★</span><span class="l">ACHIEVEMENTS</span></div>
+    <div class="item active"><span class="g">◈</span><span class="l">LOBBY</span></div>
+    <div class="item"><span class="g">⚙</span><span class="l">SETTINGS</span></div>
+    <div class="item quit"><span class="g">✕</span><span class="l">QUIT</span></div>
+  </div>
+
+  <!-- big PLAY, Ark-style -->
+  <div class="card c-whitedark play-card"><div class="in"><span class="chip">▶</span>
+    <div><span class="t">PLAY</span><span class="s" style="color:#5a626c;">SELECT NIKKE &amp; DEPLOY</span></div></div></div>
+
+  <div class="version">v0.2B</div>
+  <div class="scan"></div>
+</div>
+
+<h2 style="border-left-color:var(--yellow);">A2 · Same layout, blue-gradient PLAY colorway</h2>
+<div class="stage" style="height:260px;">
+  <div class="art"><div class="a3" style="left:30%;width:50%;"></div><div class="a4"></div></div>
+  <div class="dim"></div>
+  <div class="card c-blue play-blue" style="bottom:84px;"><div class="in"><span class="ic" style="font-size:30px;">▶</span>
+    <div><span class="t">PLAY</span><span class="s" style="opacity:.85;">SELECT NIKKE &amp; DEPLOY</span></div></div></div>
+  <div class="greeble" style="right:48px; bottom:30px;">PLAY COLORWAY OPTION 2 — BLUE GRADIENT CTA</div>
+  <div class="scan"></div>
+</div>
+
+<!-- ====================== OPTION B ====================== -->
+<h2>B · Keep the bar, restyle to glass</h2>
+<p class="note">Current structure kept (one full-width bottom strip, 7 slots). Bar becomes
+translucent glass with a single hairline; tiles go dark-glass with white glyphs; PLAY is a
+chamfered blue slab in the center. NOTICE tile replaces the patch panel here too.</p>
+<div class="stage">
+  <div class="art"><div class="a1"></div><div class="a2"></div><div class="a3"></div><div class="a4"></div></div>
+  <div class="dim"></div>
+  <div class="logo"><img src="../../assets/ui/logo.png" alt="logo"></div>
+  <div class="greeble" style="left:50px; top:148px;"><span class="barcode"></span> SOV-2026 // ARK SYS V2.4</div>
+  <div class="currency"><div class="pill"><span class="gem"></span> 43 <span class="plusbtn">+</span></div></div>
+  <div class="card c-whiteblue notice"><div class="in"><span class="ic" style="color:#1F8FE0;">◆</span>
+    <span class="t" style="color:#1F8FE0;">NOTICE</span></div><span class="dot"></span></div>
+
+  <div class="bar">
+    <div class="tile"><span class="g">▤</span><span class="l">LEADERBOARDS</span><span class="dot"></span></div>
+    <div class="tile"><span class="g">★</span><span class="l">ACHIEVEMENTS</span></div>
+    <div class="tile"><span class="g">▦</span><span class="l">SHOP</span></div>
+    <div class="tile playslab"><span class="g">▶</span><span class="l">PLAY</span></div>
+    <div class="tile"><span class="g">⬡</span><span class="l">THE OUTPOST</span></div>
+    <div class="tile"><span class="g">⚙</span><span class="l">SETTINGS</span></div>
+    <div class="tile quit"><span class="g">✕</span><span class="l">QUIT</span></div>
+  </div>
+  <div class="version" style="bottom:156px;">v0.2B</div>
+  <div class="scan"></div>
+</div>
+
+<!-- ====================== LOGO ====================== -->
+<h2>C · Logo treatments</h2>
+<p class="note">The subtitle "A GODDESS OF VICTORY: NIKKE FAN GAME" is already baked into
+logo.png — so the choice is only whether to add the greeble cluster next to it.</p>
+<div style="display:flex; gap:24px;">
+  <div>
+    <span class="lab">C1 — as is</span>
+    <div class="stage" style="width:560px; height:240px;">
+      <div class="art"><div class="a2" style="left:0;width:70%;"></div><div class="a3" style="left:60%;width:50%;"></div></div>
+      <div class="dim"></div>
+      <div class="logo" style="left:30px; top:24px; width:340px;"><img src="../../assets/ui/logo.png"></div>
+      <div class="scan"></div>
+    </div>
+  </div>
+  <div>
+    <span class="lab">C2 — plus serial/barcode greebles (recommended)</span>
+    <div class="stage" style="width:560px; height:240px;">
+      <div class="art"><div class="a2" style="left:0;width:70%;"></div><div class="a3" style="left:60%;width:50%;"></div></div>
+      <div class="dim"></div>
+      <div class="logo" style="left:30px; top:24px; width:340px;"><img src="../../assets/ui/logo.png"></div>
+      <div class="greeble" style="left:32px; top:136px;"><span class="barcode"></span> SOV-2026 // ARK SYS V2.4 // CMDR.EXPORTERROR</div>
+      <span class="plus" style="left:390px; top:40px;">+</span>
+      <span class="plus" style="left:420px; top:120px;">+</span>
+      <div class="scan"></div>
+    </div>
+  </div>
+</div>
+
+<p class="note" style="margin-top:36px;">— Open questions to answer: <b>A or B?</b> ·
+<b>PLAY white-Ark or blue-gradient?</b> · <b>Logo C1 or C2?</b></p>
+
+</body>
+</html>

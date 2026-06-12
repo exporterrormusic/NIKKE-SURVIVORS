@@ -1,9 +1,9 @@
-extends Node
+﻿extends Node
 
 ## Kilo ally behavior - Shotgun with pellet spread
 
 func configure(ally, _registry) -> void:
-	var hp_mult := 1.0 + (ally.player_level - 1) * 0.25
+	var hp_mult: float = 1.0 + (ally.player_level - 1) * 0.25
 	ally.max_hp = int(65 * hp_mult)
 	ally.move_speed = 210.0
 	ally.attack_damage = ally._get_scaled_damage(3)

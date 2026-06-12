@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SOV Achievements — Round 3 (ghost art behind the list)</title>
+<style>
+  :root{
+    --cyan:#35C5F2; --cyan-deep:#1F8FE0; --yellow:#FFD23F; --red:#E8392E;
+    --green:#3aa86a; --gold:#F8A33B; --muted:#97A0AC;
+    --admin-bg:#EDEFF2; --admin-hair:#D8DCE1; --admin-text:#2A2E35; --admin-dim:#8A9099;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#070a0e; color:#F0F4F8;
+    font-family:"Pretendard","Segoe UI",system-ui,sans-serif; padding:40px;}
+  h1{font-family:"Arial Narrow",sans-serif; font-size:32px; font-style:italic;
+    text-transform:uppercase; margin-bottom:4px;}
+  h2{font-family:"Arial Narrow",sans-serif; font-size:24px; font-style:italic;
+    text-transform:uppercase; margin:46px 0 4px;}
+  .sub{color:var(--muted); text-transform:uppercase; letter-spacing:.25em; font-size:12px;
+    margin-bottom:18px;}
+
+  .stage{position:relative; width:1280px; height:720px; overflow:hidden;
+    background:var(--admin-bg); border:1px solid #2a3340; margin-bottom:10px;
+    color:var(--admin-text);}
+  .scan{position:absolute; inset:0; pointer-events:none; z-index:50; opacity:.4;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px);}
+
+  .hdr{position:absolute; left:44px; top:24px; z-index:5;}
+  .hdr .t{font-family:"Arial Narrow",sans-serif; font-weight:800; font-style:italic; font-size:40px;}
+  .hdr .s{font-size:12px; letter-spacing:.3em; text-transform:uppercase; color:var(--admin-dim); margin-top:2px;}
+  .hdr .bar{width:54px; height:3px; background:var(--cyan); margin-top:8px;}
+  .topright{position:absolute; right:24px; top:22px; display:flex; gap:12px; z-index:5;}
+  .backchip{display:flex; align-items:center; height:38px; padding:0 18px;
+    transform:skewX(-6deg); background:#fff; color:var(--admin-text);
+    box-shadow:0 1px 4px rgba(0,0,0,.18); font-weight:800; font-size:14px; cursor:pointer;}
+  .backchip span{transform:skewX(6deg);}
+  .greeble{position:absolute; left:46px; bottom:20px; display:flex; align-items:center;
+    gap:14px; opacity:.35; font-size:9px; letter-spacing:.22em; font-weight:700; z-index:4;}
+  .greeble .bars{display:flex; gap:2px; align-items:flex-end;}
+  .greeble .bars i{display:block; width:2px; background:#2A2E35;}
+
+  .seg{display:flex; border:1px solid #c8cdd3; height:38px; background:#fff;}
+  .seg .opt{display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0 16px;
+    font-weight:800; font-size:12px; letter-spacing:.1em; color:var(--admin-dim); user-select:none;}
+  .seg .opt.sel{background:var(--admin-text); color:#fff;}
+
+  .rail{position:absolute; left:44px; top:128px; width:300px; bottom:46px; z-index:4;
+    display:flex; flex-direction:column; gap:6px; overflow-y:auto; padding-right:6px;}
+  .rail::-webkit-scrollbar{width:8px;} .rail::-webkit-scrollbar-thumb{background:#c4cad1;}
+  .rb{position:relative; display:flex; align-items:center; gap:12px; background:#fff;
+    padding:7px 12px 9px; box-shadow:0 1px 4px rgba(0,0,0,.12); cursor:pointer; flex:none;}
+  .rb .pic{width:42px; height:42px; flex:none; overflow:hidden; background:#222a34;
+    display:flex; align-items:center; justify-content:center; color:#ffd23f; font-size:20px;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%);}
+  .rb .pic img{width:100%; height:100%; object-fit:cover; object-position:top;}
+  .rb .mid{flex:1; min-width:0;}
+  .rb .n{font-weight:800; font-size:13.5px;}
+  .rb .ubar{height:4px; background:rgba(60,70,82,.15); margin-top:5px; position:relative;}
+  .rb .ubar i{position:absolute; left:0; top:0; bottom:0; background:var(--green);}
+  .rb .cnt{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:17px;
+    color:var(--admin-dim);}
+  .rb .cnt.full{color:var(--green);}
+  .rb.locked .pic img{filter:grayscale(1) brightness(.5);}
+  .rb.locked .n{color:var(--admin-dim);}
+  .rb.sel{outline:2px solid var(--yellow); outline-offset:2px;}
+  .rb.sel::before{content:""; position:absolute; left:0; top:0; bottom:0; width:4px;
+    background:var(--yellow); z-index:1;}
+
+  .content{position:absolute; left:372px; top:128px; right:36px; bottom:46px; z-index:3;
+    background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.16); display:flex; flex-direction:column;
+    overflow:hidden;}
+  .ghost{position:absolute; right:0; top:0; bottom:0; width:55%; pointer-events:none; z-index:0;}
+  .ghost img{width:100%; height:100%; object-fit:cover; object-position:50% 14%;}
+  .ghost .gfade{position:absolute; inset:0;
+    background:linear-gradient(90deg,#fff 0%, rgba(255,255,255,.86) 40%, rgba(255,255,255,.7) 100%);}
+  .crow{display:flex; align-items:center; gap:16px; padding:18px 24px 0; z-index:2;}
+  .ctitle{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:30px; flex:1;}
+  .csub{font-size:11px; letter-spacing:.24em; color:var(--admin-dim); font-weight:800;}
+  .alist{flex:1; display:flex; flex-direction:column; gap:8px; overflow-y:auto;
+    padding:14px 24px 20px; z-index:2;}
+  .alist::-webkit-scrollbar{width:8px;} .alist::-webkit-scrollbar-thumb{background:#c4cad1;}
+
+  .arow{position:relative; border:1px solid var(--admin-hair); padding:10px 14px;
+    display:flex; gap:14px; align-items:center; flex:none; background:rgba(255,255,255,.92);}
+  .arow::before{content:""; position:absolute; left:0; top:0; bottom:0; width:5px; background:#c4cad1;}
+  .arow.done::before{background:var(--green);}
+  .arow.prog::before{background:var(--cyan);}
+  .medal{width:52px; height:52px; flex:none; display:flex; align-items:center; justify-content:center;}
+  .medal .dia{width:38px; height:38px; transform:rotate(45deg); border:2px solid #c4cad1;
+    background:#f2f3f5; display:flex; align-items:center; justify-content:center;}
+  .medal .dia span{transform:rotate(-45deg); font-size:15px; font-weight:800; color:var(--admin-dim);}
+  .arow.done .medal .dia{background:linear-gradient(135deg,#ffd76e,#F8A33B); border-color:#c97f1d;}
+  .arow.done .medal .dia span{color:#7a4d05;}
+  .arow.prog .medal .dia{border-color:var(--cyan-deep);}
+  .arow.prog .medal .dia span{color:var(--cyan-deep); font-size:11px;}
+  .arow .mid{flex:1; min-width:0;}
+  .arow .n{font-weight:800; font-size:15.5px;}
+  .arow.done .n{color:#2c7a4e;}
+  .arow .d{font-size:12.5px; color:var(--admin-dim); margin-top:2px;}
+  .arow .prow{display:flex; align-items:center; gap:12px; margin-top:7px;}
+  .arow .pbar{flex:1; height:7px; background:rgba(60,70,82,.18); position:relative;}
+  .arow .pbar i{position:absolute; left:0; top:0; bottom:0;
+    background:linear-gradient(90deg,#5BD2F7,#1F8FE0);}
+  .arow .pnum{font-size:11.5px; font-weight:800; color:var(--admin-dim); min-width:96px; text-align:right;}
+  .arow .chip{font-size:10px; font-weight:800; letter-spacing:.12em; padding:3px 10px; color:#fff;
+    background:var(--green); flex:none;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%);}
+
+  /* per-variant ghost strength */
+  #w1 .ghost .gfade{background:linear-gradient(90deg,#fff 0%, rgba(255,255,255,.93) 40%, rgba(255,255,255,.88) 100%);}
+  #w2 .ghost .gfade{background:linear-gradient(90deg,#fff 0%, rgba(255,255,255,.84) 40%, rgba(255,255,255,.72) 100%);}
+  #w3 .ghost{display:none;}
+</style>
+</head>
+<body>
+
+<h1>Achievements — Round 3 · ghost art behind the list</h1>
+<div class="sub">V1's banner replaced by faint burst art behind the achievement rows · rows slightly translucent so it breathes through · pick a strength</div>
+
+<h2>W1 — Subtle ghost (~10%)</h2>
+<div class="sub">Barely-there detail; reads as texture.</div>
+<div class="stage" id="w1">
+  <div class="hdr"><div class="t">ACHIEVEMENTS</div><div class="s">COMMENDATIONS // SERVICE MEDALS</div><div class="bar"></div></div>
+  <div class="topright"><div class="backchip"><span>← BACK</span></div></div>
+  <div class="rail"></div>
+  <div class="content">
+    <div class="ghost"><img src=""><div class="gfade"></div></div>
+    <div class="crow">
+      <div style="flex:1;"><div class="ctitle">GENERAL</div><div class="csub">3 OF 8 COMMENDATIONS EARNED</div></div>
+      <div class="seg"><div class="opt sel" data-f="ALL">ALL</div><div class="opt" data-f="COMPLETE">COMPLETE</div><div class="opt" data-f="INCOMPLETE">INCOMPLETE</div></div>
+    </div>
+    <div class="alist"></div>
+  </div>
+  <div class="greeble"><div class="bars"></div><span>COMMENDATIONS // ARK SYS V2.4</span></div>
+  <div class="scan"></div>
+</div>
+
+<h2>W2 — Stronger ghost (~22%)</h2>
+<div class="sub">Clearly visible art, rows still fully readable.</div>
+<div class="stage" id="w2">
+  <div class="hdr"><div class="t">ACHIEVEMENTS</div><div class="s">COMMENDATIONS // SERVICE MEDALS</div><div class="bar"></div></div>
+  <div class="topright"><div class="backchip"><span>← BACK</span></div></div>
+  <div class="rail"></div>
+  <div class="content">
+    <div class="ghost"><img src=""><div class="gfade"></div></div>
+    <div class="crow">
+      <div style="flex:1;"><div class="ctitle">GENERAL</div><div class="csub">3 OF 8 COMMENDATIONS EARNED</div></div>
+      <div class="seg"><div class="opt sel" data-f="ALL">ALL</div><div class="opt" data-f="COMPLETE">COMPLETE</div><div class="opt" data-f="INCOMPLETE">INCOMPLETE</div></div>
+    </div>
+    <div class="alist"></div>
+  </div>
+  <div class="greeble"><div class="bars"></div><span>COMMENDATIONS // ARK SYS V2.4</span></div>
+  <div class="scan"></div>
+</div>
+
+<h2>W3 — No art (control)</h2>
+<div class="sub">Medals + underbars only.</div>
+<div class="stage" id="w3">
+  <div class="hdr"><div class="t">ACHIEVEMENTS</div><div class="s">COMMENDATIONS // SERVICE MEDALS</div><div class="bar"></div></div>
+  <div class="topright"><div class="backchip"><span>← BACK</span></div></div>
+  <div class="rail"></div>
+  <div class="content">
+    <div class="ghost"><img src=""><div class="gfade"></div></div>
+    <div class="crow">
+      <div style="flex:1;"><div class="ctitle">GENERAL</div><div class="csub">3 OF 8 COMMENDATIONS EARNED</div></div>
+      <div class="seg"><div class="opt sel" data-f="ALL">ALL</div><div class="opt" data-f="COMPLETE">COMPLETE</div><div class="opt" data-f="INCOMPLETE">INCOMPLETE</div></div>
+    </div>
+    <div class="alist"></div>
+  </div>
+  <div class="greeble"><div class="bars"></div><span>COMMENDATIONS // ARK SYS V2.4</span></div>
+  <div class="scan"></div>
+</div>
+
+<script>
+const CHARS=[
+ {code:"GENERAL", n:"GENERAL", img:null},
+ {code:"snow-white", n:"SNOW WHITE"}, {code:"scarlet", n:"SCARLET"},
+ {code:"rapunzel", n:"RAPUNZEL"}, {code:"nayuta", n:"NAYUTA"},
+ {code:"commander", n:"COMMANDER"}, {code:"marian", n:"MARIAN"},
+ {code:"crown", n:"CROWN", locked:true}, {code:"kilo", n:"KILO"},
+ {code:"cecil", n:"CECIL", locked:true}, {code:"sin", n:"SIN"}, {code:"wells", n:"WELLS"},
+];
+const ACH={
+ GENERAL:[
+  {t:"First Blood", d:"Complete a Stage 1 map", u:true},
+  {t:"Boss Slayer", d:"Defeat a boss enemy", u:true},
+  {t:"Abandoned Wishes", d:"Reach Wave 10", u:true},
+  {t:"Massacre", d:"Defeat 100,000 enemies total", u:false, p:42180, m:100000},
+  {t:"World Traveler", d:"Play on all maps", u:false, p:3, m:5},
+  {t:"Untouchable", d:"Complete a wave without taking damage", u:false, p:0, m:1},
+  {t:"She Descends", d:"Spawn N01", u:false, p:0, m:1},
+  {t:"Look Commander, No Hands!", d:"Defeat Wave 11 without firing any bullets, rockets, or pellets", u:false, p:0, m:1},
+ ],
+};
+CHARS.slice(1).forEach(c=>{
+  const dn=c.n.charAt(0)+c.n.slice(1).toLowerCase();
+  const list=[];
+  if(["crown","cecil","sin","wells","nayuta","marian","kilo","commander"].includes(c.code))
+    list.push({t:`Unlock ${dn} in SHOP`, d:`Unlock ${dn} using Pristine Rapture Cores in the main menu shop`, u:!c.locked, p:c.locked?0:1, m:1});
+  list.push({t:`Kill 10,000 Raptures as ${dn}`, d:`Defeat 10,000 enemies while playing as ${dn}`, u:false, p:c.code==="snow-white"?4210:0, m:10000});
+  list.push({t:`Purchase all skills for ${dn}`, d:`Buy all 12 skill nodes for ${dn} during a single match`, u:false, p:0, m:1});
+  list.push({t:`Win a game with ${dn}`, d:`Complete a run playing ${dn}`, u:c.code==="snow-white", p:c.code==="snow-white"?1:0, m:1});
+  ACH[c.code]=list;
+});
+const img=c=>`../../assets/characters/${c}/portrait-sq.png`;
+const burst=c=>`../../assets/characters/${c}/burst.png`;
+const fmt=v=>v.toString().replace(/\B(?=(\d{3})+(?!\d))/g,",");
+
+document.querySelectorAll(".greeble .bars").forEach(b=>{
+  for(let i=0;i<46;i++){const x=document.createElement("i");
+    x.style.height=(6+Math.random()*10)+"px"; x.style.width=(Math.random()<.3?"3":"1.5")+"px";
+    b.appendChild(x);}});
+
+function counts(code){const l=ACH[code]||[]; return [l.filter(a=>a.u).length, l.length];}
+function arow(a){
+  const r=document.createElement("div");
+  const pct=a.m>1?Math.round((a.p||0)/a.m*100):0;
+  r.className="arow "+(a.u?"done":(a.p>0?"prog":""));
+  const medal=a.u?"✓":(a.m>1&&a.p>0?pct+"%":"◆");
+  r.innerHTML=`<div class="medal"><div class="dia"><span>${medal}</span></div></div>
+    <div class="mid"><div class="n">${a.t}</div><div class="d">${a.d}</div>
+    ${!a.u&&a.m>1?`<div class="prow"><div class="pbar"><i style="width:${pct}%"></i></div>
+      <div class="pnum">${fmt(a.p||0)} / ${fmt(a.m)}</div></div>`:""}</div>
+    ${a.u?'<div class="chip">CLEARED</div>':""}`;
+  return r;
+}
+function wire(id){
+  const root=document.getElementById(id);
+  let cat="GENERAL", filter="ALL";
+  const list=root.querySelector(".alist");
+  function render(){
+    const cdef=CHARS.find(c=>c.code===cat), [u,t]=counts(cat);
+    root.querySelector(".ctitle").textContent=cdef.n;
+    root.querySelector(".csub").textContent=`${u} OF ${t} COMMENDATIONS EARNED`;
+    const gimg=root.querySelector(".ghost img");
+    if(cdef.img===null){gimg.style.display="none";}
+    else{gimg.style.display=""; gimg.src=burst(cdef.code);}
+    list.innerHTML="";
+    let l=(ACH[cat]||[]).slice();
+    if(filter==="COMPLETE")l=l.filter(a=>a.u);
+    if(filter==="INCOMPLETE")l=l.filter(a=>!a.u);
+    l.sort((a,b)=> (b.u-a.u) || ((b.p||0)/(b.m||1) - (a.p||0)/(a.m||1)));
+    l.forEach(a=>list.appendChild(arow(a)));
+    const rail=root.querySelector(".rail"); rail.innerHTML="";
+    CHARS.forEach(c=>{
+      const [cu,ct2]=counts(c.code);
+      const b=document.createElement("div");
+      b.className="rb"+(c.code===cat?" sel":"")+(c.locked?" locked":"");
+      b.innerHTML=`<div class="pic">${c.img===null?"♕":`<img src="${img(c.code)}">`}</div>
+        <div class="mid"><div class="n">${c.n}</div>
+        <div class="ubar"><i style="width:${Math.round(cu/ct2*100)}%"></i></div></div>
+        <div class="cnt${cu===ct2&&ct2>0?" full":""}">${cu}/${ct2}</div>`;
+      b.addEventListener("click",()=>{cat=c.code; render();});
+      rail.appendChild(b);
+    });
+  }
+  root.querySelectorAll(".seg .opt").forEach(o=>o.addEventListener("click",()=>{
+    root.querySelectorAll(".seg .opt").forEach(x=>x.classList.remove("sel"));
+    o.classList.add("sel"); filter=o.dataset.f; render();}));
+  render();
+}
+["w1","w2","w3"].forEach(wire);
+</script>
+</body>
+</html>

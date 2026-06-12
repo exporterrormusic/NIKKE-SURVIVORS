@@ -12,6 +12,7 @@ extends Resource
 @export var code_name: String = ""  # Alternative identifier for lookups
 @export var folder_name: String = ""  # Folder name in assets/characters/ (e.g., "snow-white")
 @export var display_name: String = ""  # Display name (e.g., "Scarlet", "Snow White")
+@export var squad: String = ""  # NIKKE squad affiliation (e.g., "Pioneer", "White Knight")
 @export_multiline var description: String = ""
 @export var role: String = "Balanced"  # e.g., "DPS", "Tank", "Support"
 @export var difficulty: String = "Standard"  # e.g., "Easy", "Standard", "Expert"

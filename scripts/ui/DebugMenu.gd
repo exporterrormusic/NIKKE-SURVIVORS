@@ -66,7 +66,7 @@ func _setup_ui() -> void:
 	style.bg_color = UI.DEBUG_PANEL_BG
 	style.border_color = UI.DEBUG_PANEL_BORDER
 	style.set_border_width_all(2)
-	style.set_corner_radius_all(8)
+	style.set_corner_radius_all(0)
 	style.set_content_margin_all(12)
 	_panel.add_theme_stylebox_override("panel", style)
 	add_child(_panel)
@@ -322,7 +322,7 @@ func _add_danger_button(parent: Control, text: String, tooltip: String, callback
 func _style_button(btn: Button, base_color: Color) -> void:
 	var style := StyleBoxFlat.new()
 	style.bg_color = base_color
-	style.set_corner_radius_all(4)
+	style.set_corner_radius_all(0)
 	style.set_content_margin_all(8)
 	btn.add_theme_stylebox_override("normal", style)
 	
@@ -395,7 +395,7 @@ func _update_tab_styles() -> void:
 		
 		style.set_border_width_all(0)
 		style.border_width_bottom = 2 if active else 1
-		style.set_corner_radius_all(4)
+		style.set_corner_radius_all(0)
 		style.corner_radius_bottom_left = 0
 		style.corner_radius_bottom_right = 0
 		style.set_content_margin_all(4)

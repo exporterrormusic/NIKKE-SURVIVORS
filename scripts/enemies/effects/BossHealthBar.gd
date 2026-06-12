@@ -1,12 +1,18 @@
 extends CanvasLayer
 class_name BossHealthBar
 
-## Large segmented health bar displayed at top of screen for boss enemies
+## Boss health bar (dark field register, approved mockup
+## docs/mockups/hud_v2.html): bottom-center - skewed red name chip above a
+## segmented bar with red corner brackets, percentage outside on the right.
+
+const UI := preload("res://scripts/ui/UITheme.gd")
 
 var _container: Control = null
 var _bar_background: ColorRect = null
 var _bar_fill: Control = null
+var _name_chip: PanelContainer = null
 var _name_label: Label = null
+var _pct_label: Label = null
 var _timer_label: Label = null # Enrage timer display
 var _boss: Node2D = null
 var _target_fill: float = 1.0
@@ -16,20 +22,25 @@ var _shake_timer: float = 0.0
 var _is_goddess_fall: bool = false
 var _flash_time: float = 0.0 # For timer flashing effect
 
-const BAR_WIDTH := 600.0
+const BAR_WIDTH := 760.0
 const BAR_HEIGHT := 24.0
+const PCT_WIDTH := 86.0
+const NAME_ROW_HEIGHT := 36.0
+const BAR_Y := 60.0
+const BOTTOM_MARGIN := 200.0
 const SEGMENT_COUNT := 10
 const SEGMENT_GAP := 2.0
+const BRACKET_SIZE := 21.0
+const BRACKET_WIDTH := 3.0
 
-const BG_COLOR := Color(0.1, 0.05, 0.12, 0.9)
+const BG_COLOR := Color(0.039, 0.051, 0.071, 0.7)
 const FILL_COLOR := Color(0.7, 0.2, 0.9, 1.0) # Purple for regular boss
 const SUPER_BOSS_COLOR := Color(0.9, 0.2, 0.2, 1.0) # Red for N01/super boss
 const FILL_LOW_COLOR := Color(0.9, 0.2, 0.3, 1.0)
-const BORDER_COLOR := Color(0.9, 0.85, 1.0, 0.9)
-const SEGMENT_LINE_COLOR := Color(0.2, 0.1, 0.25, 0.8)
+const BRACKET_COLOR := Color(0.91, 0.224, 0.18, 0.9)
+const SEGMENT_LINE_COLOR := Color(0.05, 0.05, 0.08, 0.8)
 
 const SHIELD_HEIGHT := 16.0
-const SHIELD_GAP := 4.0
 
 var _is_super_boss := false # Track if current boss is super boss (red bar)
 var _shield_bar: Control = null
@@ -42,63 +53,80 @@ func _ready() -> void:
 	_setup_ui()
 
 func _setup_ui() -> void:
-	# Main container - positioned lower for better visibility
+	# Main container - bottom center (approved mockup position)
 	_container = Control.new()
 	_container.name = "BossBarContainer"
-	_container.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_container.position = Vector2(-BAR_WIDTH / 2, 140) # Lowered from 115
-	_container.size = Vector2(BAR_WIDTH, BAR_HEIGHT + 30)
+	_container.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_container.position = Vector2(-(BAR_WIDTH + PCT_WIDTH) / 2, -BOTTOM_MARGIN)
+	_container.size = Vector2(BAR_WIDTH + PCT_WIDTH, 120)
 	add_child(_container)
-	
+
+	# Skewed red name chip (top row, left-aligned)
+	_name_chip = PanelContainer.new()
+	_name_chip.name = "NameChip"
+	var chip_style := StyleBoxFlat.new()
+	chip_style.bg_color = Color(0.47, 0.03, 0.016, 0.85)
+	chip_style.border_color = UI.COLOR_DANGER
+	chip_style.set_border_width_all(1)
+	chip_style.set_corner_radius_all(0)
+	chip_style.skew = Vector2(-0.105, 0)
+	chip_style.content_margin_left = 21
+	chip_style.content_margin_right = 21
+	chip_style.content_margin_top = 4
+	chip_style.content_margin_bottom = 4
+	_name_chip.add_theme_stylebox_override("panel", chip_style)
+	_name_chip.position = Vector2(8, 0)
+	_container.add_child(_name_chip)
+
+	_name_label = Label.new()
+	_name_label.name = "BossName"
+	_name_label.text = "☠  BOSS"
+	_name_label.add_theme_font_override("font", UI.FONT_BOLD)
+	_name_label.add_theme_font_size_override("font_size", 16)
+	_name_label.add_theme_color_override("font_color", Color(1.0, 0.706, 0.682, 1.0))
+	_name_chip.add_child(_name_label)
+
 	# Bar background
 	_bar_background = ColorRect.new()
 	_bar_background.name = "Background"
 	_bar_background.color = BG_COLOR
-	_bar_background.position = Vector2(0, 0)
+	_bar_background.position = Vector2(0, BAR_Y)
 	_bar_background.size = Vector2(BAR_WIDTH, BAR_HEIGHT)
 	_container.add_child(_bar_background)
-	
+
 	# Fill
 	_bar_fill = Control.new()
 	_bar_fill.name = "Fill"
-	_bar_fill.position = Vector2.ZERO
+	_bar_fill.position = Vector2(0, BAR_Y)
 	_bar_fill.size = Vector2(BAR_WIDTH, BAR_HEIGHT)
 	_bar_fill.draw.connect(_draw_bar)
 	_container.add_child(_bar_fill)
-	
-	# Name Label - on top of the HP bar (added after fill for z-order)
-	_name_label = Label.new()
-	_name_label.name = "BossName"
-	_name_label.text = "BOSS"
-	_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_name_label.add_theme_font_size_override("font_size", 16)
-	_name_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
-	_name_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.9))
-	_name_label.add_theme_constant_override("shadow_offset_x", 1)
-	_name_label.add_theme_constant_override("shadow_offset_y", 1)
-	
-	# Use a larger container height to properly center text without clipping
-	var label_height := 64.0
-	_name_label.size = Vector2(BAR_WIDTH, label_height)
-	# Center the large label relative to the bar height
-	_name_label.position = Vector2(0, (BAR_HEIGHT - label_height) / 2.0)
-	
-	_name_label.clip_text = false # Allow text to use full height
-	_name_label.z_index = 1 # Above the bar fill
-	_container.add_child(_name_label)
-	
-	# Shield Bar (Stacked ABOVE main bar)
-	# Positioned at negative Y to sit on top with a gap
+
+	# Percentage (outside the bar, right)
+	_pct_label = Label.new()
+	_pct_label.name = "Percent"
+	_pct_label.text = "100%"
+	_pct_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_pct_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_pct_label.add_theme_font_override("font", UI.FONT_TITLE_OBLIQUE)
+	_pct_label.add_theme_font_size_override("font_size", 27)
+	_pct_label.add_theme_color_override("font_color", Color(1.0, 0.55, 0.52, 1.0))
+	_pct_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	_pct_label.add_theme_constant_override("shadow_offset_x", 1)
+	_pct_label.add_theme_constant_override("shadow_offset_y", 2)
+	_pct_label.position = Vector2(BAR_WIDTH + 6, BAR_Y - 6)
+	_pct_label.size = Vector2(PCT_WIDTH - 12, BAR_HEIGHT + 12)
+	_container.add_child(_pct_label)
+
+	# Shield Bar (stacked between name chip and main bar)
 	_shield_bar = Control.new()
 	_shield_bar.name = "ShieldBar"
-	_shield_bar.position = Vector2(0, - (SHIELD_HEIGHT + SHIELD_GAP))
+	_shield_bar.position = Vector2(0, BAR_Y - SHIELD_HEIGHT - 4)
 	_shield_bar.size = Vector2(BAR_WIDTH, SHIELD_HEIGHT)
 	_shield_bar.draw.connect(_draw_shield_bar)
 	_shield_bar.visible = false
 	_container.add_child(_shield_bar)
 
-	
 	# Enrage timer label
 	_timer_label = Label.new()
 	_timer_label.name = "EnrageTimer"
@@ -109,7 +137,7 @@ func _setup_ui() -> void:
 	_timer_label.add_theme_color_override("font_shadow_color", Color(0.3, 0.1, 0.0, 0.9))
 	_timer_label.add_theme_constant_override("shadow_offset_x", 2)
 	_timer_label.add_theme_constant_override("shadow_offset_y", 2)
-	_timer_label.position = Vector2(0, BAR_HEIGHT + 4) # Adjust for height
+	_timer_label.position = Vector2(0, BAR_Y + BAR_HEIGHT + 6)
 	_timer_label.size = Vector2(BAR_WIDTH, 28)
 	_timer_label.visible = false
 	_container.add_child(_timer_label)
@@ -151,55 +179,49 @@ func _draw_bar() -> void:
 		
 		# Segment border
 		bar.draw_rect(segment_rect, SEGMENT_LINE_COLOR, false, 1.0)
-	
-	# Outer border
-	bar.draw_rect(Rect2(Vector2(-2, -2), rect.size + Vector2(4, 4)), BORDER_COLOR, false, 2.0)
+
+	# Red corner brackets (top-left + bottom-right), outside the fill
+	var s := BRACKET_SIZE
+	var w := BRACKET_WIDTH
+	bar.draw_rect(Rect2(-2, -2, s, w), BRACKET_COLOR)
+	bar.draw_rect(Rect2(-2, -2, w, s), BRACKET_COLOR)
+	bar.draw_rect(Rect2(rect.size.x + 2 - s, rect.size.y + 2 - w, s, w), BRACKET_COLOR)
+	bar.draw_rect(Rect2(rect.size.x + 2 - w, rect.size.y + 2 - s, w, s), BRACKET_COLOR)
 
 func show_boss(boss: Node2D, boss_name: String = "BOSS", is_super: bool = false) -> void:
 	_boss = boss
 	_is_super_boss = is_super # Red bar for super boss (N01)
-	_name_label.text = boss_name
-	
+	_name_label.text = "☠  %s" % boss_name.to_upper()
+
 	# Connect to boss tree_exiting to reliably hide when boss dies/freed
 	if is_instance_valid(boss) and not boss.tree_exiting.is_connected(_on_boss_exiting):
 		boss.tree_exiting.connect(_on_boss_exiting)
-	
-	# Intelligent Font Scaling for 24px Bar
+
+	# Font scaling for very long names (chip auto-sizes horizontally)
 	var name_len = boss_name.length()
-	var font_size = 26 # Bigger again (User requested)
-	
+	var font_size = 16
 	if name_len > 35:
-		font_size = 16
+		font_size = 13
 	elif name_len > 25:
-		font_size = 18
-	elif name_len > 15:
-		font_size = 22
-	
+		font_size = 14
 	_name_label.add_theme_font_size_override("font_size", font_size)
-	
-	# Center the label vertically relative to the bar
-	# Using 64px height ensures no clipping and proper centering
-	# Apply -2px offset to correct visual center for CAPS text (metric center includes descenders)
-	var base_y = (BAR_HEIGHT - 64.0) / 2.0
-	_name_label.position.y = base_y - 2.0
-	
+
 	_current_fill = 1.0
 	_target_fill = 1.0
 	visible = true
 
-	
 	# Check if Goddess Fall mode - show enrage timer
 	var game_manager = get_node_or_null("/root/GameManager")
 	_is_goddess_fall = game_manager and game_manager.goddess_fall_mode
 	_timer_label.visible = _is_goddess_fall
-	
-	# Entrance animation - slide down from above
+
+	# Entrance animation - slide up from below
 	_container.modulate.a = 0.0
-	_container.position.y = 110
+	_container.position.y = -BOTTOM_MARGIN + 40.0
 	var tween := create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(_container, "modulate:a", 1.0, 0.3)
-	tween.tween_property(_container, "position:y", 140.0, 0.3).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	tween.tween_property(_container, "position:y", -BOTTOM_MARGIN, 0.3).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 
 func _on_boss_exiting() -> void:
 	# Called when boss is about to be freed - hide the bar immediately
@@ -248,14 +270,19 @@ func _process(delta: float) -> void:
 	
 	# Smooth fill transition
 	_current_fill = lerpf(_current_fill, _target_fill, delta * 8.0)
-	
+
+	# Percentage readout (outside the bar)
+	if _pct_label:
+		_pct_label.text = "%d%%" % maxi(0, roundi(_current_fill * 100.0))
+
 	# Handle shake
+	var bar_base := Vector2(0, BAR_Y)
 	if _shake_timer > 0:
 		_shake_timer -= delta
-		_bar_fill.position = Vector2.ZERO + _shake_offset * (_shake_timer / 0.15)
+		_bar_fill.position = bar_base + _shake_offset * (_shake_timer / 0.15)
 	else:
-		_bar_fill.position = Vector2.ZERO
-	
+		_bar_fill.position = bar_base
+
 	if _bar_fill:
 		_bar_fill.queue_redraw()
 
@@ -287,7 +314,7 @@ func _draw_shield_bar() -> void:
 		_shield_bar.draw_rect(Rect2(0, 0, fill_w, rect.size.y), Color(0.6, 0.3, 1.0, 1.0))
 		
 	# Border
-	_shield_bar.draw_rect(rect, BORDER_COLOR, false, 2.0)
+	_shield_bar.draw_rect(rect, Color(1, 1, 1, 0.3), false, 1.0)
 	
 	# Gloss
 	if _shield_fill > 0:

@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SOV Character Select — NIKKE Style Mockups</title>
+<style>
+  :root{
+    --bg-deep:#0E1116; --cyan:#35C5F2; --cyan-deep:#1F8FE0; --yellow:#FFD23F; --red:#E8392E;
+    --text:#F0F4F8; --muted:#97A0AC;
+    --admin-bg:#EDEFF2; --admin-card:#FFFFFF; --admin-hair:#D8DCE1;
+    --admin-text:#2A2E35; --admin-dim:#8A9099;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#070a0e; color:var(--text);
+    font-family:"Pretendard","Segoe UI",system-ui,sans-serif; padding:40px;}
+  h1{font-family:"Arial Narrow",sans-serif; font-size:32px; font-style:italic;
+    text-transform:uppercase; margin-bottom:4px;}
+  .sub{color:var(--muted); text-transform:uppercase; letter-spacing:.25em; font-size:12px;
+    margin-bottom:30px;}
+  h2{font-family:"Arial Narrow",sans-serif; font-size:21px; font-style:italic;
+    text-transform:uppercase; margin:44px 0 6px; border-left:4px solid var(--cyan); padding-left:12px;}
+  .note{color:var(--muted); font-size:14px; margin-bottom:14px; max-width:940px; line-height:1.5;}
+
+  .stage{position:relative; width:1280px; height:720px; overflow:hidden;
+    background:var(--bg-deep); border:1px solid #2a3340; margin-bottom:10px;}
+  .scan{position:absolute; inset:0; pointer-events:none; z-index:50;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,.02) 0 1px, transparent 1px 4px);}
+
+  /* header pair */
+  .hdr{position:absolute; left:44px; top:24px; z-index:5;}
+  .hdr .t{font-family:"Arial Narrow",sans-serif; font-weight:800; font-style:italic;
+    font-size:40px; letter-spacing:.02em;}
+  .hdr .s{font-size:11px; letter-spacing:.3em; text-transform:uppercase; margin-top:2px;}
+  .hdr .bar{width:54px; height:3px; background:var(--cyan); margin-top:8px;}
+
+  /* top-right strip */
+  .topright{position:absolute; right:24px; top:22px; display:flex; gap:12px; z-index:5;}
+  .pill{display:flex; align-items:center; gap:8px; background:rgba(0,0,0,.55);
+    padding:6px 14px 6px 10px; font-size:13px; font-weight:600; color:#fff; height:36px;}
+  .pill .gem{color:#ff4d4d;}
+  .pill .plus{color:var(--cyan); font-weight:800;}
+  .backchip{display:flex; align-items:center; height:36px; padding:0 18px;
+    transform:skewX(-6deg); background:rgba(0,0,0,.55); color:#fff;
+    font-weight:800; font-size:13px;}
+  .backchip span{transform:skewX(6deg);}
+  .light .backchip{background:#fff; color:var(--admin-text); box-shadow:0 1px 4px rgba(0,0,0,.18);}
+  .light .pill{background:#fff; color:var(--admin-text); box-shadow:0 1px 4px rgba(0,0,0,.18);}
+
+  /* character card */
+  .ccard{position:relative; width:122px; height:188px; cursor:pointer; flex:none;}
+  .ccard .frame{position:absolute; inset:0; overflow:hidden;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%);}
+  .ccard img{width:100%; height:152px; object-fit:cover; display:block;
+    background:#222a34;}
+  .ccard .nm{position:absolute; left:0; right:0; bottom:0; height:36px; display:flex;
+    align-items:center; justify-content:center; font-size:11px; font-weight:800;
+    letter-spacing:.04em; text-transform:uppercase;}
+  .ccard .wpn{position:absolute; top:4px; left:4px; font-size:8px; font-weight:800;
+    background:rgba(0,0,0,.7); color:#fff; padding:2px 5px; letter-spacing:.1em;}
+  .ccard .edge{position:absolute; top:0; left:0; right:0; height:3px;}
+  /* lock treatment */
+  .ccard.locked img{filter:grayscale(1) brightness(.45);}
+  .ccard.locked .cost{position:absolute; top:54%; left:0; right:0; text-align:center;
+    transform:translateY(-50%); font-weight:800;}
+  .ccard.locked .cost .gem{color:#ff4d4d; font-size:15px;}
+  .ccard.locked .cost .n{color:#fff; font-size:17px; margin-left:4px;}
+  .ccard.locked .cost .u{display:block; font-size:8px; letter-spacing:.18em; color:#ffd23f;
+    margin-top:3px;}
+  /* selection brackets */
+  .ccard.sel .frame{outline:2px solid var(--yellow); outline-offset:2px;}
+  .ccard.sel::before,.ccard.sel::after{content:""; position:absolute; width:16px; height:16px;
+    border:3px solid var(--yellow); z-index:3;}
+  .ccard.sel::before{top:-7px; left:-7px; border-right:none; border-bottom:none;}
+  .ccard.sel::after{bottom:-7px; right:-7px; border-left:none; border-top:none;}
+
+  /* dark register card colors */
+  .dark .ccard .frame{background:#161c25; border:1px solid rgba(255,255,255,.12);}
+  .dark .ccard .nm{background:rgba(0,0,0,.78); color:#e8eef4;}
+  /* light register card colors */
+  .light .ccard .frame{background:#fff; box-shadow:0 1px 5px rgba(0,0,0,.16);}
+  .light .ccard .nm{background:#fff; color:var(--admin-text);}
+
+  /* detail panel shared */
+  .statrow{display:flex; align-items:center; gap:8px; font-size:11px; font-weight:700;
+    margin-bottom:7px;}
+  .statrow .k{width:38px; letter-spacing:.08em;}
+  .statrow .bar{flex:1; height:7px; position:relative; background:rgba(128,140,155,.25);}
+  .statrow .bar i{position:absolute; inset:0 auto 0 0; display:block;}
+  .statrow .v{width:30px; text-align:right;}
+  .sk{margin-top:12px;}
+  .sk .t{font-size:12px; font-weight:800; letter-spacing:.06em;}
+  .sk .d{font-size:11px; line-height:1.45; margin-top:3px;}
+  .cta{display:flex; align-items:center; justify-content:center; gap:10px;
+    height:56px; background:linear-gradient(180deg,#5BD2F7,#1F8FE0);
+    border-bottom:3px solid #15679f; color:#fff; font-weight:800; font-size:20px;
+    font-style:italic; letter-spacing:.03em; cursor:pointer;
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%);}
+  .randbtn{display:flex; align-items:center; justify-content:center; height:40px;
+    font-weight:800; font-size:13px; letter-spacing:.06em; cursor:pointer;}
+
+  .greeble-line{position:absolute; font-size:9px; letter-spacing:.18em; z-index:5;
+    text-transform:uppercase;}
+
+  .lab{display:inline-block; background:#141a22; border:1px solid #2a3340; color:var(--yellow);
+    font-size:11px; padding:2px 8px; letter-spacing:.08em; margin:0 0 8px; text-transform:uppercase;}
+</style>
+</head>
+<body>
+
+<h1>Character Select — Mockup Options</h1>
+<div class="sub">Real portraits · 11-character roster, built to grow · pick a direction</div>
+
+<p class="note"><b>Shared in all three:</b> rarity-style cost-tier top edge on each card
+(blue 3 / violet 5 / gold 8 / red 12 cores, free = cyan), weapon-type tag top-left,
+chamfered card corner, yellow bracket-corner selection, locked = desaturated portrait +
+core cost + "UNLOCK", core pill + BACK top-right, RANDOM kept. Stats/Special/Burst live in
+the detail panel — updates on hover/focus like now. Stage select (phase 2) gets its own
+mockup round after this screen is locked.</p>
+
+<!-- ====================== C1 LIGHT ADMIN ====================== -->
+<h2>C1 · NIKKE Squad — light admin register</h2>
+<p class="note">The authentic NIKKE squad look and our first light screen: near-white page,
+white cards, charcoal text. Grid left (scrollable as roster grows), full detail column right
+with the cyan DEPLOY slab. Cleanest information layout.</p>
+<div class="stage light" style="background:var(--admin-bg);">
+  <div class="hdr" style="color:var(--admin-text);">
+    <div class="t">CHARACTERS</div>
+    <div class="s" style="color:var(--admin-dim);">SELECT YOUR NIKKE // SQUAD FILE</div>
+    <div class="bar"></div>
+  </div>
+  <div class="topright">
+    <div class="backchip"><span>← BACK</span></div>
+    <div class="pill" ><span class="gem">◆</span> 43 <span class="plus">+</span></div>
+  </div>
+  <div class="greeble-line" style="left:46px; bottom:14px; color:rgba(42,46,53,.35);">
+    SOV-742-001 // SQUAD ROSTER 03/11 ACTIVE</div>
+
+  <!-- grid -->
+  <div id="grid-c1" style="position:absolute; left:44px; top:118px; width:740px;
+    display:flex; flex-wrap:wrap; gap:14px;"></div>
+
+  <div class="randbtn" style="position:absolute; left:44px; bottom:44px; width:160px;
+    background:#fff; color:var(--admin-text); box-shadow:0 1px 4px rgba(0,0,0,.16);">⟳ RANDOM</div>
+
+  <!-- detail column -->
+  <div style="position:absolute; right:36px; top:118px; width:430px; bottom:40px;
+    background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.16); padding:22px 24px;
+    color:var(--admin-text); display:flex; flex-direction:column;">
+    <div style="display:flex; gap:16px;">
+      <img src="../../assets/characters/scarlet/portrait-sq.png"
+        style="width:108px; height:108px; object-fit:cover; background:#222;">
+      <div>
+        <div style="font-family:'Arial Narrow'; font-weight:800; font-style:italic; font-size:30px;">SCARLET</div>
+        <div style="font-size:10px; letter-spacing:.22em; color:var(--admin-dim);">ATTACKER // SWORD OF THE ARK</div>
+        <div style="margin-top:8px;">
+          <div class="statrow"><span class="k">HP</span><div class="bar"><i style="width:55%;background:#36b35f;"></i></div><span class="v">11</span></div>
+          <div class="statrow"><span class="k">ATK</span><div class="bar"><i style="width:80%;background:#e8392e;"></i></div><span class="v">16</span></div>
+          <div class="statrow"><span class="k">SPD</span><div class="bar"><i style="width:64%;background:#1F8FE0;"></i></div><span class="v">32</span></div>
+          <div class="statrow"><span class="k">CRIT</span><div class="bar"><i style="width:25%;background:#d9a514;"></i></div><span class="v">25</span></div>
+        </div>
+      </div>
+    </div>
+    <div style="height:1px; background:var(--admin-hair); margin:14px 0;"></div>
+    <div class="sk"><div class="t" style="color:#c77700;">⚡ SPECIAL — SCARLET FLASH</div>
+      <div class="d" style="color:#4a4f57;">Unleash a lightning-fast iaido slash that cuts through all enemies in a wide arc.</div></div>
+    <div class="sk"><div class="t" style="color:#7a3fd6;">✦ BURST — DOOM SLAYER</div>
+      <div class="d" style="color:#4a4f57;">For 10 seconds, every attack chains lightning to 3 nearby enemies.</div></div>
+    <div style="flex:1;"></div>
+    <div class="cta">▶ DEPLOY — SELECT STAGE</div>
+  </div>
+  <div class="scan" style="opacity:.4;"></div>
+</div>
+
+<!-- ====================== C2 DARK FIELD ====================== -->
+<h2>C2 · Dark field register — full-art backdrop</h2>
+<p class="note">Same structure as C1 but stays dark like the main menu, with the selected
+character's full-body art looming behind the detail panel (dark glass). More dramatic,
+less "menu-like"; light register would then debut on Shop/Settings instead.</p>
+<div class="stage dark">
+  <img src="../../assets/characters/scarlet/scarlet.png"
+    style="position:absolute; right:120px; top:30px; height:115%; opacity:.9;
+    filter:drop-shadow(0 0 24px rgba(53,197,242,.25));">
+  <div style="position:absolute; inset:0; background:linear-gradient(90deg, rgba(10,13,18,.92) 45%, rgba(10,13,18,.25));"></div>
+
+  <div class="hdr" style="color:#fff;">
+    <div class="t">CHARACTERS</div>
+    <div class="s" style="color:var(--muted);">SELECT YOUR NIKKE // SQUAD FILE</div>
+    <div class="bar"></div>
+  </div>
+  <div class="topright">
+    <div class="backchip"><span>← BACK</span></div>
+    <div class="pill"><span class="gem">◆</span> 43 <span class="plus">+</span></div>
+  </div>
+
+  <div id="grid-c2" style="position:absolute; left:44px; top:118px; width:600px;
+    display:flex; flex-wrap:wrap; gap:14px;"></div>
+
+  <div class="randbtn" style="position:absolute; left:44px; bottom:44px; width:160px;
+    background:rgba(0,0,0,.6); color:#fff; border:1px solid rgba(255,255,255,.2);">⟳ RANDOM</div>
+
+  <!-- detail glass panel -->
+  <div style="position:absolute; right:36px; top:130px; width:380px; bottom:48px;
+    background:rgba(8,11,16,.72); border:1px solid rgba(90,160,200,.3);
+    padding:20px 22px; display:flex; flex-direction:column;">
+    <div style="font-family:'Arial Narrow'; font-weight:800; font-style:italic; font-size:34px;">SCARLET</div>
+    <div style="font-size:10px; letter-spacing:.22em; color:var(--cyan);">ATTACKER // SWORD OF THE ARK</div>
+    <div style="margin-top:12px;">
+      <div class="statrow"><span class="k">HP</span><div class="bar"><i style="width:55%;background:#4ade80;"></i></div><span class="v">11</span></div>
+      <div class="statrow"><span class="k">ATK</span><div class="bar"><i style="width:80%;background:#ff6a5e;"></i></div><span class="v">16</span></div>
+      <div class="statrow"><span class="k">SPD</span><div class="bar"><i style="width:64%;background:#5fa8e8;"></i></div><span class="v">32</span></div>
+      <div class="statrow"><span class="k">CRIT</span><div class="bar"><i style="width:25%;background:#ffd23f;"></i></div><span class="v">25</span></div>
+    </div>
+    <div style="height:1px; background:rgba(255,255,255,.14); margin:12px 0;"></div>
+    <div class="sk"><div class="t" style="color:#ffb45e;">⚡ SPECIAL — SCARLET FLASH</div>
+      <div class="d" style="color:#aeb8c4;">Unleash a lightning-fast iaido slash that cuts through all enemies in a wide arc.</div></div>
+    <div class="sk"><div class="t" style="color:#b08aff;">✦ BURST — DOOM SLAYER</div>
+      <div class="d" style="color:#aeb8c4;">For 10 seconds, every attack chains lightning to 3 nearby enemies.</div></div>
+    <div style="flex:1;"></div>
+    <div class="cta">▶ DEPLOY — SELECT STAGE</div>
+  </div>
+  <div class="scan"></div>
+</div>
+
+<!-- ====================== C3 SHOWCASE ====================== -->
+<h2>C3 · Showcase carousel — full-art hero + bottom strip</h2>
+<p class="note">Fighting-game energy: huge character art center, giant oblique name behind it,
+stats in a slim left column, and the whole roster as a horizontal strip along the bottom
+(scrolls as it grows — no grid rebuilds ever). Least like NIKKE's squad page, most like its
+character-detail page.</p>
+<div class="stage dark">
+  <div style="position:absolute; left:30%; top:90px; font-family:'Arial Narrow';
+    font-weight:800; font-style:italic; font-size:150px; color:rgba(53,197,242,.08);
+    letter-spacing:.02em; white-space:nowrap;">SCARLET</div>
+  <img src="../../assets/characters/scarlet/scarlet.png"
+    style="position:absolute; left:50%; transform:translateX(-50%); top:36px; height:92%;
+    filter:drop-shadow(0 0 30px rgba(0,0,0,.6));">
+
+  <div class="hdr" style="color:#fff;">
+    <div class="t">CHARACTERS</div>
+    <div class="s" style="color:var(--muted);">SELECT YOUR NIKKE</div>
+    <div class="bar"></div>
+  </div>
+  <div class="topright">
+    <div class="backchip"><span>← BACK</span></div>
+    <div class="pill"><span class="gem">◆</span> 43 <span class="plus">+</span></div>
+  </div>
+
+  <!-- left stats column -->
+  <div style="position:absolute; left:44px; top:150px; width:300px;
+    background:rgba(8,11,16,.72); border:1px solid rgba(90,160,200,.3); padding:18px 20px;">
+    <div style="font-family:'Arial Narrow'; font-weight:800; font-style:italic; font-size:30px;">SCARLET</div>
+    <div style="font-size:10px; letter-spacing:.22em; color:var(--cyan); margin-bottom:10px;">ATTACKER // SWORD OF THE ARK</div>
+    <div class="statrow"><span class="k">HP</span><div class="bar"><i style="width:55%;background:#4ade80;"></i></div><span class="v">11</span></div>
+    <div class="statrow"><span class="k">ATK</span><div class="bar"><i style="width:80%;background:#ff6a5e;"></i></div><span class="v">16</span></div>
+    <div class="statrow"><span class="k">SPD</span><div class="bar"><i style="width:64%;background:#5fa8e8;"></i></div><span class="v">32</span></div>
+    <div class="statrow"><span class="k">CRIT</span><div class="bar"><i style="width:25%;background:#ffd23f;"></i></div><span class="v">25</span></div>
+    <div style="height:1px; background:rgba(255,255,255,.14); margin:10px 0;"></div>
+    <div class="sk"><div class="t" style="color:#ffb45e;">⚡ SCARLET FLASH</div>
+      <div class="d" style="color:#aeb8c4;">Iaido slash arc through all enemies.</div></div>
+    <div class="sk"><div class="t" style="color:#b08aff;">✦ DOOM SLAYER</div>
+      <div class="d" style="color:#aeb8c4;">10s of chain lightning on every attack.</div></div>
+  </div>
+
+  <!-- DEPLOY right -->
+  <div class="cta" style="position:absolute; right:44px; top:300px; width:280px;">▶ DEPLOY</div>
+  <div class="randbtn" style="position:absolute; right:44px; top:372px; width:280px;
+    background:rgba(0,0,0,.6); color:#fff; border:1px solid rgba(255,255,255,.2);">⟳ RANDOM</div>
+
+  <!-- bottom roster strip -->
+  <div style="position:absolute; left:0; right:0; bottom:0; height:118px;
+    background:rgba(0,0,0,.62); border-top:1px solid rgba(255,255,255,.14);
+    display:flex; align-items:center; padding:0 40px; gap:10px;">
+    <div style="font-size:26px; color:#fff; cursor:pointer;">◀</div>
+    <div id="strip-c3" style="display:flex; gap:10px; flex:1; overflow:hidden;"></div>
+    <div style="font-size:26px; color:#fff; cursor:pointer;">▶</div>
+  </div>
+  <div class="scan"></div>
+</div>
+
+<p class="note" style="margin-top:30px;">Open questions: <b>C1 / C2 / C3?</b> · is the
+cost-tier colored top edge the right "rarity" read, or should tiers get NIKKE rarity frames
+(R/SR/SSR)? · stage select phase comes next round.</p>
+
+<script>
+const CHARS = [
+  // [folder, name, cost(0=unlocked), weapon]
+  ["snow-white","Snow White",0,"AR"],
+  ["scarlet","Scarlet",0,"SWORD"],
+  ["kilo","Kilo",0,"MG"],
+  ["rapunzel","Rapunzel",3,"RL"],
+  ["commander","Commander",3,"SMG"],
+  ["nayuta","Nayuta",5,"SR"],
+  ["marian","Marian",5,"BEAM"],
+  ["crown","Crown",8,"SG"],
+  ["cecil","Cecil",8,"SR"],
+  ["sin","Sin",8,"SCYTHE"],
+  ["wells","Wells",12,"AR"],
+];
+const TIER = c => c===0 ? "#35C5F2" : c<=3 ? "#5FA8E8" : c<=5 ? "#A06BE0" : c<=8 ? "#F8A33B" : "#E8392E";
+
+function card(c, selected){
+  const [folder,name,cost,wpn] = c;
+  const locked = cost>0;
+  return `<div class="ccard ${locked?"locked":""} ${selected?"sel":""}">
+    <div class="frame">
+      <img src="../../assets/characters/${folder}/portrait-sq.png">
+      <div class="edge" style="background:${TIER(cost)};"></div>
+      <div class="wpn">${wpn}</div>
+      ${locked?`<div class="cost"><span class="gem">◆</span><span class="n">${cost}</span><span class="u">UNLOCK</span></div>`:""}
+      <div class="nm">${name}</div>
+    </div></div>`;
+}
+document.getElementById("grid-c1").innerHTML = CHARS.map((c,i)=>card(c,i===1)).join("");
+document.getElementById("grid-c2").innerHTML = CHARS.map((c,i)=>card(c,i===1)).join("");
+// C3 strip: smaller square cards
+document.getElementById("strip-c3").innerHTML = CHARS.map((c,i)=>{
+  const [folder,name,cost] = c; const locked = cost>0;
+  return `<div style="position:relative; width:86px; height:92px; flex:none; cursor:pointer;
+    ${i===1?"outline:2px solid #FFD23F; outline-offset:2px;":""}">
+    <img src="../../assets/characters/${folder}/portrait-sq.png"
+      style="width:86px; height:74px; object-fit:cover; display:block;
+      ${locked?"filter:grayscale(1) brightness(.45);":""}">
+    <div style="position:absolute; top:0; left:0; right:0; height:3px; background:${TIER(cost)};"></div>
+    ${locked?`<div style="position:absolute; top:26px; width:100%; text-align:center;
+      color:#fff; font-weight:800; font-size:12px;"><span style="color:#ff4d4d;">◆</span>${cost}</div>`:""}
+    <div style="height:18px; background:rgba(0,0,0,.8); color:#dfe6ec; font-size:9px;
+      font-weight:700; display:flex; align-items:center; justify-content:center;
+      letter-spacing:.04em; text-transform:uppercase;">${name}</div>
+  </div>`;
+}).join("");
+</script>
+</body>
+</html>

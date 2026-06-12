@@ -4,6 +4,9 @@ extends PanelContainer
 static var is_hovered: bool = false
 static var _instance: Control = null  # Track the active instance for rect checking
 
+const UI := preload("res://scripts/ui/UITheme.gd")
+const BracketStyleBoxScript := preload("res://scripts/ui/components/BracketStyleBox.gd")
+
 # Use safe lookups for all nodes to prevent instantiation errors
 @onready var song_label: Label = find_child("SongLabel", true, false)
 @onready var progress_bar: ProgressBar = find_child("ProgressBar", true, false)
@@ -14,11 +17,12 @@ static var _instance: Control = null  # Track the active instance for rect check
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_instance = self  # Register this instance for static checks
-	
+	_apply_styles()
+
 	# Track mouse hover to block game input
 	mouse_entered.connect(_on_mouse_entered)
 	mouse_exited.connect(_on_mouse_exited)
-	
+
 	if AudioDirector:
 		AudioDirector.music_track_changed.connect(_on_track_changed)
 		AudioDirector.music_playback_state_changed.connect(_on_state_changed)
@@ -37,6 +41,50 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if _instance == self:
 		_instance = null
+
+
+## Bracket-frame chip styling (dark field register, approved HUD mockup
+## docs/mockups/hud_v2.html).
+func _apply_styles() -> void:
+	var panel_style = BracketStyleBoxScript.new()
+	add_theme_stylebox_override("panel", panel_style)
+
+	if song_label:
+		song_label.add_theme_font_override("font", UI.FONT_BOLD)
+		song_label.add_theme_font_size_override("font_size", 15)
+		song_label.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
+
+	if progress_bar:
+		var bar_bg := StyleBoxFlat.new()
+		bar_bg.bg_color = Color(1, 1, 1, 0.12)
+		bar_bg.set_corner_radius_all(0)
+		var bar_fill := StyleBoxFlat.new()
+		bar_fill.bg_color = UI.ACCENT_CYAN_DEEP
+		bar_fill.set_corner_radius_all(0)
+		progress_bar.add_theme_stylebox_override("background", bar_bg)
+		progress_bar.add_theme_stylebox_override("fill", bar_fill)
+		progress_bar.custom_minimum_size.y = 6
+
+	for btn in [prev_btn, play_pause_btn, next_btn]:
+		if btn == null:
+			continue
+		var normal := StyleBoxFlat.new()
+		normal.bg_color = Color(1, 1, 1, 0.06)
+		normal.set_corner_radius_all(0)
+		var hover := StyleBoxFlat.new()
+		hover.bg_color = Color(0.122, 0.561, 0.878, 0.35)
+		hover.set_corner_radius_all(0)
+		var pressed := StyleBoxFlat.new()
+		pressed.bg_color = Color(0.122, 0.561, 0.878, 0.55)
+		pressed.set_corner_radius_all(0)
+		btn.add_theme_stylebox_override("normal", normal)
+		btn.add_theme_stylebox_override("hover", hover)
+		btn.add_theme_stylebox_override("pressed", pressed)
+		btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		btn.add_theme_font_override("font", UI.FONT_BOLD)
+		btn.add_theme_font_size_override("font_size", 14)
+		btn.add_theme_color_override("font_color", Color(1, 1, 1, 0.75))
+		btn.add_theme_color_override("font_hover_color", Color.WHITE)
 
 func _on_mouse_entered() -> void:
 	is_hovered = true

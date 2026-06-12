@@ -39,6 +39,35 @@ static func get_unlock_cost(char_id: String) -> int:
 		return 0
 	return UNLOCK_COSTS.get(char_id, 5)
 
+
+# Human-readable weapon names keyed by weapon_kind (UI: detail role line)
+const WEAPON_DISPLAY_NAMES := {
+	"sniper": "Sniper Rifle",
+	"sword": "Sword",
+	"rocket": "Rocket Launcher",
+	"smg": "SMG",
+	"assault": "Assault Rifle",
+	"minigun": "Minigun",
+	"shotgun": "Shotgun",
+}
+
+# Short tags for grid cards (AR/SR/SG...)
+const WEAPON_TAGS := {
+	"sniper": "SR",
+	"sword": "SWORD",
+	"rocket": "RL",
+	"smg": "SMG",
+	"assault": "AR",
+	"minigun": "MG",
+	"shotgun": "SG",
+}
+
+static func get_weapon_display_name(weapon_kind: String) -> String:
+	return WEAPON_DISPLAY_NAMES.get(weapon_kind, weapon_kind.capitalize())
+
+static func get_weapon_tag(weapon_kind: String) -> String:
+	return WEAPON_TAGS.get(weapon_kind, weapon_kind.to_upper())
+
 # Controller scripts
 const CONTROLLER_SCRIPTS = {
 	"scarlet": preload("res://scripts/characters/ScarletController.gd"),
@@ -69,6 +98,7 @@ func _load_all_characters() -> void:
 	_register_character("snow_white", {
 		"weapon_kind": "sniper",
 		"display_name": "Snow White",
+		"squad": "Pioneer",
 		"description": "Sniper with piercing shots and turrets",
 		"sprite_path": "snow-white-sprite.png",
 		"portrait_path": "portrait-sq.png",
@@ -90,7 +120,7 @@ func _load_all_characters() -> void:
 		"special_upgrade1": "Ammo Cache: +2 turret missile capacity per level. Max: 10.",
 		"special_upgrade2": "More Turrets: +2 max turret charges per level. Max: 7.",
 		"burst_name": "Seven Dwarves",
-		"burst_description": "90° ice beam dealing 50 damage. Massive range.",
+		"burst_description": "90° blast dealing 50 damage. Massive range.",
 		"burst_upgrade1": "Incendiary Rounds: Burns enemies for 34% max HP/s for 3s. Bosses take 12% instead.",
 		"burst_upgrade2": "Fully Active: Kills during burst refill burst gauge.",
 	})
@@ -98,6 +128,7 @@ func _load_all_characters() -> void:
 	_register_character("scarlet", {
 		"weapon_kind": "sword",
 		"display_name": "Scarlet",
+		"squad": "Pioneer",
 		"description": "Melee fighter who sacrifices HP for power",
 		"sprite_path": "scarlet-sprite.png",
 		"portrait_path": "portrait-sq.png",
@@ -125,6 +156,7 @@ func _load_all_characters() -> void:
 	_register_character("rapunzel", {
 		"weapon_kind": "rocket",
 		"display_name": "Rapunzel",
+		"squad": "Pioneer",
 		"description": "Rocket launcher with healing abilities",
 		"sprite_path": "rapunzel-sprite.png",
 		"portrait_path": "portrait-sq.png",
@@ -154,6 +186,7 @@ func _load_all_characters() -> void:
 	_register_character("nayuta", {
 		"weapon_kind": "smg",
 		"display_name": "Nayuta",
+		"squad": "Pioneer",
 		"description": "SMG with clone summoning",
 		"sprite_path": "nayuta-sprite.png",
 		"portrait_path": "portrait-sq.png",
@@ -183,6 +216,7 @@ func _load_all_characters() -> void:
 	_register_character("commander", {
 		"weapon_kind": "assault",
 		"display_name": "Commander",
+		"squad": "Goddess",
 		"description": "Leader with ally summoning",
 		"sprite_path": "commander-sprite.png",
 		"portrait_path": "portrait-sq.png",
@@ -212,6 +246,7 @@ func _load_all_characters() -> void:
 	_register_character("marian", {
 		"weapon_kind": "minigun",
 		"display_name": "Marian",
+		"squad": "White Knight",
 		"description": "Minigun with charm and epic beam burst",
 		"sprite_path": "marian-sprite.png",
 		"portrait_path": "portrait-sq.png",
@@ -241,6 +276,7 @@ func _load_all_characters() -> void:
 	_register_character("crown", {
 		"weapon_kind": "minigun",
 		"display_name": "Crown",
+		"squad": "White Knight",
 		"description": "Minigun cavalry with golden nova burst",
 		"sprite_path": "crown-sprite.png",
 		"portrait_path": "portrait-sq.png",
@@ -270,6 +306,7 @@ func _load_all_characters() -> void:
 	_register_character("kilo", {
 		"weapon_kind": "shotgun",
 		"display_name": "Kilo",
+		"squad": "Heavy Gram",
 		"description": "Shotgun specialist with explosive blasts",
 		"sprite_path": "kilo-sprite.png",
 		"portrait_path": "portrait-sq.png",
@@ -301,6 +338,7 @@ func _load_all_characters() -> void:
 	_register_character("cecil", {
 		"weapon_kind": "smg",
 		"display_name": "Cecil",
+		"squad": "Eden",
 		"description": "SMG with drone robots and hacking burst",
 		"sprite_path": "cecil-sprite.png",
 		"portrait_path": "portrait-sq.png",
@@ -330,6 +368,7 @@ func _load_all_characters() -> void:
 	_register_character("sin", {
 		"weapon_kind": "smg",
 		"display_name": "Sin",
+		"squad": "Real Kindness",
 		"description": "SMG with charm and life drain abilities",
 		"sprite_path": "sin-sprite.png",
 		"portrait_path": "portrait-sq.png",
@@ -359,6 +398,7 @@ func _load_all_characters() -> void:
 	_register_character("wells", {
 		"weapon_kind": "sniper",
 		"display_name": "Wells",
+		"squad": "Mnemosyne",
 		"description": "Time Traveler Sniper with Bullet Time",
 		"sprite_path": "wells-sprite.png",
 		"portrait_path": "portrait-sq.png",

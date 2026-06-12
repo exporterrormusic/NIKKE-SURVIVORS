@@ -1,9 +1,9 @@
-extends Node
+﻿extends Node
 
 ## Crown ally behavior - Minigun with golden bullets
 
 func configure(ally, _registry) -> void:
-	var hp_mult := 1.0 + (ally.player_level - 1) * 0.25
+	var hp_mult: float = 1.0 + (ally.player_level - 1) * 0.25
 	ally.max_hp = int(70 * hp_mult)
 	ally.move_speed = 240.0
 	ally.attack_damage = ally._get_scaled_damage(2)

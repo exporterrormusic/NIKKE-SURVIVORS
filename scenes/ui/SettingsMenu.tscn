@@ -1,82 +1,10 @@
-[gd_scene load_steps=14 format=3 uid="uid://settings_menu_scene"]
+[gd_scene format=3 uid="uid://settings_menu_scene"]
 
-[ext_resource type="Script" path="res://scripts/ui/SettingsMenu.gd" id="1"]
-[ext_resource type="FontFile" path="res://resources/fonts/futura_condensed_extra_bold.tres" id="2"]
-[ext_resource type="FontFile" path="res://resources/fonts/pretendard_bold.tres" id="3"]
-[ext_resource type="Script" path="res://scripts/ui/components/VenetianBlindsBackground.gd" id="4"]
-
-[sub_resource type="StyleBoxFlat" id="panel_style"]
-bg_color = Color(0.04, 0.055, 0.08, 0.97)
-border_width_left = 4
-border_width_top = 4
-border_width_right = 4
-border_width_bottom = 4
-border_color = Color(0.95, 0.95, 0.98, 0.9)
-corner_radius_top_left = 12
-corner_radius_top_right = 12
-corner_radius_bottom_left = 12
-corner_radius_bottom_right = 12
-shadow_color = Color(0, 0, 0, 0.5)
-shadow_size = 6
-shadow_offset = Vector2(3, 3)
-
-[sub_resource type="StyleBoxFlat" id="tab_active_style"]
-bg_color = Color(0.95, 0.95, 0.98, 1.0)
-border_width_bottom = 4
-border_color = Color(1.0, 1.0, 1.0, 1.0)
-corner_radius_top_left = 4
-corner_radius_top_right = 4
-
-[sub_resource type="StyleBoxFlat" id="tab_inactive_style"]
-bg_color = Color(0.082, 0.11, 0.157, 0.95)
-border_width_bottom = 2
-border_color = Color(0.4, 0.4, 0.45, 0.8)
-corner_radius_top_left = 4
-corner_radius_top_right = 4
-
-[sub_resource type="StyleBoxFlat" id="letterbox_style"]
-bg_color = Color(0.04, 0.055, 0.08, 0.95)
-border_width_top = 3
-border_width_bottom = 3
-border_color = Color(0.75, 0.75, 0.8, 0.8)
-shadow_color = Color(0, 0, 0, 0.35)
-shadow_size = 3
-shadow_offset = Vector2(2, 2)
-
-[sub_resource type="StyleBoxFlat" id="slider_background"]
-bg_color = Color(0.15, 0.17, 0.22, 1.0)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.3, 0.32, 0.38, 1.0)
-corner_radius_top_left = 8
-corner_radius_top_right = 8
-corner_radius_bottom_left = 8
-corner_radius_bottom_right = 8
-
-[sub_resource type="StyleBoxFlat" id="slider_fill"]
-bg_color = Color(0.4, 0.75, 1.0, 1.0)
-corner_radius_top_left = 6
-corner_radius_top_right = 6
-corner_radius_bottom_left = 6
-corner_radius_bottom_right = 6
-
-[sub_resource type="StyleBoxFlat" id="slider_grabber_area"]
-bg_color = Color(0.4, 0.75, 1.0, 1.0)
-corner_radius_top_left = 6
-corner_radius_top_right = 6
-corner_radius_bottom_left = 6
-corner_radius_bottom_right = 6
-
-[sub_resource type="StyleBoxFlat" id="slider_grabber_highlight"]
-bg_color = Color(0.5, 0.85, 1.0, 1.0)
-corner_radius_top_left = 6
-corner_radius_top_right = 6
-corner_radius_bottom_left = 6
-corner_radius_bottom_right = 6
-
-[sub_resource type="StyleBoxEmpty" id="slider_grabber"]
+[ext_resource type="Script" path="res://scripts/ui/SettingsMenu.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/ui/components/NikkeCardButton.gd" id="2_card"]
+[ext_resource type="Script" path="res://scripts/ui/components/CategoryRailButton.gd" id="3_rail"]
+[ext_resource type="Script" path="res://scripts/ui/components/NikkeSegmentToggle.gd" id="4_seg"]
+[ext_resource type="Script" path="res://scripts/ui/components/NikkeGreebles.gd" id="5_greebles"]
 
 [node name="SettingsMenu" type="Control"]
 layout_mode = 3
@@ -85,18 +13,9 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1")
+script = ExtResource("1_script")
 
-[node name="Background" type="Control" parent="."]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-script = ExtResource("4")
-
-[node name="Overlay" type="ColorRect" parent="."]
+[node name="PageBg" type="ColorRect" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -104,453 +23,364 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0, 0, 0, 0.35)
+color = Color(0.929, 0.937, 0.949, 1)
 
-[node name="TopBar" type="Panel" parent="."]
-layout_mode = 1
-anchors_preset = -1
-anchor_right = 1.0
-offset_top = 24.0
-offset_bottom = 184.0
-grow_horizontal = 2
+[node name="HeaderTitle" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 66.0
+offset_top = 36.0
+offset_right = 900.0
+offset_bottom = 110.0
 mouse_filter = 2
-theme_override_styles/panel = SubResource("letterbox_style")
-
-[node name="TitleLabel" type="Label" parent="TopBar"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 24.0
-offset_right = -24.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
-theme_override_colors/font_outline_color = Color(0.1, 0.1, 0.15, 1)
-theme_override_constants/outline_size = 3
-theme_override_fonts/font = ExtResource("2")
-theme_override_font_sizes/font_size = 90
 text = "SETTINGS"
-horizontal_alignment = 1
-vertical_alignment = 1
+
+[node name="HeaderSub" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 69.0
+offset_top = 112.0
+offset_right = 900.0
+offset_bottom = 140.0
+mouse_filter = 2
+text = "SYSTEM CONFIG // COMMANDER PREFERENCES"
+
+[node name="HeaderBar" type="ColorRect" parent="."]
+layout_mode = 0
+offset_left = 69.0
+offset_top = 150.0
+offset_right = 150.0
+offset_bottom = 154.0
+mouse_filter = 2
+color = Color(0.208, 0.773, 0.949, 1)
+
+[node name="TopRightStrip" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -400.0
+offset_top = 33.0
+offset_right = -36.0
+offset_bottom = 90.0
+grow_horizontal = 0
+alignment = 2
+
+[node name="BackButton" type="Button" parent="TopRightStrip"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(190, 57)
+layout_mode = 2
+script = ExtResource("2_card")
+card_style = "white_blue"
+title_text = "← BACK"
+title_size = 21
+
+[node name="Rail" type="VBoxContainer" parent="."]
+layout_mode = 0
+offset_left = 66.0
+offset_top = 192.0
+offset_right = 486.0
+offset_bottom = 900.0
+theme_override_constants/separation = 12
+
+[node name="AudioRail" type="Button" parent="Rail"]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("3_rail")
+title_text = "AUDIO"
+desc_text = "VOLUME MIX"
+
+[node name="VideoRail" type="Button" parent="Rail"]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("3_rail")
+title_text = "VIDEO"
+desc_text = "DISPLAY OUTPUT"
+
+[node name="GameplayRail" type="Button" parent="Rail"]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("3_rail")
+title_text = "GAMEPLAY"
+desc_text = "READABILITY & FEEDBACK"
+
+[node name="ControlsRail" type="Button" parent="Rail"]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("3_rail")
+title_text = "CONTROLS"
+desc_text = "KEY BINDINGS"
 
 [node name="ContentPanel" type="Panel" parent="."]
+unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = -1
-anchor_left = 0.25
-anchor_top = 0.25
-anchor_right = 0.75
-anchor_bottom = 0.9
-offset_top = 0.0
-offset_bottom = 0.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 534.0
+offset_top = 192.0
+offset_right = -54.0
+offset_bottom = -90.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_styles/panel = SubResource("panel_style")
 
-[node name="VBox" type="VBoxContainer" parent="ContentPanel"]
+[node name="AudioPane" type="VBoxContainer" parent="ContentPanel"]
+unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 32.0
-offset_top = 28.0
-offset_right = -32.0
-offset_bottom = -28.0
+offset_left = 45.0
+offset_top = 42.0
+offset_right = -45.0
+offset_bottom = -45.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/separation = 20
+theme_override_constants/separation = 12
 
-[node name="TabBar" type="HBoxContainer" parent="ContentPanel/VBox"]
+[node name="AudioCap" type="HBoxContainer" parent="ContentPanel/AudioPane"]
 layout_mode = 2
-theme_override_constants/separation = 16
-alignment = 1
+theme_override_constants/separation = 15
 
-[node name="AudioTab" type="Button" parent="ContentPanel/VBox/TabBar"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(260, 84)
+[node name="Tick" type="ColorRect" parent="ContentPanel/AudioPane/AudioCap"]
+custom_minimum_size = Vector2(6, 24)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
-theme_override_colors/font_pressed_color = Color(0.1, 0.1, 0.12, 1)
-theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 40
-theme_override_styles/normal = SubResource("tab_inactive_style")
-theme_override_styles/hover = SubResource("tab_inactive_style")
-theme_override_styles/pressed = SubResource("tab_active_style")
+size_flags_vertical = 4
+color = Color(0.208, 0.773, 0.949, 1)
+
+[node name="Cap" type="Label" parent="ContentPanel/AudioPane/AudioCap"]
+layout_mode = 2
 text = "AUDIO"
 
-[node name="VideoTab" type="Button" parent="ContentPanel/VBox/TabBar"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(260, 84)
+[node name="MusicRow" type="HBoxContainer" parent="ContentPanel/AudioPane"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
-theme_override_colors/font_pressed_color = Color(0.1, 0.1, 0.12, 1)
-theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 40
-theme_override_styles/normal = SubResource("tab_inactive_style")
-theme_override_styles/hover = SubResource("tab_inactive_style")
-theme_override_styles/pressed = SubResource("tab_active_style")
+theme_override_constants/separation = 24
+
+[node name="MusicLabel" type="Label" parent="ContentPanel/AudioPane/MusicRow"]
+custom_minimum_size = Vector2(255, 0)
+layout_mode = 2
+text = "MUSIC"
+
+[node name="MusicSlider" type="HSlider" parent="ContentPanel/AudioPane/MusicRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 54)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 1.0
+step = 0.01
+value = 0.8
+
+[node name="MusicValue" type="Label" parent="ContentPanel/AudioPane/MusicRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(105, 0)
+layout_mode = 2
+horizontal_alignment = 2
+text = "80%"
+
+[node name="SfxRow" type="HBoxContainer" parent="ContentPanel/AudioPane"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="SfxLabel" type="Label" parent="ContentPanel/AudioPane/SfxRow"]
+custom_minimum_size = Vector2(255, 0)
+layout_mode = 2
+text = "SFX"
+
+[node name="SfxSlider" type="HSlider" parent="ContentPanel/AudioPane/SfxRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 54)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 1.0
+step = 0.01
+value = 0.8
+
+[node name="SfxValue" type="Label" parent="ContentPanel/AudioPane/SfxRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(105, 0)
+layout_mode = 2
+horizontal_alignment = 2
+text = "80%"
+
+[node name="VideoPane" type="VBoxContainer" parent="ContentPanel"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 45.0
+offset_top = 42.0
+offset_right = -45.0
+offset_bottom = -45.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
+
+[node name="VideoCap" type="HBoxContainer" parent="ContentPanel/VideoPane"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="Tick" type="ColorRect" parent="ContentPanel/VideoPane/VideoCap"]
+custom_minimum_size = Vector2(6, 24)
+layout_mode = 2
+size_flags_vertical = 4
+color = Color(0.208, 0.773, 0.949, 1)
+
+[node name="Cap" type="Label" parent="ContentPanel/VideoPane/VideoCap"]
+layout_mode = 2
 text = "VIDEO"
 
-[node name="ControlsTab" type="Button" parent="ContentPanel/VBox/TabBar"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(260, 84)
-layout_mode = 2
-theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
-theme_override_colors/font_pressed_color = Color(0.1, 0.1, 0.12, 1)
-theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 40
-theme_override_styles/normal = SubResource("tab_inactive_style")
-theme_override_styles/hover = SubResource("tab_inactive_style")
-theme_override_styles/pressed = SubResource("tab_active_style")
-text = "CONTROLS"
-
-[node name="ContentSeparator" type="ColorRect" parent="ContentPanel/VBox"]
-custom_minimum_size = Vector2(0, 2)
-layout_mode = 2
-color = Color(0.75, 0.75, 0.8, 0.4)
-
-[node name="PanelContainer" type="Control" parent="ContentPanel/VBox"]
-layout_mode = 2
-size_flags_vertical = 3
-
-[node name="AudioPanel" type="VBoxContainer" parent="ContentPanel/VBox/PanelContainer"]
-unique_name_in_owner = true
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/separation = 64
-alignment = 1
-
-[node name="MusicSection" type="VBoxContainer" parent="ContentPanel/VBox/PanelContainer/AudioPanel"]
+[node name="ResolutionRow" type="HBoxContainer" parent="ContentPanel/VideoPane"]
 layout_mode = 2
 theme_override_constants/separation = 24
 
-[node name="MusicLabel" type="Label" parent="ContentPanel/VBox/PanelContainer/AudioPanel/MusicSection"]
+[node name="ResolutionLabel" type="Label" parent="ContentPanel/VideoPane/ResolutionRow"]
+custom_minimum_size = Vector2(255, 0)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 52
-text = "MUSIC"
-horizontal_alignment = 1
-
-[node name="MusicRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/AudioPanel/MusicSection"]
-layout_mode = 2
-theme_override_constants/separation = 40
-
-[node name="MusicSlider" type="HSlider" parent="ContentPanel/VBox/PanelContainer/AudioPanel/MusicSection/MusicRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 32)
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 1
-theme_override_styles/slider = SubResource("slider_background")
-theme_override_styles/grabber_area = SubResource("slider_grabber_area")
-theme_override_styles/grabber_area_highlight = SubResource("slider_grabber_highlight")
-min_value = 0.0
-max_value = 1.0
-step = 0.01
-value = 1.0
-
-[node name="MusicValue" type="Label" parent="ContentPanel/VBox/PanelContainer/AudioPanel/MusicSection/MusicRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(140, 0)
-layout_mode = 2
-theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 42
-text = "100%"
-horizontal_alignment = 2
-
-[node name="SfxSection" type="VBoxContainer" parent="ContentPanel/VBox/PanelContainer/AudioPanel"]
-layout_mode = 2
-theme_override_constants/separation = 24
-
-[node name="SfxLabel" type="Label" parent="ContentPanel/VBox/PanelContainer/AudioPanel/SfxSection"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 52
-text = "SFX"
-horizontal_alignment = 1
-
-[node name="SfxRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/AudioPanel/SfxSection"]
-layout_mode = 2
-theme_override_constants/separation = 40
-
-[node name="SfxSlider" type="HSlider" parent="ContentPanel/VBox/PanelContainer/AudioPanel/SfxSection/SfxRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 32)
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 1
-theme_override_styles/slider = SubResource("slider_background")
-theme_override_styles/grabber_area = SubResource("slider_grabber_area")
-theme_override_styles/grabber_area_highlight = SubResource("slider_grabber_highlight")
-min_value = 0.0
-max_value = 1.0
-step = 0.01
-value = 1.0
-
-[node name="SfxValue" type="Label" parent="ContentPanel/VBox/PanelContainer/AudioPanel/SfxSection/SfxRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(140, 0)
-layout_mode = 2
-theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 42
-text = "100%"
-horizontal_alignment = 2
-
-[node name="VideoPanel" type="VBoxContainer" parent="ContentPanel/VBox/PanelContainer"]
-unique_name_in_owner = true
-visible = false
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/separation = 40
-alignment = 1
-
-[node name="ResolutionSection" type="VBoxContainer" parent="ContentPanel/VBox/PanelContainer/VideoPanel"]
-layout_mode = 2
-theme_override_constants/separation = 20
-
-[node name="ResolutionLabel" type="Label" parent="ContentPanel/VBox/PanelContainer/VideoPanel/ResolutionSection"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 52
 text = "RESOLUTION"
-horizontal_alignment = 1
 
-[node name="ResolutionOptions" type="OptionButton" parent="ContentPanel/VBox/PanelContainer/VideoPanel/ResolutionSection"]
+[node name="ResolutionOptions" type="OptionButton" parent="ContentPanel/VideoPane/ResolutionRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(380, 72)
+custom_minimum_size = Vector2(0, 60)
 layout_mode = 2
-size_flags_horizontal = 4
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 40
+size_flags_horizontal = 3
 
-[node name="FullscreenSection" type="VBoxContainer" parent="ContentPanel/VBox/PanelContainer/VideoPanel"]
+[node name="FullscreenRow" type="HBoxContainer" parent="ContentPanel/VideoPane"]
 layout_mode = 2
-theme_override_constants/separation = 20
+theme_override_constants/separation = 24
 
-[node name="FullscreenLabel" type="Label" parent="ContentPanel/VBox/PanelContainer/VideoPanel/FullscreenSection"]
+[node name="FullscreenLabel" type="Label" parent="ContentPanel/VideoPane/FullscreenRow"]
+custom_minimum_size = Vector2(255, 0)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 52
 text = "FULLSCREEN"
-horizontal_alignment = 1
 
-[node name="FullscreenOptions" type="OptionButton" parent="ContentPanel/VBox/PanelContainer/VideoPanel/FullscreenSection"]
+[node name="FullscreenToggle" type="HBoxContainer" parent="ContentPanel/VideoPane/FullscreenRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(380, 72)
 layout_mode = 2
-size_flags_horizontal = 4
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 40
+size_flags_horizontal = 3
+script = ExtResource("4_seg")
 
-[node name="ControlsPanel" type="VBoxContainer" parent="ContentPanel/VBox/PanelContainer"]
+[node name="GameplayPane" type="VBoxContainer" parent="ContentPanel"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_left = 45.0
+offset_top = 42.0
+offset_right = -45.0
+offset_bottom = -45.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
+
+[node name="GameplayCap" type="HBoxContainer" parent="ContentPanel/GameplayPane"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="Tick" type="ColorRect" parent="ContentPanel/GameplayPane/GameplayCap"]
+custom_minimum_size = Vector2(6, 24)
+layout_mode = 2
+size_flags_vertical = 4
+color = Color(0.208, 0.773, 0.949, 1)
+
+[node name="Cap" type="Label" parent="ContentPanel/GameplayPane/GameplayCap"]
+layout_mode = 2
+text = "GAMEPLAY"
+
+[node name="ShakeRow" type="HBoxContainer" parent="ContentPanel/GameplayPane"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="ShakeLabel" type="Label" parent="ContentPanel/GameplayPane/ShakeRow"]
+custom_minimum_size = Vector2(255, 0)
+layout_mode = 2
+text = "SCREEN SHAKE"
+
+[node name="ShakeToggle" type="HBoxContainer" parent="ContentPanel/GameplayPane/ShakeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+script = ExtResource("4_seg")
+
+[node name="ShakeHint" type="Label" parent="ContentPanel/GameplayPane"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Camera impact shake on explosions, bosses and heavy hits."
+
+[node name="DamageRow" type="HBoxContainer" parent="ContentPanel/GameplayPane"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="DamageLabel" type="Label" parent="ContentPanel/GameplayPane/DamageRow"]
+custom_minimum_size = Vector2(255, 0)
+layout_mode = 2
+text = "DAMAGE NUMBERS"
+
+[node name="DamageToggle" type="HBoxContainer" parent="ContentPanel/GameplayPane/DamageRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+script = ExtResource("4_seg")
+
+[node name="DamageHint" type="Label" parent="ContentPanel/GameplayPane"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Floating damage / crit numbers on enemies. Heal numbers always show."
+
+[node name="ControlsPane" type="VBoxContainer" parent="ContentPanel"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 45.0
+offset_top = 42.0
+offset_right = -45.0
+offset_bottom = -45.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 16
-alignment = 1
 
-[node name="MoveUpRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/ControlsPanel"]
+[node name="ControlsCap" type="HBoxContainer" parent="ContentPanel/ControlsPane"]
 layout_mode = 2
-theme_override_constants/separation = 24
+theme_override_constants/separation = 15
 
-[node name="Label" type="Label" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/MoveUpRow"]
-custom_minimum_size = Vector2(180, 0)
+[node name="Tick" type="ColorRect" parent="ContentPanel/ControlsPane/ControlsCap"]
+custom_minimum_size = Vector2(6, 24)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 22
-text = "MOVE UP"
+size_flags_vertical = 4
+color = Color(0.208, 0.773, 0.949, 1)
 
-[node name="MoveUpButton" type="Button" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/MoveUpRow"]
+[node name="Cap" type="Label" parent="ContentPanel/ControlsPane/ControlsCap"]
+layout_mode = 2
+text = "KEY BINDINGS"
+
+[node name="BindGrid" type="GridContainer" parent="ContentPanel/ControlsPane"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 40)
 layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
-theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 20
-text = "W"
+columns = 2
+theme_override_constants/h_separation = 72
+theme_override_constants/v_separation = 10
 
-[node name="MoveDownRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/ControlsPanel"]
-layout_mode = 2
-theme_override_constants/separation = 24
-
-[node name="Label" type="Label" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/MoveDownRow"]
-custom_minimum_size = Vector2(180, 0)
-layout_mode = 2
-theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 22
-text = "MOVE DOWN"
-
-[node name="MoveDownButton" type="Button" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/MoveDownRow"]
+[node name="ResetBindsButton" type="Button" parent="ContentPanel/ControlsPane"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 40)
+custom_minimum_size = Vector2(420, 60)
 layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
-theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 20
-text = "S"
+size_flags_horizontal = 0
+text = "↺  RESET BINDINGS TO DEFAULTS"
 
-[node name="MoveLeftRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/ControlsPanel"]
-layout_mode = 2
-theme_override_constants/separation = 24
-
-[node name="Label" type="Label" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/MoveLeftRow"]
-custom_minimum_size = Vector2(180, 0)
-layout_mode = 2
-theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 22
-text = "MOVE LEFT"
-
-[node name="MoveLeftButton" type="Button" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/MoveLeftRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 40)
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
-theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 20
-text = "A"
-
-[node name="MoveRightRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/ControlsPanel"]
-layout_mode = 2
-theme_override_constants/separation = 24
-
-[node name="Label" type="Label" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/MoveRightRow"]
-custom_minimum_size = Vector2(180, 0)
-layout_mode = 2
-theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 22
-text = "MOVE RIGHT"
-
-[node name="MoveRightButton" type="Button" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/MoveRightRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 40)
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
-theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 20
-text = "D"
-
-[node name="DashRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/ControlsPanel"]
-layout_mode = 2
-theme_override_constants/separation = 24
-
-[node name="Label" type="Label" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/DashRow"]
-custom_minimum_size = Vector2(180, 0)
-layout_mode = 2
-theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 22
-text = "DASH"
-
-[node name="DashButton" type="Button" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/DashRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 40)
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
-theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 20
-text = "SPACE"
-
-[node name="BurstRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/ControlsPanel"]
-layout_mode = 2
-theme_override_constants/separation = 24
-
-[node name="Label" type="Label" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/BurstRow"]
-custom_minimum_size = Vector2(180, 0)
-layout_mode = 2
-theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 22
-text = "BURST"
-
-[node name="BurstButton" type="Button" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/BurstRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 40)
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
-theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 20
-text = "Q"
-
-[node name="SpecialAttackRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/ControlsPanel"]
-layout_mode = 2
-theme_override_constants/separation = 24
-
-[node name="Label" type="Label" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/SpecialAttackRow"]
-custom_minimum_size = Vector2(180, 0)
-layout_mode = 2
-theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 22
-text = "SPECIAL ATTACK"
-
-[node name="SpecialAttackButton" type="Button" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/SpecialAttackRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 40)
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
-theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 20
-text = "E"
-
-[node name="PauseRow" type="HBoxContainer" parent="ContentPanel/VBox/PanelContainer/ControlsPanel"]
-layout_mode = 2
-theme_override_constants/separation = 24
-
-[node name="Label" type="Label" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/PauseRow"]
-custom_minimum_size = Vector2(180, 0)
-layout_mode = 2
-theme_override_colors/font_color = Color(0.94, 0.96, 0.97, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 22
-text = "PAUSE"
-
-[node name="PauseButton" type="Button" parent="ContentPanel/VBox/PanelContainer/ControlsPanel/PauseRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 40)
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
-theme_override_colors/font_hover_color = Color(1.0, 1.0, 1.0, 1)
-theme_override_fonts/font = ExtResource("3")
-theme_override_font_sizes/font_size = 20
-text = "ESCAPE"
+[node name="Greebles" type="Control" parent="."]
+layout_mode = 0
+offset_left = 68.0
+offset_top = 1042.0
+offset_right = 520.0
+offset_bottom = 1066.0
+script = ExtResource("5_greebles")
+serial_text = "SYS CONFIG // ARK SYS V2.4"
+tint = Color(0.165, 0.18, 0.208, 0.3)

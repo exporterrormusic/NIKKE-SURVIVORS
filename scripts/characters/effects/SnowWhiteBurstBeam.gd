@@ -27,10 +27,19 @@ var _has_dealt_damage: bool = false
 var player_level: int = 1
 
 # Talent bonuses
-# Talent bonuses
-var burn_level: int = 0 # 0=none, 1-3=talent level for frostburn
-var gauge_on_kill: bool = false # Soul Harvest talent
-var _enemies_killed: int = 0 # Track kills for gauge generation
+var burn_level: int = 0          # Incendiary Rounds rank (1-3)
+var gauge_level: int = 0         # Fully Active rank (1-3) -> chance per kill
+var gauge_per_kill: float = 0.0  # normal burst gain granted per successful kill-roll
+var pierce_level: int = 0        # Pierce Through rank -> Weak Point mult
+var stun_level: int = 0          # Stunned rank -> stun duration
+var damage_multiplier: float = 1.0 # Focused Fire concentrated-beam damage scaling
+var _enemies_killed: int = 0
+
+const PIERCE_MULTS := [2.0, 4.0, 6.0]
+const STUN_DURS := [2.0, 5.0, 7.0]
+const GAUGE_CHANCES := [0.33, 0.66, 1.0]
+const BURN_RATES := [0.10, 0.20, 0.30]
+const BURN_BOSS_RATES := [0.05, 0.10, 0.15]
 
 # Source identification for Shield/Burst logic
 var source: String = "SnowWhiteBurst"
@@ -93,13 +102,14 @@ func _apply_cone_damage() -> void:
 	var half_angle := deg_to_rad(beam_angle_degrees * 0.5)
 	var range_sq := beam_range * beam_range
 	
-	# Calculate level-scaled damage (+50% per level)
-	var level_mult := 1.0 + (player_level - 1) * 0.5
-	var scaled_damage := int(damage * level_mult)
-	
+	# Damage scales off the player's attack (set by the controller) and the
+	# Focused Fire concentrated-beam multiplier. No level scaling.
+	var scaled_damage := int(damage * damage_multiplier)
+
 	# Track enemies for burn and kill counting
 	var hit_enemies: Array[Node2D] = []
 	var hit_shields: Dictionary = {} # Track unique shields hit to prevent multi-damage
+	var gauge_gain := 0.0 # Fully Active: accumulated burst refund
 	
 	# Find all enemies in scene
 	var enemies = TargetCache.get_enemies()
@@ -155,13 +165,20 @@ func _apply_cone_damage() -> void:
 			continue
 		
 		hit_enemies.append(enemy)
-		
+
 		# Apply damage with hit direction
 		var hit_direction := to_enemy.normalized()
 		var enemy_hp_before := 0
 		if "hp" in enemy:
 			enemy_hp_before = enemy.hp
-		
+
+		# Pierce Through: permanent Weak Point mark (set before damage so this hit
+		# benefits too). Stunned: stun on hit.
+		if pierce_level > 0:
+			enemy.set_meta("damage_vulnerability", PIERCE_MULTS[mini(pierce_level, 3) - 1])
+		if stun_level > 0 and enemy.has_method("apply_stun"):
+			enemy.apply_stun(STUN_DURS[mini(stun_level, 3) - 1])
+
 		# Determine source
 		var damage_source: String = "SnowWhiteBurst"
 		if owner_node and (owner_node.is_in_group("summoned_allies") or owner_node.name.contains("SummonedAlly")):
@@ -173,10 +190,12 @@ func _apply_cone_damage() -> void:
 			enemy.apply_damage_with_source(scaled_damage, damage_source)
 		elif enemy.has_method("apply_damage"):
 			enemy.apply_damage(scaled_damage, damage_source)
-			
-		# Check if enemy was killed
+
+		# Check if enemy was killed; Fully Active rolls per kill to refund gauge.
 		if "hp" in enemy and enemy.hp <= 0 and enemy_hp_before > 0:
 			_enemies_killed += 1
+			if gauge_level > 0 and randf() < GAUGE_CHANCES[mini(gauge_level, 3) - 1]:
+				gauge_gain += gauge_per_kill
 
 	
 	# Apply frostburn DOT to surviving enemies if talent is unlocked
@@ -185,45 +204,22 @@ func _apply_cone_damage() -> void:
 			if is_instance_valid(enemy) and "hp" in enemy and enemy.hp > 0:
 				_apply_frostburn(enemy)
 	
-	# Grant burst gauge for kills if Soul Harvest is unlocked
-	if gauge_on_kill and _enemies_killed > 0 and owner_node:
-		# Each kill adds to burst gauge (3 per kill - 30% of normal)
-		var refund_amount := _enemies_killed * 3.0
-		# Use proper burst system add method to keep values in sync
-		if owner_node.has_method("add_burst"):
-			owner_node.add_burst(refund_amount)
-		elif "_burst_system" in owner_node and owner_node._burst_system and owner_node._burst_system.has_method("gain_burst"):
-			owner_node._burst_system.gain_burst(refund_amount)
-		else:
-			# Fallback: direct assignment (legacy, may cause desync)
-			if "burst_current" in owner_node:
-				owner_node.burst_current = mini(owner_node.burst_current + refund_amount, owner_node.burst_max)
-				# Update HUD immediately
-				var player_hud = owner_node.get_node_or_null("../CanvasLayer/PlayerHudCluster")
-				if player_hud and player_hud.has_method("update_burst"):
-					player_hud.update_burst(owner_node.burst_current, owner_node.burst_max, true)
-				var overhead_hud = owner_node.get_node_or_null("PlayerOverheadHud")
-				if overhead_hud and overhead_hud.has_method("update_burst"):
-					overhead_hud.update_burst(owner_node.burst_current, owner_node.burst_max)
+	# Fully Active: grant the accumulated burst refund (enables chaining).
+	if gauge_gain > 0.0 and is_instance_valid(owner_node):
+		if owner_node.has_method("add_burst_charge"):
+			owner_node.add_burst_charge(gauge_gain)
+		elif owner_node.has_method("gain_burst"):
+			owner_node.gain_burst(gauge_gain)
 
 func _apply_frostburn(enemy: Node2D) -> void:
 	"""Apply frostburn DOT based on talent level."""
 	if not is_instance_valid(enemy) or not "max_hp" in enemy:
 		return
 	
-	# Burn rates: 34% max HP/s for normal, 3% for bosses (User Requested)
-	var burn_rates := [0.0, 0.34] # Per second - index 0 unused, index 1 is the unlocked value
-	var boss_rates := [0.0, 0.03] # Reduced for boss only
-	
-	# Logic: Only "boss" gets the deep reduction. Elites take full damage?
-	# User requested "Change Snow White's Frostburn to 3% max HP per second for bosses."
-	# Implies Elites should probably take normal damage? Or stays reduced?
-	# "reduced burn effect is only for bosses" was explicitly said for Kilo.
-	# It's safer to assume Consistency: Bosses = 3%, Everyone else = 34%.
-	
+	# Incendiary Rounds: 10/20/30% max HP/s for normal, 5/10/15% for bosses, over 3s.
 	var is_boss: bool = enemy.has_meta("enemy_tier") and enemy.get_meta("enemy_tier") == "boss"
-	var level_idx := mini(burn_level, 1) # Cap at 1 for array access
-	var burn_rate: float = boss_rates[level_idx] if is_boss else burn_rates[level_idx]
+	var idx := mini(burn_level, 3) - 1
+	var burn_rate: float = BURN_BOSS_RATES[idx] if is_boss else BURN_RATES[idx]
 	var burn_duration := 3.0
 	var damage_per_tick := int(enemy.max_hp * burn_rate) # Per second
 	

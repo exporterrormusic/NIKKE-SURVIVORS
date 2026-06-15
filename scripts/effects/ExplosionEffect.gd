@@ -11,12 +11,26 @@ class_name ExplosionEffect
 @export var shockwave_thickness: float = 14.0
 @export var spark_color: Color = Color(1.0, 0.76, 0.42, 0.7)
 @export var spark_count: int = 16
+## Warm fire hue used by the lobes/embers; overridable for tinted blasts (e.g.
+## Scarlet's purple "In One Strike"). Restored to the default on pool reuse.
+@export var flame_color: Color = Color(1.0, 0.62, 0.24)
+
+# Palette defaults, restored in reset() so pooled reuse never inherits a tint.
+const DEFAULT_BASE := Color(1.0, 0.52, 0.24, 0.7)
+const DEFAULT_GLOW := Color(1.0, 0.6, 0.26, 0.6)
+const DEFAULT_CORE := Color(1.0, 0.92, 0.74, 0.8)
+const DEFAULT_SHOCK := Color(1.0, 0.78, 0.3, 0.7)
+const DEFAULT_SPARK := Color(1.0, 0.76, 0.42, 0.7)
+const DEFAULT_FLAME := Color(1.0, 0.62, 0.24)
 
 const FOREGROUND_Z_INDEX := 915
 const FIRE_LOBE_COUNT := 8
 const SMOKE_PUFF_COUNT := 6
 
 var _elapsed := 0.0
+## Cheap render path for high-volume explosions (turret/barrage missiles): a single
+## cached radial-glow texture + core + shockwave (~3 draws) instead of ~90 primitives.
+var simple := false
 var _rng := RandomNumberGenerator.new()
 var _rotation_offset := 0.0
 var _fire_lobes: Array = []
@@ -26,8 +40,40 @@ var _spark_lengths: Array = []
 var _spark_angle_offset: PackedFloat32Array = PackedFloat32Array()
 
 func _ready() -> void:
+	# One-time material setup (persists across pool reuse).
+	var mat := CanvasItemMaterial.new()
+	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+	material = mat
+	_activate()
+
+## Re-initialize for a fresh explosion. Also called by ProjectileCache on pool reuse.
+func reset() -> void:
+	simple = false
+	# Restore the warm default palette (a previous user may have tinted this one).
+	base_color = DEFAULT_BASE
+	glow_color = DEFAULT_GLOW
+	core_color = DEFAULT_CORE
+	shockwave_color = DEFAULT_SHOCK
+	spark_color = DEFAULT_SPARK
+	flame_color = DEFAULT_FLAME
+	_activate()
+
+## Recolour this blast to Scarlet's purple palette (used by her skill effects).
+## reset() restores the warm default on pool reuse, so other blasts stay orange.
+func apply_scarlet_tint() -> void:
+	base_color = Color(0.66, 0.24, 0.95, 0.75)
+	glow_color = Color(0.6, 0.3, 1.0, 0.65)
+	core_color = Color(0.93, 0.84, 1.0, 0.9)
+	shockwave_color = Color(0.82, 0.5, 1.0, 0.75)
+	spark_color = Color(0.88, 0.6, 1.0, 0.75)
+	flame_color = Color(0.74, 0.4, 1.0)
+
+
+func _activate() -> void:
 	z_as_relative = false
 	z_index = FOREGROUND_Z_INDEX
+	_elapsed = 0.0
 	_rng.randomize()
 	_rotation_offset = _rng.randf_range(0.0, TAU)
 	_initialize_fire_lobes()
@@ -35,17 +81,12 @@ func _ready() -> void:
 	_initialize_sparks()
 	set_process(true)
 	queue_redraw()
-	
-	# Make explosion glowing/unshaded
-	var mat := CanvasItemMaterial.new()
-	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
-	material = mat
-	
 	# Assign to effects layer to avoid night darkening (and for Z sorting)
 	call_deferred("_assign_to_effects_layer")
 
 func _assign_to_effects_layer() -> void:
+	if get_parent() == null:
+		return
 	var env = get_tree().get_first_node_in_group("environment_controller")
 	if env:
 		var effects = env.get_node_or_null("EffectsLayer")
@@ -60,7 +101,7 @@ func _assign_to_effects_layer() -> void:
 func _process(delta: float) -> void:
 	_elapsed += delta
 	if _elapsed >= duration:
-		queue_free()
+		ProjectileCache.return_to_pool(self)
 		return
 	# Reduce redraw frequency for better performance (30 FPS is enough for explosions)
 	if Engine.get_process_frames() % 2 == 0:
@@ -71,6 +112,9 @@ func _draw() -> void:
 		return
 	var progress := clampf(_elapsed / duration, 0.0, 1.0)
 	var fade := 1.0 - progress
+	if simple:
+		_draw_simple(progress, fade)
+		return
 	_draw_fire_layers(progress, fade)
 	_draw_core_flare(progress, fade)
 	_draw_fire_lobes(progress, fade)
@@ -80,12 +124,43 @@ func _draw() -> void:
 	_draw_embers(progress, fade)
 	_draw_debris(progress, fade)
 
+## Cheap explosion: one cached radial-glow texture (additive) + a core + a shockwave
+## ring. ~3 draw calls vs ~90 for the full procedural version. Used for the many
+## concurrent turret/barrage missile explosions so they don't tank the framerate.
+func _draw_simple(progress: float, fade: float) -> void:
+	# Outer glow (cached radial texture) sized to match the full explosion's spread.
+	var tex: Texture2D = TextureCache.get_light_texture_64()
+	var glow_r := radius * (1.0 + 0.7 * progress)
+	var glow_a := clampf(glow_color.a * (1.0 - progress * progress), 0.0, 1.0)
+	if tex and glow_a > 0.0:
+		draw_texture_rect(tex, Rect2(-glow_r, -glow_r, glow_r * 2.0, glow_r * 2.0), false,
+			Color(glow_color.r, glow_color.g, glow_color.b, glow_a))
+	# Bright core.
+	var core_strength := clampf(1.0 - pow(progress, 1.5), 0.0, 1.0)
+	if core_strength > 0.0:
+		draw_circle(Vector2.ZERO, radius * 0.5 * core_strength,
+			Color(core_color.r, core_color.g, core_color.b, core_color.a * core_strength))
+		draw_circle(Vector2.ZERO, radius * 0.28 * core_strength, Color(1.0, 0.98, 0.86, core_strength))
+	# A few fireball lobes spreading outward (the "fire" read of the original).
+	var lobe_a := clampf(0.7 * fade * (1.0 - progress * 0.5), 0.0, 0.8)
+	if lobe_a > 0.0:
+		var travel := radius * lerpf(0.3, 0.95, progress)
+		var lobe_r := radius * 0.34 * (1.0 - progress * 0.45)
+		for i in range(6):
+			var ang := _rotation_offset + TAU * float(i) / 6.0
+			draw_circle(Vector2(cos(ang), sin(ang)) * travel, lobe_r, Color(flame_color.r, flame_color.g, flame_color.b, lobe_a))
+	# Shockwave ring.
+	var shock_a := shockwave_color.a * fade
+	if shock_a > 0.0:
+		draw_arc(Vector2.ZERO, radius * (0.85 + 0.6 * progress), 0.0, TAU, 28,
+			Color(shockwave_color.r, shockwave_color.g, shockwave_color.b, shock_a), max(2.0, shockwave_thickness * 0.7))
+
 func _draw_fire_layers(progress: float, fade: float) -> void:
 	var primary_alpha := glow_color.a * clampf(1.0 - pow(progress, 1.6), 0.0, 1.0)
 	var primary_color := Color(glow_color.r, glow_color.g, glow_color.b, primary_alpha)
 	var primary_radius := radius * (0.85 + 0.55 * progress)
 	_draw_radial_glow(primary_radius, primary_color, 0.7, 6)
-	var ember_color := Color(1.0, 0.64, 0.22, 0.45 * fade)
+	var ember_color := Color(flame_color.r, flame_color.g, flame_color.b, 0.45 * fade)
 	_draw_radial_glow(radius * (0.58 + 0.28 * progress), ember_color, 0.5, 4)
 
 func _draw_core_flare(progress: float, _fade: float) -> void:
@@ -114,7 +189,7 @@ func _draw_fire_lobes(progress: float, fade: float) -> void:
 		var lobe_alpha := clampf(0.65 * fade * (1.0 - lobe_progress) * intensity, 0.0, 0.8)
 		if lobe_alpha <= 0.0:
 			continue
-		var fire_color := Color(1.0, 0.68 + 0.18 * intensity, 0.24, lobe_alpha)
+		var fire_color := Color(flame_color.r, flame_color.g, flame_color.b, lobe_alpha)
 		draw_circle(center, lobe_radius * lobe_width, fire_color)
 
 func _draw_shockwave(progress: float, fade: float) -> void:
@@ -184,7 +259,7 @@ func _draw_embers(progress: float, fade: float) -> void:
 		var distance := radius * lerpf(0.18, 1.25, progress) * offset
 		var ember_pos := dir * distance
 		var ember_radius: float = 1.4 if 1.4 > radius * 0.035 * speed else radius * 0.035 * speed
-		var glow := Color(1.0, 0.72, 0.28, 0.45 * ember_strength * speed)
+		var glow := Color(flame_color.r, flame_color.g, flame_color.b, 0.45 * ember_strength * speed)
 		draw_circle(ember_pos, ember_radius, glow)
 
 func _draw_debris(progress: float, fade: float) -> void:

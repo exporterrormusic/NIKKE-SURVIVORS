@@ -196,7 +196,7 @@ func explode():
 	var final_damage = explosion_damage if explosion_damage > 0 else base_damage
 	if explosion.has_method("initialize"):
 		explosion.initialize(final_damage, explosion_radius)
-		
+
 	get_parent().add_child(explosion)
 	explosion.global_position = global_position
 	if explosion.has_method("force_damage_check"):

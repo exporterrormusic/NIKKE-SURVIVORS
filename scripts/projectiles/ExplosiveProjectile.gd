@@ -14,9 +14,19 @@ class_name ExplosiveProjectile
 @export var explosion_damage: int = 60
 @export var explosion_radius: float = 150.0
 @export var explosion_color: Color = Color(1.0, 0.5, 0.2, 0.8)
+var explosion_glow_boost: float = 1.0 # >1 brightens the explosion visual (Rapunzel burst turrets)
 @export var owner_node: Node = null
 var killer_source: String = "rocket" # For ShielderShield collision detection
 var killer_source_override: String = "" # Override killer_source if set (for summon-spawned turrets)
+## Snow White turret missile talents, carried through to the explosion.
+var armor_pierce_mult: float = 0.0 # >0: Armor-Piercing Ammo / Rapunzel Anti-Armor damage-taken mark
+var incendiary_total: float = 0.0  # >0: Incendiary Ammo flat burn DoT total
+## Rapunzel "Concussive Blast": >0 = explosion stuns enemies hit for this many seconds.
+var explosion_stun_duration: float = 0.0
+## Rapunzel "It Burns" / "Endless Desire" payloads handed to the burning ground.
+var ground_fire_it_burns_mult: float = 0.0
+var ground_fire_attack_damage: int = 0
+var ground_fire_endless: bool = false
 @export var render_style: String = "grenade" # "grenade" | "rocket"
 @export var special_attack: bool = false
 @export var trail_enabled: bool = false
@@ -62,6 +72,51 @@ var _trail_points: Array = []
 var _trail_ages: Array = []
 var _trail_distance := 0.0
 var _exploded := false
+var _had_node_target := false # True once a homing node-target was assigned (for re-acquire on death)
+## Cross-missile target coordination (turret missiles opt in). Lets turrets avoid
+## piling missiles onto an enemy already doomed by missiles in flight, which is the
+## main cause of mass redirect/curving when that enemy dies.
+var coordinate_targeting := false
+var _registered := false
+static var _active_missiles: Array = []
+## Cheap target-spread: each enemy carries a "missile_targeters" count (meta). New
+## missiles prefer enemies under MAX_TARGETERS so they don't dogpile (which caused
+## the overkill->mass-redirect curving). O(1) checks instead of summing all missiles.
+const MAX_TARGETERS := 2
+var _counted_target: Node = null
+var _can_pierce_boulders := false # cached Wells chrono check, computed once per flight
+var _pierce_checked := false
+# Turret missiles render the body via a baked sprite (the procedural look rendered to
+# rocket.png) instead of redrawing ~20 polygons every frame.
+var _body_sprite: Sprite2D = null
+const BODY_TEX_PATH := "res://assets/projectiles/rocket.png"
+static var _body_tex: Texture2D = null
+static var _body_tex_tried := false
+
+static func _get_body_tex() -> Texture2D:
+	if not _body_tex_tried:
+		_body_tex_tried = true
+		if ResourceLoader.exists(BODY_TEX_PATH):
+			_body_tex = load(BODY_TEX_PATH)
+	return _body_tex
+
+func _ensure_body_sprite() -> void:
+	if _body_sprite == null:
+		var tex := _get_body_tex()
+		if tex == null:
+			return
+		_body_sprite = Sprite2D.new()
+		_body_sprite.texture = tex
+		_body_sprite.centered = true
+		_body_sprite.z_as_relative = false
+		_body_sprite.z_index = PROJECTILE_BASE_Z_INDEX
+		# Unshaded so the night/day light doesn't darken the missile (the procedural
+		# body was unshaded via _apply_unshaded_material; child sprites need their own).
+		var mat := CanvasItemMaterial.new()
+		mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+		_body_sprite.material = mat
+		add_child(_body_sprite)
+	_body_sprite.visible = true
 var _smoke_puffs: Array = []
 var _smoke_timer := 0.0
 var _exhaust_time := 0.0
@@ -133,19 +188,35 @@ func reset() -> void:
 	direction = Vector2.ZERO
 	target_position = Vector2.ZERO
 	target_node = null
+	_had_node_target = false
+	coordinate_targeting = false
+	_counted_target = null
+	_pierce_checked = false
+	_can_pierce_boulders = false
+	if _body_sprite:
+		_body_sprite.visible = false
 	owner_node = null
 	killer_source_override = ""
 	lightweight_mode = false
 	reduced_smoke = false
-	
+	explosion_glow_boost = 1.0
+	armor_pierce_mult = 0.0
+	incendiary_total = 0.0
+	explosion_stun_duration = 0.0
+	ground_fire_it_burns_mult = 0.0
+	ground_fire_attack_damage = 0
+	ground_fire_endless = false
+	ground_fire_enabled = false
+
 	visible = true
 	set_process(true)
 
 func _process(delta: float) -> void:
 	# Apply Global Enemy Time Scale (Bullet Time) - ONLY for non-player projectiles
 	var time_scale = 1.0
-	var game_manager = get_node_or_null("/root/GameManager")
+	# Player-owned missiles (turrets) run at normal time; skip the GameManager lookup.
 	if not (owner_node and owner_node.is_in_group("player")):
+		var game_manager = get_node_or_null("/root/GameManager")
 		time_scale = game_manager.enemy_time_scale if game_manager else 1.0
 	
 	# Scale delta
@@ -154,6 +225,12 @@ func _process(delta: float) -> void:
 	if not _motion_configured:
 		_configure_motion()
 		_motion_configured = true
+
+	if coordinate_targeting and not _registered:
+		_registered = true
+		_active_missiles.append(self)
+		_inc_targeter(target_node) # count the turret-assigned target
+
 	if _exploded:
 		return
 	_age += dt
@@ -169,9 +246,18 @@ func _process(delta: float) -> void:
 	if max_flight_time > 0.0 and _flight_time >= max_flight_time:
 		_explode()
 		return
-	# Update target position if following a node
+	# Update target position if following a node. If our homing target died
+	# mid-flight, re-acquire the nearest enemy along our heading so the missile
+	# redirects smoothly instead of curving toward an empty death spot.
 	if target_node and is_instance_valid(target_node):
 		target_position = target_node.global_position
+		_had_node_target = true
+	elif _had_node_target and homing_enabled:
+		if not _reacquire_target():
+			# No live enemy left: stop seeking, fly straight until timeout/impact.
+			target_node = null
+			target_position = Vector2.ZERO
+			_had_node_target = false
 	
 	# Homing: steer velocity toward target
 	if homing_enabled and target_position != Vector2.ZERO:
@@ -234,12 +320,93 @@ func _process(delta: float) -> void:
 		_update_smoke(delta)
 	if exhaust_enabled and is_rocket:
 		_exhaust_time += delta
+	# Turret missiles: body is a baked sprite, so just orient the sprites each frame
+	# (cheap transforms) - no procedural redraw at all.
+	if coordinate_targeting:
+		_ensure_body_sprite()
+		if _body_sprite and _velocity.length() > 0.0:
+			_body_sprite.rotation = _velocity.angle()
+		_update_glow_visual()
+		return
 	_update_glow_visual()
 	queue_redraw()
 
 func _exit_tree() -> void:
+	if _registered:
+		_active_missiles.erase(self)
+		_registered = false
+	_dec_targeter()
 	if _glow_sprite and is_instance_valid(_glow_sprite):
 		_glow_sprite.queue_free()
+
+
+## Number of coordinating missiles currently targeting an enemy (O(1) meta read).
+static func targeters_of(enemy: Node) -> int:
+	if enemy == null:
+		return 0
+	return int(enemy.get_meta("missile_targeters", 0))
+
+func _inc_targeter(node) -> void:
+	if node and is_instance_valid(node):
+		node.set_meta("missile_targeters", int(node.get_meta("missile_targeters", 0)) + 1)
+		_counted_target = node
+
+func _dec_targeter() -> void:
+	if _counted_target and is_instance_valid(_counted_target):
+		var c := int(_counted_target.get_meta("missile_targeters", 0)) - 1
+		if c <= 0:
+			_counted_target.remove_meta("missile_targeters")
+		else:
+			_counted_target.set_meta("missile_targeters", c)
+	_counted_target = null
+
+## Re-point at a new target, keeping the per-enemy targeter counts in sync.
+func _set_missile_target(new_target: Node) -> void:
+	if new_target != _counted_target:
+		_dec_targeter()
+		_inc_targeter(new_target)
+	target_node = new_target
+	if new_target and is_instance_valid(new_target):
+		target_position = (new_target as Node2D).global_position
+
+
+## Pick the existing enemy closest to our current flight path (used when a homing
+## missile's target dies). Returns true if a new target was assigned. Only enemies
+## within a forward cone are considered (no hard U-turns), and enemies already
+## doomed by other in-flight missiles are skipped.
+func _reacquire_target() -> bool:
+	var heading := _velocity.normalized()
+	if heading == Vector2.ZERO:
+		heading = direction.normalized()
+	var best: Node2D = null
+	var best_score := INF
+	for e in TargetCache.get_enemies():
+		if not is_instance_valid(e) or not e is Node2D:
+			continue
+		if e.is_in_group("charmed_allies"):
+			continue
+		var node2d := e as Node2D
+		var to_e: Vector2 = node2d.global_position - global_position
+		var dist := to_e.length()
+		if dist < 1.0:
+			best = node2d
+			break
+		var align := heading.dot(to_e / dist) # 1 = dead ahead, <=0 = behind
+		if align < 0.5: # only ~60-degree forward cone -> gentle redirects, no whipping
+			continue
+		# Prefer enemies not already over-targeted (cheap O(1) count).
+		if coordinate_targeting and targeters_of(node2d) >= MAX_TARGETERS:
+			continue
+		# Perpendicular deviation from the heading ray + a mild distance bias.
+		var perp := dist * sqrt(maxf(0.0, 1.0 - align * align))
+		var score := perp + dist * 0.25
+		if score < best_score:
+			best_score = score
+			best = node2d
+	if best:
+		_set_missile_target(best)
+		return true
+	return false
 
 func _apply_unshaded_material() -> void:
 	# Create unshaded material so rockets/projectiles glow through night darkness
@@ -381,6 +548,10 @@ func _should_ignore_target(target: Node) -> bool:
 	# Also check by group or script name for other projectile types
 	if target.is_in_group("projectiles"):
 		return true
+	# Don't detonate on enemy projectiles (lasers / enemy missiles) - they share
+	# the enemy collision layer, so without this the missile blows up on them.
+	if target.is_in_group("enemy_projectiles"):
+		return true
 	
 	if target.is_in_group("shielder_shields") or target.is_in_group("boss_shields"):
 		# Skip if Chrono-Intangibility upgrade is active AND playing Wells
@@ -429,33 +600,39 @@ static var _shared_glow_texture: Texture2D = null
 
 func _check_boulder_collision() -> bool:
 	"""Check if projectile hit a boulder."""
-	# Skip if Chrono-Intangibility upgrade is active
-	var player = get_tree().get_first_node_in_group("player")
-	var has_upgrade = ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility")
-	var playing_wells = false
-	if player and player.has_method("is_playing_character"):
-		playing_wells = player.is_playing_character("wells")
-	
-	if has_upgrade and playing_wells:
-		return false
-	
-	# Use TargetCache to avoid expensive get_nodes_in_group and array allocation every frame
+	# Cheap early-out: usually there are no boulders, so skip the whole player/talent
+	# lookup that used to run every frame per missile (a big missile-travel cost).
 	var boulders := TargetCache.get_boulders()
+	if boulders.is_empty():
+		return false
+
+	# Wells Chrono-Intangibility lets shots phase boulders. Cache it once per flight
+	# instead of querying the registry + talent tree every frame.
+	if not _pierce_checked:
+		_pierce_checked = true
+		_can_pierce_boulders = _compute_can_pierce_boulders()
+	if _can_pierce_boulders:
+		return false
+
 	for boulder in boulders:
 		if not is_instance_valid(boulder):
 			continue
 		var boulder_pos: Vector2 = boulder.global_position
-		# Optimize: Check squared distance first to avoid sqrt if possible, or just simple check
-		# But boulder radii vary, so we need radius.
 		var boulder_radius: float = 150.0
 		if boulder.get("boulder_size") != null:
 			boulder_radius = boulder.boulder_size * 0.5
-			
-		# Squared distance check is faster
 		var dist_sq = global_position.distance_squared_to(boulder_pos)
 		if dist_sq < boulder_radius * boulder_radius:
 			return true
 	return false
+
+func _compute_can_pierce_boulders() -> bool:
+	var player = TargetCache.get_player()
+	if player == null or not player.has_method("is_playing_character"):
+		return false
+	if not player.is_playing_character("wells"):
+		return false
+	return ShopMenuScript.has_character_upgrade("wells", "chrono_intangibility")
 
 func _explode() -> void:
 	if _exploded:
@@ -473,6 +650,9 @@ func _explode() -> void:
 	if is_instance_valid(owner_node):
 		explosion.owner_node = owner_node
 	explosion.killer_source_override = killer_source_override
+	explosion.armor_pierce_mult = armor_pierce_mult
+	explosion.incendiary_total = incendiary_total
+	explosion.stun_duration = explosion_stun_duration
 	
 	# Hide the sprite (we'll use procedural effect instead)
 	if explosion.has_node("Sprite2D"):
@@ -485,6 +665,19 @@ func _explode() -> void:
 		# Create visual explosion effect (procedural - no stripes)
 		var visual = ProjectileCache.create_explosion_effect()
 		visual.radius = explosion_radius
+		# Turret/barrage missiles use the cheap cached-glow explosion (many concurrent).
+		if "simple" in visual:
+			visual.simple = coordinate_targeting
+		# Pooled effect: always assign glow_color so a boosted value can't
+		# leak into the next explosion
+		if "glow_color" in visual:
+			var g := Color(1.0, 0.6, 0.26, 0.6) # ExplosionEffect default
+			if explosion_glow_boost > 1.0:
+				g = Color(minf(g.r * explosion_glow_boost, 1.0),
+					minf(g.g * explosion_glow_boost, 1.0),
+					minf(g.b * explosion_glow_boost, 1.0),
+					minf(g.a * explosion_glow_boost, 1.0))
+			visual.glow_color = g
 		get_parent().add_child(visual)
 		visual.global_position = global_position
 	else:
@@ -543,11 +736,18 @@ func _spawn_ground_fire_if_needed() -> void:
 	fire.duration = max(ground_fire_duration, 0.1)
 	fire.damage_per_tick = max(1, ground_fire_damage) if ground_fire_damage > 0 else max(1, int(damage * 0.25))
 	fire.color = ground_fire_color
+	# Rapunzel "It Burns" / "Endless Desire" payloads.
+	fire.it_burns_mult = ground_fire_it_burns_mult
+	fire.burn_attack_damage = ground_fire_attack_damage
+	fire.endless = ground_fire_endless
 	fire.global_position = global_position
 	if get_parent():
 		get_parent().add_child(fire)
 
 func _draw() -> void:
+	# Turret missiles render their body via the baked sprite (_body_sprite) - no draw.
+	if coordinate_targeting:
+		return
 	var style := render_style.to_lower()
 	if smoke_enabled and style == "rocket" and not _smoke_puffs.is_empty():
 		_draw_smoke()
@@ -720,53 +920,41 @@ func _draw_rocket() -> void:
 	_draw_rocket_body(dir, perp, body_length, body_width)
 
 func _draw_rocket_exhaust(dir: Vector2, perp: Vector2, body_length: float, body_width: float) -> void:
-	var tail := -dir * (body_length * 0.5 - body_width * 0.12)
 	var flicker := 1.0 + 0.3 * sin(_exhaust_time * exhaust_flicker_speed + _flicker_seed)
-	flicker *= _thrust_pulse # Apply thrust pulse
-	var outer_length: float = exhaust_length * 1.15 * flicker
-	var outer_width: float = body_width * (1.7 if special_attack else 1.4) * (0.9 + _thrust_pulse * 0.15)
+	paint_rocket_exhaust(self, dir, perp, body_length, body_width, special_attack, exhaust_length, flicker, _thrust_pulse)
+
+## Pure-geometry exhaust flame painter (no instance state) so it can be drawn live OR
+## baked into the rocket texture. Pass flicker=1, thrust=1 for a static bake.
+static func paint_rocket_exhaust(ci: CanvasItem, dir: Vector2, perp: Vector2, body_length: float, body_width: float, special_attack: bool, exhaust_length: float, flicker: float, thrust: float) -> void:
+	var tail := -dir * (body_length * 0.5 - body_width * 0.12)
+	var f := flicker * thrust
+	var outer_length: float = exhaust_length * 1.15 * f
+	var outer_width: float = body_width * (1.7 if special_attack else 1.4) * (0.9 + thrust * 0.15)
 	var outer_tip := tail - dir * outer_length
 	var outer_left := tail + perp * outer_width
 	var outer_right := tail - perp * outer_width
 	var outer_color: Color = Color(1.0, 0.44, 0.12, 0.9) if special_attack else Color(1.0, 0.58, 0.16, 0.85)
-	var outer_center := (outer_tip + outer_right + tail + outer_left) * 0.25
-	var tinted_outer := _environment_tint(outer_color, outer_center)
-	draw_polygon(
-		PackedVector2Array([outer_tip, outer_right, tail, outer_left]),
-		PackedColorArray([tinted_outer, tinted_outer, tinted_outer, tinted_outer])
-	)
+	ci.draw_polygon(PackedVector2Array([outer_tip, outer_right, tail, outer_left]), PackedColorArray([outer_color, outer_color, outer_color, outer_color]))
 	var inner_length: float = outer_length * 0.62
 	var inner_width: float = outer_width * 0.55
 	var inner_tip := tail - dir * inner_length
 	var inner_left := tail + perp * inner_width
 	var inner_right := tail - perp * inner_width
 	var inner_color: Color = Color(1.0, 0.78, 0.36, 0.92) if special_attack else Color(1.0, 0.88, 0.46, 0.92)
-	var inner_center := (inner_tip + inner_right + tail + inner_left) * 0.25
-	var tinted_inner := _environment_tint(inner_color, inner_center)
-	draw_polygon(
-		PackedVector2Array([inner_tip, inner_right, tail, inner_left]),
-		PackedColorArray([tinted_inner, tinted_inner, tinted_inner, tinted_inner])
-	)
+	ci.draw_polygon(PackedVector2Array([inner_tip, inner_right, tail, inner_left]), PackedColorArray([inner_color, inner_color, inner_color, inner_color]))
 	var core_length: float = inner_length * 0.55
 	var core_width: float = inner_width * 0.45
 	var core_tip := tail - dir * core_length
 	var core_left := tail + perp * core_width
 	var core_right := tail - perp * core_width
 	var core_color := Color(1.0, 0.97, 0.78, 0.95)
-	var core_center := (core_tip + core_right + tail + core_left) * 0.25
-	var tinted_core := _environment_tint(core_color, core_center)
-	draw_polygon(
-		PackedVector2Array([core_tip, core_right, tail, core_left]),
-		PackedColorArray([tinted_core, tinted_core, tinted_core, tinted_core])
-	)
+	ci.draw_polygon(PackedVector2Array([core_tip, core_right, tail, core_left]), PackedColorArray([core_color, core_color, core_color, core_color]))
 	var glow_radius: float = max(body_width * 0.85, inner_width * 0.9)
 	var glow_color := Color(outer_color.r, outer_color.g, outer_color.b, outer_color.a * 0.5)
-	var tinted_glow := _environment_tint(glow_color, tail)
 	var inner_glow_color := Color(core_color.r, core_color.g, core_color.b, 0.7)
 	var inner_glow_center := tail - dir * (outer_length * 0.4)
-	var tinted_inner_glow := _environment_tint(inner_glow_color, inner_glow_center)
-	draw_circle(tail, glow_radius, tinted_glow)
-	draw_circle(inner_glow_center, glow_radius * 0.45, tinted_inner_glow)
+	ci.draw_circle(tail, glow_radius, glow_color)
+	ci.draw_circle(inner_glow_center, glow_radius * 0.45, inner_glow_color)
 
 func _draw_impact_anticipation(dir: Vector2, body_length: float) -> void:
 	# Pulsing glow ahead of the rocket that intensifies near impact
@@ -804,6 +992,12 @@ func _draw_impact_anticipation(dir: Vector2, body_length: float) -> void:
 		draw_arc(glow_offset, ring_radius, 0, TAU, 24, tinted_ring, 2.5)
 
 func _draw_rocket_body(dir: Vector2, perp: Vector2, body_length: float, body_width: float) -> void:
+	paint_rocket_body(self, dir, perp, body_length, body_width, special_attack)
+
+## Pure-geometry rocket body painter (no per-frame/instance state) so the exact same
+## look can be drawn by a live missile OR baked into a texture. Centered at the
+## canvas origin, pointing along `dir`.
+static func paint_rocket_body(ci: CanvasItem, dir: Vector2, perp: Vector2, body_length: float, body_width: float, special_attack: bool) -> void:
 	var half_length := body_length * 0.5
 	var segment_count := 5 if special_attack else 4
 	var segment_span: float = body_length / float(segment_count)
@@ -825,9 +1019,7 @@ func _draw_rocket_body(dir: Vector2, perp: Vector2, body_length: float, body_wid
 			start_vec - perp * segment_half_width,
 			start_vec + perp * segment_half_width
 		])
-		var body_center := (body_points[0] + body_points[1] + body_points[2] + body_points[3]) * 0.25
-		var tinted_segment := _environment_tint(segment_color, body_center)
-		draw_polygon(body_points, PackedColorArray([tinted_segment, tinted_segment, tinted_segment, tinted_segment]))
+		ci.draw_polygon(body_points, PackedColorArray([segment_color, segment_color, segment_color, segment_color]))
 		var highlight_width: float = segment_half_width * 0.55
 		var highlight_color := segment_color.lerp(Color(1.0, 1.0, 1.0, 1.0), 0.35)
 		var highlight_points := PackedVector2Array([
@@ -836,33 +1028,18 @@ func _draw_rocket_body(dir: Vector2, perp: Vector2, body_length: float, body_wid
 			start_vec - perp * highlight_width * 0.2,
 			start_vec + perp * highlight_width
 		])
-		var highlight_center := (highlight_points[0] + highlight_points[1] + highlight_points[2] + highlight_points[3]) * 0.25
-		var tinted_highlight := _environment_tint(highlight_color, highlight_center)
-		draw_polygon(highlight_points, PackedColorArray([tinted_highlight, tinted_highlight, tinted_highlight, tinted_highlight]))
+		ci.draw_polygon(highlight_points, PackedColorArray([highlight_color, highlight_color, highlight_color, highlight_color]))
 	var tip_front := dir * half_length
 	var tip_back: Vector2 = dir * (half_length - max(body_width * 0.85, 14.0))
 	var tip_color: Color = Color(1.0, 0.58, 0.32, 1.0) if special_attack else Color(1.0, 0.86, 0.45, 1.0)
-	var tip_points := PackedVector2Array([
-		tip_front,
-		tip_back + perp * (body_width * 0.5),
-		tip_back - perp * (body_width * 0.5)
-	])
-	var tip_center := (tip_points[0] + tip_points[1] + tip_points[2]) / 3.0
-	var tinted_tip := _environment_tint(tip_color, tip_center)
-	draw_polygon(tip_points, PackedColorArray([tinted_tip, tinted_tip, tinted_tip]))
+	var tip_points := PackedVector2Array([tip_front, tip_back + perp * (body_width * 0.5), tip_back - perp * (body_width * 0.5)])
+	ci.draw_polygon(tip_points, PackedColorArray([tip_color, tip_color, tip_color]))
 	var tip_highlight := tip_color.lerp(Color(1.0, 1.0, 1.0, 1.0), 0.4)
-	var inner_tip_points := PackedVector2Array([
-		tip_front,
-		tip_back + perp * (body_width * 0.28),
-		tip_back - perp * (body_width * 0.28)
-	])
-	var tip_highlight_center := (inner_tip_points[0] + inner_tip_points[1] + inner_tip_points[2]) / 3.0
-	var tinted_tip_highlight := _environment_tint(tip_highlight, tip_highlight_center)
-	draw_polygon(inner_tip_points, PackedColorArray([tinted_tip_highlight, tinted_tip_highlight, tinted_tip_highlight]))
+	var inner_tip_points := PackedVector2Array([tip_front, tip_back + perp * (body_width * 0.28), tip_back - perp * (body_width * 0.28)])
+	ci.draw_polygon(inner_tip_points, PackedColorArray([tip_highlight, tip_highlight, tip_highlight]))
 	var nose_center := tip_front - dir * (body_width * 0.1)
 	var nose_color := Color(tip_color.r, tip_color.g, tip_color.b, 0.45)
-	var tinted_nose := _environment_tint(nose_color, nose_center)
-	draw_circle(nose_center, body_width * 0.45, tinted_nose)
+	ci.draw_circle(nose_center, body_width * 0.45, nose_color)
 	var fin_origin := dir * (-half_length * 0.82)
 	var fin_length := body_width * (1.7 if special_attack else 1.35)
 	var fin_root_offset := body_width * 0.28
@@ -875,20 +1052,11 @@ func _draw_rocket_body(dir: Vector2, perp: Vector2, body_length: float, body_wid
 		var fin_base_left := fin_origin + perp * fin_root_offset
 		var fin_base_right := fin_origin - perp * fin_root_offset
 		var fin_color: Color = Color(0.82, 0.34, 0.34, 0.85) if special_attack else Color(0.7, 0.52, 0.52, 0.85)
-		var fin_points := PackedVector2Array([fin_base_left, fin_tip, fin_base_right])
-		var fin_center := (fin_points[0] + fin_points[1] + fin_points[2]) / 3.0
-		var tinted_fin := _environment_tint(fin_color, fin_center)
-		draw_polygon(fin_points, PackedColorArray([tinted_fin, tinted_fin, tinted_fin]))
+		ci.draw_polygon(PackedVector2Array([fin_base_left, fin_tip, fin_base_right]), PackedColorArray([fin_color, fin_color, fin_color]))
 		var fin_highlight := fin_color.lerp(Color(1.0, 0.92, 0.92, 1.0), 0.4)
 		var highlight_tip := fin_origin + fin_dir * (fin_length * 0.68)
-		var highlight_points := PackedVector2Array([
-			fin_origin + perp * (fin_root_offset * 0.5),
-			highlight_tip,
-			fin_origin - perp * (fin_root_offset * 0.5)
-		])
-		var fin_highlight_center := (highlight_points[0] + highlight_points[1] + highlight_points[2]) / 3.0
-		var tinted_fin_highlight := _environment_tint(fin_highlight, fin_highlight_center)
-		draw_polygon(highlight_points, PackedColorArray([tinted_fin_highlight, tinted_fin_highlight, tinted_fin_highlight]))
+		var highlight_points := PackedVector2Array([fin_origin + perp * (fin_root_offset * 0.5), highlight_tip, fin_origin - perp * (fin_root_offset * 0.5)])
+		ci.draw_polygon(highlight_points, PackedColorArray([fin_highlight, fin_highlight, fin_highlight]))
 
 func _draw_grenade_body() -> void:
 	var grenade_radius := 12.0

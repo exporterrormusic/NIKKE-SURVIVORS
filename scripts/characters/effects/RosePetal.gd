@@ -31,7 +31,7 @@ func _ready() -> void:
 	monitorable = true # Must be monitorable for Shield to detect it too
 	
 	var shape := CircleShape2D.new()
-	shape.radius = _size * 0.6 # Hitbox slightly smaller than visual
+	shape.radius = _size * 1.2 # Generous hitbox (was 0.6) so the aimed target is reliably hit
 	var collider := CollisionShape2D.new()
 	collider.shape = shape
 	add_child(collider)
@@ -186,7 +186,7 @@ func _on_body_entered(body: Node2D) -> void:
 	_has_hit = true
 	
 	# Roll for critical hit
-	var crit_chance := 0.15
+	var crit_chance := 0.05  # HoloCure clone: 5% base crit
 	var player = get_tree().get_first_node_in_group("player")
 	if player and player.has_method("get_crit_chance"):
 		crit_chance += player.get_crit_chance()
@@ -194,7 +194,7 @@ func _on_body_entered(body: Node2D) -> void:
 	var is_crit := randf() < crit_chance
 	var damage := base_damage
 	if is_crit:
-		damage = int(base_damage * 2.0)
+		damage = int(base_damage * 1.5)  # HoloCure clone: 1.5x on crit
 	
 	var hit_direction = velocity.normalized()
 	# Pass source="projectile" so ModularEnemy registers burst hit

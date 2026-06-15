@@ -162,7 +162,8 @@ func _play_wish_audio() -> void:
 	_audio_player = AudioStreamPlayer.new()
 	_audio_player.bus = "SFX"
 	_audio_player.process_mode = Node.PROCESS_MODE_ALWAYS
-	_audio_player.volume_db = -3.0 # Slightly quieter
+	# Loudness-normalized, kept 3 dB under the burst level (relative trim -3.0).
+	_audio_player.volume_db = AudioDirector.VOICE_BASE_GAIN + AudioDirector.get_voice_offset(WISH_AUDIO) - 3.0
 	
 	if WISH_AUDIO:
 		_audio_player.stream = WISH_AUDIO

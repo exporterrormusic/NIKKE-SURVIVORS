@@ -211,7 +211,7 @@ func _create_enemy(enemy_type: String, is_elite: bool = false) -> Node2D:
 	var enemy: Node2D
 	
 	# REPLACEMENT: All requests use the new Modular System
-	if enemy_type in ["basic", "modular_rapture", "tank", "shielder", "exploder", "boss", "super_boss", "elite", "ranged"]:
+	if enemy_type in ["basic", "modular_rapture", "tank", "shielder", "exploder", "boss", "super_boss", "elite", "ranged"] or EnemyTierConfigClass.has_tier(enemy_type):
 		# Check pool first
 		enemy = _get_from_pool()
 		if not enemy:
@@ -291,7 +291,13 @@ func _create_enemy(enemy_type: String, is_elite: bool = false) -> Node2D:
 		"super_boss":
 			_apply_super_boss_stats(enemy)
 			force_elite = false
-	
+		_:
+			# Data-only roster tiers (swarmer, warden, ...) handled generically by name
+			if EnemyTierConfigClass.has_tier(actual_type):
+				_apply_tier_stats(enemy, actual_type)
+			else:
+				_apply_basic_stats(enemy)
+
 	# Apply elite modifier on top
 	if force_elite:
 		_apply_elite_modifier(enemy)
@@ -404,11 +410,18 @@ func _apply_tier_stats(enemy: Node2D, tier_name: String) -> void:
 		enemy.hp = 9999
 	
 	# Apply speed
+	# FIX: Always start from a clean base (stats) to prevent compounding speed decay in the pool.
+	# Previously `enemy.speed = int(enemy.speed * speed_mult)` multiplied the CURRENT speed, so a
+	# pooled enemy reused through slow tiers (elite 0.4, super_boss 0.5, tank 0.8) decayed toward 0
+	# and effectively stopped moving — same compounding bug the HP code above guards against.
+	var base_speed: float = 200.0  # HoloCure clone: SPD 1.0 baseline (enemy px/s = speed_mult * 200)
+	if "stats" in enemy and enemy.stats and "move_speed" in enemy.stats:
+		base_speed = enemy.stats.move_speed
 	var speed_mult: float = tier.speed_mult
 	# Only apply Goddess Fall speed modifier in that mode
 	if _game_manager and _game_manager.goddess_fall_mode:
 		speed_mult *= EnemyTierConfigClass.GODDESS_FALL_SPEED_MULT
-	enemy.speed = int(enemy.speed * speed_mult)
+	enemy.speed = base_speed * speed_mult
 	
 	# Apply damage
 	if tier.damage_mult > 1.0:
@@ -435,19 +448,11 @@ func _apply_tier_stats(enemy: Node2D, tier_name: String) -> void:
 		
 	_apply_outline_glow(enemy, tier.glow_color, tier.glow_enhanced, enable_outline)
 	
-	# Handle core drops
-	var core_chance: float = tier.get("core_drop_chance", 0.0)
-	# Elite core drop chance (20%) is now baseline
-	if tier_name == "elite":
-		core_chance = EnemyTierConfigClass.GODDESS_FALL_ELITE_CORE_CHANCE
-	
-	# Cheat: Otter -> Always drop pristine core
+	# Pristine Cores drop ONLY from bosses (Level._spawn_pristine_core_orb_at_boss).
+	# The "pristine_drops" cheat still tags enemies for the debug core-drop path.
 	if CheatManager.is_cheat_active("pristine_drops"):
-		core_chance = 1.0
-		
-	if core_chance > 0.0 and randf() < core_chance:
 		enemy.set_meta("pristine_core_drop", difficulty_mult)
-	
+
 	# Add boss AI if needed
 	var needs_boss_ai: bool = tier.get("has_boss_ai", false)
 	# Tank Boss AI and Elite Enhanced AI are now baseline

@@ -8,6 +8,38 @@ var killer_source_override: String = "" # If set, missiles use this source
 var fire_delay := 0.0 # Stagger fire times to spread CPU load
 var _fire_timer: Timer = null # Timer for firing projectiles
 
+# Snow White SKILL-tree talent payloads (set by the controller before add_child)
+var defensive_line: bool = false      # Defensive Line: damaging red aura
+var aura_radius: float = 80.0
+var incendiary_level: int = 0         # Incendiary Ammo: missiles apply burn DoT
+var armor_piercing_level: int = 0     # Armor-Piercing Ammo: missiles apply damage mark
+var permanent: bool = false           # Permanent Emplacement: reload instead of despawn
+var detonation: bool = false          # Detonation: explode when destroyed/retired
+var reload_time: float = 6.0
+
+# Rapunzel burst-tree payloads (set on "6,000? Really?" turrets)
+var rapunzel_it_burns_level: int = 0  # "Incendiary Rockets": rockets leave an It Burns ground zone
+var use_fixed_target: bool = false    # "Anti-Queen Bombardment": fire all rockets at a fixed point
+var fixed_target_position: Vector2 = Vector2.ZERO
+
+const ARMOR_PIERCE_MULTS := [2.0, 4.0, 6.0]
+const INCENDIARY_MULTS := [2.0, 4.0, 6.0]
+const RAPUNZEL_IT_BURNS_MULTS := [2.0, 4.0, 6.0]
+const MISSILE_DMG_MULT := 0.5          # turret missile damage = player damage x this
+const MISSILE_EXPLOSION_RADIUS := 60.0 # a turret missile's blast size
+const DETONATION_DMG_MULT := 3.0
+const DETONATION_RADIUS_MULT := 3.0
+const MISSILE_CAP := 32 # perf: max concurrent turret missiles (paces the Century barrage)
+
+# Per-missile visual scale + blast radius. Barrage turrets (A CENTURY / Rapunzel's
+# "6,000") bump these to the bigger original look; the normal turret keeps the smaller
+# defaults.
+var missile_scale: float = 1.0
+var missile_explosion_radius: float = MISSILE_EXPLOSION_RADIUS * 2.0
+
+var _aura_timer: Timer = null
+var _reloading := false
+
 @onready var ammo_bar = get_node_or_null("AmmoBar")
 @onready var ammo_label = get_node_or_null("AmmoLabel")
 
@@ -93,7 +125,16 @@ func _ready() -> void:
 		ammo_bar.material = mat
 	if ammo_label:
 		ammo_label.material = mat
-	
+
+	# Defensive Line: damaging aura ticking once per second
+	if defensive_line:
+		_aura_timer = Timer.new()
+		_aura_timer.wait_time = 1.0
+		_aura_timer.one_shot = false
+		add_child(_aura_timer)
+		_aura_timer.timeout.connect(_aura_tick)
+		_aura_timer.start()
+
 	set_process(true)
 
 func _process(delta: float) -> void:
@@ -121,13 +162,20 @@ func _process(delta: float) -> void:
 		queue_redraw()
 
 func _update_targeting(delta: float) -> void:
+	# Anti-Queen Bombardment: always aim at the painted point, skip enemy scanning.
+	if use_fixed_target:
+		_target_angle = (fixed_target_position - global_position).angle()
+		var ad := wrapf(_target_angle - _current_angle, -PI, PI)
+		_current_angle += ad * ROTATION_SPEED * delta
+		return
+
 	# Only scan for new targets periodically (approx 4 times/sec)
 	# This drastically reduces CPU load when many turrets are active (Rapunzel Ultra Burst)
 	_target_update_timer -= delta
 	if _target_update_timer <= 0:
 		_target_update_timer = _rng.randf_range(0.2, 0.3) # Randomize to prevent frame spikes
 		_scan_for_target()
-	
+
 	# Rotate towards current target if valid
 	if is_instance_valid(_current_target):
 		var to_target = _current_target.global_position - global_position
@@ -157,8 +205,14 @@ func _scan_for_target() -> void:
 	_current_target = closest_enemy
 
 func _draw() -> void:
+	# Defensive Line: red damaging aura (drawn behind the turret body)
+	if defensive_line:
+		var pulse := 0.10 + 0.04 * sin(_age * 3.0)
+		draw_circle(Vector2.ZERO, aura_radius, Color(1.0, 0.13, 0.1, pulse))
+		draw_arc(Vector2.ZERO, aura_radius, 0.0, TAU, 48, Color(1.0, 0.25, 0.2, 0.45), 2.0)
+
 	var deploy := _ease_out_back(_deploy_progress)
-	
+
 	# Draw base/platform
 	_draw_base(deploy)
 	
@@ -303,96 +357,141 @@ func _ease_out_back(t: float) -> float:
 	return 1.0 + c3 * pow(t - 1.0, 3) + c1 * pow(t - 1.0, 2)
 
 func shoot():
-	# Trigger muzzle flash
-	_muzzle_flash_timer = 0.15
-	
-	# Find enemies to target using TargetCache (much faster than get_nodes_in_group)
-	var cached_enemies := TargetCache.get_enemies()
-	var enemies: Array[Node2D] = []
-	for enemy in cached_enemies:
-		if enemy is Node2D and is_instance_valid(enemy) and enemy.has_method("take_damage"):
-			enemies.append(enemy)
-	
-	# Sort by distance (only the valid enemies)
-	enemies.sort_custom(func(a, b): return global_position.distance_squared_to(a.global_position) < global_position.distance_squared_to(b.global_position))
-	
-	if enemies.size() == 0:
-		return # No enemies, don't fire
-	
-	# Determine how many rockets to fire (up to 2, but limited by ammo)
-	var rockets_to_fire := mini(2, ammo)
-	var targets = []
-	if enemies.size() >= 2:
-		targets = [enemies[0], enemies[1]]
+	# Perf: bound concurrent turret missiles so a 20-turret barrage can't flood the
+	# screen with missiles/explosions in one frame. Ammo is NOT consumed when capped,
+	# so the turret simply retries on its next fire tick (paces volume, keeps visuals).
+	if ExplosiveProjectile._active_missiles.size() >= MISSILE_CAP:
+		return
+
+	# Resolve up to 2 targets. Anti-Queen Bombardment fires every rocket at the
+	# painted point; otherwise pick the 2 nearest enemies (preferring ones not
+	# already over-targeted) in ONE O(n) pass.
+	var target_positions: Array = []
+	var target_nodes: Array = []
+	if use_fixed_target:
+		target_positions = [fixed_target_position, fixed_target_position]
+		target_nodes = [null, null]
 	else:
-		targets = [enemies[0], enemies[0]]
-	
-	for i in rockets_to_fire:
-		# Consume ammo for each rocket
+		var my_pos := global_position
+		var t1: Node2D = null
+		var t1_d := INF
+		var t2: Node2D = null
+		var t2_d := INF
+		var nearest: Node2D = null # fallback if every enemy is already over-targeted
+		var nearest_d := INF
+		for e in TargetCache.get_enemies():
+			if not (e is Node2D) or not is_instance_valid(e) or not e.has_method("take_damage"):
+				continue
+			var d := my_pos.distance_squared_to((e as Node2D).global_position)
+			if d < nearest_d:
+				nearest_d = d
+				nearest = e
+			if ExplosiveProjectile.targeters_of(e) >= ExplosiveProjectile.MAX_TARGETERS:
+				continue
+			if d < t1_d:
+				t2 = t1; t2_d = t1_d
+				t1 = e; t1_d = d
+			elif d < t2_d:
+				t2 = e; t2_d = d
+
+		if t1 == null:
+			t1 = nearest # everything over-targeted -> just use the nearest enemy
+		if t1 == null:
+			return # no enemies, don't fire
+		if t2 == null:
+			t2 = t1
+		target_nodes = [t1, t2]
+		target_positions = [t1.global_position, t2.global_position]
+
+	# Trigger muzzle flash (we have a target)
+	_muzzle_flash_timer = 0.15
+
+	var missiles_to_fire := mini(2, ammo)
+
+	for i in missiles_to_fire:
+		# Consume ammo for each missile
 		ammo -= 1
 		if ammo_bar:
 			ammo_bar.value = ammo
 		_update_ammo_label()
-		
-		var rocket = ProjectileCache.create_rocket()
-		get_parent().add_child(rocket)
-		
+
+		var missile = ProjectileCache.create_rocket()
+		get_parent().add_child(missile)
+
 		# Fire from the barrel tips
 		var dir := Vector2(cos(_current_angle), sin(_current_angle))
 		var perp := Vector2(-dir.y, dir.x)
 		var offset := perp * (12.0 if i == 0 else -12.0)
-		rocket.global_position = global_position + dir * 20.0 + offset
-		
-		# ExplosiveProjectile properties - these are the correct ones for Rocket.tscn
-		var target_pos = targets[i].global_position
-		var fire_dir = (target_pos - rocket.global_position).normalized()
-		rocket.direction = fire_dir
-		rocket.speed = 300
-		rocket.acceleration = 1200
-		rocket.max_speed = 2500
-		rocket.target_position = target_pos
-		rocket.explode_at_target = true
-		
+		missile.global_position = global_position + dir * 20.0 + offset
+
+		# ExplosiveProjectile properties (Rocket.tscn is the shared explosive)
+		var target_pos = target_positions[i]
+		var fire_dir = (target_pos - missile.global_position).normalized()
+		missile.direction = fire_dir
+		missile.speed = 300
+		missile.acceleration = 1200
+		missile.max_speed = 2500
+		missile.target_position = target_pos
+		missile.explode_at_target = true
+
 		# Set owner_node and killer_source based on who spawned the turret
 		if spawned_by_summon:
 			# Set killer_source_override directly so it persists even after summon is freed
-			rocket.killer_source_override = "summon"
+			missile.killer_source_override = "summon"
 			if is_instance_valid(spawner_node):
-				rocket.owner_node = spawner_node
-			# Performance optimizations for Rapunzel burst turret rockets
-			rocket.homing_enabled = false
-			rocket.target_node = null # Don't track, just fly to position
-			rocket.exhaust_enabled = false
-			rocket.trail_enabled = false
-			rocket.smoke_enabled = false
-			rocket.lightweight_mode = true
+				missile.owner_node = spawner_node
+			# Performance optimizations for summoned-turret missiles
+			missile.homing_enabled = false
+			missile.target_node = null # Don't track, just fly to position
+			missile.exhaust_enabled = false
+			missile.trail_enabled = false
+			missile.smoke_enabled = false
+			missile.lightweight_mode = true
 		else:
-			rocket.owner_node = get_parent().get_node_or_null("Player")
-			rocket.target_node = targets[i] # Normal turrets track targets
-			rocket.homing_enabled = true
-			rocket.homing_strength = 10.0
-		
-		rocket.scale = Vector2(0.5, 0.5)
-		rocket.ground_fire_enabled = false
-		rocket.ground_fire_damage = 0
-		rocket.ground_fire_duration = 0.0
-		
-		# Turret damage = 50% of player's calculated damage
-		var player_node = get_parent().get_node_or_null("Player")
-		if player_node and player_node.has_method("calc_damage"):
-			var turret_damage: int = maxi(1, int(player_node.calc_damage() * 0.5))
-			rocket.damage = turret_damage
-			rocket.explosion_damage = turret_damage
+			missile.owner_node = get_parent().get_node_or_null("Player")
+			if use_fixed_target:
+				# Anti-Queen Bombardment: fly to the painted point, don't home.
+				missile.target_node = null
+				missile.homing_enabled = false
+			else:
+				missile.target_node = target_nodes[i] # Normal turrets track targets
+				missile.homing_enabled = true
+				missile.homing_strength = 6.0 # gentler turns -> smoother arcs
+				missile.coordinate_targeting = true # join the cross-missile target spread
+
+		missile.scale = Vector2(missile_scale, missile_scale)
+
+		# Turret missile damage = 50% of player's calculated damage
+		var missile_dmg := _missile_damage()
+		missile.damage = missile_dmg
+		missile.explosion_damage = missile_dmg
+		missile.explosion_radius = missile_explosion_radius
+
+		# Incendiary Rockets (Rapunzel): leave an "It Burns" ground zone on impact.
+		if rapunzel_it_burns_level > 0:
+			missile.ground_fire_enabled = true
+			missile.ground_fire_duration = 3.0
+			missile.ground_fire_radius = 120.0
+			missile.ground_fire_damage = maxi(int(missile_dmg / 3.0), 1)
+			missile.ground_fire_it_burns_mult = RAPUNZEL_IT_BURNS_MULTS[mini(rapunzel_it_burns_level, 3) - 1]
+			missile.ground_fire_attack_damage = missile_dmg
 		else:
-			# Fallback if player not found
-			rocket.damage = 2
-			rocket.explosion_damage = 2
-		rocket.explosion_radius = 60.0 # Smaller explosion radius
-	
-	# Check if out of ammo after firing
+			missile.ground_fire_enabled = false
+			missile.ground_fire_damage = 0
+			missile.ground_fire_duration = 0.0
+
+		# Snow White missile talents (carried to the missile's explosion)
+		if armor_piercing_level > 0:
+			missile.armor_pierce_mult = ARMOR_PIERCE_MULTS[armor_piercing_level - 1]
+		if incendiary_level > 0:
+			missile.incendiary_total = INCENDIARY_MULTS[incendiary_level - 1] * float(missile.explosion_damage)
+
+	# Out of ammo: permanent turrets reload, normal turrets despawn (and Detonate).
 	if ammo <= 0:
-		_spawn_destruction_effect()
-		queue_free()
+		if permanent:
+			_start_reload()
+		else:
+			_despawn()
 
 func _spawn_destruction_effect() -> void:
 	# Spawn sparks and smoke when turret is destroyed
@@ -409,3 +508,93 @@ func _create_spark() -> Node2D:
 func _update_ammo_label() -> void:
 	if ammo_label:
 		ammo_label.text = str(ammo) + "/" + str(max_ammo)
+
+
+## A turret missile's base damage (player damage scaled). Read live so it tracks
+## ATK growth even for permanent turrets placed earlier.
+func _missile_damage() -> int:
+	var p = get_parent().get_node_or_null("Player") if get_parent() else null
+	if p and p.has_method("calc_damage"):
+		return maxi(1, int(p.calc_damage() * MISSILE_DMG_MULT))
+	return 2
+
+
+## Defensive Line: damage every enemy inside the aura once per second. Routes
+## through take_damage so Weak Point / Armor-Piercing marks amplify it.
+func _aura_tick() -> void:
+	var dmg := _missile_damage()
+	var r_sq := aura_radius * aura_radius
+	for e in TargetCache.get_enemies():
+		if not is_instance_valid(e) or not e is Node2D:
+			continue
+		if e.is_in_group("charmed_allies"):
+			continue
+		if global_position.distance_squared_to((e as Node2D).global_position) <= r_sq:
+			if e.has_method("take_damage"):
+				e.take_damage(dmg, false, Vector2.ZERO, false, "snow_white_turret_aura")
+
+
+## Permanent Emplacement: refill ammo after a reload delay instead of despawning.
+func _start_reload() -> void:
+	if _reloading:
+		return
+	_reloading = true
+	if _fire_timer:
+		_fire_timer.stop()
+	var t := get_tree().create_timer(reload_time)
+	t.timeout.connect(func():
+		if not is_instance_valid(self):
+			return
+		ammo = max_ammo
+		if ammo_bar:
+			ammo_bar.value = ammo
+		_update_ammo_label()
+		_reloading = false
+		if _fire_timer:
+			_fire_timer.start()
+	)
+
+
+## Called by the controller when retiring the oldest turret at the cap.
+func request_despawn() -> void:
+	_despawn()
+
+
+func _despawn() -> void:
+	_detonate()
+	_spawn_destruction_effect()
+	queue_free()
+
+
+## Detonation: explode for 3x missile damage in 3x a rocket's blast, carrying the
+## Armor-Piercing / Incendiary missile debuffs.
+func _detonate() -> void:
+	if not detonation:
+		return
+	var parent = get_parent()
+	if parent == null:
+		return
+
+	var dmg := int(_missile_damage() * DETONATION_DMG_MULT)
+	var blast := MISSILE_EXPLOSION_RADIUS * DETONATION_RADIUS_MULT
+
+	var explosion = ProjectileCache.create_explosion()
+	if explosion.has_method("initialize"):
+		explosion.initialize(dmg, blast)
+	explosion.owner_node = parent.get_node_or_null("Player")
+	explosion.killer_source_override = "snow_white_detonation"
+	if armor_piercing_level > 0:
+		explosion.armor_pierce_mult = ARMOR_PIERCE_MULTS[armor_piercing_level - 1]
+	if incendiary_level > 0:
+		explosion.incendiary_total = INCENDIARY_MULTS[incendiary_level - 1] * float(_missile_damage())
+	if explosion.has_node("Sprite2D"):
+		explosion.get_node("Sprite2D").visible = false
+	parent.add_child(explosion)
+	explosion.global_position = global_position
+
+	var visual = ProjectileCache.create_explosion_effect()
+	if visual:
+		if "radius" in visual:
+			visual.radius = blast
+		parent.add_child(visual)
+		visual.global_position = global_position

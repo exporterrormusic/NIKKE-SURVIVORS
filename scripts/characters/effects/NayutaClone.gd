@@ -10,6 +10,8 @@ signal clone_died
 
 # Preload hologram shader
 const HologramShader = preload("res://resources/shaders/hologram_ally.gdshader")
+# The bright golden return stream that carries the dissolve + heal to the player
+const EssenceStreamScript = preload("res://scripts/characters/effects/NayutaEssenceStream.gd")
 
 # Character registry for stats
 var _registry: CharacterRegistry = null
@@ -48,7 +50,7 @@ var _spawn_duration: float = 0.8
 var _glow_time: float = 0.0
 var _is_dying: bool = false
 var _death_timer: float = 0.0
-var _death_duration: float = 1.0
+var _death_duration: float = 0.45  # Quick sprite dissolve; the stream carries the rest
 
 # Health bar
 var _health_bar_bg: ColorRect = null
@@ -63,10 +65,6 @@ var _smg_burst_timer: float = 0.0
 var _smg_is_paused: bool = false
 const SMG_FIRE_DURATION := 2.0
 const SMG_PAUSE_DURATION := 2.0
-
-# Death sparkles
-var _sparkles: Array = [] # Array of {pos, vel, life}
-var _sparkles_traveling: bool = false
 
 func _ready() -> void:
 	z_index = 9
@@ -152,7 +150,12 @@ func _load_sprite() -> void:
 			frames.add_frame(anim_name, atlas)
 	
 	_animator.sprite_frames = frames
-	_animator.scale = Vector2(0.18, 0.18)
+	# Frame-height-relative scale: pixel-art (64px) and high-res (640px) sheets
+	# both render ~115px tall
+	var clone_scale := 115.2 / float(frame_height)
+	_animator.scale = Vector2(clone_scale, clone_scale)
+	if clone_scale >= 1.0:
+		_animator.texture_filter = TEXTURE_FILTER_NEAREST
 	_animator.play("down")
 
 func _create_collision_shape() -> void:
@@ -547,70 +550,14 @@ func _update_animation() -> void:
 			_animator.play()
 
 func _process_death(delta: float) -> void:
+	# The dissolve burst, gold stream and heal are handled by the separate
+	# NayutaEssenceStream node (spawned in _die) so they render bright on the
+	# EffectsLayer. The clone itself just fades its sprite out and frees.
 	_death_timer += delta
-	
-	# Phase 1: Dissolve into sparkles
-	if _death_timer < _death_duration * 0.5:
-		# Hide animator progressively
-		if _animator:
-			_animator.modulate.a = 1.0 - (_death_timer / (_death_duration * 0.5))
-		
-		# Spawn sparkles
-		if _sparkles.size() < 30:
-			for i in range(3):
-				var sparkle := {
-					"pos": Vector2(randf_range(-20, 20), randf_range(-30, 30)),
-					"vel": Vector2(randf_range(-50, 50), randf_range(-80, -20)),
-					"life": 1.0,
-					"size": randf_range(3, 6)
-				}
-				_sparkles.append(sparkle)
-	
-	# Phase 2: Sparkles float/travel
-	else:
-		if _animator:
-			_animator.visible = false
-		
-		# Check if should travel to player
-		if should_heal_on_death and not _sparkles_traveling:
-			_sparkles_traveling = true
-		
-		# Update sparkles
-		for sparkle in _sparkles:
-			sparkle.life -= delta * 0.5
-			
-			if _sparkles_traveling and owner_player and is_instance_valid(owner_player):
-				# Travel toward player
-				var to_player: Vector2 = owner_player.global_position - (global_position + sparkle.pos)
-				sparkle.vel = sparkle.vel.lerp(to_player.normalized() * 400.0, delta * 5.0)
-				sparkle.pos += sparkle.vel * delta
-				
-				# Check if reached player
-				if to_player.length() < 30.0:
-					sparkle.life = 0.0
-			else:
-				# Float upward
-				sparkle.vel.y -= 50.0 * delta
-				sparkle.pos += sparkle.vel * delta
-		
-		# Remove dead sparkles
-		_sparkles = _sparkles.filter(func(s): return s.life > 0)
-	
-	# End death sequence
-	if _death_timer >= _death_duration and _sparkles.is_empty():
-		# Apply heal if applicable
-		if should_heal_on_death and has_meta("heal_owner_amount") and has_meta("heal_owner_ref"):
-			var heal_amount: int = get_meta("heal_owner_amount")
-			var player_ref: WeakRef = get_meta("heal_owner_ref")
-			var player_node: Node = player_ref.get_ref() if player_ref else null
-			if player_node and is_instance_valid(player_node):
-				if player_node.has_method("heal"):
-					player_node.heal(heal_amount)
-				elif "hp" in player_node and "max_hp" in player_node:
-					player_node.hp = mini(player_node.hp + heal_amount, player_node.max_hp)
-		
+	if _animator:
+		_animator.modulate.a = clampf(1.0 - (_death_timer / _death_duration), 0.0, 1.0)
+	if _death_timer >= _death_duration:
 		queue_free()
-	
 	queue_redraw()
 
 func _draw() -> void:
@@ -624,16 +571,9 @@ func _draw() -> void:
 		draw_arc(Vector2.ZERO, ring_radius, 0, TAU, 32, Color(1.0, 0.85, 0.4, alpha), 3.0)
 		draw_arc(Vector2.ZERO, ring_radius * 0.7, 0, TAU, 32, Color(1.0, 0.9, 0.5, alpha * 0.6), 2.0)
 	
-	# Death sparkles
-	if _is_dying:
-		for sparkle in _sparkles:
-			var alpha: float = float(sparkle.life)
-			var color := Color(1.0, 0.85, 0.3, alpha) # Gold sparkles
-			draw_circle(sparkle.pos, sparkle.size * alpha, color)
-			
-			# Add glow
-			draw_circle(sparkle.pos, sparkle.size * alpha * 1.5, Color(1.0, 0.9, 0.5, alpha * 0.3))
-	
+	# (The death dissolve + return stream is drawn by NayutaEssenceStream, on the
+	# bright EffectsLayer, so it glows through night.)
+
 	# Subtle floor glow when alive
 	if not _is_dying:
 		var pulse := 0.5 + 0.3 * sin(_glow_time * 3.0)
@@ -687,8 +627,28 @@ func _die() -> void:
 		_health_bar_fill.visible = false
 	if _health_bar_label:
 		_health_bar_label.visible = false
-	
+
 	clone_died.emit()
+
+	# Spawn the bright golden return stream. Done AFTER clone_died.emit() so the
+	# heal metas set by NayutaController._on_clone_died are already present.
+	_spawn_essence_stream()
+
+## Spawn the EffectsLayer stream that carries the dissolve sparkles + heal home.
+func _spawn_essence_stream() -> void:
+	var parent := get_parent()
+	if not parent:
+		return
+	var heal_amt: int = 0
+	if should_heal_on_death and has_meta("heal_owner_amount"):
+		heal_amt = int(get_meta("heal_owner_amount"))
+	var is_return: bool = has_meta("return_essence")
+	var stream := Node2D.new()
+	stream.name = "NayutaEssenceStream"
+	stream.set_script(EssenceStreamScript)
+	parent.add_child(stream)
+	stream.global_position = global_position
+	stream.call("setup", owner_player, heal_amt, is_return)
 
 func initialize(player: Node2D, weapon: String, hp: int, atk_mult: float, heal_on_death: bool, level: int) -> void:
 	owner_player = player

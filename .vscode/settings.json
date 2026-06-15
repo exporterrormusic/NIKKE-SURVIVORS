@@ -10,5 +10,11 @@
     },
     "files.watcherExclude": {
         "NIKKE-GODOT - Copy/**": true
+    },
+    "chat.tools.terminal.autoApprove": {
+        "/^ffmpeg -i \"c:\\\\Users\\\\rmdou\\\\Desktop\\\\SURVIVORS OF VICTORY - 2026\\\\assets\\\\sounds\\\\music\\\\bgm\\\\breakbeat\\.wav\" -c:a mp3_mf -q:a 2 \"c:\\\\Users\\\\rmdou\\\\Desktop\\\\SURVIVORS OF VICTORY - 2026\\\\assets\\\\sounds\\\\music\\\\bgm\\\\breakbeat\\.mp3\" 2>&1$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }

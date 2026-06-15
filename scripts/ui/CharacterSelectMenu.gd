@@ -15,6 +15,7 @@ const UISounds := preload("res://scripts/ui/UISoundManager.gd")
 const ShopMenuScript := preload("res://scripts/ui/ShopMenu.gd")
 const CharacterSelectCardScript := preload("res://scripts/ui/components/CharacterSelectCard.gd")
 const NikkePopupScript := preload("res://scripts/ui/components/NikkePopup.gd")
+const TalentTreeScript := preload("res://scripts/ui/TalentTree.gd")
 
 signal play_requested(character_index: int, stage_id: String)
 signal back_requested
@@ -65,6 +66,7 @@ func _ready() -> void:
 	_setup_burst_audio()
 
 	_detail.deploy_pressed.connect(_on_deploy_pressed)
+	_detail.skill_tree_pressed.connect(_on_skill_tree_pressed)
 	_back_button.pressed.connect(_go_back)
 	visibility_changed.connect(_on_visibility_changed)
 
@@ -280,6 +282,30 @@ func _on_deploy_pressed() -> void:
 	_transition_to_stage()
 
 
+## Opens the selected unit's talent tree as a read-only, centered modal preview
+## (reuses the in-run TalentTree overlay in preview mode).
+func _on_skill_tree_pressed() -> void:
+	if _phase != Phase.CHARACTER or _selected_char_id.is_empty() or _active_popup:
+		return
+	UISounds.play_select()
+
+	var idx: int = _registry.get_all_character_ids().find(_selected_char_id)
+	if idx < 0:
+		idx = 0
+
+	var preview: TalentTree = TalentTreeScript.new()
+	preview.configure_preview(idx)
+	_active_popup = preview
+	add_child(preview)
+	preview.tree_closed.connect(func():
+		_active_popup = null
+		if is_instance_valid(preview):
+			preview.queue_free()
+		call_deferred("_grab_initial_focus")
+	)
+	preview.show_preview()
+
+
 func _transition_to_stage() -> void:
 	if _phase == Phase.STAGE:
 		return
@@ -430,4 +456,6 @@ func _play_burst_sfx(char_id: String) -> void:
 	var stream: AudioStream = _registry.get_burst_sound(char_id)
 	if stream:
 		_burst_audio.stream = stream
+		# Normalize preview loudness to match the in-game burst.
+		_burst_audio.volume_db = AudioDirector.VOICE_BASE_GAIN + AudioDirector.get_voice_offset(stream)
 		_burst_audio.play()

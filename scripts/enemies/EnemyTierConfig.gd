@@ -17,9 +17,9 @@ extends RefCounted
 static var TIERS := {
 	"basic": {
 		"scale": 1.0,
-		"hp_mult": 1.0,
-		"damage_mult": 1.0,
-		"speed_mult": 1.0,
+		"hp_mult": 12.0,  # absolute HP (base max_hp=1); weakest grunt
+		"damage_mult": 4.0,  # absolute contact ATK
+		"speed_mult": 0.4,  # HoloCure SPD (px/s = mult * base_speed 200)
 		"glow_color": Color.TRANSPARENT,
 		"glow_enhanced": false,
 		"groups": [],
@@ -28,9 +28,9 @@ static var TIERS := {
 	},
 	"tank": {
 		"scale": 2.0,
-		"hp_mult": 5.0,
-		"damage_mult": 2.0,
-		"speed_mult": 1.0,
+		"hp_mult": 150.0,  # mid trash band
+		"damage_mult": 8.0,
+		"speed_mult": 0.6,
 		"glow_color": Color(0.85, 0.35, 0.15, 1.0),  # Dark reddish-orange
 		"glow_enhanced": true,
 		"groups": ["tank"],
@@ -40,9 +40,9 @@ static var TIERS := {
 	},
 	"shielder": {
 		"scale": 2.0,
-		"hp_mult": 5.0,
-		"damage_mult": 2.0,
-		"speed_mult": 0.8,  # Slightly slower - defensive unit
+		"hp_mult": 200.0,  # HoloCure clone: tanky defensive band
+		"damage_mult": 7.0,
+		"speed_mult": 0.5,  # Slightly slower - defensive unit
 		"glow_color": Color(0.3, 0.6, 1.0, 1.0),  # Blue glow
 		"glow_enhanced": true,
 		"groups": ["tank", "shielder"],
@@ -53,9 +53,9 @@ static var TIERS := {
 	},
 	"exploder": {
 		"scale": 1.5,  # 50% larger than normal enemies
-		"hp_mult": 3.0,  # Less HP - suicide unit
-		"damage_mult": 4.0,  # High explosion damage
-		"speed_mult": 1.2,  # Faster - needs to reach player
+		"hp_mult": 50.0,  # fast swarm band
+		"damage_mult": 10.0,  # High explosion damage
+		"speed_mult": 1.15,  # Faster - needs to reach player
 		"glow_color": Color(1.0, 0.2, 0.2, 1.0),  # Red glow
 		"glow_enhanced": true,
 		"enable_outline": false, # Disable shader outline (ring effect)
@@ -67,9 +67,9 @@ static var TIERS := {
 	},
 	"elite": {
 		"scale": 3.25,
-		"hp_mult": 10.0,
-		"damage_mult": 3.0,
-		"speed_mult": 0.8,
+		"hp_mult": 600.0,  # mini-boss band
+		"damage_mult": 11.0,
+		"speed_mult": 0.9,
 		"glow_color": Color(0.8, 0.1, 0.1, 1.0),  # Red glow
 		"glow_enhanced": true,
 		"groups": ["elite"],
@@ -80,9 +80,9 @@ static var TIERS := {
 	},
 	"boss": {
 		"scale": 4.5,
-		"hp_mult": 50.0,
-		"damage_mult": 5.0,
-		"speed_mult": 0.5,
+		"hp_mult": 3500.0,  # heavy mini-boss band
+		"damage_mult": 15.0,
+		"speed_mult": 0.8,
 		"glow_color": Color(0.7, 0.2, 1.0, 1.0),  # Purple glow
 		"glow_enhanced": true,
 		"groups": ["boss"],
@@ -94,9 +94,9 @@ static var TIERS := {
 	},
 	"super_boss": {
 		"scale": 5.5,
-		"hp_mult": 100.0,
-		"damage_mult": 8.0,
-		"speed_mult": 0.4,
+		"hp_mult": 8000.0,  # stage finale boss scale
+		"damage_mult": 20.0,
+		"speed_mult": 0.8,
 		"glow_color": Color(1.0, 0.2, 0.5, 1.0),  # Red-purple glow
 		"glow_enhanced": true,
 		"groups": ["boss", "super_boss"],
@@ -107,6 +107,24 @@ static var TIERS := {
 		"health_bar_name": "RAPTURE OVERLORD",
 		"has_aura": true,
 	},
+
+	# === Survivor enemy roster (absolute HP via base max_hp=1) ===
+	# Trash — melee chasers; the dominant trash type steps up over the run.
+	"swarmer": {"scale": 0.9, "hp_mult": 6.0, "damage_mult": 4.0, "speed_mult": 0.35, "glow_color": Color.TRANSPARENT, "glow_enhanced": false, "groups": [], "can_shoot": false, "has_boss_ai": false, "xp": 6},
+	"trooper": {"scale": 1.0, "hp_mult": 20.0, "damage_mult": 7.0, "speed_mult": 0.40, "glow_color": Color.TRANSPARENT, "glow_enhanced": false, "groups": [], "can_shoot": false, "has_boss_ai": false, "xp": 7},
+	"marauder": {"scale": 1.1, "hp_mult": 40.0, "damage_mult": 8.0, "speed_mult": 0.40, "glow_color": Color.TRANSPARENT, "glow_enhanced": false, "groups": [], "can_shoot": false, "has_boss_ai": false, "xp": 8},
+	"brute": {"scale": 1.1, "hp_mult": 60.0, "damage_mult": 10.0, "speed_mult": 0.60, "glow_color": Color(0.5, 0.2, 0.6, 1.0), "glow_enhanced": false, "groups": [], "can_shoot": false, "has_boss_ai": false, "xp": 12},
+	"enforcer": {"scale": 1.15, "hp_mult": 80.0, "damage_mult": 13.0, "speed_mult": 0.60, "glow_color": Color.TRANSPARENT, "glow_enhanced": false, "groups": [], "can_shoot": false, "has_boss_ai": false, "xp": 9},
+	"harrier": {"scale": 1.2, "hp_mult": 105.0, "damage_mult": 13.0, "speed_mult": 0.85, "glow_color": Color.TRANSPARENT, "glow_enhanced": false, "groups": [], "can_shoot": false, "has_boss_ai": false, "xp": 9},
+	"devastator": {"scale": 1.25, "hp_mult": 135.0, "damage_mult": 15.0, "speed_mult": 0.65, "glow_color": Color.TRANSPARENT, "glow_enhanced": false, "groups": [], "can_shoot": false, "has_boss_ai": false, "xp": 9},
+	# Fast / swarm
+	"skitter": {"scale": 0.9, "hp_mult": 12.0, "damage_mult": 5.0, "speed_mult": 1.0, "glow_color": Color(1.0, 0.7, 0.2, 1.0), "glow_enhanced": false, "groups": [], "can_shoot": false, "has_boss_ai": false, "xp": 3},
+	"lunger": {"scale": 1.0, "hp_mult": 28.0, "damage_mult": 8.0, "speed_mult": 1.15, "glow_color": Color(1.0, 0.7, 0.2, 1.0), "glow_enhanced": false, "groups": [], "can_shoot": false, "has_boss_ai": false, "xp": 7},
+	# Mini-bosses — big tanky chasers, ~every 2 min (no boss AI; not in "boss" group)
+	"warden": {"scale": 2.5, "hp_mult": 350.0, "damage_mult": 12.0, "speed_mult": 0.50, "glow_color": Color(1.0, 0.3, 0.2, 1.0), "glow_enhanced": true, "groups": [], "can_shoot": false, "has_boss_ai": false, "core_drop_chance": 0.5, "xp": 150},
+	"breaker": {"scale": 3.0, "hp_mult": 900.0, "damage_mult": 18.0, "speed_mult": 0.75, "glow_color": Color(0.8, 0.2, 0.9, 1.0), "glow_enhanced": true, "groups": [], "can_shoot": false, "has_boss_ai": false, "core_drop_chance": 0.5, "xp": 600},
+	"colossus": {"scale": 3.0, "hp_mult": 1300.0, "damage_mult": 20.0, "speed_mult": 0.90, "glow_color": Color(0.5, 0.2, 0.7, 1.0), "glow_enhanced": true, "groups": [], "can_shoot": false, "has_boss_ai": false, "core_drop_chance": 0.5, "xp": 1000},
+	"leviathan": {"scale": 3.25, "hp_mult": 1900.0, "damage_mult": 22.0, "speed_mult": 1.0, "glow_color": Color(1.0, 0.2, 0.3, 1.0), "glow_enhanced": true, "groups": [], "can_shoot": false, "has_boss_ai": false, "core_drop_chance": 0.5, "xp": 1500},
 }
 
 # =============================================================================

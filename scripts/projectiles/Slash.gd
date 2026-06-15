@@ -1,5 +1,7 @@
 extends Area2D
 
+const ScarletBleedScript = preload("res://scripts/characters/effects/ScarletBleed.gd")
+
 @onready var visual = $SwordSlashVisual
 
 var _hit_bodies: Array = []
@@ -8,10 +10,22 @@ var killer_source: String = "sword"  # For ShielderShield collision detection
 var killer_source_override: String = ""
 
 # Critical hit settings
-const BASE_CRIT_CHANCE := 0.15  # 15% base chance to crit
-const CRIT_MULTIPLIER := 2.0  # 2x damage on crit
+const BASE_CRIT_CHANCE := 0.05  # HoloCure clone: 5% base crit
+const CRIT_MULTIPLIER := 1.5  # HoloCure clone: 1.5x on crit
 var base_damage := 2
 var override_visual_params: Dictionary = {}
+
+# --- Scarlet attack-talent payloads (set by ScarletController before add_child) ---
+## Parry: deflect enemy bullets back the way they came instead of destroying them.
+var parry_enabled: bool = false
+## Retaliation: damage multiplier applied to a deflected bullet (1.0 = Parry only).
+var deflect_damage_mult: float = 1.0
+## Eviscerate: total bleed damage to apply to each enemy hit (0 = no bleed).
+var eviscerate_total: float = 0.0
+## I am cheating: each successive melee hit on the same enemy doubles its damage.
+var i_am_cheating_enabled: bool = false
+## Reference back to ScarletController for parry/evasion callbacks.
+var scarlet_controller: Node = null
 
 func _ready():
 	# Ensure we can hit enemy projectiles (Layer 3 / Value 4)
@@ -73,6 +87,14 @@ func _on_body_entered(body):
 	if body.is_in_group("charmed_allies"):
 		return
 	if body.has_method("take_damage"):
+		# I am cheating: each successive melee hit on the SAME enemy doubles its
+		# damage (x2, x4, x8, x16), capped at 4 doublings. Tracked per enemy.
+		var effective_base := base_damage
+		if i_am_cheating_enabled:
+			var cheat_hits: int = body.get_meta("scarlet_cheat_hits", 0)
+			effective_base = int(round(base_damage * pow(2.0, float(mini(cheat_hits, 4)))))
+			body.set_meta("scarlet_cheat_hits", cheat_hits + 1)
+
 		# Roll for critical hit - base chance + shop bonus
 		var crit_chance := BASE_CRIT_CHANCE
 		var player = get_tree().get_first_node_in_group("player")
@@ -80,9 +102,9 @@ func _on_body_entered(body):
 			crit_chance += player.get_crit_chance()
 		crit_chance = minf(crit_chance, 1.0)  # Cap at 100%
 		var is_crit := randf() < crit_chance
-		var damage := base_damage
+		var damage := effective_base
 		if is_crit:
-			damage = int(base_damage * CRIT_MULTIPLIER)
+			damage = int(effective_base * CRIT_MULTIPLIER)
 		# Pass hit direction (slash direction) for knockback visual
 		var hit_direction = Vector2.from_angle(rotation)
 		# Determine killer source based on owner type
@@ -96,14 +118,52 @@ func _on_body_entered(body):
 		body.take_damage(damage, is_crit, hit_direction, is_burst_attack, killer_source)
 		_hit_bodies.append(body)
 
+		# Eviscerate: apply/refresh a bleed DoT (+ blood trail) on the target.
+		if eviscerate_total > 0.0:
+			_apply_eviscerate_bleed(body)
+
+func _apply_eviscerate_bleed(body: Node) -> void:
+	if not is_instance_valid(body) or not (body is Node2D):
+		return
+	var existing = body.get_node_or_null("ScarletBleed")
+	if existing and is_instance_valid(existing):
+		existing.refresh(eviscerate_total, 5.0)
+	else:
+		var bleed = ScarletBleedScript.new()
+		body.add_child(bleed)
+		bleed.setup(body, eviscerate_total, 5.0)
+
 func _on_area_entered(area):
-	# Scarlet's blade destroys enemy normal projectiles
-	if area.is_in_group("enemy_projectiles"):
-		print("[Slash] Hit enemy projectile: ", area.name)
-		# Exclude rockets and special attacks
-		if not area.is_in_group("rockets") and not area.is_in_group("special_attacks"):
-			# Destroy the bullet
-			area.queue_free()
-			
-			# Optional: Play a small "clash" sound or effect?
-			# For now just destroy as requested.
+	_handle_projectile(area)
+
+
+## Each physics frame, sweep EVERYTHING currently overlapping the blade — not
+## just the area_entered transition. The slash is short-lived and enemy bullets
+## are fast, so relying only on the entry signal misses bullets that are already
+## inside the arc when the swing starts. This makes delete/deflect reliable.
+func _physics_process(_delta):
+	# Burst-spawned slashes disable monitoring; get_overlapping_areas() errors then.
+	if not monitoring:
+		return
+	for area in get_overlapping_areas():
+		_handle_projectile(area)
+
+
+func _handle_projectile(area) -> void:
+	# Scarlet's blade interacts with enemy normal projectiles (not rockets/beams).
+	if not is_instance_valid(area) or not area.is_in_group("enemy_projectiles"):
+		return
+	if area.is_in_group("rockets") or area.is_in_group("special_attacks"):
+		return
+
+	# Parry: deflect the bullet back the way it came instead of destroying it.
+	# Without Parry (or for projectiles that can't be deflected), destroy it.
+	if parry_enabled and area.has_method("deflect"):
+		# Don't re-deflect a bullet that's already been turned (avoids ping-pong).
+		if area.has_meta("from_charmed") and area.get_meta("from_charmed"):
+			return
+		area.deflect(deflect_damage_mult)
+		if is_instance_valid(scarlet_controller) and scarlet_controller.has_method("on_parry_deflect"):
+			scarlet_controller.on_parry_deflect()
+	else:
+		area.queue_free()

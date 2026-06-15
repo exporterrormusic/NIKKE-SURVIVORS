@@ -135,7 +135,10 @@ func _ready() -> void:
 				print("ERROR: Sprite texture missing at res://assets/enemies/rapture-basic/sprite.png")
 				
 		if tex:
-			visuals.configure(tex, 3, 4, 6.0, 0.15)
+			# Scale relative to frame height so the rapture renders ~96px tall
+			# regardless of sheet resolution (48px pixel-art -> 2x, old 640px -> 0.15)
+			var enemy_scale: float = 96.0 / (tex.get_height() / 4.0)
+			visuals.configure(tex, 3, 4, 6.0, enemy_scale)
 		else:
 			# Even if texture fails, FORCE VISIBLE so we can see the debug placeholder (or at least know it exists)
 			print("ERROR: Visuals configuration failed - No Texture. Forcing visible anyway.")
@@ -673,13 +676,33 @@ func apply_stun(duration: float) -> void:
 		# set_stunned(true) # ensure on
 	
 	set_stunned(true)
-	
+
 	if not is_inside_tree():
 		return
-		
+
+	# Show a "dazed" indicator (orbiting stars) for the stun's duration.
+	_spawn_stun_indicator(duration)
+
 	# Create timer to un-stun
 	var timer = get_tree().create_timer(duration)
 	timer.timeout.connect(func(): if is_instance_valid(self): set_stunned(false))
+
+const StunEffectScript = preload("res://scripts/effects/StunEffect.gd")
+
+func _spawn_stun_indicator(duration: float) -> void:
+	# Avoid stacking duplicates.
+	if has_node("StunEffect"):
+		return
+	var fx = StunEffectScript.new()
+	fx.name = "StunEffect"
+	add_child(fx)
+	fx.setup(duration)
+
+## Apply (or refresh) a temporary movement slow. `factor` is the speed multiplier
+## (e.g. 0.7 = 30% slower). Used by Snow White's "Inferno" fire trails.
+func apply_slow(factor: float, duration: float) -> void:
+	if movement_component and movement_component.has_method("apply_slow"):
+		movement_component.apply_slow(factor, duration)
 
 func _fire_laser(direction: Vector2) -> void:
 	var laser = ProjectileCache.create_enemy_laser()
@@ -834,9 +857,11 @@ func _spawn_xp_orbs() -> void:
 	if stats and "xp_value" in stats:
 		drop_xp = stats.xp_value
 	
-	# Scale XP based on tier (basic=1x, tank=2x, elite=5x, boss=10x)
+	# Determine tier (spawner sets "enemy_tier"; fall back to legacy meta/groups)
 	var tier_name := ""
-	if has_meta("tier"):
+	if has_meta("enemy_tier"):
+		tier_name = get_meta("enemy_tier")
+	elif has_meta("tier"):
 		tier_name = get_meta("tier")
 	elif is_in_group("boss") or is_in_group("super_boss"):
 		tier_name = "boss"
@@ -844,21 +869,29 @@ func _spawn_xp_orbs() -> void:
 		tier_name = "elite"
 	elif is_in_group("tank") or is_in_group("shielder") or is_in_group("exploder"):
 		tier_name = "tank"
-	
-	# Apply tier XP multipliers
-	match tier_name:
-		"tank", "shielder", "exploder":
-			drop_xp = int(drop_xp * 2)
-		"elite":
-			drop_xp = int(drop_xp * 5)
-		"boss":
-			drop_xp = int(drop_xp * 10)
-		"super_boss":
-			drop_xp = int(drop_xp * 20)
+
+	# HoloCure clone: absolute per-tier EXP when the tier defines "xp"; else legacy mult
+	var tier_cfg: Dictionary = EnemyTierConfig.get_tier(tier_name) if tier_name != "" else {}
+	if tier_cfg.has("xp"):
+		drop_xp = int(tier_cfg.xp)
+	else:
+		match tier_name:
+			"tank", "shielder", "exploder":
+				drop_xp = int(drop_xp * 1.5)  # ~12
+			"elite":
+				drop_xp = int(drop_xp * 75)  # ~600 (mini-boss)
+			"boss":
+				drop_xp = int(drop_xp * 188)  # ~1500
+			"super_boss":
+				drop_xp = int(drop_xp * 250)  # ~2000
 	
 	# Ensure minimum XP
 	drop_xp = maxi(1, drop_xp)
-	
+
+	# Bonus XP multiplier (e.g. Scarlet's Execution = 1.5x for instakilled enemies).
+	if has_meta("xp_bonus_mult"):
+		drop_xp = maxi(1, int(drop_xp * float(get_meta("xp_bonus_mult"))))
+
 	# DIRECT GRANT: No nodes spawned, call player directly for performance
 	var player = TargetCache.get_player()
 	if player and player.has_method("add_xp"):
@@ -945,6 +978,8 @@ func reset() -> void:
 	global_position = Vector2.ZERO
 	rotation = 0.0
 	scale = Vector2.ONE
+	if movement_component and movement_component.has_method("clear_slow"):
+		movement_component.clear_slow()
 	
 	# 2. Reset Health
 	# CRITICAL: Reset Max HP to base value (from stats or default). 
@@ -1003,7 +1038,25 @@ func reset() -> void:
 		remove_meta("super_boss_damage_reduction")
 	if has_meta("damage_vulnerability"):
 		remove_meta("damage_vulnerability")
-			
+	if has_meta("armor_pierce_vulnerability"):
+		remove_meta("armor_pierce_vulnerability")
+	if has_meta("missile_targeters"):
+		remove_meta("missile_targeters")
+	# Scarlet "I am cheating": per-enemy melee damage-doubling counter.
+	if has_meta("scarlet_cheat_hits"):
+		remove_meta("scarlet_cheat_hits")
+	# Scarlet "Execution": bonus-XP multiplier flag.
+	if has_meta("xp_bonus_mult"):
+		remove_meta("xp_bonus_mult")
+	# Rapunzel "Oooh, Ahhhh": per-blessing "already stunned" marks. Cleared so a
+	# pooled-reused enemy can be stunned again by the same blessing area.
+	for meta_name in get_meta_list():
+		if meta_name.begins_with("blessing_stun_"):
+			remove_meta(meta_name)
+	# Rapunzel "It Burns": legacy burn-luck accumulator (no longer used, clear if present).
+	if has_meta("rapunzel_burn_luck"):
+		remove_meta("rapunzel_burn_luck")
+
 	# 6. CLEANUP POOLED CHILDREN
 	# Remove attached AI and Effects from previous life
 	# 6. CLEANUP POOLED CHILDREN
@@ -1020,11 +1073,12 @@ func reset() -> void:
 	if shield_controller:
 		shield_controller.reset()
 	
-	# Remove BurnDOTs (scan children by script path to be safe)
+	# Remove BurnDOTs / Scarlet bleeds (scan children by script path to be safe)
 	# Iterate backwards to safely remove
 	for i in range(get_child_count() - 1, -1, -1):
 		var child = get_child(i)
-		if child.get_script() and child.get_script().resource_path.contains("BurnDOT.gd"):
+		var spath = child.get_script().resource_path if child.get_script() else ""
+		if spath.contains("BurnDOT.gd") or spath.contains("ScarletBleed.gd"):
 			remove_child(child)
 			child.queue_free()
 			

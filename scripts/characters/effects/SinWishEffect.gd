@@ -168,7 +168,9 @@ func _play_wish_audio() -> void:
 	_audio_player = AudioStreamPlayer.new()
 	_audio_player.bus = "SFX"
 	_audio_player.process_mode = Node.PROCESS_MODE_ALWAYS
-	
+	# Loudness-normalized to match burst voices (relative trim 0).
+	_audio_player.volume_db = AudioDirector.VOICE_BASE_GAIN + AudioDirector.get_voice_offset(WISH_AUDIO)
+
 	var audio = WISH_AUDIO
 	if audio:
 		_audio_player.stream = audio

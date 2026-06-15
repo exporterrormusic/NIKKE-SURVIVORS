@@ -29,6 +29,7 @@ var _collision_poly: CollisionPolygon2D = null
 var _beam_visual: ColorRect = null
 var _rng := RandomNumberGenerator.new()
 var _hitbox_active := false # Delayed hitbox activation
+var _deflected := false # Scarlet's Parry reversed this bullet to hit enemies
 
 # Owner info for damage log
 var owner_name := "Enemy"
@@ -119,6 +120,29 @@ func set_direction(dir: Vector2) -> void:
 	_direction = dir.normalized() if dir.length() > 0 else Vector2.RIGHT
 	rotation = _direction.angle()
 
+## Scarlet's Parry: reverse this bullet so it flies back the way it came and now
+## damages enemies (reusing the charmed-laser path). Retaliation passes a damage
+## multiplier. Resets travel so it gets full range/lifetime on the return trip.
+func deflect(damage_mult: float = 1.0) -> void:
+	if _is_retired:
+		return
+	_direction = -_direction
+	rotation = _direction.angle()
+	_deflected = true
+	set_meta("from_charmed", true)
+	damage = maxi(1, int(round(damage * damage_mult)))
+	_hit_targets.clear()
+	_age = 0.0
+	_distance_travelled = 0.0
+	_hitbox_active = true
+	# deflect() runs inside the slash's area_entered signal, so toggling collision
+	# state must be deferred (the physics server blocks it mid-callback). The laser
+	# is already active from the collision, so this just keeps it that way.
+	set_deferred("monitoring", true)
+	set_deferred("monitorable", true)
+	if _collision_poly:
+		_collision_poly.set_deferred("disabled", false)
+
 func _physics_process(delta: float) -> void:
 	if _is_retired:
 		return
@@ -187,6 +211,9 @@ func reset() -> void:
 	_hit_targets.clear()
 	owner_name = "Enemy"
 	_hitbox_active = false
+	_deflected = false
+	if has_meta("from_charmed"):
+		remove_meta("from_charmed")
 	
 	# Reset transforms
 	scale = Vector2.ONE
@@ -233,7 +260,8 @@ func _apply_damage(target: Node) -> void:
 		if target.is_in_group("charmed_allies") or target.is_in_group("player"):
 			return
 		if target.is_in_group("enemies") and target.has_method("take_damage"):
-			target.take_damage(damage, false, Vector2.ZERO, false, "charmed_enemy")
+			var deflect_source := "scarlet_parry" if _deflected else "charmed_enemy"
+			target.take_damage(damage, false, Vector2.ZERO, false, deflect_source)
 			_retire()
 			return
 	else:

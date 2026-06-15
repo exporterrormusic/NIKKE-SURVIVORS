@@ -191,7 +191,12 @@ func _upgrade_to_animated_character() -> void:
 
 	_loading_character = AnimatedSprite2D.new()
 	_loading_character.sprite_frames = frames
-	_loading_character.scale = Vector2(0.25, 0.25)
+	# Frame-height-relative scale: walking loader renders ~160px tall for both
+	# pixel-art (64px) and high-res (640px) sheets
+	var loader_scale := 160.0 / float(frame_height)
+	_loading_character.scale = Vector2(loader_scale, loader_scale)
+	if loader_scale >= 1.0:
+		_loading_character.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_loading_character.animation = "right"
 	_loading_character.play("right")
 	_loading_character.modulate = _COLOR_CHAR_PORTRAIT

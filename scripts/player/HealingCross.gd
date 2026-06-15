@@ -9,6 +9,15 @@ extends Node2D
 @export var heal_radius: float = 180.0 # Bigger healing area
 var burn_enabled: bool = false
 var burn_percent: float = 0.03 # Can be overridden by controller (uses heal_percent logic)
+var burn_damage_mult: float = 1.0 # "More, more!" - multiplies the burn damage
+var stun_duration: float = 0.0 # "Oooh, Ahhhh" - stun seconds on an enemy's first hit from this aura
+# "Personal Toy": a blessing aura that follows the player and never expires.
+var follow_target: Node2D = null
+var persistent: bool = false
+var active: bool = true # When false the aura is hidden and does nothing (Personal Toy gating)
+# Meta key marking an enemy already stunned by THIS aura. Unique per aura instance,
+# and cleared on enemy reset() so a fresh (or pooled-reused) enemy can be stunned again.
+@onready var _stun_meta_key: String = "blessing_stun_%d" % get_instance_id()
 
 var _lifetime: float = 0.0
 var _heal_timer: float = 0.0
@@ -52,98 +61,94 @@ func _ready():
 		})
 
 func _process(delta: float) -> void:
+	# Personal Toy aura tracks the player.
+	if follow_target and is_instance_valid(follow_target):
+		global_position = follow_target.global_position
+
+	# Inactive Personal Toy aura: hidden, no heal/burn.
+	if not active:
+		if visible:
+			visible = false
+		return
+	if not visible:
+		visible = true
+
 	_lifetime += delta
-	if _lifetime >= lifespan:
+	if not persistent and _lifetime >= lifespan:
 		queue_free()
 		return
-	
+
 	_heal_timer += delta
 	if _heal_timer >= heal_interval:
 		_heal_timer = 0.0
 		_try_heal_player()
 		if burn_enabled:
 			_try_burn_enemies()
-	
+
 	# Update sparkles
 	for i in range(_sparkles.size()):
 		var s = _sparkles[i]
 		s["angle"] += delta * s["speed"]
 		_sparkles[i] = s
-	
+
 	# Redraw for pulsing effect
 	queue_redraw()
 
-func _try_heal_player() -> void:
+## The HP the blessing heals per tick — also the basis for its burn damage.
+func _resolve_player() -> Node:
+	if follow_target and is_instance_valid(follow_target):
+		return follow_target
 	if _player == null or not is_instance_valid(_player):
 		_player = get_parent().get_node_or_null("Player")
-	if _player == null:
+	return _player
+
+func _heal_amount() -> int:
+	var p = _resolve_player()
+	if p == null:
+		return 0
+	return int(ceil(p.max_hp * heal_percent))
+
+func _try_heal_player() -> void:
+	var p = _resolve_player()
+	if p == null:
 		return
-	
-	var dist = global_position.distance_to(_player.global_position)
-	if dist <= heal_radius:
-		# Heal 10% of max HP
-		if _player.has_method("heal"):
-			var heal_amount = int(ceil(_player.max_hp * heal_percent))
-			_player.heal(heal_amount)
+
+	var dist = global_position.distance_to(p.global_position)
+	if dist <= heal_radius and p.has_method("heal"):
+		p.heal(_heal_amount())
 
 func _try_burn_enemies() -> void:
-	# Burn enemies within radius
+	# Burn damage = the HP this blessing heals per second (max HP x heal %),
+	# scaled by "More, more!". Flat damage, independent of the enemy's own HP.
+	var damage := int(round(float(_heal_amount()) * burn_damage_mult))
+	if damage < 1:
+		damage = 1
+
 	var enemies = TargetCache.get_enemies()
 	for enemy in enemies:
 		if not is_instance_valid(enemy):
 			continue
-			
+		if enemy.is_in_group("charmed_allies"):
+			continue
 		var dist = global_position.distance_to(enemy.global_position)
-		if dist <= heal_radius:
-			if enemy.has_method("take_damage"):
-				# Calculate burn damage
-				# Use current heal_percent as base (matches "same amount it would heal")
-				var dmg_pct = heal_percent
-				
-				# Cap boss damage at 3%
-				if enemy.is_in_group("bosses") or enemy.is_in_group("guardian_bosses") or enemy.is_in_group("gbosses"):
-					dmg_pct = min(dmg_pct, 0.03)
-				
-				# Apply damage based on ENEMY max HP
-				var max_hp = enemy.get("max_hp")
-				if max_hp == null and enemy.has_method("get_max_hp"):
-					max_hp = enemy.get_max_hp()
-				
-				if max_hp:
-					# BALANCE FIX: Probabilistic damage with Bad Luck Protection
-					# 1. Calculate base fractional damage (e.g. 0.03)
-					# 2. Add accumulated "luck" multiplier from metadata
-					# 3. If roll fails, multiply luck by 5 (exponential boost to guarantee hit soon)
-					var expected_damage = float(max_hp) * dmg_pct
-					var damage = int(floor(expected_damage))
-					var remainder = expected_damage - damage
-					
-					# Retrieve luck multiplier (default 1.0)
-					var luck_mult: float = enemy.get_meta("rapunzel_burn_luck", 1.0)
-					
-					# effective_chance scales with luck
-					# For 1HP unit: 0.03 * 1 -> 0.03 * 5 -> 0.03 * 25 (0.75) -> 0.03 * 125 (Guaranteed)
-					var effective_chance = remainder * luck_mult
-					
-					if randf() < effective_chance:
-						damage += 1
-						# Reset luck on success
-						enemy.set_meta("rapunzel_burn_luck", 1.0)
-					else:
-						# Increase luck on failure (x5 exponential boost)
-						if remainder > 0:
-							enemy.set_meta("rapunzel_burn_luck", luck_mult * 5.0)
-					
-					if damage > 0:
-						enemy.take_damage(damage)
-					
-					# Spawn hit effect if possible? Can overload visuals.
-					# Just rely on damage numbers floating up (take_damage usually handles this)
+		if dist > heal_radius or not enemy.has_method("take_damage"):
+			continue
+
+		# "Oooh, Ahhhh": stun the enemy the first time THIS aura hits it. The mark
+		# lives on the enemy and is cleared on reset(), so a respawned/pooled enemy
+		# can be stunned again, while still only once per blessing area.
+		if stun_duration > 0.0:
+			if not enemy.has_meta(_stun_meta_key):
+				enemy.set_meta(_stun_meta_key, true)
+				if enemy.has_method("apply_stun"):
+					enemy.apply_stun(stun_duration)
+
+		enemy.take_damage(damage)
 
 func _draw() -> void:
 	var pulse = 0.7 + 0.3 * sin(_lifetime * 2.5)
 	var pulse_fast = 0.8 + 0.2 * sin(_lifetime * 5.0)
-	var fade = 1.0 - (_lifetime / lifespan) * 0.25 # Slight fade near end
+	var fade = 1.0 if persistent else (1.0 - (_lifetime / lifespan) * 0.25) # Slight fade near end
 	
 	# Draw radiating light rays (heavenly beams)
 	_draw_light_rays(pulse, fade)

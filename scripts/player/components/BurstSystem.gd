@@ -77,18 +77,20 @@ func gain_burst(amount: float) -> void:
 		burst_ready.emit()
 
 
-func use_burst() -> bool:
-	"""Attempt to use burst. Returns true if successful."""
+func use_burst(consume_fraction: float = 1.0) -> bool:
+	"""Attempt to use burst. consume_fraction is the portion of the gauge spent
+	(1.0 = all, 0.5 = half, 0.0 = none); used by Snow White's
+	"A Goddess Who Cannot Yield". Returns true if successful."""
 	if not is_ready():
 		return false
-	
+
 	# Check for debug infinite burst
 	if _player and _player.has_meta("debug_infinite_burst") and _player.get_meta("debug_infinite_burst"):
 		burst_changed.emit(burst_current, burst_max)
 		burst_used.emit()
 		return true
-	
-	burst_current = 0.0
+
+	burst_current = burst_max * (1.0 - clampf(consume_fraction, 0.0, 1.0))
 	burst_changed.emit(burst_current, burst_max)
 	burst_used.emit()
 	return true

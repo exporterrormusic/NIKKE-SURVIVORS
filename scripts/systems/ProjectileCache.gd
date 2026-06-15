@@ -156,12 +156,10 @@ static func create_robot_death_effect() -> Node:
 	return new_node
 
 static func create_explosion() -> Node:
-	# DEBUG: User reports "Purple Explosion" during Scarlet Burst.
-	# Scarlet should NOT spawn explosions. Trace who calls this.
-	return ExplosionScene.instantiate()
+	return _get_from_pool("explosion", ExplosionScene)
 
 static func create_explosion_effect() -> Node:
-	return ExplosionEffectScene.instantiate()
+	return _get_from_pool("explosion_effect", ExplosionEffectScene)
 
 static func create_ground_fire() -> Node:
 	return GroundFireScene.instantiate()

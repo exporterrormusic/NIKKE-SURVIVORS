@@ -144,7 +144,7 @@ func apply_damage_to(body: Node, is_crit: bool = false) -> void:
 	
 	var damage := _get_base_damage()
 	if is_crit:
-		damage *= 2
+		damage = int(damage * 1.5)
 	
 	var hit_direction := velocity.normalized()
 	var killer_source := get_killer_source()

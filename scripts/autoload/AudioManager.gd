@@ -30,19 +30,27 @@ var _current_music_path: String = ""
 var _music_fade_tween: Tween = null
 var _sfx_cache: Dictionary = {} # path -> AudioStream
 
+# --- Auto loudness measurement ---
+const TARGET_RMS_DB := -14.0
+const RMS_SAMPLE_STRIDE := 50
+var _measured_offsets: Dictionary = {}
+var _offsets_config_path: String = "user://music_offsets.cfg"
+
 # --- Music Metadata ---
 const MUSIC_METADATA := {
-	"battle": {"name": "BATTLE", "unlock_id": ""},
-	"dark": {"name": "DARK", "unlock_id": ""},
-	"nayuta": {"name": "SEEN IT ALL (Nayuta's Theme)", "unlock_id": ""},
-	"racer": {"name": "FAST", "unlock_id": ""},
-	"rapunzel": {"name": "YET STILL I BELIEVE (Rapunzel's Theme)", "unlock_id": ""},
-	"sin": {"name": "TASTE MY SILVER TONGUE (Sin's Theme)", "unlock_id": ""},
-	"snow": {"name": "UNYIELDING (Snow White's Theme)", "unlock_id": ""},
-	"western": {"name": "WESTERN", "unlock_id": ""},
-	"wishes": {"name": "ABANDON YOUR WISHES (Scheherezade's Theme)", "unlock_id": "abandoned_wishes", "event_only": true},
-	"main-menu": {"name": "MAIN MENU", "unlock_id": ""},
-	"timer": {"name": "TIMER", "unlock_id": "she_descends", "event_only": true},
+	"battle": {"name": "BATTLE", "unlock_id": "", "volume_offset_db": 0.3},
+	"breakbeat": {"name": "BREAKBEAT", "unlock_id": "", "volume_offset_db": -1.6},
+	"dark": {"name": "DARK", "unlock_id": "", "volume_offset_db": -0.3},
+	"nayuta": {"name": "SEEN IT ALL (Nayuta's Theme)", "unlock_id": "", "volume_offset_db": 0.5},
+	"racer": {"name": "FAST", "unlock_id": "", "volume_offset_db": 0.9},
+	"rapunzel": {"name": "YET STILL I BELIEVE (Rapunzel's Theme)", "unlock_id": "", "volume_offset_db": 1.1},
+	"sin": {"name": "TASTE MY SILVER TONGUE (Sin's Theme)", "unlock_id": "", "volume_offset_db": -0.3},
+	"snow": {"name": "UNYIELDING (Snow White's Theme)", "unlock_id": "", "volume_offset_db": -1.1},
+	"train": {"name": "TRAIN", "unlock_id": "", "volume_offset_db": -0.3},
+	"western": {"name": "WESTERN", "unlock_id": "", "volume_offset_db": 0.9},
+	"wishes": {"name": "ABANDON YOUR WISHES (Scheherezade's Theme)", "unlock_id": "abandoned_wishes", "event_only": true, "volume_offset_db": 1.2},
+	"main-menu": {"name": "MAIN MENU", "unlock_id": "", "volume_offset_db": 0.0},
+	"timer": {"name": "TIMER", "unlock_id": "she_descends", "event_only": true, "volume_offset_db": -3.0},
 }
 
 # --- Weapon SFX Data ---
@@ -73,6 +81,8 @@ const WEAPON_SFX_ARRAYS := {
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_setup_audio_players()
+	_load_measured_offsets()
+	_scan_unmeasured_tracks.call_deferred()  # Defer so ResourceManifest is ready
 	print("[AudioManager] Initialized")
 
 
@@ -129,15 +139,18 @@ func play_music(path: String, fade_time: float = 0.5) -> void:
 
 
 func _start_playing_music(stream: AudioStream, fade_in_time: float) -> void:
+	# Look up per-track volume offset (hardcoded metadata → auto-measured cache → 0.0)
+	var offset_db: float = _get_track_offset(_current_music_path)
+	
 	_music_player.stop()
 	_music_player.stream = stream
-	_music_player.volume_db = -40.0 if fade_in_time > 0 else 0.0
+	_music_player.volume_db = offset_db - 40.0 if fade_in_time > 0 else offset_db
 	_music_player.play()
 	
 	if fade_in_time > 0:
 		if _music_fade_tween: _music_fade_tween.kill()
 		_music_fade_tween = create_tween()
-		_music_fade_tween.tween_property(_music_player, "volume_db", 0.0, fade_in_time)
+		_music_fade_tween.tween_property(_music_player, "volume_db", offset_db, fade_in_time)
 	
 	music_playback_state_changed.emit(true)
 
@@ -215,6 +228,94 @@ func _get_available_sfx_player() -> AudioStreamPlayer:
 	# Fallback: Steal the first player if pool is full
 	return _sfx_pool[0]
 
+
+# =============================================================================
+# AUTO LOUDNESS MEASUREMENT
+# =============================================================================
+
+func _load_measured_offsets() -> void:
+	var config := ConfigFile.new()
+	if config.load(_offsets_config_path) == OK:
+		for key in config.get_section_keys("offsets"):
+			_measured_offsets[key] = config.get_value("offsets", key)
+
+func _save_measured_offsets() -> void:
+	var config := ConfigFile.new()
+	for key in _measured_offsets:
+		config.set_value("offsets", key, _measured_offsets[key])
+	config.save(_offsets_config_path)
+
+func _scan_unmeasured_tracks() -> void:
+	## Measure any battle music tracks that don't have a volume offset yet
+	if not ResourceManifest:
+		return
+	ResourceManifest.ensure_initialized()
+	var new_count := 0
+	for path in ResourceManifest.battle_music:
+		var file_id := path.get_file().get_basename().to_lower()
+		if MUSIC_METADATA.has(file_id) and MUSIC_METADATA[file_id].has("volume_offset_db"):
+			continue
+		if _measured_offsets.has(file_id):
+			continue
+		
+		var stream := _load_stream(path)
+		if stream == null:
+			continue
+		
+		var rms_db := _measure_stream_rms(stream)
+		if rms_db > -80.0:
+			var offset_db: float = snapped(TARGET_RMS_DB - rms_db, 0.1)
+			_measured_offsets[file_id] = offset_db
+			new_count += 1
+			print("[AudioManager] Auto-measured %s: RMS %.1f dB → offset %.1f dB" % [file_id, rms_db, offset_db])
+	
+	if new_count > 0:
+		_save_measured_offsets()
+		print("[AudioManager] Saved %d new loudness measurement(s)" % new_count)
+
+func _get_track_offset(path: String) -> float:
+	var file_id := path.get_file().get_basename().to_lower()
+	if MUSIC_METADATA.has(file_id) and MUSIC_METADATA[file_id].has("volume_offset_db"):
+		return MUSIC_METADATA[file_id]["volume_offset_db"]
+	if _measured_offsets.has(file_id):
+		return _measured_offsets[file_id]
+	return 0.0
+
+func _measure_stream_rms(stream: AudioStream) -> float:
+	var data := _get_stream_pcm(stream)
+	if data.size() < 4:
+		return -120.0
+	
+	var sum_sq := 0.0
+	var count := 0
+	var step := RMS_SAMPLE_STRIDE * 2
+	var i := 0
+	while i < data.size() - 1:
+		var lo := data[i] as int
+		var hi := data[i + 1] as int
+		var sample := lo | (hi << 8)
+		if sample >= 0x8000:
+			sample -= 0x10000
+		sum_sq += float(sample * sample)
+		count += 1
+		i += step
+	
+	if count == 0:
+		return -120.0
+	
+	var rms := sqrt(sum_sq / float(count)) / 32768.0
+	if rms < 0.0000001:
+		return -120.0
+	return 20.0 * log(rms) / log(10.0)
+
+func _get_stream_pcm(stream: AudioStream) -> PackedByteArray:
+	if stream is AudioStreamMP3:
+		return (stream as AudioStreamMP3).data
+	if stream is AudioStreamOggVorbis:
+		return (stream as AudioStreamOggVorbis).data
+	if stream is AudioStreamWAV:
+		return (stream as AudioStreamWAV).data
+	return PackedByteArray()
 
 # =============================================================================
 # UTILITY

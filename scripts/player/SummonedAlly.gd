@@ -246,7 +246,12 @@ func _load_sprite(character_id: String) -> void:
 			frames.add_frame(anim_name, atlas)
 	
 	_animator.sprite_frames = frames
-	_animator.scale = Vector2(0.18, 0.18) # Scale down to match game
+	# Scale relative to frame height so high-res (640px) and pixel-art (64px)
+	# sheets both render ~115px tall (old behavior: 640 * 0.18)
+	var ally_scale := 115.2 / float(frame_height)
+	_animator.scale = Vector2(ally_scale, ally_scale)
+	if ally_scale >= 1.0:
+		_animator.texture_filter = TEXTURE_FILTER_NEAREST
 	_animator.play("down")
 
 func _process(delta: float) -> void:

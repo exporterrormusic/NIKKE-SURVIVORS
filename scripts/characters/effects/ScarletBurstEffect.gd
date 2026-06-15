@@ -16,9 +16,20 @@ var owner_node: Node2D = null
 var teleport_target: Vector2 = Vector2.ZERO
 var should_teleport: bool = false
 
-# Talent bonuses
-var execute_talent: bool = false # Instantly kill non-elite/boss enemies
-var vuln_talent: bool = false # Apply 50% damage taken debuff
+# Talent bonuses (set by ScarletController)
+var execute_level: int = 0           # Execution: 33/66/100% instakill chance on regulars
+var expose_weakness_level: int = 0   # Expose Weakness: 2x/4x/6x permanent damage_vulnerability
+var drink_to_victory_level: int = 0  # Drink to Victory: heal 5/10/15% max HP per burst kill
+var fire_in_my_veins_level: int = 0  # Fire In My Veins: 33/66/100% chance per kill to refund gauge
+var gauge_per_kill: float = 0.0      # normal burst gain per successful Fire In My Veins roll
+var low_hp_mult: float = 1.0         # Scraping the Bottle snapshot (HP at burst trigger)
+var d1_crashout: bool = false        # D1 Crashout: linger the freeze 3s post-burst
+
+const EXECUTE_CHANCES := [0.33, 0.66, 1.0]
+const EXPOSE_MULTS := [2.0, 4.0, 6.0]
+const DRINK_PERCENTS := [0.05, 0.10, 0.15]
+const GAUGE_CHANCES := [0.33, 0.66, 1.0]
+const ScarletCrashoutScript = preload("res://scripts/characters/effects/ScarletCrashout.gd")
 
 var _age: float = 0.0
 var _killed_positions: Array[Vector2] = []
@@ -238,13 +249,32 @@ func _start_sequence() -> void:
 		
 	# Exit Time Stop
 	_cleanup_time_stop()
-	
+
 	# Execute all kills simultaneously
 	_execute_pending_kills()
-		
+
 	# Finish
 	emit_signal("burst_complete", owner_node.global_position)
+
+	# D1 Crashout: keep enemies frozen for 3s while Scarlet acts freely.
+	if d1_crashout:
+		_begin_crashout()
+
 	queue_free()
+
+
+## Spawn the lingering enemy-freeze (D1 Crashout). It lives independently of this
+## effect (which frees itself), so it survives to run its 3s timer.
+func _begin_crashout() -> void:
+	if not is_instance_valid(owner_node):
+		return
+	var world = owner_node.get_parent()
+	if world == null:
+		return
+	var crashout = ScarletCrashoutScript.new()
+	world.add_child(crashout)
+	crashout.global_position = Vector2.ZERO
+	crashout.start(owner_node)
 
 func _setup_time_stop() -> void:
 	# Store original state
@@ -451,72 +481,88 @@ func _mark_target(enemy: Node2D) -> void:
 	_pending_kills.append({"node": enemy, "orig_z_rel": orig_z_rel})
 
 func _execute_pending_kills() -> void:
-	var execution_kill_count_total: int = 0
-	
+	var total_kills: int = 0
+	var gauge_gain: float = 0.0
+
+	# Base burst damage = 10x attack, scaled by the Scraping the Bottle SNAPSHOT
+	# (low_hp_mult captured at trigger), so Drink to Victory healing can't lower it.
+	var damage_base: int = 0
+	if owner_node:
+		if owner_node.has_method("calc_damage"):
+			damage_base = owner_node.calc_damage()
+		elif "attack_damage" in owner_node:
+			damage_base = owner_node.attack_damage
+		elif "base_damage" in owner_node:
+			damage_base = owner_node.base_damage
+	var burst_damage: int = int(float(damage_base * 10) * low_hp_mult)
+
+	var damage_source: String = "ScarletBurst"
+	if owner_node and (owner_node.is_in_group("summoned_allies") or owner_node.is_in_group("clones") or owner_node.name.contains("SummonedAlly") or owner_node.name.contains("NayutaClone")):
+		damage_source = "summon"
+
 	for pk in _pending_kills:
 		var enemy = pk["node"]
 		var orig_z_rel = pk.get("orig_z_rel", true)
-		
+
 		if not is_instance_valid(enemy):
 			continue
-			
-		# Restore visuals logic is handled by enemy death usually
+
 		enemy.z_index = 0
 		enemy.z_as_relative = orig_z_rel
-		# enemy.modulate = Color.WHITE # No need if we didn't change it
-		
-		# Determine execute logic (re-check in case stats changed?)
+
 		var is_elite_or_boss: bool = enemy.has_meta("enemy_tier") and enemy.get_meta("enemy_tier") in ["elite", "boss"]
 		is_elite_or_boss = is_elite_or_boss or enemy.is_in_group("elite") or enemy.is_in_group("boss")
-		
-		var will_execute := false
-		var damage_base: int = 0
-		if owner_node:
-			if owner_node.has_method("calc_damage"):
-				damage_base = owner_node.calc_damage()
-			elif "attack_damage" in owner_node:
-				damage_base = owner_node.attack_damage
-			elif "base_damage" in owner_node:
-				damage_base = owner_node.base_damage
-				
-		var damage_amount: int = damage_base * 10
-		
-		# Apply Scraping the Bottle multiplier if available
-		if owner_node and owner_node.has_method("get_low_hp_damage_multiplier"):
-			damage_amount = int(float(damage_amount) * owner_node.get_low_hp_damage_multiplier())
-		
-		if execute_talent and not is_elite_or_boss:
+
+		# Expose Weakness: permanent damage_vulnerability mark (set before damage so
+		# this hit benefits too). Cleared by ModularEnemy.reset on death/reuse.
+		if expose_weakness_level > 0:
+			enemy.set_meta("damage_vulnerability", EXPOSE_MULTS[mini(expose_weakness_level, 3) - 1])
+
+		var damage_amount: int = burst_damage
+		var forced_kill := false
+		# Execution: chance to instantly kill a regular enemy (and grant 1.5x XP).
+		if execute_level > 0 and not is_elite_or_boss and randf() < EXECUTE_CHANCES[mini(execute_level, 3) - 1]:
 			damage_amount = 999999
-			will_execute = true
-			
-		# Vulnerability
-		if vuln_talent:
-			_apply_vulnerability(enemy)
-			
-		# Determine source
-		var damage_source: String = "ScarletBurst"
-		if owner_node and (owner_node.is_in_group("summoned_allies") or owner_node.is_in_group("clones") or owner_node.name.contains("SummonedAlly") or owner_node.name.contains("NayutaClone")):
-			damage_source = "summon"
-			
+			forced_kill = true
+			enemy.set_meta("xp_bonus_mult", 1.5)
+
+		var hp_before: int = enemy.hp if "hp" in enemy else 1
+		var pos: Vector2 = enemy.global_position
+
 		# Apply Damage
 		if enemy.has_method("take_damage"):
 			enemy.take_damage(damage_amount, false, Vector2.ZERO, true, damage_source)
 		elif enemy.has_method("apply_damage"):
 			enemy.apply_damage(damage_amount, damage_source)
-			
-		_killed_positions.append(enemy.global_position)
-		
-		if will_execute:
-			execution_kill_count_total += 1
-		
-		if owner_node and owner_node.has_method("register_burst_hit"):
+
+		_killed_positions.append(pos)
+
+		# Count kills for Drink to Victory + Fire In My Veins.
+		var died := forced_kill
+		if not died and hp_before > 0:
+			died = not is_instance_valid(enemy) or ("hp" in enemy and enemy.hp <= 0)
+		if died:
+			total_kills += 1
+			# Fire In My Veins: roll per kill to refund the normal burst gauge.
+			if fire_in_my_veins_level > 0 and randf() < GAUGE_CHANCES[mini(fire_in_my_veins_level, 3) - 1]:
+				gauge_gain += gauge_per_kill
+
+		if is_instance_valid(enemy) and owner_node and owner_node.has_method("register_burst_hit"):
 			owner_node.register_burst_hit(enemy, true)
-			
-	# Apply Healing - use heal() method for immediate visual feedback
-	if execute_talent and execution_kill_count_total > 0 and owner_node:
-		var heal_amount := int(owner_node.max_hp * 0.15 * execution_kill_count_total)
-		if heal_amount > 0 and owner_node.has_method("heal"):
-			owner_node.heal(heal_amount) # Proper heal method triggers floating number and updates display
+
+	# Drink to Victory: heal 5/10/15% max HP per enemy the burst killed.
+	if drink_to_victory_level > 0 and total_kills > 0 and owner_node and owner_node.has_method("heal"):
+		var heal_pct: float = DRINK_PERCENTS[mini(drink_to_victory_level, 3) - 1]
+		var heal_amount := int(owner_node.max_hp * heal_pct * total_kills)
+		if heal_amount > 0:
+			owner_node.heal(heal_amount)
+
+	# Fire In My Veins: grant the accumulated burst refund (enables chaining).
+	if gauge_gain > 0.0 and is_instance_valid(owner_node):
+		if owner_node.has_method("add_burst_charge"):
+			owner_node.add_burst_charge(gauge_gain)
+		elif owner_node.has_method("gain_burst"):
+			owner_node.gain_burst(gauge_gain)
 
 func _apply_vulnerability(enemy: Node2D) -> void:
 	"""Apply 50% increased damage taken debuff to enemy with purple cracked visual."""

@@ -15,21 +15,33 @@ var _fire_timer: Timer = null
 var _rng := RandomNumberGenerator.new()
 var _current_angle := 0.0
 var _target: Node2D = null
+var _scan_phase := 0 # De-syncs enemy scans so 20 turrets don't all scan the same frame
 
-# Simple visual - grey metallic like original turrets
-const TURRET_COLOR := Color(0.35, 0.35, 0.4, 0.95) # Dark grey
-const ACCENT_COLOR := Color(0.55, 0.55, 0.6, 0.95) # Light grey metallic
+# 2x the size of Snow White's turrets, gold energy styling
+const TURRET_COLOR := Color(0.4, 0.38, 0.45, 0.95) # Gunmetal
+const ACCENT_COLOR := Color(1.0, 0.82, 0.35, 0.95) # Rapunzel gold
 const BARREL_COLOR := Color(0.25, 0.25, 0.3, 1.0) # Dark barrel
-const BASE_SIZE := 16.0
+const GLOW_COLOR := Color(1.0, 0.8, 0.4) # Soft gold halo
+const BASE_SIZE := 32.0
+
+# One unshaded material shared by all turrets (was per-instance)
+static var _shared_unshaded_mat: CanvasItemMaterial = null
 
 func _ready() -> void:
 	_rng.randomize()
+	_scan_phase = _rng.randi_range(0, 29)
 	z_index = 50
-	
+
 	# Unshaded so it's visible at night
-	var mat := CanvasItemMaterial.new()
-	mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
-	material = mat
+	if _shared_unshaded_mat == null:
+		_shared_unshaded_mat = CanvasItemMaterial.new()
+		_shared_unshaded_mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+	material = _shared_unshaded_mat
+
+	# Energy pulse via modulate (no redraw cost)
+	var pulse := create_tween().set_loops()
+	pulse.tween_property(self, "self_modulate", Color(1.35, 1.28, 1.1), 0.45).set_trans(Tween.TRANS_SINE)
+	pulse.tween_property(self, "self_modulate", Color.WHITE, 0.45).set_trans(Tween.TRANS_SINE)
 	
 	# Setup fire timer - fires every 0.8 seconds for faster action
 	_fire_timer = Timer.new()
@@ -48,14 +60,18 @@ func _ready() -> void:
 	queue_redraw()
 
 func _process(_delta: float) -> void:
-	# Minimal processing - just rotate toward nearest enemy occasionally
-	if Engine.get_process_frames() % 30 == 0: # Every 30 frames (~0.5s at 60fps)
+	# Minimal processing - just rotate toward nearest enemy occasionally.
+	# _scan_phase staggers the scans across turrets.
+	if (Engine.get_process_frames() + _scan_phase) % 30 == 0:
 		_find_target()
-	
+
 	if _target and is_instance_valid(_target):
 		var to_target = (_target.global_position - global_position).normalized()
-		_current_angle = to_target.angle()
-		queue_redraw()
+		var new_angle: float = to_target.angle()
+		# Only redraw when the barrel visibly moves
+		if absf(angle_difference(new_angle, _current_angle)) > 0.02:
+			_current_angle = new_angle
+			queue_redraw()
 
 func _find_target() -> void:
 	var enemies = TargetCache.get_enemies()
@@ -73,24 +89,29 @@ func _find_target() -> void:
 	_target = closest
 
 func _draw() -> void:
-	# Simplified drawing - grey metallic turret appearance
+	# Soft gold glow halo (pulsed via self_modulate tween)
+	draw_circle(Vector2.ZERO, BASE_SIZE * 2.0, Color(GLOW_COLOR.r, GLOW_COLOR.g, GLOW_COLOR.b, 0.08))
+	draw_circle(Vector2.ZERO, BASE_SIZE * 1.5, Color(GLOW_COLOR.r, GLOW_COLOR.g, GLOW_COLOR.b, 0.14))
+	draw_circle(Vector2.ZERO, BASE_SIZE * 1.15, Color(GLOW_COLOR.r, GLOW_COLOR.g, GLOW_COLOR.b, 0.2))
+
+	# Hex body
 	var points := PackedVector2Array()
 	for i in range(6):
 		var angle := TAU * i / 6.0
 		points.append(Vector2(cos(angle), sin(angle)) * BASE_SIZE)
 	draw_colored_polygon(points, TURRET_COLOR)
-	
+
 	# Outer ring
-	draw_arc(Vector2.ZERO, BASE_SIZE, 0, TAU, 12, ACCENT_COLOR, 2.0)
-	
+	draw_arc(Vector2.ZERO, BASE_SIZE, 0, TAU, 12, ACCENT_COLOR, 3.0)
+
 	# Barrel
 	var barrel_dir := Vector2.from_angle(_current_angle)
-	draw_line(Vector2.ZERO, barrel_dir * (BASE_SIZE + 14.0), BARREL_COLOR, 5.0)
-	draw_line(Vector2.ZERO, barrel_dir * (BASE_SIZE + 14.0), ACCENT_COLOR, 3.0)
-	
+	draw_line(Vector2.ZERO, barrel_dir * (BASE_SIZE + 28.0), BARREL_COLOR, 8.0)
+	draw_line(Vector2.ZERO, barrel_dir * (BASE_SIZE + 28.0), ACCENT_COLOR, 5.0)
+
 	# Center pivot
-	draw_circle(Vector2.ZERO, 5.0, BARREL_COLOR)
-	draw_circle(Vector2.ZERO, 3.0, ACCENT_COLOR)
+	draw_circle(Vector2.ZERO, 9.0, BARREL_COLOR)
+	draw_circle(Vector2.ZERO, 6.0, ACCENT_COLOR)
 
 func _shoot() -> void:
 	if ammo <= 0:
@@ -138,7 +159,8 @@ func _shoot() -> void:
 	rocket.trail_enabled = false
 	rocket.smoke_enabled = false
 	rocket.lightweight_mode = true
-	rocket.scale = Vector2(0.4, 0.4) # Smaller rockets
+	rocket.scale = Vector2(0.8, 0.8) # 2x the old burst-turret rockets
+	rocket.explosion_glow_boost = 1.6 # Brighter, more dramatic blasts
 	rocket.ground_fire_enabled = false
 	
 	# Simple damage calculation
@@ -150,7 +172,7 @@ func _shoot() -> void:
 	else:
 		rocket.damage = 2
 		rocket.explosion_damage = 2
-	rocket.explosion_radius = 50.0 # Smaller explosion
+	rocket.explosion_radius = 100.0 # 2x blast
 	
 	# Check if out of ammo
 	if ammo <= 0:

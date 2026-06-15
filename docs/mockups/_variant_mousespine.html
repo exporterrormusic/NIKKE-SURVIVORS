@@ -1,0 +1,198 @@
+<h2>B - Input Glyph Spine (Left)</h2>
+<div class="sub">a vertical mouse-glyph spine inside the tree's left edge - L / R / burst-star map the tabs to the in-battle ability cluster</div>
+<section class="stage">
+  <div class="game"><img src="../../assets/backgrounds/forest.jpg"></div>
+  <div class="dim"></div>
+
+  <style>
+    /* ===== scoped to .v-mousespine ===== */
+    .v-mousespine{position:absolute; left:396px; top:120px; width:96px; bottom:84px; z-index:5;}
+    .v-mousespine .tile{position:absolute; left:0; width:96px; height:172px;
+      background:rgba(10,13,18,.55); border:1px solid rgba(255,255,255,.12);
+      border-bottom:none; cursor:pointer; overflow:hidden;}
+    .v-mousespine .tile:last-child{border-bottom:1px solid rgba(255,255,255,.12);}
+    .v-mousespine .tile.t0{top:0;}
+    .v-mousespine .tile.t1{top:172px;}
+    .v-mousespine .tile.t2{top:344px;}
+
+    /* skewed inner block (skew only, box stays 90deg) */
+    .v-mousespine .skin{position:absolute; left:0; right:0; top:0; bottom:0;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      transform:skewY(-6deg); transform-origin:50% 50%;}
+    .v-mousespine .glyph{width:34px; height:34px; opacity:.42;
+      display:flex; align-items:center; justify-content:center; transition:opacity .12s;}
+    .v-mousespine .glyph svg{width:30px; height:30px; display:block;}
+    .v-mousespine .lbl{font-family:"Arial Narrow",sans-serif; font-weight:800; font-style:italic;
+      font-size:21px; letter-spacing:.06em; margin-top:8px; color:#F0F4F8; opacity:.42;
+      transition:color .12s, opacity .12s;}
+
+    /* invested fraction sublabel, baked bottom-left */
+    .v-mousespine .frac{position:absolute; left:9px; bottom:9px; z-index:3;
+      font-family:"Pretendard",sans-serif; font-weight:800; font-size:9px; letter-spacing:.14em;
+      text-transform:uppercase; color:rgba(151,160,172,.5);}
+
+    /* vertical pip strip, inner-right edge, fills bottom-up */
+    .v-mousespine .vpips{position:absolute; right:7px; top:18px; bottom:18px; width:4px;
+      display:flex; flex-direction:column-reverse; gap:4px; z-index:3;}
+    .v-mousespine .vpips i{flex:1; width:4px; background:rgba(255,255,255,.16);}
+
+    /* hover idle */
+    .v-mousespine .tile:hover .lbl{color:var(--yellow); opacity:1;}
+    .v-mousespine .tile:hover .glyph{opacity:.7;}
+
+    /* ===== ACTIVE (SKILL tile) ===== */
+    .v-mousespine .tile.active{background:rgba(16,20,26,.95);}
+    .v-mousespine .tile.active .lbl{opacity:1;}
+    .v-mousespine .tile.active .glyph{opacity:1;}
+    .v-mousespine .tile.active::before{content:""; position:absolute; left:0; top:0; bottom:0;
+      width:4px; background:var(--yellow); z-index:4;} /* left accent bar (skill=yellow) */
+
+    /* signature tints */
+    .v-mousespine .tile.t0 .frac{color:var(--cyan);}        /* attack 2/? cyan */
+    .v-mousespine .tile.t1 .frac{color:var(--yellow);}      /* skill 4/? yellow */
+    .v-mousespine .tile.t2 .frac{color:rgba(151,160,172,.5);}/* burst 0 muted */
+    .v-mousespine .tile.t0 .vpips i.on{background:var(--cyan);}
+    .v-mousespine .tile.t1 .vpips i.on{background:var(--yellow);}
+    .v-mousespine .tile.t2 .vpips i.on{background:var(--cyan);}
+    .v-mousespine .tile.t2 .glyph{color:var(--yellow);}     /* burst star drawn yellow */
+
+    /* cyan hairline bleeding RIGHT from active tile into treewrap top-left */
+    .v-mousespine .feed{position:absolute; left:96px; top:194px; width:14px; height:1px;
+      background:var(--cyan); box-shadow:0 0 5px rgba(53,197,242,.7); z-index:6;}
+  </style>
+
+  <div class="hdr"><div class="t">TALENTS</div><div class="s">NIKKE // SNOW WHITE</div><div class="bar"></div></div>
+  <div class="spchip"><div><span class="k">SKILL POINTS</span><span class="n">3</span></div></div>
+
+  <div class="statpanel">
+    <div class="cap">FIELD STATUS</div>
+    <div class="ophead"><img src="../../assets/characters/snow-white/portrait-sq.png">
+      <div><div class="nm">SNOW WHITE</div><div class="lv">LV 12</div></div></div>
+    <div class="srow"><span class="k">ATK</span><span class="v">2.4<em>+15%</em></span></div>
+    <div class="srow"><span class="k">HP</span><span class="v">86<em>+10</em></span></div>
+    <div class="srow"><span class="k">BURST GEN</span><span class="v">5%</span></div>
+    <div class="srow"><span class="k">SPEED</span><span class="v">420</span></div>
+    <div class="srow"><span class="k">CRIT RATE</span><span class="v">24%<em>+4%</em></span></div>
+  </div>
+
+  <!-- ===== TAB CHROME: vertical mouse-glyph spine ===== -->
+  <div class="v-mousespine">
+
+    <!-- ATTACK (L-click) :: 2 pts invested, inactive -->
+    <div class="tile t0">
+      <div class="skin">
+        <div class="glyph">
+          <svg viewBox="0 0 30 30" fill="none" stroke="currentColor" stroke-width="1.6">
+            <rect x="7.5" y="2.5" width="15" height="25" rx="7.5"/>
+            <line x1="15" y1="2.5" x2="15" y2="13"/>
+            <path d="M7.5 13 H15" fill="#35C5F2" stroke="none"/>
+            <rect x="7.5" y="2.5" width="7.5" height="10.5" rx="0" fill="#35C5F2" stroke="none" opacity=".9"/>
+          </svg>
+        </div>
+        <div class="lbl">ATK</div>
+      </div>
+      <div class="frac">2/3</div>
+      <div class="vpips"><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i></div>
+    </div>
+
+    <!-- SKILL (R-click) :: 4 pts invested, ACTIVE -->
+    <div class="tile t1 active">
+      <div class="skin">
+        <div class="glyph">
+          <svg viewBox="0 0 30 30" fill="none" stroke="currentColor" stroke-width="1.6">
+            <rect x="7.5" y="2.5" width="15" height="25" rx="7.5"/>
+            <line x1="15" y1="2.5" x2="15" y2="13"/>
+            <rect x="15" y="2.5" width="7.5" height="10.5" rx="0" fill="#FFD23F" stroke="none" opacity=".95"/>
+            <path d="M15 13 H22.5" stroke="#FFD23F"/>
+          </svg>
+        </div>
+        <div class="lbl">SKL</div>
+      </div>
+      <div class="frac">4/7</div>
+      <div class="vpips"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div>
+    </div>
+
+    <!-- BURST (star) :: 0 pts invested, inactive -->
+    <div class="tile t2">
+      <div class="skin">
+        <div class="glyph"><span style="font-size:26px; line-height:1;">&#10022;</span></div>
+        <div class="lbl">BST</div>
+      </div>
+      <div class="frac">0/4</div>
+      <div class="vpips"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+
+    <!-- cyan hairline feeding the pane from the active SKILL tile -->
+    <div class="feed"></div>
+  </div>
+
+  <!-- ===== TREEWRAP reflowed right of spine (left:506) ===== -->
+  <div class="treewrap" style="left:506px;">
+    <!-- pane 720x516. centered vertical Auto-Turret tree -->
+
+    <!-- ROOT (220..500, bottom 102) -> TIER1 split rail -->
+    <!-- stem out of root bottom-center (x360) down to rail y129 -->
+    <div class="edge lit" style="left:358px; top:102px; width:3px; height:27px;"></div>
+    <!-- horizontal rail from left lane center (188) to right lane center (532) -->
+    <div class="edge lit" style="left:188px; top:129px; width:344px; height:3px;"></div>
+    <!-- left stub down into AMMO CACHE top (x188, y156) -->
+    <div class="edge lit" style="left:186px; top:129px; width:3px; height:27px;"></div>
+    <div class="ah down lit" style="left:182px; top:150px;"></div>
+    <!-- right stub down into MORE TURRETS top (x532, y156) -->
+    <div class="edge lit" style="left:530px; top:129px; width:3px; height:27px;"></div>
+    <div class="ah down lit" style="left:526px; top:150px;"></div>
+
+    <!-- TIER1 left (AMMO CACHE) bottom 240 -> TIER2 left (TARGETING UPLINK) top 294 -->
+    <div class="edge" style="left:186px; top:240px; width:3px; height:54px;"></div>
+    <div class="ah down" style="left:182px; top:288px;"></div>
+    <!-- TIER1 right (MORE TURRETS) bottom 240 -> TIER2 right (RAPID DEPLOY) top 294 -->
+    <div class="edge" style="left:530px; top:240px; width:3px; height:54px;"></div>
+    <div class="ah down" style="left:526px; top:288px;"></div>
+
+    <!-- TIER2 left bottom 378 -> capstone rail y396 -> stem into capstone top (x360,414) -->
+    <div class="edge" style="left:186px; top:378px; width:3px; height:18px;"></div>
+    <div class="edge" style="left:530px; top:378px; width:3px; height:18px;"></div>
+    <div class="edge" style="left:186px; top:396px; width:347px; height:3px;"></div>
+    <div class="edge" style="left:358px; top:396px; width:3px; height:18px;"></div>
+    <div class="ah down" style="left:354px; top:408px;"></div>
+
+    <!-- ===== NODES ===== -->
+    <!-- TIER 0 root centered -->
+    <div class="node unlocked" style="left:220px; top:18px; width:280px;">
+      <div class="nm">AUTO-TURRET</div><div class="d">Deploy auto-targeting turrets</div>
+      <div class="state" style="color:var(--cyan);">ACTIVE</div>
+    </div>
+
+    <!-- TIER 1 left -->
+    <div class="node maxed" style="left:58px; top:156px; width:260px;">
+      <div class="nm">AMMO CACHE</div><div class="d">+2 turret missile capacity</div>
+      <div class="pips"><i class="on"></i><i class="on"></i><i class="on"></i></div>
+      <div class="state" style="color:#7be09a;">MAX</div>
+    </div>
+    <!-- TIER 1 right -->
+    <div class="node available" style="left:402px; top:156px; width:260px;">
+      <div class="nm">MORE TURRETS</div><div class="d">+2 max turret charges</div>
+      <div class="cost">1 SP</div>
+      <div class="pips"><i></i><i></i><i></i></div>
+    </div>
+
+    <!-- TIER 2 left -->
+    <div class="node locked" style="left:58px; top:294px; width:260px;">
+      <div class="nm">TARGETING UPLINK</div><div class="d">Turrets prioritize elites</div>
+      <div class="cost">1 SP</div>
+    </div>
+    <!-- TIER 2 right -->
+    <div class="node locked" style="left:402px; top:294px; width:260px;">
+      <div class="nm">RAPID DEPLOY</div><div class="d">-3s turret recharge</div>
+      <div class="cost">1 SP</div>
+    </div>
+
+    <!-- TIER 3 capstone centered -->
+    <div class="node locked" style="left:220px; top:414px; width:280px;">
+      <div class="nm">MASTER MECHANIC</div><div class="d">Ammo capacity +100%</div>
+      <div class="cost">2 SP</div>
+    </div>
+  </div>
+
+  <div class="closechip">CLOSE<span>ESC</span></div>
+</section>

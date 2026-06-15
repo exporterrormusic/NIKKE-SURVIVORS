@@ -33,14 +33,30 @@ var burst_debuff_bosses: bool = false # Bosses/elites take 50% more damage
 const BURST_STUN_DURATION := 8.0
 const BURST_DEBUFF_MULTIPLIER := 1.5
 
+# RETURN UNTO ME: hold special to destroy all clones for a damage buff
+var return_unto_me_unlocked: bool = false
+const RETURN_BUFF_PER_CLONE := 0.5 # +50% damage per clone destroyed
+const RETURN_BUFF_DURATION := 5.0 # Buff lasts 5 seconds
+var _return_buff_timer: float = 0.0
+var _return_buff_mult: float = 1.0
+var _return_glow_node: Node2D = null # Golden sparkle glow shown while the buff is active
+
 func _on_initialize() -> void:
 	# Ammo already set from CharacterRegistry by base class
 	# Clone summon cooldown
 	data.special_cooldown = 8.0
 
-func _on_process(_delta: float) -> void:
+func _on_process(delta: float) -> void:
 	# Clean up dead clone references
 	_cleanup_clones()
+
+	# Tick down the RETURN UNTO ME damage buff
+	if _return_buff_timer > 0.0:
+		_return_buff_timer -= delta
+		if _return_buff_timer <= 0.0:
+			_return_buff_timer = 0.0
+			_return_buff_mult = 1.0
+			_apply_return_glow(false)
 
 func _cleanup_clones() -> void:
 	for i in range(_active_clones.size() - 1, -1, -1):
@@ -76,9 +92,117 @@ func _can_use_special() -> bool:
 func _perform_special(_direction: Vector2) -> void:
 	# Summon a clone
 	_summon_clone()
-	
+
 	# Set cooldown
 	special_timer = data.special_cooldown
+
+## RETURN UNTO ME is only active once the talent is purchased. When enabled, the
+## input handler taps for a normal summon and holds for use_special_hold().
+func is_special_hold_enabled() -> bool:
+	return return_unto_me_unlocked
+
+## RETURN UNTO ME: destroy every active clone, gain +50% damage per clone for 5s,
+## and (if NIMPH Return is owned) heal from each clone's death sparkles.
+func use_special_hold(_direction: Vector2) -> void:
+	if not return_unto_me_unlocked:
+		return
+	if MusicPlayerUI and MusicPlayerUI.is_hovered:
+		return
+	if not is_instance_valid(player):
+		return
+
+	var tree := player.get_tree()
+	if not tree:
+		return
+
+	# Destroy ALL clones on the field (controller-summoned AND Duplicity clones)
+	var clones := tree.get_nodes_in_group("nayuta_clones")
+	var destroyed: int = 0
+	for clone in clones:
+		if not is_instance_valid(clone):
+			continue
+		# Skip clones already dissolving
+		if clone.get("_is_dying") == true:
+			continue
+
+		# Set up heal-on-death so the gold sparkles travel to the player.
+		# We set this explicitly (rather than relying on the clone's spawn-time
+		# flag) so even older clones and Duplicity clones heal when NIMPH Return
+		# is owned.
+		if clone_heal_level > 0:
+			var heal_percent: float = _heal_percentages[mini(clone_heal_level, 3)]
+			var heal_amount: int = int(player.max_hp * heal_percent)
+			clone.set("should_heal_on_death", true)
+			clone.set_meta("heal_owner_amount", heal_amount)
+			clone.set_meta("heal_owner_ref", weakref(player))
+
+		# Mark as RETURN UNTO ME essence so its stream flows home and lights up
+		# the buff aura on arrival (even when NIMPH Return isn't owned)
+		clone.set_meta("return_essence", true)
+
+		if clone.has_method("_die"):
+			clone.call("_die")
+			destroyed += 1
+
+	# All tracked clones are now dissolving
+	_active_clones.clear()
+
+	if destroyed <= 0:
+		return
+
+	# Apply the damage buff: +50% per clone destroyed, for 5 seconds.
+	# Re-triggering keeps the strongest active buff rather than letting a small
+	# re-consume (e.g. 2 Duplicity clones) clobber a big one; the timer refreshes.
+	var new_mult: float = 1.0 + RETURN_BUFF_PER_CLONE * destroyed
+	if _return_buff_timer > 0.0:
+		_return_buff_mult = maxf(_return_buff_mult, new_mult)
+	else:
+		_return_buff_mult = new_mult
+	_return_buff_timer = RETURN_BUFF_DURATION
+	# NOTE: the buff aura is NOT lit here - it's triggered when the first essence
+	# stream actually reaches the player (notify_return_essence_arrived), so the
+	# glow visibly follows the returning particles home.
+
+	# Player feedback
+	if player.overhead_hud and player.overhead_hud.has_method("show_message"):
+		player.overhead_hud.show_message("RETURN UNTO ME  +%d%% DMG" % int(RETURN_BUFF_PER_CLONE * destroyed * 100))
+
+## Called by a NayutaEssenceStream when it reaches the player: light the buff
+## aura, but only while the damage buff is still active (a late stream that
+## arrives after the buff expired must not leave a stuck glow).
+func notify_return_essence_arrived() -> void:
+	if _return_buff_timer > 0.0:
+		_apply_return_glow(true)
+
+## Damage multiplier includes the temporary RETURN UNTO ME buff
+func get_damage_multiplier() -> float:
+	var mult: float = 1.0
+	if burst_active:
+		mult *= data.burst_damage_multiplier
+	if _return_buff_timer > 0.0:
+		mult *= _return_buff_mult
+	return mult
+
+## Show/hide the golden sparkle glow that signals the RETURN UNTO ME buff.
+## Deactivating fades it out (the glow node then self-frees); a re-trigger while
+## it is still fading revives it - unless it has already queued itself for
+## deletion this frame, in which case we must spawn a fresh node so the aura
+## isn't left stuck off.
+func _apply_return_glow(enable: bool) -> void:
+	if not is_instance_valid(player):
+		return
+	if enable:
+		if _return_glow_node and is_instance_valid(_return_glow_node) and not _return_glow_node.is_queued_for_deletion():
+			if _return_glow_node.has_method("set_active"):
+				_return_glow_node.set_active(true)
+		else:
+			_return_glow_node = Node2D.new()
+			_return_glow_node.name = "NayutaReturnGlow"
+			_return_glow_node.set_script(preload("res://scripts/characters/effects/visuals/NayutaReturnGlow.gd"))
+			player.add_child(_return_glow_node)
+	else:
+		if _return_glow_node and is_instance_valid(_return_glow_node) and _return_glow_node.has_method("set_active"):
+			_return_glow_node.set_active(false)
 
 # Max active clones
 const MAX_CLONES := 15
@@ -280,6 +404,11 @@ func _on_cleanup() -> void:
 	# Only clean up dead clone references
 	_cleanup_clones()
 
+	# Remove the buff glow immediately so it doesn't orphan on character switch
+	if _return_glow_node and is_instance_valid(_return_glow_node):
+		_return_glow_node.queue_free()
+	_return_glow_node = null
+
 func apply_talent(talent_id: String) -> void:
 	match talent_id:
 		"special":
@@ -296,6 +425,8 @@ func apply_talent(talent_id: String) -> void:
 			burst_stun_bosses = true
 		"burst_debuff":
 			burst_debuff_bosses = true
+		"return_unto_me":
+			return_unto_me_unlocked = true
 
 func _update_weapon_pool() -> void:
 	# Reset pool

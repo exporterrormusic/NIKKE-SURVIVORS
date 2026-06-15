@@ -22,10 +22,20 @@ var _current_time: float = 0.0
 # Collision
 var _tick_elapsed: float = 0.0
 
-const DOT_SOURCE_ID := "snow_white_burn"
-const DOT_DURATION := 10.0
-const DOT_DAMAGE_PERCENT := 0.03
-const DOT_BOSS_DAMAGE_PERCENT := 0.01
+# "Burning" talent (flat DoT) and "Inferno" talent (slow). The trail itself is
+# the "Afterburn" feature; these two are upgrades layered on top, configured by
+# the bullet that spawns the trail.
+const BURN_SOURCE_ID := "snow_white_burning"
+const AFTERBURN_HIT_SOURCE := "snow_white_afterburn"
+const BURN_DURATION := 5.0
+const BURN_MULTS := [2.0, 5.0, 10.0]   # total burn damage = mult x bullet_damage over BURN_DURATION
+const INFERNO_SLOWS := [0.15, 0.30, 0.50] # slow fraction per rank
+const INFERNO_REFRESH := 0.4 # slow lingers this long after leaving the fire
+
+# Set by the SnowWhiteBullet that creates this trail (from talent levels)
+var burning_level: int = 0
+var inferno_level: int = 0
+var bullet_damage: int = 0
 
 const MAX_POINTS := 150
 
@@ -298,26 +308,38 @@ func _process_enemy(body: Node2D) -> void:
 		return
 	if body.is_in_group("charmed_allies"):
 		return
-	
-	# Look for existing burn DOT
-	var existing_dot: Node = null
-	for child in body.get_children():
-		if child.get_script() == BurnDOTScript and child._source_id == DOT_SOURCE_ID:
-			existing_dot = child
-			break
-	
-	if existing_dot:
-		existing_dot.refresh()
-	else:
-		var dot = BurnDOTScript.new()
-		dot.damage_percent = DOT_DAMAGE_PERCENT
-		dot.boss_damage_percent = DOT_BOSS_DAMAGE_PERCENT
-		dot.duration = DOT_DURATION
-		body.add_child(dot)
-		dot.setup(body, DOT_SOURCE_ID)
-	
+
+	# Inferno: slow enemies standing in the fire (never bosses).
+	if inferno_level > 0 and not body.is_in_group("bosses") and not body.is_in_group("super_boss"):
+		if body.has_method("apply_slow"):
+			var slow_pct: float = INFERNO_SLOWS[mini(inferno_level, INFERNO_SLOWS.size()) - 1]
+			body.apply_slow(1.0 - slow_pct, INFERNO_REFRESH)
+
+	# Burning: flat damage-over-time scaled off the bullet's damage. Refreshes
+	# duration while the enemy stays in the fire (ticks never starve because the
+	# DoT's tick timer is independent of its duration timer).
+	if burning_level > 0:
+		var existing_dot: Node = null
+		for child in body.get_children():
+			if child.get_script() == BurnDOTScript and child._source_id == BURN_SOURCE_ID:
+				existing_dot = child
+				break
+
+		if existing_dot:
+			existing_dot.refresh()
+		else:
+			var mult: float = BURN_MULTS[mini(burning_level, BURN_MULTS.size()) - 1]
+			var dot = BurnDOTScript.new()
+			dot.use_flat = true
+			dot.flat_total = mult * float(maxi(bullet_damage, 1))
+			dot.duration = BURN_DURATION
+			dot.damage_source = BURN_SOURCE_ID
+			body.add_child(dot)
+			dot.setup(body, BURN_SOURCE_ID, BURN_DURATION)
+
+	# Bare Afterburn always chips enemies standing in the fire (the "injury").
 	if body.has_method("take_damage"):
-		body.take_damage(damage_per_tick, false, Vector2.ZERO, false, "burn_dot")
+		body.take_damage(damage_per_tick, false, Vector2.ZERO, false, AFTERBURN_HIT_SOURCE)
 
 func _smoothstep(edge0: float, edge1: float, x: float) -> float:
 	var t := clampf((x - edge0) / (edge1 - edge0), 0.0, 1.0)

@@ -1,7 +1,8 @@
 extends Area2D
 class_name SnowWhiteBullet
-## Snow White's piercing bullet that can optionally leave a burning trail
-## when the "Best Girl" shop upgrade is purchased.
+## Snow White's piercing bullet. Carries her ATTACK-tree payloads: Weak Point
+## (damage-taken mark), the Afterburn fire trail, and the Burning/Inferno ranks
+## and charge width handed to that trail.
 ## Should be instantiated from SnowWhiteBullet.tscn for proper sprite display.
 
 const SnowWhiteBurnTrailScript = preload("res://scripts/characters/effects/SnowWhiteBurnTrail.gd")
@@ -28,9 +29,15 @@ var _trail_node: Node2D = null # Single trail that tracks all positions
 var _trail_record_interval: float = 0.03 # Record position every 30ms (was 15ms)
 var _trail_timer: float = 0.0
 
+# Snow White attack-talent payloads (set per shot by SnowWhiteController)
+var weak_point_mult: float = 0.0   # 0 = none; else 2.0/4.0/6.0 (Weak Point)
+var burning_level: int = 0         # Burning DoT rank carried into the trail
+var inferno_level: int = 0         # Inferno slow rank carried into the trail
+var trail_width_mult: float = 1.0  # Charging widens the fire trail
+
 # Critical hit settings
-const BASE_CRIT_CHANCE := 0.15
-const CRIT_MULTIPLIER := 2.0
+const BASE_CRIT_CHANCE := 0.05 # HoloCure clone: 5% base crit
+const CRIT_MULTIPLIER := 1.5 # HoloCure clone: 1.5x on crit
 var base_damage := 3
 
 var _hit_nodes: Array = []
@@ -95,7 +102,12 @@ func _physics_process(delta: float) -> void:
 
 func _create_trail_node() -> void:
 	_trail_node = SnowWhiteBurnTrailScript.new()
-	
+	# Hand the trail its damage/slow payload and charge-scaled width.
+	_trail_node.burning_level = burning_level
+	_trail_node.inferno_level = inferno_level
+	_trail_node.bullet_damage = base_damage
+	_trail_node.trail_width = _trail_node.trail_width * trail_width_mult
+
 	var parent = get_parent()
 	if parent:
 		parent.add_child(_trail_node)
@@ -177,7 +189,14 @@ func _handle_hit(target: Node, is_shield: bool = false) -> void:
 		if not can_pierce_shield:
 			if target.has_method("is_protected_by_shield") and target.is_protected_by_shield():
 				protected = true
-			
+
+		# Weak Point: permanently mark the enemy to take amplified damage from ALL
+		# sources. Reuses the shared "damage_vulnerability" meta the HitboxComponent
+		# reads, and is set BEFORE this hit so the triggering shot is amplified too.
+		# (ModularEnemy.reset() clears this meta, so it can't leak across pooled enemies.)
+		if weak_point_mult > 0.0 and not protected:
+			target.set_meta("damage_vulnerability", weak_point_mult)
+
 		# Determine killer source for burst tracking and Goddess Fall XP
 		var effective_source := killer_source # Use class property (defaults to "sniper")
 		if killer_source_override != "":

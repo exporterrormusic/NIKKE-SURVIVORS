@@ -16,8 +16,8 @@ var _start_position_set: bool = false
 const MAX_RANGE := 1100.0
 
 # Critical hit settings
-const BASE_CRIT_CHANCE := 0.15
-const CRIT_MULTIPLIER := 2.0
+const BASE_CRIT_CHANCE := 0.05 # HoloCure clone: 5% base crit
+const CRIT_MULTIPLIER := 1.5 # HoloCure clone: 1.5x on crit
 
 func _ready() -> void:
 	# Set up collision

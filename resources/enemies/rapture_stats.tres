@@ -7,4 +7,4 @@ script = ExtResource("1_stats")
 max_hp = 1
 speed = 100.0
 base_damage = 10
-xp_value = 5
+xp_value = 8

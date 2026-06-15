@@ -29,6 +29,13 @@ extends Control
 		zoom = value
 		queue_redraw()
 @export var chamfer := 24.0
+## Width fraction (0-0.5) over which the art alpha-fades out at the right
+## edge — softens the crop line on screens where the art ends mid-panel.
+## When > 0 the chamfer is skipped (the fade hides that corner anyway).
+@export_range(0.0, 0.5) var fade_right := 0.0:
+	set(value):
+		fade_right = value
+		queue_redraw()
 
 
 func _ready() -> void:
@@ -62,7 +69,31 @@ func _draw() -> void:
 	# Keep the focus point centered in the crop, clamped to the image bounds
 	var u0 := clampf(focus_x - uv_w * 0.5, 0.0, 1.0 - uv_w)
 	var v0 := clampf(focus_y - uv_h * 0.5, 0.0, 1.0 - uv_h)
-	var uvs := PackedVector2Array()
-	for p in quad:
-		uvs.append(Vector2(u0 + (p.x / w) * uv_w, v0 + (p.y / h) * uv_h))
-	draw_colored_polygon(quad, Color.WHITE, uvs, texture)
+	if fade_right <= 0.0:
+		var uvs := PackedVector2Array()
+		for p in quad:
+			uvs.append(Vector2(u0 + (p.x / w) * uv_w, v0 + (p.y / h) * uv_h))
+		draw_colored_polygon(quad, Color.WHITE, uvs, texture)
+		return
+
+	# Right-edge fade: a solid quad for the bulk, then a quad over the rightmost
+	# `fade_right` whose right vertices are fully transparent. Per-vertex alpha
+	# interpolates linearly across it, so the art is at 100% at the fade
+	# boundary and 0% at the right edge — a clean even gradient with no band.
+	var xs := w * (1.0 - fade_right)
+	var u_split := u0 + (xs / w) * uv_w
+	var main_pts := PackedVector2Array([
+		Vector2(0, 0), Vector2(xs, 0), Vector2(xs, h), Vector2(0, h)])
+	var main_uvs := PackedVector2Array([
+		Vector2(u0, v0), Vector2(u_split, v0),
+		Vector2(u_split, v0 + uv_h), Vector2(u0, v0 + uv_h)])
+	draw_colored_polygon(main_pts, Color.WHITE, main_uvs, texture)
+
+	var fade_pts := PackedVector2Array([
+		Vector2(xs, 0), Vector2(w, 0), Vector2(w, h), Vector2(xs, h)])
+	var fade_uvs := PackedVector2Array([
+		Vector2(u_split, v0), Vector2(u0 + uv_w, v0),
+		Vector2(u0 + uv_w, v0 + uv_h), Vector2(u_split, v0 + uv_h)])
+	var fade_cols := PackedColorArray([
+		Color.WHITE, Color(1, 1, 1, 0), Color(1, 1, 1, 0), Color.WHITE])
+	draw_polygon(fade_pts, fade_cols, fade_uvs, texture)

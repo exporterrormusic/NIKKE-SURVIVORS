@@ -10,6 +10,16 @@ var owner_node: Node = null # Track who spawned this explosion for killer_source
 var killer_source_override: String = "" # Override killer_source if set
 var damage: int = 30 # Default damage if not initialized
 var radius: float = 100.0 # Default radius
+var _activated := false # Activation (damage + fade) runs on first process, so pooled reuse re-runs it
+var _skip_los := false  # Perf: skip line-of-sight raycasts when no shields exist this blast
+
+## Snow White turret missile debuffs applied to enemies this explosion damages.
+var armor_pierce_mult: float = 0.0  # >0: permanent damage-taken mark (x2/x4/x6)
+var incendiary_total: float = 0.0   # >0: flat burn DoT total over INCENDIARY_DURATION
+var stun_duration: float = 0.0      # >0: stun enemies hit (Rapunzel "Concussive Blast")
+const BurnDOTScript := preload("res://scripts/effects/BurnDOT.gd")
+const INCENDIARY_SOURCE := "snow_white_incendiary"
+const INCENDIARY_DURATION := 5.0
 
 # Performance: disable explosion lights (less impactful since they're short-lived)
 const ENABLE_EXPLOSION_LIGHTS := false
@@ -21,22 +31,39 @@ func initialize(dmg: int, r: float = 100.0) -> void:
 
 func _ready():
 	add_to_group("explosions")
-	
+	# Activation (collision setup, damage scan, fade) is deferred to the first
+	# _process frame so a pooled explosion re-runs it after the caller has set
+	# damage/radius/etc. (see _activate).
+
+## Reset state for pool reuse. Called by ProjectileCache before the caller
+## re-configures this explosion.
+func reset() -> void:
+	_activated = false
+	_damaged_bodies.clear()
+	time = 0.0
+	modulate = Color(1, 1, 1, 1)
+	owner_node = null
+	killer_source_override = ""
+	armor_pierce_mult = 0.0
+	incendiary_total = 0.0
+	stun_duration = 0.0
+
+func _activate() -> void:
 	# Proper Area2D setup - use engine's collision list instead of manual query
 	collision_layer = 0
 	set_deferred("collision_mask", 15) # Layers 1, 2, 3, 4 (Enemies/Hitboxes)
 	set_deferred("monitoring", true)
 	set_deferred("monitorable", false)
-	
+
 	# Update collision shape to match radius
 	var shape_node = get_node_or_null("CollisionShape2D")
 	if shape_node and shape_node.shape is CircleShape2D:
 		shape_node.shape.radius = radius
-	
+
 	# Wait for physics update to populate overlaps
 	await get_tree().physics_frame
 	await get_tree().physics_frame
-	
+
 	if not is_inside_tree():
 		return
 
@@ -54,16 +81,27 @@ func _ready():
 		_light.texture_scale = radius / 64.0 # Scale light with radius
 		_light.shadow_enabled = false
 		add_child(_light)
-	
+
 	var tween = create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(self, "modulate:a", 0.0, 0.2)
 	if _light:
 		tween.tween_property(_light, "energy", 0.0, 0.25) # Light fades with explosion
 	await tween.finished
-	queue_free()
+	_finish()
+
+func _finish() -> void:
+	if _light and is_instance_valid(_light):
+		_light.queue_free()
+		_light = null
+	ProjectileCache.return_to_pool(self)
 
 func _process_explosion_overlaps() -> void:
+	# Perf: line-of-sight raycasts only exist to stop explosions punching through
+	# shields (and walls/boulders). When no shields are active this blast, skip them
+	# entirely - the dominant per-target raycast cost during big bursts.
+	_skip_los = get_tree().get_nodes_in_group("shielder_shields").is_empty() and get_tree().get_nodes_in_group("boss_shields").is_empty()
+
 	# Use standard get_overlapping_bodies which reads safe current state
 	var bodies = get_overlapping_bodies()
 	for body in bodies:
@@ -90,6 +128,9 @@ func _create_light_texture() -> Texture2D:
 	return TextureCache.get_light_texture_64()
 
 func _process(delta):
+	if not _activated:
+		_activated = true
+		_activate()
 	time += delta
 	if has_node("Sprite2D"):
 		$Sprite2D.material.set_shader_parameter("time", time)
@@ -162,6 +203,7 @@ func _try_damage_body(body) -> void:
 				killer_source = killer_source_override
 			elif is_instance_valid(owner_node) and (owner_node.is_in_group("summons") or owner_node.is_in_group("summoned_allies") or owner_node.is_in_group("clones")):
 				killer_source = "summon"
+			_apply_missile_debuffs(root_entity)
 			hitbox.take_damage(damage, false, hit_direction, false, killer_source)
 		return
 		
@@ -172,9 +214,40 @@ func _try_damage_body(body) -> void:
 		killer_source = killer_source_override
 	elif is_instance_valid(owner_node) and (owner_node.is_in_group("summons") or owner_node.is_in_group("summoned_allies") or owner_node.is_in_group("clones")):
 		killer_source = "summon"
+	_apply_missile_debuffs(root_entity)
 	body.take_damage(damage, false, hit_direction, false, killer_source)
 
+
+## Apply Snow White turret missile debuffs (Armor-Piercing mark / Incendiary burn)
+## to an enemy this explosion damaged. No-ops when neither talent fed values in.
+func _apply_missile_debuffs(enemy: Node) -> void:
+	if not is_instance_valid(enemy):
+		return
+	if armor_pierce_mult > 0.0:
+		enemy.set_meta("armor_pierce_vulnerability", armor_pierce_mult)
+	if stun_duration > 0.0 and enemy.has_method("apply_stun"):
+		enemy.apply_stun(stun_duration)
+	if incendiary_total > 0.0:
+		var existing: Node = null
+		for child in enemy.get_children():
+			if child.get_script() == BurnDOTScript and child._source_id == INCENDIARY_SOURCE:
+				existing = child
+				break
+		if existing:
+			existing.refresh()
+		else:
+			var dot = BurnDOTScript.new()
+			dot.use_flat = true
+			dot.flat_total = incendiary_total
+			dot.duration = INCENDIARY_DURATION
+			dot.damage_source = INCENDIARY_SOURCE
+			enemy.add_child(dot)
+			dot.setup(enemy, INCENDIARY_SOURCE, INCENDIARY_DURATION)
+
 func _has_line_of_sight(target: Node2D) -> bool:
+	# Perf: no shields active this blast -> no raycast needed.
+	if _skip_los:
+		return true
 	# If Chrono-Intangibility is active, ignore all shields (always LOS)
 	var player = get_tree().get_first_node_in_group("player")
 	var playing_wells = player and player.has_method("is_playing_character") and player.is_playing_character("wells")

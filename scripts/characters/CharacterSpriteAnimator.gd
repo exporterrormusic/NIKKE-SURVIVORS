@@ -54,6 +54,8 @@ func configure(sprite_sheet: Texture2D, columns: int, rows: int, fps: float, sca
 	
 	sprite_frames = frames
 	scale = Vector2(scale_factor, scale_factor)
+	# Pixel-art sheets (upscaled) need crisp pixels; high-res sheets (downscaled) need smoothing
+	texture_filter = TEXTURE_FILTER_NEAREST if scale_factor >= 1.0 else TEXTURE_FILTER_PARENT_NODE
 	_has_sprite = true
 	visible = true
 	

@@ -18,9 +18,18 @@ var owner_node: Node = null
 var heal_mode: bool = false # When true, heals owner per hit instead of damaging enemies
 var heal_percent: float = 0.0 # Percent of owner's max HP to heal per enemy hit (e.g. 0.05 = 5%)
 
+# In One Strike: enemies killed by the wave explode (set by ScarletController).
+var in_one_strike: bool = false
+var in_one_strike_radius: float = 180.0
+var in_one_strike_damage: int = 0
+var in_one_strike_owner: Node = null
+
+var _cached_env: Node = null # environment_controller (for world bounds)
+const WORLD_MARGIN := 60.0   # despawn this far inside the border, so teleports stay off the wall
+
 # Critical hit settings
-const BASE_CRIT_CHANCE := 0.15 # 15% base chance to crit
-const CRIT_MULTIPLIER := 2.0 # 2x damage on crit
+const BASE_CRIT_CHANCE := 0.05 # HoloCure clone: 5% base crit
+const CRIT_MULTIPLIER := 1.5 # HoloCure clone: 1.5x on crit
 
 var _hit_nodes: Array = []
 var _spawn_position: Vector2 = Vector2.ZERO
@@ -75,7 +84,7 @@ func _assign_to_effects_layer() -> void:
 		"glow_color": Color(0.4, 0.2, 0.7, 0.6),
 		"fade": 1.0,
 		"wipe_progress": 1.0,
-		"sparkle_count": 4,
+		"sparkle_count": 0, # no cross "+" sparkles - keep it a clean arc
 		"sparkle_seed": randi()
 	})
 
@@ -86,7 +95,13 @@ func _physics_process(delta):
 	
 	global_position += velocity * delta
 	lifetime += delta
-	
+
+	# Despawn once the wave leaves the playable map, so the "Nothing Personal"
+	# teleport can never drop the player outside the world.
+	if _is_outside_world():
+		queue_free()
+		return
+
 	# Check boulder collision (reparenting to EffectsLayer breaks Area2D overlap)
 	if _check_boulder_collision():
 		queue_free()
@@ -112,6 +127,17 @@ func _physics_process(delta):
 	# Lifespan safety
 	if lifetime > 3.5:
 		queue_free()
+
+func _is_outside_world() -> bool:
+	if _cached_env == null or not is_instance_valid(_cached_env):
+		_cached_env = get_tree().get_first_node_in_group("environment_controller")
+	if _cached_env == null:
+		return false
+	var bounds = _cached_env.get("_world_bounds")
+	if not (bounds is Rect2) or (bounds as Rect2).size == Vector2.ZERO:
+		return false
+	return not (bounds as Rect2).grow(-WORLD_MARGIN).has_point(global_position)
+
 
 func _check_boulder_collision() -> bool:
 	"""Manual boulder collision check since waves are in EffectsLayer (different scene tree branch)."""
@@ -144,7 +170,8 @@ func _on_body_entered(body: Node) -> void:
 		return
 	
 	_hit_nodes.append(body)
-	
+	var hit_pos: Vector2 = body.global_position # capture before take_damage may free it
+
 	# Roll for critical hit - base chance + shop bonus (capped at 100%)
 	var crit_chance := BASE_CRIT_CHANCE
 	var player = get_tree().get_first_node_in_group("player")
@@ -173,7 +200,11 @@ func _on_body_entered(body: Node) -> void:
 		# Use ceili to ensure at least 1 HP healed per hit
 		var heal_amount := maxi(1, ceili(owner_max_hp * heal_percent))
 		owner_node.heal(heal_amount)
-	
+
+	# In One Strike: if this hit killed the enemy, detonate at its position.
+	if in_one_strike and _enemy_is_dead(body):
+		_spawn_in_one_strike(hit_pos)
+
 	# Piercing behavior
 	if not pierce_all:
 		queue_free()
@@ -182,3 +213,39 @@ func _on_body_entered(body: Node) -> void:
 		pierce_count -= 1
 		if pierce_count <= 0:
 			queue_free()
+
+
+func _enemy_is_dead(body: Node) -> bool:
+	if not is_instance_valid(body):
+		return true
+	if body.is_in_group("dying"):
+		return true
+	if "hp" in body and body.hp <= 0:
+		return true
+	return false
+
+
+## Spawn a turret-Detonation-sized blast (matches Snow White) for the skill's damage.
+func _spawn_in_one_strike(pos: Vector2) -> void:
+	var parent := get_parent()
+	if parent == null:
+		return
+
+	var explosion = ProjectileCache.create_explosion()
+	if explosion.has_method("initialize"):
+		explosion.initialize(in_one_strike_damage, in_one_strike_radius)
+	explosion.owner_node = in_one_strike_owner
+	explosion.killer_source_override = "scarlet_in_one_strike"
+	if explosion.has_node("Sprite2D"):
+		explosion.get_node("Sprite2D").visible = false
+	parent.add_child(explosion)
+	explosion.global_position = pos
+
+	var visual = ProjectileCache.create_explosion_effect()
+	if visual:
+		if "radius" in visual:
+			visual.radius = in_one_strike_radius
+		if visual.has_method("apply_scarlet_tint"):
+			visual.apply_scarlet_tint()
+		parent.add_child(visual)
+		visual.global_position = pos

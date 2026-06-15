@@ -18,9 +18,9 @@ script = ExtResource("1")
 
 [node name="BulletSprite" type="Sprite2D" parent="."]
 modulate = Color(0.3, 0.95, 1, 1)
-texture_filter = 2
+texture_filter = 1
 material = SubResource("ShaderMaterial_tcts8")
-scale = Vector2(0.1092632, 0.1092632)
+scale = Vector2(1.7482112, 1.7482112)
 texture = ExtResource("2")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]

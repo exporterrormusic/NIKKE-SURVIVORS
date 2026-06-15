@@ -107,7 +107,7 @@ func _load_all_characters() -> void:
 		"secondary_color": Color(0.2, 0.4, 0.8),
 		"burst_color": Color(0.6, 0.9, 1.0),
 		"base_speed": 320.0,
-		"base_hp": 10,
+		"base_hp": 50,
 		"base_damage": 7.0,
 		"crit_chance": 0.30,  # 30% crit - sniper precision
 		"weapon_type": 1,  # Rifle
@@ -116,11 +116,12 @@ func _load_all_characters() -> void:
 		"attack_cooldown": 0.35,
 		"projectile_speed": 1650.0,
 		"special_name": "Auto-Turret",
-		"special_description": "Deploys turret with 4 missiles. 1 charge, 8s recharge.",
+		"special_cooldown": 10.0,
+		"special_description": "Deploys turret with 4 missiles. 1 charge, 10s recharge.",
 		"special_upgrade1": "Ammo Cache: +2 turret missile capacity per level. Max: 10.",
 		"special_upgrade2": "More Turrets: +2 max turret charges per level. Max: 7.",
 		"burst_name": "Seven Dwarves",
-		"burst_description": "90° blast dealing 50 damage. Massive range.",
+		"burst_description": "Fires a 90° cone dealing heavy damage scaled off your attack. Massive range.",
 		"burst_upgrade1": "Incendiary Rounds: Burns enemies for 34% max HP/s for 3s. Bosses take 12% instead.",
 		"burst_upgrade2": "Fully Active: Kills during burst refill burst gauge.",
 	})
@@ -137,7 +138,7 @@ func _load_all_characters() -> void:
 		"secondary_color": Color(0.6, 0.1, 0.1),
 		"burst_color": Color(1.0, 0.2, 0.2),
 		"base_speed": 500.0,
-		"base_hp": 10,
+		"base_hp": 50,
 		"base_damage": 10.0,
 		"crit_chance": 0.25,  # 25% crit chance
 		"weapon_type": 0,  # Melee
@@ -165,7 +166,7 @@ func _load_all_characters() -> void:
 		"secondary_color": Color(0.8, 0.6, 0.1),
 		"burst_color": Color(1.0, 0.95, 0.5),
 		"base_speed": 310.0,
-		"base_hp": 12,
+		"base_hp": 50,
 		"base_damage": 15.0,
 		"crit_chance": 0.10,  # 10% crit - support focused
 		"weapon_type": 2,  # Launcher
@@ -195,7 +196,7 @@ func _load_all_characters() -> void:
 		"secondary_color": Color(0.4, 0.15, 0.7),
 		"burst_color": Color(0.7, 0.4, 1.0),
 		"base_speed": 340.0,
-		"base_hp": 10,
+		"base_hp": 50,
 		"base_damage": 2.0,
 		"crit_chance": 0.20,  # 20% crit - clone synergy
 		"weapon_type": 4,  # Dual SMG
@@ -225,7 +226,7 @@ func _load_all_characters() -> void:
 		"secondary_color": Color(0.5, 0.3, 0.15),
 		"burst_color": Color(1.0, 0.84, 0.28),
 		"base_speed": 270.0,
-		"base_hp": 7,
+		"base_hp": 50,
 		"base_damage": 6.0,
 		"crit_chance": 0.15,
 		"weapon_type": 6,  # Assault Rifle
@@ -255,7 +256,7 @@ func _load_all_characters() -> void:
 		"secondary_color": Color(0.3, 0.1, 0.5),
 		"burst_color": Color(0.7, 0.3, 1.0),
 		"base_speed": 310.0,
-		"base_hp": 10,
+		"base_hp": 50,
 		"base_damage": 2.0,
 		"crit_chance": 0.15,  # 15% crit
 		"weapon_type": 5,  # Minigun
@@ -285,7 +286,7 @@ func _load_all_characters() -> void:
 		"secondary_color": Color(0.8, 0.65, 0.1),
 		"burst_color": Color(1.0, 0.95, 0.5),
 		"base_speed": 320.0,
-		"base_hp": 12,
+		"base_hp": 50,
 		"base_damage": 2.0,
 		"crit_chance": 0.15,  # 15% crit
 		"weapon_type": 5,  # Minigun
@@ -315,7 +316,7 @@ func _load_all_characters() -> void:
 		"secondary_color": Color(0.8, 0.3, 0.1),
 		"burst_color": Color(1.0, 0.6, 0.3),
 		"base_speed": 320.0,
-		"base_hp": 8,
+		"base_hp": 50,
 		"base_damage": 3.0,
 		"crit_chance": 0.20,  # 20% crit - DPS focused
 		"weapon_type": 3,  # Shotgun
@@ -347,7 +348,7 @@ func _load_all_characters() -> void:
 		"secondary_color": Color(0.1, 0.4, 0.8),
 		"burst_color": Color(0.4, 0.8, 1.0),
 		"base_speed": 250.0,
-		"base_hp": 6,
+		"base_hp": 50,
 		"base_damage": 2.0,
 		"crit_chance": 0.15,  # 15% crit
 		"weapon_type": 4,  # Dual SMG
@@ -377,7 +378,7 @@ func _load_all_characters() -> void:
 		"secondary_color": Color(0.5, 0.1, 0.7),
 		"burst_color": Color(0.85, 0.4, 0.95),
 		"base_speed": 340.0,
-		"base_hp": 6,
+		"base_hp": 50,
 		"base_damage": 2.0,
 		"crit_chance": 0.15,  # 15% crit
 		"weapon_type": 4,  # Dual SMG
@@ -407,7 +408,7 @@ func _load_all_characters() -> void:
 		"secondary_color": Color(0.4, 0.4, 0.6), # Greyish Blue/Purple
 		"burst_color": Color(0.6, 0.8, 1.0),
 		"base_speed": 320.0,
-		"base_hp": 8,
+		"base_hp": 50,
 		"base_damage": 7.0, # Sniper base
 		"crit_chance": 0.30, 
 		"weapon_type": 1,  # Rifle

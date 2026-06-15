@@ -77,6 +77,10 @@ func add_invincibility(duration: float) -> void:
 	if _health:
 		_health.add_invincibility(duration)
 
+func add_full_invincibility(duration: float) -> void:
+	if _health:
+		_health.add_full_invincibility(duration)
+
 # Progression system (delegated)
 var _progression: PlayerProgression = null
 # Legacy accessors (for compatibility)
@@ -394,6 +398,11 @@ func on_enemy_killed(_enemy: Node2D, killer_source: String = "player") -> void:
 		_clone_manager.has_duplicity_upgrade = _upgrade_manager.has_nayuta_duplicity_upgrade
 		_clone_manager.on_enemy_killed(is_direct_kill)
 
+	# Forward to the active controller for character-specific kill effects
+	# (e.g. Snow White's Explosive Rounds / Unyielding).
+	if _current_controller and _current_controller.has_method("on_enemy_killed"):
+		_current_controller.on_enemy_killed(_enemy, killer_source)
+
 # (Duplicity clone spawning delegated to PlayerCloneManager)
 
 # HUD plumbing is delegated to PlayerHudBridge; thin wrappers kept because
@@ -413,8 +422,7 @@ func update_sprite() -> void:
 	if char_data:
 		var texture = char_data.get_sprite()
 		if texture:
-			# Default animation settings - could be in CharacterData
-			_animator.configure(texture, 3, 4, 6.0, 0.2)
+			_animator.configure(texture, 3, 4, 6.0, char_data.sprite_scale)
 			print("[PlayerCore] Loaded sprite for character %d" % _character_index)
 		else:
 			push_warning("[PlayerCore] update_sprite: No texture for character %d" % _character_index)
@@ -453,11 +461,11 @@ func _apply_character_stats(char_data: Resource) -> void:
 			hp = maxi(1, int(max_hp * hp_percent))
 			print("[PlayerCore] Applied HP: %d (base: %d, +%d shop)" % [max_hp, base_hp_val, hp_bonus])
 
-## Calculate damage with level scaling and shop ATK bonus
-## Base formula: base_damage * level_mult * (1 + shop_atk_bonus)
-## At level 1: 1.0x, level 2: 1.25x, level 3: 1.5x, level 5: 2.0x, level 10: 3.25x
+## Calculate damage with shop ATK bonus. HoloCure clone: NO per-level scaling —
+## player power comes from talents + shop picks, not from leveling.
+## Base formula: base_damage * (1 + shop_atk_bonus) * multiplier
 func calculate_damage(base_damage: float, multiplier: float = 1.0) -> int:
-	var level_multiplier: float = 1.0 + (level - 1) * 0.25
+	var level_multiplier: float = 1.0  # HoloCure clone: leveling grants no damage
 	var atk_multiplier: float = 1.0 + _shop_atk_bonus
 	
 	# Apply character-specific multiplier (e.g. Marian beam absorb +100%)
@@ -467,12 +475,12 @@ func calculate_damage(base_damage: float, multiplier: float = 1.0) -> int:
 	return maxi(1, int(base_damage * level_multiplier * atk_multiplier * multiplier))
 
 ## Calculate damage with potential critical hit (uses shop crit bonus)
-## Returns [damage, is_crit] - damage is 2x on crit
+## Returns [damage, is_crit] - damage is 1.5x on crit (HoloCure clone)
 func calculate_damage_with_crit(base_damage: float, multiplier: float = 1.0) -> Array:
 	var damage: int = calculate_damage(base_damage, multiplier)
 	var is_crit: bool = randf() < _shop_crit_bonus
 	if is_crit:
-		damage *= 2
+		damage = int(damage * 1.5)
 	return [damage, is_crit]
 
 ## Get shop crit chance (for UI display or other systems)
@@ -696,15 +704,15 @@ func is_burst_ready() -> bool:
 		return _burst_system.is_ready()
 	return burst_current >= burst_max
 
-func use_burst() -> bool:
+func use_burst(consume_fraction: float = 1.0) -> bool:
 	if not is_burst_ready():
 		return false
 	# Delegate to BurstSystem to ensure proper reset and signal emission
 	if _burst_system:
-		return _burst_system.use_burst()
+		return _burst_system.use_burst(consume_fraction)
 	# Legacy fallback if BurstSystem not available
 	if not (has_meta("debug_infinite_burst") and get_meta("debug_infinite_burst")):
-		burst_current = 0.0
+		burst_current = burst_max * (1.0 - consume_fraction)
 	if player_hud:
 		player_hud.update_burst(burst_current, burst_max, true)
 	if overhead_hud:
@@ -717,7 +725,11 @@ func is_using_controller() -> bool:
 func _attempt_burst_activation() -> void:
 	if not is_burst_unlocked():
 		return
-	if use_burst():
+	# A Goddess Who Cannot Yield (Snow White): roll how much gauge to consume.
+	var consume_fraction := 1.0
+	if _current_controller and _current_controller.has_method("get_burst_consume_fraction"):
+		consume_fraction = _current_controller.get_burst_consume_fraction()
+	if use_burst(consume_fraction):
 		_play_burst_voice()
 		if _current_controller:
 			# Trigger combat juice
@@ -753,7 +765,7 @@ func _play_burst_voice() -> void:
 		var audio_player = AudioStreamPlayer.new()
 		audio_player.name = "BurstVoice_%d" % Time.get_ticks_msec()
 		audio_player.stream = sound
-		audio_player.volume_db = 10.0
+		audio_player.volume_db = AudioDirector.VOICE_BASE_GAIN + AudioDirector.get_voice_offset(sound)
 		audio_player.bus = "SFX" # Use SFX bus for voice lines
 		audio_player.process_mode = Node.PROCESS_MODE_ALWAYS
 		root.add_child(audio_player)
@@ -781,9 +793,9 @@ func add_xp(amount: int) -> void:
 	if not _progression:
 		return
 	
-	# Apply shop XP bonus
-	var xp_multiplier: float = 1.0 + _shop_xp_bonus
-	
+	# Global XP rate (doubled per design — leveling cadence was too slow)
+	var xp_multiplier: float = 2.0 * (1.0 + _shop_xp_bonus)
+
 	# Crown "Royal Knowledge" upgrade: 2x XP gain
 	if _upgrade_manager.has_crown_xp:
 		xp_multiplier *= 2.0
@@ -1001,14 +1013,18 @@ func _physics_process(delta: float) -> void:
 		_animator.update_state(velocity, aim_direction)
 
 func _on_dash_started() -> void:
-	invincible = true
+	# Base dash no longer grants i-frames; a character's controller may grant its
+	# own (e.g. Scarlet's "Dodge" talent) via this hook.
+	if _current_controller and _current_controller.has_method("on_dash_started"):
+		_current_controller.on_dash_started()
 	# Notify camera for juicy lag effect
 	var camera = get_node_or_null("Camera2D")
 	if camera and camera.has_method("notify_dash"):
 		camera.notify_dash()
 
 func _on_dash_ended() -> void:
-	invincible = false
+	if _current_controller and _current_controller.has_method("on_dash_ended"):
+		_current_controller.on_dash_ended()
 
 
 # Talent tree management is delegated to PlayerTalentBridge; thin wrappers

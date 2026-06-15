@@ -36,7 +36,9 @@ extends Resource
 @export var sprite_sheet_columns: int = 1
 @export var sprite_sheet_rows: int = 1
 @export var sprite_animation_fps: float = 6.0
-@export var sprite_scale: float = 0.2
+# All character sheets are 64px-frame pixel art displayed at integer 2x.
+# (Pre-2026-06 high-res 640px sheets used 0.2; originals archived in old/ subfolders.)
+@export var sprite_scale: float = 2.0
 
 # =============================================================================
 # COLORS

@@ -8,3 +8,4 @@ class_name ResourceManifestData
 @export var map_files: Array[String] = []
 @export var background_files: Array[String] = []
 @export var character_burst_files: Array[String] = []
+@export var voice_audio_files: Array[String] = []

@@ -71,7 +71,7 @@ func apply_upgrade_for_character(char_id: String) -> void:
 func _check_and_activate_upgrade(char_id: String) -> void:
 	match char_id:
 		"rapunzel":
-			if ShopMenuScript.has_character_upgrade("rapunzel", "basic_attack"):
+			if ShopMenuScript.has_character_upgrade("rapunzel", "im_a_healer"):
 				has_rapunzel_healer = true
 				if _player._health: _player._health.enable_rapunzel_healing()
 				print("[UpgradeManager] Rapunzel 'I'm a healer' active")

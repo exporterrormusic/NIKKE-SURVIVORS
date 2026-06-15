@@ -23,8 +23,8 @@ var pool_id: String = "" # Empty = not pooled, otherwise identifies the pool
 @export var max_range: float = 0.0
 
 # Critical hit settings
-const BASE_CRIT_CHANCE := 0.15 # 15% base chance to crit
-const CRIT_MULTIPLIER := 2.0 # 2x damage on crit
+const BASE_CRIT_CHANCE := 0.05 # HoloCure clone: 5% base crit
+const CRIT_MULTIPLIER := 1.5 # HoloCure clone: 1.5x on crit
 var base_damage := 3
 
 # Weapon type source for Goddess Fall XP/Burst tracking
@@ -309,8 +309,12 @@ func _on_body_entered(body):
 			_despawn()
 		return
 
-	# Prevent repeated hits on the same target
-	if _hit_nodes.has(body):
+	# Prevent repeated hits on the same enemy. This handler is connected to BOTH
+	# body_entered AND area_entered (see _ready), so one shot fires it twice for an
+	# enemy that has both a physics body and a HitboxComponent (Area2D) — different
+	# nodes, so we must dedup on the OWNING enemy or the shot lands twice (7 + 7).
+	var hit_key = body.get_parent() if (body is Area2D and is_instance_valid(body.get_parent())) else body
+	if _hit_nodes.has(hit_key):
 		return
 		
 	# Check if target is protected by a shield (stop piercing if so)
@@ -338,7 +342,7 @@ func _on_body_entered(body):
 		killer_source = "summon"
 	
 	body.take_damage(damage, is_crit, hit_direction, false, killer_source)
-	_hit_nodes.append(body)
+	_hit_nodes.append(hit_key)
 	
 	# If protected, the damage was redirected to the shield, but we MUST stop the bullet from piercing
 	if protected:

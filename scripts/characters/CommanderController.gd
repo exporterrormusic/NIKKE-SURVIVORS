@@ -324,9 +324,9 @@ func _play_ally_burst_sound(ally_type: int) -> void:
 	if sound == null:
 		return
 	
-	# Use AudioDirector if available for proper audio management
+	# Use AudioDirector if available for proper audio management.
+	# Loudness-normalized at parity with the player burst (relative_db = 0).
 	if player.audio_director and player.audio_director.has_method("play_burst_voice"):
-		# Temporarily adjust volume for ally (quieter than main burst)
 		player.audio_director.play_burst_voice(sound)
 	else:
 		# Fallback: Create independent audio player
@@ -334,7 +334,7 @@ func _play_ally_burst_sound(ally_type: int) -> void:
 		var audio_player = AudioStreamPlayer.new()
 		audio_player.name = "AllyBurstVoice_%d" % Time.get_ticks_msec()
 		audio_player.stream = sound
-		audio_player.volume_db = 8.0
+		audio_player.volume_db = AudioDirector.VOICE_BASE_GAIN + AudioDirector.get_voice_offset(sound)
 		audio_player.bus = "SFX" # Use SFX bus for voice lines
 		audio_player.process_mode = Node.PROCESS_MODE_ALWAYS
 		root.add_child(audio_player)

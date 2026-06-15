@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SOV Talent Tree — A2 frame · arrangements · swappable tabs</title>
+<style>
+  :root{
+    --cyan:#35C5F2; --cyan-deep:#1F8FE0; --yellow:#FFD23F; --red:#E8392E;
+    --green:#4ADE80; --muted:#97A0AC;
+    --edge:rgba(128,140,155,.45); --edgelit:rgba(53,197,242,.9);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#070a0e; color:#F0F4F8;
+    font-family:"Pretendard","Segoe UI",system-ui,sans-serif; padding:40px;}
+  h1{font-family:"Arial Narrow",sans-serif; font-size:32px; font-style:italic;
+    text-transform:uppercase; margin-bottom:4px;}
+  h2{font-family:"Arial Narrow",sans-serif; font-size:24px; font-style:italic;
+    text-transform:uppercase; margin:46px 0 4px;}
+  .sub{color:var(--muted); text-transform:uppercase; letter-spacing:.25em; font-size:12px;
+    margin-bottom:18px;}
+  .note{color:var(--muted); font-size:13px; line-height:1.6; max-width:1280px; margin-bottom:8px;}
+  .note b{color:#dfe6ee;}
+
+  .stage{position:relative; width:1280px; height:720px; overflow:hidden;
+    background:#0E1116; border:1px solid #2a3340; margin-bottom:10px;}
+  .game{position:absolute; inset:0;}
+  .game img{width:100%; height:100%; object-fit:cover; filter:brightness(.85);}
+  .dim{position:absolute; inset:0; background:rgba(7,10,14,.74);}
+
+  .hdr{position:absolute; left:54px; top:30px;}
+  .hdr .t{font-family:"Arial Narrow",sans-serif; font-weight:800; font-style:italic; font-size:42px;
+    line-height:1; text-shadow:0 2px 12px rgba(0,0,0,.7);}
+  .hdr .s{font-size:11px; letter-spacing:.3em; text-transform:uppercase; opacity:.65; margin-top:5px;}
+  .hdr .bar{width:54px; height:3px; background:var(--cyan); margin-top:9px;}
+  .spchip{position:absolute; right:54px; top:34px; display:flex; align-items:center; gap:12px;
+    padding:9px 20px; background:rgba(255,210,63,.12); border:1px solid var(--yellow);}
+  .spchip .k{font-size:9px; letter-spacing:.26em; font-weight:800; color:var(--yellow); display:block;}
+  .spchip .n{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:26px; color:var(--yellow);}
+  .closechip{position:absolute; right:54px; bottom:30px; padding:10px 26px;
+    background:rgba(20,24,31,.86); border:1px solid rgba(255,255,255,.18); font-weight:800;
+    font-style:italic; font-family:"Arial Narrow"; font-size:17px; cursor:pointer;}
+  .closechip span{opacity:.45; font-family:"Pretendard"; font-style:normal; font-size:10px;
+    letter-spacing:.2em; margin-left:10px;}
+
+  .statpanel{position:absolute; left:54px; top:120px; bottom:84px; width:300px;
+    background:rgba(16,20,26,.86); border:1px solid rgba(255,255,255,.16); padding:18px 20px;}
+  .statpanel .cap{font-size:10px; letter-spacing:.3em; opacity:.55; font-weight:800; margin-bottom:12px;}
+  .statpanel .ophead{display:flex; align-items:center; gap:13px; margin-bottom:14px;}
+  .statpanel .ophead img{width:56px; height:56px; object-fit:cover; object-position:top;
+    border:1px solid rgba(255,255,255,.3);}
+  .statpanel .ophead .nm{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:24px;}
+  .statpanel .ophead .lv{font-size:10px; letter-spacing:.2em; color:var(--yellow); font-weight:800;}
+  .srow{display:flex; align-items:baseline; padding:9px 0; border-bottom:1px solid rgba(128,140,155,.18);}
+  .srow .k{flex:1; font-size:10px; letter-spacing:.22em; font-weight:800; opacity:.6;}
+  .srow .v{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:22px;}
+  .srow .v em{font-style:normal; font-size:12px; color:var(--green); margin-left:6px;}
+
+  /* edges + arrowheads */
+  .edge{position:absolute; background:var(--edge);}
+  .edge.lit{background:var(--edgelit); box-shadow:0 0 6px rgba(53,197,242,.5);}
+  .edge.diag{height:3px; transform-origin:0 50%;}
+  .ah{position:absolute; width:0; height:0; border:6px solid transparent;}
+  .ah.down{border-top:8px solid var(--edge); border-bottom:none;}
+  .ah.down.lit{border-top-color:var(--edgelit);}
+  .ah.right{border-left:8px solid var(--edge); border-right:none;}
+  .ah.right.lit{border-left-color:var(--edgelit);}
+
+  /* rectangular ability node (B1 lanes) */
+  .node{position:absolute; height:84px; cursor:pointer; padding:10px 13px 8px; background:rgba(10,13,18,.78);}
+  .node::before,.node::after{content:""; position:absolute; width:14px; height:14px;}
+  .node::before{left:0; top:0; border-left:2px solid rgba(255,255,255,.5); border-top:2px solid rgba(255,255,255,.5);}
+  .node::after{right:0; bottom:0; border-right:2px solid rgba(255,255,255,.5); border-bottom:2px solid rgba(255,255,255,.5);}
+  .node .nm{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:17px;}
+  .node .d{font-size:10.5px; opacity:.65; margin-top:2px; line-height:1.3;}
+  .node .cost{position:absolute; right:8px; top:8px; font-size:9px; font-weight:800;
+    letter-spacing:.08em; padding:2px 7px; background:rgba(10,13,18,.8);
+    border:1px solid rgba(255,210,63,.5); color:var(--yellow);}
+  .node .pips{position:absolute; left:13px; bottom:7px; display:flex; gap:4px;}
+  .node .pips i{width:14px; height:5px; background:rgba(255,255,255,.18);}
+  .node .pips i.on{background:var(--cyan);}
+  .node .state{position:absolute; right:8px; bottom:6px; font-size:8.5px; font-weight:800; letter-spacing:.18em;}
+  .node.unlocked{background:rgba(31,143,224,.18);}
+  .node.unlocked::before,.node.unlocked::after{border-color:var(--cyan); width:18px; height:18px;}
+  .node.unlocked .nm{color:var(--cyan);}
+  .node.available::before,.node.available::after{border-color:rgba(255,255,255,.85);}
+  .node.available:hover::before,.node.available:hover::after{border-color:var(--yellow); width:20px; height:20px;}
+  .node.locked{opacity:.42;}
+  .node.locked .cost{border-color:rgba(255,255,255,.2); color:#8a9099;}
+  .node.maxed{background:rgba(63,174,94,.15);}
+  .node.maxed::before,.node.maxed::after{border-color:var(--green);}
+  .node.maxed .nm{color:#7be09a;}
+
+  /* square talent node (grid / spine / branch / web) */
+  .tnode{position:absolute; width:72px; height:72px; background:rgba(10,13,18,.82); cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:5px;}
+  .tnode::before,.tnode::after{content:""; position:absolute; width:11px; height:11px;}
+  .tnode::before{left:0; top:0; border-left:2px solid rgba(255,255,255,.5); border-top:2px solid rgba(255,255,255,.5);}
+  .tnode::after{right:0; bottom:0; border-right:2px solid rgba(255,255,255,.5); border-bottom:2px solid rgba(255,255,255,.5);}
+  .tnode .g{font-family:"Arial Narrow"; font-style:italic; font-weight:900; font-size:23px; line-height:1; color:#cfd6de;}
+  .tnode .tn{font-size:8px; letter-spacing:.02em; line-height:1.12; margin-top:4px; opacity:.85;
+    text-transform:uppercase; font-weight:700; color:#e7edf3;}
+  .tnode .rk{position:absolute; right:-1px; bottom:-1px; font-family:"Arial Narrow"; font-style:italic;
+    font-weight:800; font-size:11px; padding:0 4px; background:rgba(10,13,18,.92);
+    border:1px solid rgba(255,210,63,.5); color:var(--yellow);}
+  .tnode.unlocked{background:rgba(31,143,224,.18);}
+  .tnode.unlocked::before,.tnode.unlocked::after{border-color:var(--cyan);}
+  .tnode.unlocked .g{color:var(--cyan);}
+  .tnode.unlocked .rk{border-color:var(--cyan); color:var(--cyan);}
+  .tnode.maxed{background:rgba(63,174,94,.15);}
+  .tnode.maxed::before,.tnode.maxed::after{border-color:var(--green);}
+  .tnode.maxed .g{color:#7be09a;}
+  .tnode.maxed .rk{border-color:var(--green); color:#7be09a;}
+  .tnode.available::before,.tnode.available::after{border-color:rgba(255,255,255,.85);}
+  .tnode.locked{opacity:.42;}
+  .tnode.locked .rk{border-color:rgba(255,255,255,.2); color:#8a9099;}
+
+  /* WoW tier separators */
+  .tierline{position:absolute; left:58px; right:8px; height:1px; background:rgba(255,255,255,.08);}
+  .tierreq{position:absolute; left:0; font-size:8px; letter-spacing:.12em; font-weight:800;
+    color:var(--muted); opacity:.7; text-transform:uppercase;}
+
+  /* ===== shared A2 header-band frame ===== */
+  .hb-enclosure{position:absolute; left:396px; top:120px; width:770px; height:516px;
+    border:1px solid rgba(255,255,255,.16); background:rgba(10,13,18,.55);}
+  .hb-band{position:absolute; left:0; top:0; right:0; height:53px; background:rgba(20,25,33,.92);
+    border-bottom:1px solid rgba(255,255,255,.16); display:flex;}
+  .hb-seg{position:relative; flex:1 1 0; height:100%; border-right:1px solid rgba(255,255,255,.13);
+    cursor:pointer; overflow:hidden; transform:skewX(-9deg);}
+  .hb-seg:last-child{border-right:none;}
+  .hb-seg .in{transform:skewX(9deg); height:100%; display:flex; align-items:center; gap:13px; padding:0 22px;}
+  .hb-seg .glyph{font-size:26px; font-style:normal; line-height:1; color:var(--muted); opacity:.5;}
+  .hb-seg .meta{display:flex; flex-direction:column; justify-content:center;}
+  .hb-seg .nm{font-family:"Arial Narrow"; font-weight:900; font-style:italic; font-size:19px;
+    letter-spacing:.06em; text-transform:uppercase; color:var(--muted); line-height:1;}
+  .hb-seg .inv{display:flex; align-items:baseline; gap:6px; margin-top:3px;}
+  .hb-seg .inv .lbl{font-size:8.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); font-weight:700;}
+  .hb-seg .inv .num{font-family:"Arial Narrow"; font-weight:900; font-style:italic; font-size:21px; line-height:.8; color:var(--muted);}
+  .hb-seg:hover{background:rgba(255,255,255,.04);}
+  .hb-seg.active{background:rgba(8,11,15,.92);}
+  .hb-seg.active .glyph{opacity:1;}
+  .hb-seg .uline{position:absolute; left:0; bottom:0; height:3px; width:100%; background:transparent; transform:skewX(9deg);}
+  /* idle glyph tints */
+  .hb-seg.attack .glyph{color:var(--cyan);}
+  .hb-seg.skill .glyph{color:var(--yellow);}
+  .hb-seg.burst .glyph{color:var(--red);}
+  /* active accents per spec */
+  .hb-seg.attack.active .glyph,.hb-seg.attack.active .nm,.hb-seg.attack.active .inv .num{color:var(--cyan);}
+  .hb-seg.attack.active .uline{background:var(--cyan); box-shadow:0 0 7px rgba(53,197,242,.6);}
+  .hb-seg.skill.active .glyph,.hb-seg.skill.active .nm,.hb-seg.skill.active .inv .num{color:var(--cyan);}
+  .hb-seg.skill.active .uline{background:var(--cyan); box-shadow:0 0 7px rgba(53,197,242,.6);}
+  .hb-seg.burst.active .glyph,.hb-seg.burst.active .nm,.hb-seg.burst.active .inv .num{color:var(--red);}
+  .hb-seg.burst.active .uline{background:var(--red); box-shadow:0 0 7px rgba(232,57,46,.6);}
+  .hb-treewrap{position:absolute; left:396px; right:54px; top:174px; bottom:84px;}
+
+  /* swappable tab pages */
+  .page{display:none;}
+  .page.show{display:block;}
+</style>
+</head>
+<body>
+
+<h1>Talent Tree — A2 Frame · Arrangements · <span style="color:var(--cyan)">Swappable Tabs</span></h1>
+<div class="sub">click ATTACK / SKILL / BURST on any mockup to swap trees · five arrangements, sparse → dense</div>
+<div class="note">
+  All keep the approved <b>A2 header-band frame</b>. <b>The tabs now work — click them.</b> Each tab shows that ability's
+  own tree (the old single tree, now split across <b>ATTACK</b> / <b>SKILL</b> / <b>BURST</b>). What changes between the
+  five sections is the <b>arrangement</b> of talents inside, since the count per tree is still open. <b>B1</b> is what we
+  have, vertically centered (top padding = bottom). Talent names are placeholders to show the swap; geometry is the point.
+</div>
+
+<!-- ==================== B1 — Ability Lanes (centered) ==================== -->
+<h2>B1 — Ability Lanes (current, balanced padding)</h2>
+<div class="sub">what we have now, centered vertically · ~8 talents per tree (two lanes + a capstone row)</div>
+<section class="stage">
+<div class="game"><img src="../../assets/backgrounds/forest.jpg"></div>
+<div class="dim"></div>
+<div class="hdr"><div class="t">TALENTS</div><div class="s">NIKKE // SNOW WHITE</div><div class="bar"></div></div>
+<div class="spchip"><div><span class="k">SKILL POINTS</span><span class="n">3</span></div></div>
+<div class="statpanel">
+  <div class="cap">FIELD STATUS</div>
+  <div class="ophead"><img src="../../assets/characters/snow-white/portrait-sq.png"><div><div class="nm">SNOW WHITE</div><div class="lv">LV 12</div></div></div>
+  <div class="srow"><span class="k">ATK</span><span class="v">2.4<em>+15%</em></span></div>
+  <div class="srow"><span class="k">HP</span><span class="v">86<em>+10</em></span></div>
+  <div class="srow"><span class="k">BURST GEN</span><span class="v">5%</span></div>
+  <div class="srow"><span class="k">SPEED</span><span class="v">420</span></div>
+  <div class="srow"><span class="k">CRIT RATE</span><span class="v">24%<em>+4%</em></span></div>
+</div>
+<div class="hb-enclosure"><div class="hb-band">
+  <div class="hb-seg attack" data-tab="attack"><div class="in"><div class="glyph">⨯</div><div class="meta"><div class="nm">ATTACK</div><div class="inv"><span class="lbl">INVESTED</span><span class="num">2</span></div></div></div><div class="uline"></div></div>
+  <div class="hb-seg skill active" data-tab="skill"><div class="in"><div class="glyph">◆</div><div class="meta"><div class="nm">SKILL</div><div class="inv"><span class="lbl">INVESTED</span><span class="num">4</span></div></div></div><div class="uline"></div></div>
+  <div class="hb-seg burst" data-tab="burst"><div class="in"><div class="glyph">#</div><div class="meta"><div class="nm">BURST</div><div class="inv"><span class="lbl">INVESTED</span><span class="num">0</span></div></div></div><div class="uline"></div></div>
+</div></div>
+<div class="hb-treewrap">
+  <!-- shared edges -->
+  <div class="edge lit" style="left:279px;top:88px;width:69px;height:3px;"></div>
+  <div class="edge lit" style="left:348px;top:47px;width:3px;height:85px;"></div>
+  <div class="edge lit" style="left:348px;top:47px;width:70px;height:3px;"></div>
+  <div class="ah right lit" style="left:418px;top:43px;"></div>
+  <div class="edge lit" style="left:348px;top:129px;width:70px;height:3px;"></div>
+  <div class="ah right lit" style="left:418px;top:125px;"></div>
+  <div class="edge lit" style="left:150px;top:127px;width:3px;height:98px;"></div>
+  <div class="ah down lit" style="left:146px;top:225px;"></div>
+  <div class="edge" style="left:279px;top:270px;width:69px;height:3px;"></div>
+  <div class="edge" style="left:348px;top:229px;width:3px;height:85px;"></div>
+  <div class="edge" style="left:348px;top:229px;width:70px;height:3px;"></div>
+  <div class="ah right" style="left:418px;top:225px;"></div>
+  <div class="edge" style="left:348px;top:311px;width:70px;height:3px;"></div>
+  <div class="ah right" style="left:418px;top:307px;"></div>
+  <div class="edge" style="left:150px;top:309px;width:3px;height:57px;"></div>
+  <div class="ah down" style="left:146px;top:366px;"></div>
+
+  <!-- SKILL page -->
+  <div class="page show" data-tab="skill">
+    <div class="node unlocked" style="left:24px;top:51px;width:255px;height:76px;"><div class="nm">AUTO-TURRET</div><div class="d">Deploy auto-targeting turrets</div><div class="state" style="color:var(--cyan);">ACTIVE</div></div>
+    <div class="node maxed" style="left:418px;top:10px;width:340px;height:76px;"><div class="nm">AMMO CACHE</div><div class="d">+2 turret missile capacity</div><div class="cost">1 SP</div><div class="pips"><i class="on"></i><i class="on"></i><i class="on"></i></div><div class="state" style="color:#7be09a;">MAX</div></div>
+    <div class="node available" style="left:418px;top:92px;width:340px;height:76px;"><div class="nm">MORE TURRETS</div><div class="d">+2 max turret charges</div><div class="cost">1 SP</div><div class="pips"><i></i><i></i><i></i></div></div>
+    <div class="node available" style="left:24px;top:233px;width:255px;height:76px;"><div class="nm">SENTRY MODE</div><div class="d">Turrets root, +50% damage</div><div class="cost">1 SP</div></div>
+    <div class="node locked" style="left:418px;top:192px;width:340px;height:76px;"><div class="nm">OVERCLOCK</div><div class="d">Turrets fire 40% faster</div><div class="cost">1 SP</div></div>
+    <div class="node locked" style="left:418px;top:274px;width:340px;height:76px;"><div class="nm">AP ROUNDS</div><div class="d">Turret shots pierce armor</div><div class="cost">1 SP</div></div>
+    <div class="node locked" style="left:24px;top:374px;width:255px;height:76px;"><div class="nm">OVERDRIVE</div><div class="d">Turret kills cut recharge</div><div class="cost">2 SP</div></div>
+    <div class="node available" style="left:418px;top:374px;width:340px;height:76px;"><div class="nm">MASTER MECHANIC</div><div class="d">Ammo capacity +100%</div><div class="cost">2 SP</div></div>
+  </div>
+  <!-- ATTACK page -->
+  <div class="page" data-tab="attack">
+    <div class="node unlocked" style="left:24px;top:51px;width:255px;height:76px;"><div class="nm">MARKSMAN</div><div class="d">Your sniper normal attack</div><div class="state" style="color:var(--cyan);">ACTIVE</div></div>
+    <div class="node maxed" style="left:418px;top:10px;width:340px;height:76px;"><div class="nm">HOLLOW POINTS</div><div class="d">+20% attack damage</div><div class="cost">1 SP</div><div class="pips"><i class="on"></i><i class="on"></i><i class="on"></i></div><div class="state" style="color:#7be09a;">MAX</div></div>
+    <div class="node available" style="left:418px;top:92px;width:340px;height:76px;"><div class="nm">QUICKDRAW</div><div class="d">+15% fire rate</div><div class="cost">1 SP</div><div class="pips"><i></i><i></i><i></i></div></div>
+    <div class="node available" style="left:24px;top:233px;width:255px;height:76px;"><div class="nm">RICOCHET</div><div class="d">Shots bounce to 1 extra</div><div class="cost">1 SP</div></div>
+    <div class="node locked" style="left:418px;top:192px;width:340px;height:76px;"><div class="nm">STEADY AIM</div><div class="d">+30% crit damage</div><div class="cost">1 SP</div></div>
+    <div class="node locked" style="left:418px;top:274px;width:340px;height:76px;"><div class="nm">LONG SCOPE</div><div class="d">+Range, +dmg at distance</div><div class="cost">1 SP</div></div>
+    <div class="node locked" style="left:24px;top:374px;width:255px;height:76px;"><div class="nm">DOUBLE TAP</div><div class="d">20% chance for a free shot</div><div class="cost">2 SP</div></div>
+    <div class="node available" style="left:418px;top:374px;width:340px;height:76px;"><div class="nm">HEADHUNTER</div><div class="d">Crits leave burning trails</div><div class="cost">2 SP</div></div>
+  </div>
+  <!-- BURST page -->
+  <div class="page" data-tab="burst">
+    <div class="node unlocked" style="left:24px;top:51px;width:255px;height:76px;"><div class="nm">SEVEN DWARVES</div><div class="d">BURST: Freezing storm</div><div class="state" style="color:var(--cyan);">ACTIVE</div></div>
+    <div class="node maxed" style="left:418px;top:10px;width:340px;height:76px;"><div class="nm">INCENDIARY ROUNDS</div><div class="d">Burns enemies 34% HP/s</div><div class="cost">1 SP</div><div class="pips"><i class="on"></i><i class="on"></i><i class="on"></i></div><div class="state" style="color:#7be09a;">MAX</div></div>
+    <div class="node available" style="left:418px;top:92px;width:340px;height:76px;"><div class="nm">FULLY ACTIVE</div><div class="d">Kills refill burst gauge</div><div class="cost">1 SP</div><div class="pips"><i></i><i></i><i></i></div></div>
+    <div class="node available" style="left:24px;top:233px;width:255px;height:76px;"><div class="nm">AVALANCHE</div><div class="d">Adds crashing ice shards</div><div class="cost">1 SP</div></div>
+    <div class="node locked" style="left:418px;top:192px;width:340px;height:76px;"><div class="nm">OVERCHARGE</div><div class="d">+50% burst damage</div><div class="cost">1 SP</div></div>
+    <div class="node locked" style="left:418px;top:274px;width:340px;height:76px;"><div class="nm">FROST NOVA</div><div class="d">Cast pulses a freeze nova</div><div class="cost">1 SP</div></div>
+    <div class="node locked" style="left:24px;top:374px;width:255px;height:76px;"><div class="nm">CHAIN BURST</div><div class="d">25% chance to not consume</div><div class="cost">2 SP</div></div>
+    <div class="node available" style="left:418px;top:374px;width:340px;height:76px;"><div class="nm">PERFECT FORM</div><div class="d">Burst damage +100%</div><div class="cost">2 SP</div></div>
+  </div>
+</div>
+<div class="closechip">CLOSE<span>ESC</span></div>
+</section>
+
+<!-- ==================== B2 — WoW Classic Grid ==================== -->
+<h2>B2 — WoW Classic Grid</h2>
+<div class="sub">scales to 15-21 talents · point-gated tiers, rank pips, prereq arrows — the dense end</div>
+<section class="stage">
+<div class="game"><img src="../../assets/backgrounds/forest.jpg"></div>
+<div class="dim"></div>
+<div class="hdr"><div class="t">TALENTS</div><div class="s">NIKKE // SNOW WHITE</div><div class="bar"></div></div>
+<div class="spchip"><div><span class="k">SKILL POINTS</span><span class="n">3</span></div></div>
+<div class="statpanel">
+  <div class="cap">FIELD STATUS</div>
+  <div class="ophead"><img src="../../assets/characters/snow-white/portrait-sq.png"><div><div class="nm">SNOW WHITE</div><div class="lv">LV 12</div></div></div>
+  <div class="srow"><span class="k">ATK</span><span class="v">2.4<em>+15%</em></span></div>
+  <div class="srow"><span class="k">HP</span><span class="v">86<em>+10</em></span></div>
+  <div class="srow"><span class="k">BURST GEN</span><span class="v">5%</span></div>
+  <div class="srow"><span class="k">SPEED</span><span class="v">420</span></div>
+  <div class="srow"><span class="k">CRIT RATE</span><span class="v">24%<em>+4%</em></span></div>
+</div>
+<div class="hb-enclosure"><div class="hb-band">
+  <div class="hb-seg attack" data-tab="attack"><div class="in"><div class="glyph">⨯</div><div class="meta"><div class="nm">ATTACK</div><div class="inv"><span class="lbl">INVESTED</span><span class="num">2</span></div></div></div><div class="uline"></div></div>
+  <div class="hb-seg skill active" data-tab="skill"><div class="in"><div class="glyph">◆</div><div class="meta"><div class="nm">SKILL</div><div class="inv"><span class="lbl">INVESTED</span><span class="num">4</span></div></div></div><div class="uline"></div></div>
+  <div class="hb-seg burst" data-tab="burst"><div class="in"><div class="glyph">#</div><div class="meta"><div class="nm">BURST</div><div class="inv"><span class="lbl">INVESTED</span><span class="num">0</span></div></div></div><div class="uline"></div></div>
+</div></div>
+<div class="hb-treewrap">
+  <!-- tier separators + arrows (shared) -->
+  <div class="tierline" style="top:94px;"></div><div class="tierreq" style="top:88px;">5 PTS</div>
+  <div class="tierline" style="top:182px;"></div><div class="tierreq" style="top:176px;">10 PTS</div>
+  <div class="tierline" style="top:270px;"></div><div class="tierreq" style="top:264px;">15 PTS</div>
+  <div class="tierline" style="top:358px;"></div><div class="tierreq" style="top:352px;">20 PTS</div>
+  <div class="edge lit" style="left:131px;top:86px;width:3px;height:10px;"></div><div class="ah down lit" style="left:127px;top:94px;"></div>
+  <div class="edge" style="left:131px;top:174px;width:3px;height:98px;"></div><div class="ah down" style="left:127px;top:272px;"></div>
+  <div class="edge lit" style="left:315px;top:86px;width:3px;height:10px;"></div><div class="ah down lit" style="left:311px;top:94px;"></div>
+  <div class="edge" style="left:315px;top:174px;width:3px;height:10px;"></div><div class="ah down" style="left:311px;top:182px;"></div>
+  <div class="edge" style="left:315px;top:262px;width:3px;height:98px;"></div><div class="ah down" style="left:311px;top:360px;"></div>
+  <div class="edge" style="left:499px;top:262px;width:3px;height:10px;"></div><div class="ah down" style="left:495px;top:270px;"></div>
+  <div class="edge" style="left:683px;top:174px;width:3px;height:98px;"></div><div class="ah down" style="left:679px;top:272px;"></div>
+  <div class="edge" style="left:683px;top:350px;width:3px;height:10px;"></div><div class="ah down" style="left:679px;top:358px;"></div>
+
+  <!-- SKILL page -->
+  <div class="page show" data-tab="skill">
+    <div class="tnode unlocked" style="left:96px;top:14px;"><div class="g">⌖</div><div class="tn">Auto-Turret</div><div class="rk">ON</div></div>
+    <div class="tnode maxed" style="left:280px;top:14px;"><div class="g">▲</div><div class="tn">Primer</div><div class="rk">2/2</div></div>
+    <div class="tnode maxed" style="left:96px;top:102px;"><div class="g">◧</div><div class="tn">Ammo Cache</div><div class="rk">3/3</div></div>
+    <div class="tnode unlocked" style="left:280px;top:102px;"><div class="g">⊞</div><div class="tn">Turrets+</div><div class="rk">1/3</div></div>
+    <div class="tnode locked" style="left:648px;top:102px;"><div class="g">✖</div><div class="tn">Scrap</div><div class="rk">0/2</div></div>
+    <div class="tnode available" style="left:280px;top:190px;"><div class="g">◎</div><div class="tn">Targeting</div><div class="rk">0/2</div></div>
+    <div class="tnode locked" style="left:464px;top:190px;"><div class="g">⊟</div><div class="tn">Rapid Dep</div><div class="rk">0/1</div></div>
+    <div class="tnode locked" style="left:96px;top:278px;"><div class="g">⟁</div><div class="tn">Overclock</div><div class="rk">0/3</div></div>
+    <div class="tnode locked" style="left:464px;top:278px;"><div class="g">⊠</div><div class="tn">Sentry</div><div class="rk">0/1</div></div>
+    <div class="tnode locked" style="left:648px;top:278px;"><div class="g">◆</div><div class="tn">AP Rounds</div><div class="rk">0/2</div></div>
+    <div class="tnode locked" style="left:280px;top:366px;"><div class="g">★</div><div class="tn">Master</div><div class="rk">0/1</div></div>
+    <div class="tnode locked" style="left:648px;top:366px;"><div class="g">➤</div><div class="tn">Overdrive</div><div class="rk">0/1</div></div>
+  </div>
+  <!-- ATTACK page -->
+  <div class="page" data-tab="attack">
+    <div class="tnode unlocked" style="left:96px;top:14px;"><div class="g">⌖</div><div class="tn">Marksman</div><div class="rk">ON</div></div>
+    <div class="tnode maxed" style="left:280px;top:14px;"><div class="g">▲</div><div class="tn">Primer</div><div class="rk">2/2</div></div>
+    <div class="tnode maxed" style="left:96px;top:102px;"><div class="g">◧</div><div class="tn">Hollow Pt</div><div class="rk">3/3</div></div>
+    <div class="tnode unlocked" style="left:280px;top:102px;"><div class="g">⊞</div><div class="tn">Fire Rate</div><div class="rk">1/3</div></div>
+    <div class="tnode locked" style="left:648px;top:102px;"><div class="g">✖</div><div class="tn">Bayonet</div><div class="rk">0/2</div></div>
+    <div class="tnode available" style="left:280px;top:190px;"><div class="g">◎</div><div class="tn">Deadeye</div><div class="rk">0/2</div></div>
+    <div class="tnode locked" style="left:464px;top:190px;"><div class="g">⊟</div><div class="tn">Penetrate</div><div class="rk">0/1</div></div>
+    <div class="tnode locked" style="left:96px;top:278px;"><div class="g">⟁</div><div class="tn">Steady</div><div class="rk">0/3</div></div>
+    <div class="tnode locked" style="left:464px;top:278px;"><div class="g">⊠</div><div class="tn">Ricochet</div><div class="rk">0/1</div></div>
+    <div class="tnode locked" style="left:648px;top:278px;"><div class="g">◆</div><div class="tn">Kill Shot</div><div class="rk">0/2</div></div>
+    <div class="tnode locked" style="left:280px;top:366px;"><div class="g">★</div><div class="tn">Headhunt</div><div class="rk">0/1</div></div>
+    <div class="tnode locked" style="left:648px;top:366px;"><div class="g">➤</div><div class="tn">Dbl Tap</div><div class="rk">0/1</div></div>
+  </div>
+  <!-- BURST page -->
+  <div class="page" data-tab="burst">
+    <div class="tnode unlocked" style="left:96px;top:14px;"><div class="g">⌖</div><div class="tn">7 Dwarves</div><div class="rk">ON</div></div>
+    <div class="tnode maxed" style="left:280px;top:14px;"><div class="g">▲</div><div class="tn">Prelude</div><div class="rk">2/2</div></div>
+    <div class="tnode maxed" style="left:96px;top:102px;"><div class="g">◧</div><div class="tn">Incendiary</div><div class="rk">3/3</div></div>
+    <div class="tnode unlocked" style="left:280px;top:102px;"><div class="g">⊞</div><div class="tn">Fully Act</div><div class="rk">1/3</div></div>
+    <div class="tnode locked" style="left:648px;top:102px;"><div class="g">✖</div><div class="tn">Whiteout</div><div class="rk">0/2</div></div>
+    <div class="tnode available" style="left:280px;top:190px;"><div class="g">◎</div><div class="tn">Deep Frz</div><div class="rk">0/2</div></div>
+    <div class="tnode locked" style="left:464px;top:190px;"><div class="g">⊟</div><div class="tn">Frost Nova</div><div class="rk">0/1</div></div>
+    <div class="tnode locked" style="left:96px;top:278px;"><div class="g">⟁</div><div class="tn">Overchrg</div><div class="rk">0/3</div></div>
+    <div class="tnode locked" style="left:464px;top:278px;"><div class="g">⊠</div><div class="tn">Avalanche</div><div class="rk">0/1</div></div>
+    <div class="tnode locked" style="left:648px;top:278px;"><div class="g">◆</div><div class="tn">Cold Snap</div><div class="rk">0/2</div></div>
+    <div class="tnode locked" style="left:280px;top:366px;"><div class="g">★</div><div class="tn">Perfect</div><div class="rk">0/1</div></div>
+    <div class="tnode locked" style="left:648px;top:366px;"><div class="g">➤</div><div class="tn">Chain</div><div class="rk">0/1</div></div>
+  </div>
+</div>
+<div class="closechip">CLOSE<span>ESC</span></div>
+</section>
+
+<!-- ==================== B3 — Vertical Spine ==================== -->
+<h2>B3 — Vertical Spine</h2>
+<div class="sub">best for sparse trees (4-7 talents) · a central trunk with side mods · grows by adding length</div>
+<section class="stage">
+<div class="game"><img src="../../assets/backgrounds/forest.jpg"></div>
+<div class="dim"></div>
+<div class="hdr"><div class="t">TALENTS</div><div class="s">NIKKE // SNOW WHITE</div><div class="bar"></div></div>
+<div class="spchip"><div><span class="k">SKILL POINTS</span><span class="n">3</span></div></div>
+<div class="statpanel">
+  <div class="cap">FIELD STATUS</div>
+  <div class="ophead"><img src="../../assets/characters/snow-white/portrait-sq.png"><div><div class="nm">SNOW WHITE</div><div class="lv">LV 12</div></div></div>
+  <div class="srow"><span class="k">ATK</span><span class="v">2.4<em>+15%</em></span></div>
+  <div class="srow"><span class="k">HP</span><span class="v">86<em>+10</em></span></div>
+  <div class="srow"><span class="k">BURST GEN</span><span class="v">5%</span></div>
+  <div class="srow"><span class="k">SPEED</span><span class="v">420</span></div>
+  <div class="srow"><span class="k">CRIT RATE</span><span class="v">24%<em>+4%</em></span></div>
+</div>
+<div class="hb-enclosure"><div class="hb-band">
+  <div class="hb-seg attack" data-tab="attack"><div class="in"><div class="glyph">⨯</div><div class="meta"><div class="nm">ATTACK</div><div class="inv"><span class="lbl">INVESTED</span><span class="num">2</span></div></div></div><div class="uline"></div></div>
+  <div class="hb-seg skill active" data-tab="skill"><div class="in"><div class="glyph">◆</div><div class="meta"><div class="nm">SKILL</div><div class="inv"><span class="lbl">INVESTED</span><span class="num">4</span></div></div></div><div class="uline"></div></div>
+  <div class="hb-seg burst" data-tab="burst"><div class="in"><div class="glyph">#</div><div class="meta"><div class="nm">BURST</div><div class="inv"><span class="lbl">INVESTED</span><span class="num">0</span></div></div></div><div class="uline"></div></div>
+</div></div>
+<div class="hb-treewrap">
+  <!-- shared edges -->
+  <div class="edge lit" style="left:411px;top:90px;width:3px;height:48px;"></div><div class="ah down lit" style="left:407px;top:132px;"></div>
+  <div class="edge" style="left:411px;top:210px;width:3px;height:48px;"></div><div class="ah down" style="left:407px;top:252px;"></div>
+  <div class="edge" style="left:411px;top:330px;width:3px;height:48px;"></div><div class="ah down" style="left:407px;top:372px;"></div>
+  <div class="edge lit" style="left:222px;top:173px;width:154px;height:3px;"></div>
+  <div class="edge" style="left:448px;top:293px;width:154px;height:3px;"></div>
+
+  <!-- SKILL page -->
+  <div class="page show" data-tab="skill">
+    <div class="tnode unlocked" style="left:376px;top:18px;"><div class="g">⌖</div><div class="tn">Auto-Turret</div><div class="rk">ON</div></div>
+    <div class="tnode available" style="left:376px;top:138px;"><div class="g">◎</div><div class="tn">Targeting</div><div class="rk">0/2</div></div>
+    <div class="tnode locked" style="left:376px;top:258px;"><div class="g">⊟</div><div class="tn">Rapid Dep</div><div class="rk">0/2</div></div>
+    <div class="tnode locked" style="left:376px;top:378px;"><div class="g">★</div><div class="tn">Master</div><div class="rk">0/1</div></div>
+    <div class="tnode maxed" style="left:150px;top:138px;"><div class="g">◧</div><div class="tn">Ammo Cache</div><div class="rk">3/3</div></div>
+    <div class="tnode available" style="left:602px;top:258px;"><div class="g">⊞</div><div class="tn">Turrets+</div><div class="rk">0/3</div></div>
+  </div>
+  <!-- ATTACK page -->
+  <div class="page" data-tab="attack">
+    <div class="tnode unlocked" style="left:376px;top:18px;"><div class="g">⌖</div><div class="tn">Marksman</div><div class="rk">ON</div></div>
+    <div class="tnode available" style="left:376px;top:138px;"><div class="g">◎</div><div class="tn">Deadeye</div><div class="rk">0/2</div></div>
+    <div class="tnode locked" style="left:376px;top:258px;"><div class="g">⊟</div><div class="tn">Penetrate</div><div class="rk">0/2</div></div>
+    <div class="tnode locked" style="left:376px;top:378px;"><div class="g">★</div><div class="tn">Headhunt</div><div class="rk">0/1</div></div>
+    <div class="tnode maxed" style="left:150px;top:138px;"><div class="g">◧</div><div class="tn">Hollow Pt</div><div class="rk">3/3</div></div>
+    <div class="tnode available" style="left:602px;top:258px;"><div class="g">⊞</div><div class="tn">Fire Rate</div><div class="rk">0/3</div></div>
+  </div>
+  <!-- BURST page -->
+  <div class="page" data-tab="burst">
+    <div class="tnode unlocked" style="left:376px;top:18px;"><div class="g">⌖</div><div class="tn">7 Dwarves</div><div class="rk">ON</div></div>
+    <div class="tnode available" style="left:376px;top:138px;"><div class="g">◎</div><div class="tn">Deep Frz</div><div class="rk">0/2</div></div>
+    <div class="tnode locked" style="left:376px;top:258px;"><div class="g">⊟</div><div class="tn">Frost Nova</div><div class="rk">0/2</div></div>
+    <div class="tnode locked" style="left:376px;top:378px;"><div class="g">★</div><div class="tn">Perfect</div><div class="rk">0/1</div></div>
+    <div class="tnode maxed" style="left:150px;top:138px;"><div class="g">◧</div><div class="tn">Incendiary</div><div class="rk">3/3</div></div>
+    <div class="tnode available" style="left:602px;top:258px;"><div class="g">⊞</div><div class="tn">Fully Act</div><div class="rk">0/3</div></div>
+  </div>
+</div>
+<div class="closechip">CLOSE<span>ESC</span></div>
+</section>
+
+<!-- ==================== B4 — Branching Fan ==================== -->
+<h2>B4 — Branching Fan</h2>
+<div class="sub">medium (~8-12 talents) · root fans out top-down, then converges into a capstone · add tiers to grow</div>
+<section class="stage">
+<div class="game"><img src="../../assets/backgrounds/forest.jpg"></div>
+<div class="dim"></div>
+<div class="hdr"><div class="t">TALENTS</div><div class="s">NIKKE // SNOW WHITE</div><div class="bar"></div></div>
+<div class="spchip"><div><span class="k">SKILL POINTS</span><span class="n">3</span></div></div>
+<div class="statpanel">
+  <div class="cap">FIELD STATUS</div>
+  <div class="ophead"><img src="../../assets/characters/snow-white/portrait-sq.png"><div><div class="nm">SNOW WHITE</div><div class="lv">LV 12</div></div></div>
+  <div class="srow"><span class="k">ATK</span><span class="v">2.4<em>+15%</em></span></div>
+  <div class="srow"><span class="k">HP</span><span class="v">86<em>+10</em></span></div>
+  <div class="srow"><span class="k">BURST GEN</span><span class="v">5%</span></div>
+  <div class="srow"><span class="k">SPEED</span><span class="v">420</span></div>
+  <div class="srow"><span class="k">CRIT RATE</span><span class="v">24%<em>+4%</em></span></div>
+</div>
+<div class="hb-enclosure"><div class="hb-band">
+  <div class="hb-seg attack" data-tab="attack"><div class="in"><div class="glyph">⨯</div><div class="meta"><div class="nm">ATTACK</div><div class="inv"><span class="lbl">INVESTED</span><span class="num">2</span></div></div></div><div class="uline"></div></div>
+  <div class="hb-seg skill active" data-tab="skill"><div class="in"><div class="glyph">◆</div><div class="meta"><div class="nm">SKILL</div><div class="inv"><span class="lbl">INVESTED</span><span class="num">4</span></div></div></div><div class="uline"></div></div>
+  <div class="hb-seg burst" data-tab="burst"><div class="in"><div class="glyph">#</div><div class="meta"><div class="nm">BURST</div><div class="inv"><span class="lbl">INVESTED</span><span class="num">0</span></div></div></div><div class="uline"></div></div>
+</div></div>
+<div class="hb-treewrap">
+  <!-- shared edges -->
+  <div class="edge lit" style="left:411px;top:92px;width:3px;height:24px;"></div>
+  <div class="edge lit" style="left:186px;top:116px;width:452px;height:3px;"></div>
+  <div class="edge lit" style="left:186px;top:116px;width:3px;height:18px;"></div><div class="ah down lit" style="left:182px;top:128px;"></div>
+  <div class="edge lit" style="left:411px;top:116px;width:3px;height:18px;"></div><div class="ah down lit" style="left:407px;top:128px;"></div>
+  <div class="edge lit" style="left:638px;top:116px;width:3px;height:18px;"></div><div class="ah down lit" style="left:634px;top:128px;"></div>
+  <div class="edge" style="left:186px;top:206px;width:3px;height:42px;"></div><div class="ah down" style="left:182px;top:240px;"></div>
+  <div class="edge" style="left:411px;top:206px;width:3px;height:42px;"></div><div class="ah down" style="left:407px;top:240px;"></div>
+  <div class="edge" style="left:638px;top:206px;width:3px;height:42px;"></div><div class="ah down" style="left:634px;top:240px;"></div>
+  <div class="edge" style="left:186px;top:320px;width:3px;height:24px;"></div>
+  <div class="edge" style="left:638px;top:320px;width:3px;height:24px;"></div>
+  <div class="edge" style="left:411px;top:320px;width:3px;height:24px;"></div>
+  <div class="edge" style="left:186px;top:344px;width:455px;height:3px;"></div>
+  <div class="edge" style="left:411px;top:344px;width:3px;height:26px;"></div><div class="ah down" style="left:407px;top:364px;"></div>
+
+  <!-- SKILL page -->
+  <div class="page show" data-tab="skill">
+    <div class="tnode unlocked" style="left:376px;top:20px;"><div class="g">⌖</div><div class="tn">Auto-Turret</div><div class="rk">ON</div></div>
+    <div class="tnode maxed" style="left:150px;top:134px;"><div class="g">◧</div><div class="tn">Ammo Cache</div><div class="rk">3/3</div></div>
+    <div class="tnode available" style="left:376px;top:134px;"><div class="g">⊞</div><div class="tn">Turrets+</div><div class="rk">0/3</div></div>
+    <div class="tnode available" style="left:602px;top:134px;"><div class="g">◎</div><div class="tn">Targeting</div><div class="rk">0/2</div></div>
+    <div class="tnode locked" style="left:150px;top:248px;"><div class="g">⟁</div><div class="tn">Overclock</div><div class="rk">0/3</div></div>
+    <div class="tnode locked" style="left:376px;top:248px;"><div class="g">⊟</div><div class="tn">Rapid Dep</div><div class="rk">0/2</div></div>
+    <div class="tnode locked" style="left:602px;top:248px;"><div class="g">⊠</div><div class="tn">Sentry</div><div class="rk">0/1</div></div>
+    <div class="tnode locked" style="left:376px;top:370px;"><div class="g">★</div><div class="tn">Master</div><div class="rk">0/1</div></div>
+  </div>
+  <!-- ATTACK page -->
+  <div class="page" data-tab="attack">
+    <div class="tnode unlocked" style="left:376px;top:20px;"><div class="g">⌖</div><div class="tn">Marksman</div><div class="rk">ON</div></div>
+    <div class="tnode maxed" style="left:150px;top:134px;"><div class="g">◧</div><div class="tn">Hollow Pt</div><div class="rk">3/3</div></div>
+    <div class="tnode available" style="left:376px;top:134px;"><div class="g">⊞</div><div class="tn">Fire Rate</div><div class="rk">0/3</div></div>
+    <div class="tnode available" style="left:602px;top:134px;"><div class="g">◎</div><div class="tn">Deadeye</div><div class="rk">0/2</div></div>
+    <div class="tnode locked" style="left:150px;top:248px;"><div class="g">⟁</div><div class="tn">Steady</div><div class="rk">0/3</div></div>
+    <div class="tnode locked" style="left:376px;top:248px;"><div class="g">⊟</div><div class="tn">Penetrate</div><div class="rk">0/2</div></div>
+    <div class="tnode locked" style="left:602px;top:248px;"><div class="g">⊠</div><div class="tn">Ricochet</div><div class="rk">0/1</div></div>
+    <div class="tnode locked" style="left:376px;top:370px;"><div class="g">★</div><div class="tn">Headhunt</div><div class="rk">0/1</div></div>
+  </div>
+  <!-- BURST page -->
+  <div class="page" data-tab="burst">
+    <div class="tnode unlocked" style="left:376px;top:20px;"><div class="g">⌖</div><div class="tn">7 Dwarves</div><div class="rk">ON</div></div>
+    <div class="tnode maxed" style="left:150px;top:134px;"><div class="g">◧</div><div class="tn">Incendiary</div><div class="rk">3/3</div></div>
+    <div class="tnode available" style="left:376px;top:134px;"><div class="g">⊞</div><div class="tn">Fully Act</div><div class="rk">0/3</div></div>
+    <div class="tnode available" style="left:602px;top:134px;"><div class="g">◎</div><div class="tn">Glacial</div><div class="rk">0/2</div></div>
+    <div class="tnode locked" style="left:150px;top:248px;"><div class="g">⟁</div><div class="tn">Overchrg</div><div class="rk">0/3</div></div>
+    <div class="tnode locked" style="left:376px;top:248px;"><div class="g">⊟</div><div class="tn">Deep Frz</div><div class="rk">0/2</div></div>
+    <div class="tnode locked" style="left:602px;top:248px;"><div class="g">⊠</div><div class="tn">Whiteout</div><div class="rk">0/1</div></div>
+    <div class="tnode locked" style="left:376px;top:370px;"><div class="g">★</div><div class="tn">Perfect</div><div class="rk">0/1</div></div>
+  </div>
+</div>
+<div class="closechip">CLOSE<span>ESC</span></div>
+</section>
+
+<!-- ==================== B5 — Constellation Web ==================== -->
+<h2>B5 — Constellation Web</h2>
+<div class="sub">free-form, flexible count (~6-12) · a hub with radiating links · good if talents interconnect (PoE-style)</div>
+<section class="stage">
+<div class="game"><img src="../../assets/backgrounds/forest.jpg"></div>
+<div class="dim"></div>
+<div class="hdr"><div class="t">TALENTS</div><div class="s">NIKKE // SNOW WHITE</div><div class="bar"></div></div>
+<div class="spchip"><div><span class="k">SKILL POINTS</span><span class="n">3</span></div></div>
+<div class="statpanel">
+  <div class="cap">FIELD STATUS</div>
+  <div class="ophead"><img src="../../assets/characters/snow-white/portrait-sq.png"><div><div class="nm">SNOW WHITE</div><div class="lv">LV 12</div></div></div>
+  <div class="srow"><span class="k">ATK</span><span class="v">2.4<em>+15%</em></span></div>
+  <div class="srow"><span class="k">HP</span><span class="v">86<em>+10</em></span></div>
+  <div class="srow"><span class="k">BURST GEN</span><span class="v">5%</span></div>
+  <div class="srow"><span class="k">SPEED</span><span class="v">420</span></div>
+  <div class="srow"><span class="k">CRIT RATE</span><span class="v">24%<em>+4%</em></span></div>
+</div>
+<div class="hb-enclosure"><div class="hb-band">
+  <div class="hb-seg attack" data-tab="attack"><div class="in"><div class="glyph">⨯</div><div class="meta"><div class="nm">ATTACK</div><div class="inv"><span class="lbl">INVESTED</span><span class="num">2</span></div></div></div><div class="uline"></div></div>
+  <div class="hb-seg skill active" data-tab="skill"><div class="in"><div class="glyph">◆</div><div class="meta"><div class="nm">SKILL</div><div class="inv"><span class="lbl">INVESTED</span><span class="num">4</span></div></div></div><div class="uline"></div></div>
+  <div class="hb-seg burst" data-tab="burst"><div class="in"><div class="glyph">#</div><div class="meta"><div class="nm">BURST</div><div class="inv"><span class="lbl">INVESTED</span><span class="num">0</span></div></div></div><div class="uline"></div></div>
+</div></div>
+<div class="hb-treewrap">
+  <!-- shared diagonal links -->
+  <div class="edge diag lit" style="left:412px;top:231px;width:236px;transform:rotate(-148deg);"></div>
+  <div class="edge diag" style="left:412px;top:231px;width:236px;transform:rotate(-32deg);"></div>
+  <div class="edge diag" style="left:412px;top:231px;width:309px;transform:rotate(171.6deg);"></div>
+  <div class="edge diag" style="left:412px;top:231px;width:309px;transform:rotate(8.4deg);"></div>
+  <div class="edge diag" style="left:412px;top:231px;width:234px;transform:rotate(135.2deg);"></div>
+  <div class="edge diag" style="left:412px;top:231px;width:232px;transform:rotate(45.2deg);"></div>
+  <div class="edge diag" style="left:212px;top:106px;width:400px;transform:rotate(0deg);"></div>
+  <div class="edge diag" style="left:246px;top:396px;width:330px;transform:rotate(0deg);"></div>
+  <div class="edge diag" style="left:106px;top:276px;width:184px;transform:rotate(40.6deg);"></div>
+  <div class="edge diag" style="left:718px;top:276px;width:186px;transform:rotate(139.8deg);"></div>
+
+  <!-- SKILL page -->
+  <div class="page show" data-tab="skill">
+    <div class="tnode unlocked" style="left:376px;top:195px;"><div class="g">⌖</div><div class="tn">Auto-Turret</div><div class="rk">ON</div></div>
+    <div class="tnode maxed" style="left:176px;top:70px;"><div class="g">◧</div><div class="tn">Ammo Cache</div><div class="rk">3/3</div></div>
+    <div class="tnode available" style="left:576px;top:70px;"><div class="g">⊞</div><div class="tn">Turrets+</div><div class="rk">1/3</div></div>
+    <div class="tnode available" style="left:70px;top:240px;"><div class="g">◎</div><div class="tn">Targeting</div><div class="rk">0/2</div></div>
+    <div class="tnode locked" style="left:682px;top:240px;"><div class="g">⊟</div><div class="tn">Rapid Dep</div><div class="rk">0/2</div></div>
+    <div class="tnode locked" style="left:210px;top:360px;"><div class="g">⟁</div><div class="tn">Overclock</div><div class="rk">0/3</div></div>
+    <div class="tnode locked" style="left:540px;top:360px;"><div class="g">★</div><div class="tn">Master</div><div class="rk">0/1</div></div>
+  </div>
+  <!-- ATTACK page -->
+  <div class="page" data-tab="attack">
+    <div class="tnode unlocked" style="left:376px;top:195px;"><div class="g">⌖</div><div class="tn">Marksman</div><div class="rk">ON</div></div>
+    <div class="tnode maxed" style="left:176px;top:70px;"><div class="g">◧</div><div class="tn">Hollow Pt</div><div class="rk">3/3</div></div>
+    <div class="tnode available" style="left:576px;top:70px;"><div class="g">⊞</div><div class="tn">Fire Rate</div><div class="rk">1/3</div></div>
+    <div class="tnode available" style="left:70px;top:240px;"><div class="g">◎</div><div class="tn">Deadeye</div><div class="rk">0/2</div></div>
+    <div class="tnode locked" style="left:682px;top:240px;"><div class="g">⊟</div><div class="tn">Penetrate</div><div class="rk">0/2</div></div>
+    <div class="tnode locked" style="left:210px;top:360px;"><div class="g">⟁</div><div class="tn">Steady</div><div class="rk">0/3</div></div>
+    <div class="tnode locked" style="left:540px;top:360px;"><div class="g">★</div><div class="tn">Headhunt</div><div class="rk">0/1</div></div>
+  </div>
+  <!-- BURST page -->
+  <div class="page" data-tab="burst">
+    <div class="tnode unlocked" style="left:376px;top:195px;"><div class="g">⌖</div><div class="tn">7 Dwarves</div><div class="rk">ON</div></div>
+    <div class="tnode maxed" style="left:176px;top:70px;"><div class="g">◧</div><div class="tn">Incendiary</div><div class="rk">3/3</div></div>
+    <div class="tnode available" style="left:576px;top:70px;"><div class="g">⊞</div><div class="tn">Fully Act</div><div class="rk">1/3</div></div>
+    <div class="tnode available" style="left:70px;top:240px;"><div class="g">◎</div><div class="tn">Deep Frz</div><div class="rk">0/2</div></div>
+    <div class="tnode locked" style="left:682px;top:240px;"><div class="g">⊟</div><div class="tn">Frost Nova</div><div class="rk">0/2</div></div>
+    <div class="tnode locked" style="left:210px;top:360px;"><div class="g">⟁</div><div class="tn">Overchrg</div><div class="rk">0/3</div></div>
+    <div class="tnode locked" style="left:540px;top:360px;"><div class="g">★</div><div class="tn">Perfect</div><div class="rk">0/1</div></div>
+  </div>
+</div>
+<div class="closechip">CLOSE<span>ESC</span></div>
+</section>
+
+<script>
+  // Tab swap: click a header-band segment -> activate it + show its tree page (scoped per stage).
+  document.querySelectorAll('.stage').forEach(function(stage){
+    var segs = stage.querySelectorAll('.hb-seg');
+    var pages = stage.querySelectorAll('.page');
+    segs.forEach(function(seg){
+      seg.addEventListener('click', function(){
+        var tab = seg.getAttribute('data-tab');
+        segs.forEach(function(s){ s.classList.toggle('active', s === seg); });
+        pages.forEach(function(p){ p.classList.toggle('show', p.getAttribute('data-tab') === tab); });
+      });
+    });
+  });
+</script>
+</body>
+</html>

@@ -8,6 +8,7 @@ extends Panel
 const UI := preload("res://scripts/ui/UITheme.gd")
 
 signal deploy_pressed
+signal skill_tree_pressed
 
 const STAT_DEFS := [
 	# key, label, max, color
@@ -26,6 +27,7 @@ var _special_desc: Label
 var _burst_title: Label
 var _burst_desc: Label
 var _deploy_button: Button = null
+var _skill_tree_button: Button = null
 var _swap_tween: Tween = null
 
 
@@ -133,6 +135,27 @@ func _build_content() -> void:
 	stretch.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(stretch)
 
+	# SKILL TREE — same chamfered slab as DEPLOY, but a light grey "secondary"
+	# fill with charcoal text. Opens the unit's tree as a read-only preview.
+	var skill_tree := Button.new()
+	skill_tree.text = "◈ TALENT TREE"
+	skill_tree.custom_minimum_size = Vector2(0, 58)
+	skill_tree.focus_mode = Control.FOCUS_ALL
+	skill_tree.add_theme_font_override("font", UI.FONT_TITLE_OBLIQUE)
+	skill_tree.add_theme_font_size_override("font_size", 24)
+	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		skill_tree.add_theme_color_override(state, UI.ADMIN_TEXT)
+	var st_normal := UI.create_chamfer_card(Color(0.80, 0.82, 0.85), Color(0, 0, 0, 0), 0, 2, 20.0)
+	var st_hover := UI.create_chamfer_card(Color(0.90, 0.92, 0.94), Color(0, 0, 0, 0), 0, 2, 20.0)
+	skill_tree.add_theme_stylebox_override("normal", st_normal)
+	skill_tree.add_theme_stylebox_override("hover", st_hover)
+	skill_tree.add_theme_stylebox_override("pressed", st_normal)
+	skill_tree.add_theme_stylebox_override("focus", UI.create_button_style_focus())
+	skill_tree.pressed.connect(func(): skill_tree_pressed.emit())
+	skill_tree.name = "SkillTreeButton"
+	vbox.add_child(skill_tree)
+	_skill_tree_button = skill_tree
+
 	var deploy := Button.new()
 	deploy.text = "▶ DEPLOY — SELECT STAGE"
 	deploy.custom_minimum_size = Vector2(0, 80)
@@ -152,9 +175,17 @@ func _build_content() -> void:
 	vbox.add_child(deploy)
 	_deploy_button = deploy
 
+	# Vertical focus chain between the two stacked CTAs (gamepad/keyboard nav).
+	skill_tree.focus_neighbor_bottom = skill_tree.get_path_to(deploy)
+	deploy.focus_neighbor_top = deploy.get_path_to(skill_tree)
+
 
 func get_deploy_button() -> Button:
 	return _deploy_button
+
+
+func get_skill_tree_button() -> Button:
+	return _skill_tree_button
 
 
 func _make_spacer(height: float) -> Control:

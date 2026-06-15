@@ -240,6 +240,18 @@ func _can_use_special() -> bool:
 func _perform_special(_direction: Vector2) -> void:
 	push_error("CharacterController._perform_special not implemented!")
 
+## Whether holding the special button triggers a distinct "hold special" action.
+## When true, the normal special fires on a quick tap (release) and the hold
+## action fires after the hold threshold. When false (default), the special
+## fires immediately on press. Override in subclasses (e.g. Nayuta).
+func is_special_hold_enabled() -> bool:
+	return false
+
+## Perform the hold-special action (held past the input threshold).
+## Override in subclasses that set is_special_hold_enabled() true.
+func use_special_hold(_direction: Vector2) -> void:
+	pass
+
 ## Start reloading
 func start_reload() -> void:
 	if is_reloading or max_ammo <= 0:

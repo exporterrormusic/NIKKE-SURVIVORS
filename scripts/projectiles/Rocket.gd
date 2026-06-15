@@ -18,6 +18,7 @@ var time = 0.0
 var damage: int = 1
 var explosion_damage: int = 1
 var explosion_radius: float = 60.0
+var explosion_glow_boost: float = 1.0 # >1 brightens the explosion glow (Rapunzel burst turrets)
 
 # Smoke trail settings - rockets have more intense trails
 const SMOKE_INTERVAL := 0.025
@@ -69,6 +70,7 @@ func reset() -> void:
 	trail_enabled = true
 	smoke_enabled = true
 	lightweight_mode = false
+	explosion_glow_boost = 1.0
 		
 	visible = true
 	set_process(true)
@@ -317,6 +319,17 @@ func explode():
 	# Pass dynamic damage to explosion
 	if explosion.has_method("initialize"):
 		explosion.initialize(explosion_damage, explosion_radius)
+
+	# Explosions are pooled, so always assign glow_color (a boosted value
+	# must not leak into the next rocket's explosion)
+	if "glow_color" in explosion:
+		var g := Color(1.0, 0.6, 0.26, 0.6) # ExplosionEffect default
+		if explosion_glow_boost > 1.0:
+			g = Color(minf(g.r * explosion_glow_boost, 1.0),
+				minf(g.g * explosion_glow_boost, 1.0),
+				minf(g.b * explosion_glow_boost, 1.0),
+				minf(g.a * explosion_glow_boost, 1.0))
+		explosion.glow_color = g
 	
 	get_parent().add_child(explosion)
 	explosion.global_position = global_position

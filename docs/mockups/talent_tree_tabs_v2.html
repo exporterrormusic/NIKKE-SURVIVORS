@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SOV Talent Tree — Option A round 2 · connected tabs + original tree</title>
+<style>
+  :root{
+    --cyan:#35C5F2; --cyan-deep:#1F8FE0; --yellow:#FFD23F; --red:#E8392E;
+    --green:#4ADE80; --muted:#97A0AC;
+    --edge:rgba(128,140,155,.45); --edgelit:rgba(53,197,242,.9);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#070a0e; color:#F0F4F8;
+    font-family:"Pretendard","Segoe UI",system-ui,sans-serif; padding:40px;}
+  h1{font-family:"Arial Narrow",sans-serif; font-size:32px; font-style:italic;
+    text-transform:uppercase; margin-bottom:4px;}
+  h2{font-family:"Arial Narrow",sans-serif; font-size:24px; font-style:italic;
+    text-transform:uppercase; margin:46px 0 4px;}
+  .sub{color:var(--muted); text-transform:uppercase; letter-spacing:.25em; font-size:12px;
+    margin-bottom:18px;}
+  .note{color:var(--muted); font-size:13px; line-height:1.6; max-width:1280px; margin-bottom:8px;}
+  .note b{color:#dfe6ee;}
+
+  .stage{position:relative; width:1280px; height:720px; overflow:hidden;
+    background:#0E1116; border:1px solid #2a3340; margin-bottom:10px;}
+  .game{position:absolute; inset:0;}
+  .game img{width:100%; height:100%; object-fit:cover; filter:brightness(.85);}
+  .dim{position:absolute; inset:0; background:rgba(7,10,14,.74);}
+
+  .hdr{position:absolute; left:54px; top:30px;}
+  .hdr .t{font-family:"Arial Narrow",sans-serif; font-weight:800; font-style:italic; font-size:42px;
+    line-height:1; text-shadow:0 2px 12px rgba(0,0,0,.7);}
+  .hdr .s{font-size:11px; letter-spacing:.3em; text-transform:uppercase; opacity:.65; margin-top:5px;}
+  .hdr .bar{width:54px; height:3px; background:var(--cyan); margin-top:9px;}
+  .spchip{position:absolute; right:54px; top:34px; display:flex; align-items:center; gap:12px;
+    padding:9px 20px; background:rgba(255,210,63,.12); border:1px solid var(--yellow);}
+  .spchip .k{font-size:9px; letter-spacing:.26em; font-weight:800; color:var(--yellow); display:block;}
+  .spchip .n{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:26px; color:var(--yellow);}
+  .closechip{position:absolute; right:54px; bottom:30px; padding:10px 26px;
+    background:rgba(20,24,31,.86); border:1px solid rgba(255,255,255,.18); font-weight:800;
+    font-style:italic; font-family:"Arial Narrow"; font-size:17px; cursor:pointer;}
+  .closechip span{opacity:.45; font-family:"Pretendard"; font-style:normal; font-size:10px;
+    letter-spacing:.2em; margin-left:10px;}
+
+  .statpanel{position:absolute; left:54px; top:120px; bottom:84px; width:300px;
+    background:rgba(16,20,26,.86); border:1px solid rgba(255,255,255,.16); padding:18px 20px;}
+  .statpanel .cap{font-size:10px; letter-spacing:.3em; opacity:.55; font-weight:800; margin-bottom:12px;}
+  .statpanel .ophead{display:flex; align-items:center; gap:13px; margin-bottom:14px;}
+  .statpanel .ophead img{width:56px; height:56px; object-fit:cover; object-position:top;
+    border:1px solid rgba(255,255,255,.3);}
+  .statpanel .ophead .nm{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:24px;}
+  .statpanel .ophead .lv{font-size:10px; letter-spacing:.2em; color:var(--yellow); font-weight:800;}
+  .srow{display:flex; align-items:baseline; padding:9px 0; border-bottom:1px solid rgba(128,140,155,.18);}
+  .srow .k{flex:1; font-size:10px; letter-spacing:.22em; font-weight:800; opacity:.6;}
+  .srow .v{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:22px;}
+  .srow .v em{font-style:normal; font-size:12px; color:var(--green); margin-left:6px;}
+
+  .treewrap{position:absolute; left:396px; right:54px; top:120px; bottom:84px;
+    background:rgba(10,13,18,.55); border:1px solid rgba(255,255,255,.12);}
+
+  .edge{position:absolute; background:var(--edge);}
+  .edge.lit{background:var(--edgelit); box-shadow:0 0 6px rgba(53,197,242,.5);}
+  .edge.diag{height:3px; transform-origin:0 50%;}
+  .ah{position:absolute; width:0; height:0; border:6px solid transparent;}
+  .ah.down{border-top:8px solid var(--edge); border-bottom:none;}
+  .ah.down.lit{border-top-color:var(--edgelit);}
+  .ah.right{border-left:8px solid var(--edge); border-right:none;}
+  .ah.right.lit{border-left-color:var(--edgelit);}
+
+  .node{position:absolute; height:84px; cursor:pointer; padding:10px 13px 8px; background:rgba(10,13,18,.78);}
+  .node::before,.node::after{content:""; position:absolute; width:14px; height:14px;}
+  .node::before{left:0; top:0; border-left:2px solid rgba(255,255,255,.5); border-top:2px solid rgba(255,255,255,.5);}
+  .node::after{right:0; bottom:0; border-right:2px solid rgba(255,255,255,.5); border-bottom:2px solid rgba(255,255,255,.5);}
+  .node .nm{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:17px;}
+  .node .d{font-size:10.5px; opacity:.65; margin-top:2px; line-height:1.3;}
+  .node .cost{position:absolute; right:8px; top:8px; font-size:9px; font-weight:800;
+    letter-spacing:.08em; padding:2px 7px; background:rgba(10,13,18,.8);
+    border:1px solid rgba(255,210,63,.5); color:var(--yellow);}
+  .node .pips{position:absolute; left:13px; bottom:7px; display:flex; gap:4px;}
+  .node .pips i{width:14px; height:5px; background:rgba(255,255,255,.18);}
+  .node .pips i.on{background:var(--cyan);}
+  .node .state{position:absolute; right:8px; bottom:6px; font-size:8.5px; font-weight:800; letter-spacing:.18em;}
+  .node.unlocked{background:rgba(31,143,224,.18);}
+  .node.unlocked::before,.node.unlocked::after{border-color:var(--cyan); width:18px; height:18px;}
+  .node.unlocked .nm{color:var(--cyan);}
+  .node.available::before,.node.available::after{border-color:rgba(255,255,255,.85);}
+  .node.available:hover::before,.node.available:hover::after{border-color:var(--yellow); width:20px; height:20px;}
+  .node.locked{opacity:.42;}
+  .node.locked .cost{border-color:rgba(255,255,255,.2); color:#8a9099;}
+  .node.maxed{background:rgba(63,174,94,.15);}
+  .node.maxed::before,.node.maxed::after{border-color:var(--green);}
+  .node.maxed .nm{color:#7be09a;}
+</style>
+</head>
+<body>
+
+<h1>Talent Tree — Option A · Round 2 · Connected Tabs</h1>
+<div class="sub">spec-icon rail from option A, now ATTACHED to the box, over the original C3a tree (compressed)</div>
+<div class="note">
+  Picking up from option <b>A (Spec Icon Rail)</b>. Two changes vs round 1: (1) the tree is the <b>original C3a "Ability
+  Lanes" layout</b> again — all 8 nodes (special lane + burst lane + signature row, same elbow-splits and gates), just
+  vertically compressed to make room for the tab strip (you'll add skills to flesh out each of the 3 trees later); and
+  (2) the tabs are now <b>physically connected to the tree box</b> instead of floating above it. All four show the same
+  state (SKILL tab active) so only the <b>tab→box connection</b> differs. Pick the connection you like.
+</div>
+
+<!-- ==================== A1 — Folder Tabs ==================== -->
+<h2>A1 — Folder Tabs (seamless merge)</h2>
+<div class="sub">the active tab opens INTO the box — shared fill, no dividing line; inactive tabs sit recessed behind the rim</div>
+<section class="stage">
+<style>
+.v-a1foldertabs{position:absolute;left:396px;top:120px;width:770px;height:54px;}
+.v-a1foldertabs .rail{position:absolute;inset:0;display:flex;gap:5px;align-items:flex-end;}
+.v-a1foldertabs .tab{position:relative;flex:1;height:48px;transform:skewX(-9deg);background:rgba(11,14,19,.92);border:1px solid rgba(151,160,172,.22);border-bottom:none;box-sizing:border-box;cursor:pointer;overflow:hidden;transition:background .12s,height .12s;}
+.v-a1foldertabs .tab .in{transform:skewX(9deg);height:100%;display:flex;align-items:center;gap:13px;padding:0 17px;box-sizing:border-box;}
+.v-a1foldertabs .tab .glyph{font-size:26px;line-height:1;font-style:normal;flex:0 0 auto;opacity:.4;filter:grayscale(.6);color:var(--muted);}
+.v-a1foldertabs .tab .meta{display:flex;flex-direction:column;justify-content:center;min-width:0;}
+.v-a1foldertabs .tab .nm{font-family:"Arial Narrow",Arial,sans-serif;font-weight:900;font-style:italic;font-size:19px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);line-height:1;}
+.v-a1foldertabs .tab .inv{display:flex;align-items:baseline;gap:6px;margin-top:3px;}
+.v-a1foldertabs .tab .inv .lbl{font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);font-weight:700;}
+.v-a1foldertabs .tab .inv .num{font-family:"Arial Narrow",Arial,sans-serif;font-weight:900;font-style:italic;font-size:20px;line-height:.8;color:var(--muted);}
+.v-a1foldertabs .tab .topedge{position:absolute;left:0;top:0;height:3px;width:100%;background:transparent;}
+/* INACTIVE: recessed — darker, sat ~4px lower, dim inner top shadow */
+.v-a1foldertabs .tab.inactive{height:44px;background:rgba(8,11,15,.94);box-shadow:inset 0 5px 9px -4px rgba(0,0,0,.85);border-color:rgba(151,160,172,.16);}
+.v-a1foldertabs .tab.inactive .topedge{background:rgba(151,160,172,.14);}
+.v-a1foldertabs .tab:hover.inactive{background:rgba(14,18,24,.96);}
+.v-a1foldertabs .tab:hover.inactive .nm{color:#cfd6de;}
+.v-a1foldertabs .tab:hover.inactive .glyph{opacity:.6;filter:grayscale(.3);}
+/* ACTIVE (SKILL): continuous with box interior, cyan top accent, drops 2px over the border */
+.v-a1foldertabs .tab.active{height:50px;margin-bottom:-2px;z-index:3;background:rgba(10,13,18,.55);border-color:rgba(53,197,242,.5);box-shadow:none;}
+.v-a1foldertabs .tab.active .topedge{background:var(--cyan);box-shadow:0 0 7px rgba(53,197,242,.55);}
+.v-a1foldertabs .tab.active .glyph{opacity:1;filter:none;}
+/* accent coding (active carries its accent color across glyph+name+number) */
+.v-a1foldertabs .tab.skill.active .glyph,.v-a1foldertabs .tab.skill.active .nm,.v-a1foldertabs .tab.skill.active .inv .num{color:var(--cyan);}
+.v-a1foldertabs .tab.attack.active .glyph,.v-a1foldertabs .tab.attack.active .nm,.v-a1foldertabs .tab.attack.active .inv .num{color:var(--cyan);}
+.v-a1foldertabs .tab.burst.active{border-color:rgba(232,57,46,.5);}
+.v-a1foldertabs .tab.burst.active .topedge{background:var(--red);box-shadow:0 0 7px rgba(232,57,46,.55);}
+.v-a1foldertabs .tab.burst.active .glyph,.v-a1foldertabs .tab.burst.active .nm,.v-a1foldertabs .tab.burst.active .inv .num{color:var(--red);}
+/* TREE BOX: seamless merge — same interior fill, top:174, right:54. Top border broken under active tab via a masking strip */
+.v-a1foldertabs+.treewrap{top:174px;right:54px;border-top:1px solid rgba(255,255,255,.12);}
+/* erase the box's top border under the active SKILL tab (tab 2 of 3). Active tab spans box-x ~651..906; cover that border run. */
+.v-a1foldertabs+.treewrap::before{content:"";position:absolute;left:259px;top:-1px;width:248px;height:3px;background:rgba(10,13,18,.55);z-index:4;}
+.v-a1foldertabs+.treewrap .node.unlocked .state{color:var(--cyan);}
+</style>
+<div class="game"><img src="../../assets/backgrounds/forest.jpg"></div>
+<div class="dim"></div>
+<div class="hdr"><div class="t">TALENTS</div><div class="s">NIKKE // SNOW WHITE</div><div class="bar"></div></div>
+<div class="spchip"><div><span class="k">SKILL POINTS</span><span class="n">3</span></div></div>
+<div class="statpanel">
+  <div class="cap">FIELD STATUS</div>
+  <div class="ophead"><img src="../../assets/characters/snow-white/portrait-sq.png"><div><div class="nm">SNOW WHITE</div><div class="lv">LV 12</div></div></div>
+  <div class="srow"><span class="k">ATK</span><span class="v">2.4<em>+15%</em></span></div>
+  <div class="srow"><span class="k">HP</span><span class="v">86<em>+10</em></span></div>
+  <div class="srow"><span class="k">BURST GEN</span><span class="v">5%</span></div>
+  <div class="srow"><span class="k">SPEED</span><span class="v">420</span></div>
+  <div class="srow"><span class="k">CRIT RATE</span><span class="v">24%<em>+4%</em></span></div>
+</div>
+<div class="v-a1foldertabs">
+  <div class="rail">
+    <div class="tab attack inactive">
+      <div class="topedge"></div>
+      <div class="in">
+        <div class="glyph">⨯</div>
+        <div class="meta">
+          <div class="nm">ATTACK</div>
+          <div class="inv"><span class="lbl">INVESTED</span><span class="num">2</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="tab skill active">
+      <div class="topedge"></div>
+      <div class="in">
+        <div class="glyph">◆</div>
+        <div class="meta">
+          <div class="nm">SKILL</div>
+          <div class="inv"><span class="lbl">INVESTED</span><span class="num">4</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="tab burst inactive">
+      <div class="topedge"></div>
+      <div class="in">
+        <div class="glyph">#</div>
+        <div class="meta">
+          <div class="nm">BURST</div>
+          <div class="inv"><span class="lbl">INVESTED</span><span class="num">0</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="treewrap">
+<!-- SPECIAL lane split (lit): stem -> rail -> stubs into the two mods -->
+<div class="edge lit" style="left:279px;top:85px;width:69px;height:3px;"></div>
+<div class="edge lit" style="left:348px;top:44px;width:3px;height:84px;"></div>
+<div class="edge lit" style="left:348px;top:44px;width:70px;height:3px;"></div>
+<div class="ah right lit" style="left:418px;top:39px;"></div>
+<div class="edge lit" style="left:348px;top:128px;width:70px;height:3px;"></div>
+<div class="ah right lit" style="left:418px;top:123px;"></div>
+<!-- gate special root -> burst root (lit) -->
+<div class="edge lit" style="left:150px;top:124px;width:3px;height:62px;"></div>
+<div class="ah down lit" style="left:146px;top:186px;"></div>
+<!-- BURST lane split (plain) -->
+<div class="edge" style="left:279px;top:223px;width:69px;height:3px;"></div>
+<div class="edge" style="left:348px;top:182px;width:3px;height:84px;"></div>
+<div class="edge" style="left:348px;top:182px;width:70px;height:3px;"></div>
+<div class="ah right" style="left:418px;top:177px;"></div>
+<div class="edge" style="left:348px;top:266px;width:70px;height:3px;"></div>
+<div class="ah right" style="left:418px;top:261px;"></div>
+<!-- gate burst root -> signature/capstone (plain) -->
+<div class="edge" style="left:150px;top:262px;width:3px;height:98px;"></div>
+<div class="ah down" style="left:146px;top:360px;"></div>
+
+<!-- SPECIAL lane nodes -->
+<div class="node unlocked" style="left:24px;top:48px;width:255px;height:76px;">
+  <div class="nm">AUTO-TURRET</div><div class="d">Deploy auto-targeting turrets</div>
+  <div class="state" style="color:var(--cyan);">ACTIVE</div>
+</div>
+<div class="node maxed" style="left:418px;top:6px;width:340px;height:76px;">
+  <div class="nm">AMMO CACHE</div><div class="d">+2 turret missile capacity</div>
+  <div class="cost">1 SP</div>
+  <div class="pips"><i class="on"></i><i class="on"></i><i class="on"></i></div>
+  <div class="state" style="color:#7be09a;">MAX</div>
+</div>
+<div class="node available" style="left:418px;top:90px;width:340px;height:76px;">
+  <div class="nm">MORE TURRETS</div><div class="d">+2 max turret charges</div>
+  <div class="cost">1 SP</div>
+  <div class="pips"><i></i><i></i><i></i></div>
+</div>
+<!-- BURST lane nodes -->
+<div class="node available" style="left:24px;top:186px;width:255px;height:76px;">
+  <div class="nm">SEVEN DWARVES</div><div class="d">BURST: Freezing storm</div>
+  <div class="cost">1 SP</div>
+</div>
+<div class="node locked" style="left:418px;top:144px;width:340px;height:76px;">
+  <div class="nm">INCENDIARY ROUNDS</div><div class="d">Burns enemies for 34% max HP/s</div>
+  <div class="cost">1 SP</div>
+</div>
+<div class="node locked" style="left:418px;top:228px;width:340px;height:76px;">
+  <div class="nm">FULLY ACTIVE</div><div class="d">Kills during burst refill gauge</div>
+  <div class="cost">1 SP</div>
+</div>
+<!-- SIGNATURE row -->
+<div class="node locked" style="left:24px;top:360px;width:255px;height:76px;">
+  <div class="nm">MASTER MECHANIC</div><div class="d">Greatly increased ammo capacity</div>
+  <div class="cost">2 SP</div>
+</div>
+<div class="node available" style="left:418px;top:360px;width:340px;height:76px;">
+  <div class="nm">BEST GIRL</div><div class="d">Attacks leave burning trails</div>
+  <div class="cost">2 SP</div>
+</div>
+</div>
+<div class="closechip">CLOSE<span>ESC</span></div>
+</section>
+
+<!-- ==================== A2 — Header Band ==================== -->
+<h2>A2 — Header Band (tabs are the box title bar)</h2>
+<div class="sub">one enclosed container: a full-width header row split into 3 tab segments, a hairline, then the tree body</div>
+<section class="stage">
+<style>
+.v-a2hdrband .a2-enclosure{position:absolute;left:396px;top:120px;width:770px;height:516px;border:1px solid rgba(255,255,255,.16);background:rgba(10,13,18,.55);box-sizing:border-box;}
+.v-a2hdrband .a2-band{position:absolute;left:0;top:0;right:0;height:53px;background:rgba(20,25,33,.92);border-bottom:1px solid rgba(255,255,255,.16);display:flex;box-sizing:border-box;}
+.v-a2hdrband .a2-seg{position:relative;flex:1 1 0;height:100%;border-right:1px solid rgba(255,255,255,.13);cursor:pointer;overflow:hidden;transform:skewX(-9deg);background:transparent;box-sizing:border-box;}
+.v-a2hdrband .a2-seg:last-child{border-right:none;}
+.v-a2hdrband .a2-seg .in{transform:skewX(9deg);height:100%;display:flex;align-items:center;gap:13px;padding:0 22px;box-sizing:border-box;}
+.v-a2hdrband .a2-seg .glyph{font-size:26px;line-height:1;font-style:normal;flex:0 0 auto;color:var(--muted);opacity:.5;filter:grayscale(.5);}
+.v-a2hdrband .a2-seg .meta{display:flex;flex-direction:column;justify-content:center;min-width:0;}
+.v-a2hdrband .a2-seg .nm{font-family:"Arial Narrow",Arial,sans-serif;font-weight:900;font-style:italic;font-size:19px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);line-height:1;}
+.v-a2hdrband .a2-seg .inv{display:flex;align-items:baseline;gap:6px;margin-top:3px;}
+.v-a2hdrband .a2-seg .inv .lbl{font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:700;}
+.v-a2hdrband .a2-seg .inv .num{font-family:"Arial Narrow",Arial,sans-serif;font-weight:900;font-style:italic;font-size:21px;line-height:.8;color:var(--muted);}
+.v-a2hdrband .a2-seg:hover{background:rgba(255,255,255,.04);}
+.v-a2hdrband .a2-seg:hover .glyph,.v-a2hdrband .a2-seg:hover .nm{opacity:.85;filter:grayscale(.2);}
+/* active = darker inset + accent + 3px underline sitting on the y174 divider */
+.v-a2hdrband .a2-seg.active{background:rgba(8,11,15,.92);box-shadow:inset 0 0 0 1px rgba(0,0,0,.5);}
+.v-a2hdrband .a2-seg.active .glyph{opacity:1;filter:none;}
+.v-a2hdrband .a2-seg .uline{position:absolute;left:0;bottom:-1px;height:3px;width:100%;background:transparent;transform:skewX(9deg);}
+.v-a2hdrband .a2-seg.active .uline{height:3px;}
+/* accents */
+.v-a2hdrband .a2-seg.attack .glyph{color:var(--cyan);}
+.v-a2hdrband .a2-seg.skill .glyph{color:var(--yellow);}
+.v-a2hdrband .a2-seg.burst .glyph{color:var(--red);}
+.v-a2hdrband .a2-seg.skill.active{border-color:rgba(53,197,242,.5);}
+.v-a2hdrband .a2-seg.skill.active .glyph,.v-a2hdrband .a2-seg.skill.active .nm,.v-a2hdrband .a2-seg.skill.active .inv .num{color:var(--cyan);}
+.v-a2hdrband .a2-seg.skill.active .uline{background:var(--cyan);box-shadow:0 0 7px rgba(53,197,242,.6);}
+.v-a2hdrband .a2-seg.burst.active{border-color:rgba(232,57,46,.5);}
+.v-a2hdrband .a2-seg.burst.active .glyph,.v-a2hdrband .a2-seg.burst.active .nm,.v-a2hdrband .a2-seg.burst.active .inv .num{color:var(--red);}
+.v-a2hdrband .a2-seg.burst.active .uline{background:var(--red);}
+.v-a2hdrband .a2-seg.attack.active{border-color:rgba(53,197,242,.5);}
+.v-a2hdrband .a2-seg.attack.active .glyph,.v-a2hdrband .a2-seg.attack.active .nm,.v-a2hdrband .a2-seg.attack.active .inv .num{color:var(--cyan);}
+.v-a2hdrband .a2-seg.attack.active .uline{background:var(--cyan);}
+/* treewrap sits inside the enclosure: no border (enclosure draws it), transparent fill */
+.v-a2hdrband+.treewrap{top:174px;right:54px;border:none;background:transparent;}
+.v-a2hdrband+.treewrap .node.unlocked .state{color:var(--cyan);}
+</style>
+<div class="game"><img src="../../assets/backgrounds/forest.jpg"></div>
+<div class="dim"></div>
+<div class="hdr"><div class="t">TALENTS</div><div class="s">NIKKE // SNOW WHITE</div><div class="bar"></div></div>
+<div class="spchip"><div><span class="k">SKILL POINTS</span><span class="n">3</span></div></div>
+<div class="statpanel">
+  <div class="cap">FIELD STATUS</div>
+  <div class="ophead"><img src="../../assets/characters/snow-white/portrait-sq.png"><div><div class="nm">SNOW WHITE</div><div class="lv">LV 12</div></div></div>
+  <div class="srow"><span class="k">ATK</span><span class="v">2.4<em>+15%</em></span></div>
+  <div class="srow"><span class="k">HP</span><span class="v">86<em>+10</em></span></div>
+  <div class="srow"><span class="k">BURST GEN</span><span class="v">5%</span></div>
+  <div class="srow"><span class="k">SPEED</span><span class="v">420</span></div>
+  <div class="srow"><span class="k">CRIT RATE</span><span class="v">24%<em>+4%</em></span></div>
+</div>
+<div class="v-a2hdrband">
+  <div class="a2-enclosure">
+    <div class="a2-band">
+      <div class="a2-seg attack">
+        <div class="in">
+          <div class="glyph">⨯</div>
+          <div class="meta">
+            <div class="nm">ATTACK</div>
+            <div class="inv"><span class="lbl">INVESTED</span><span class="num">2</span></div>
+          </div>
+        </div>
+        <div class="uline"></div>
+      </div>
+      <div class="a2-seg skill active">
+        <div class="in">
+          <div class="glyph">◆</div>
+          <div class="meta">
+            <div class="nm">SKILL</div>
+            <div class="inv"><span class="lbl">INVESTED</span><span class="num">4</span></div>
+          </div>
+        </div>
+        <div class="uline"></div>
+      </div>
+      <div class="a2-seg burst">
+        <div class="in">
+          <div class="glyph">#</div>
+          <div class="meta">
+            <div class="nm">BURST</div>
+            <div class="inv"><span class="lbl">INVESTED</span><span class="num">0</span></div>
+          </div>
+        </div>
+        <div class="uline"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="treewrap" style="top:174px;right:54px;">
+<!-- SPECIAL lane split (lit): stem -> rail -> stubs into the two mods -->
+<div class="edge lit" style="left:279px;top:85px;width:69px;height:3px;"></div>
+<div class="edge lit" style="left:348px;top:44px;width:3px;height:84px;"></div>
+<div class="edge lit" style="left:348px;top:44px;width:70px;height:3px;"></div>
+<div class="ah right lit" style="left:418px;top:39px;"></div>
+<div class="edge lit" style="left:348px;top:128px;width:70px;height:3px;"></div>
+<div class="ah right lit" style="left:418px;top:123px;"></div>
+<!-- gate special root -> burst root (lit) -->
+<div class="edge lit" style="left:150px;top:124px;width:3px;height:62px;"></div>
+<div class="ah down lit" style="left:146px;top:186px;"></div>
+<!-- BURST lane split (plain) -->
+<div class="edge" style="left:279px;top:223px;width:69px;height:3px;"></div>
+<div class="edge" style="left:348px;top:182px;width:3px;height:84px;"></div>
+<div class="edge" style="left:348px;top:182px;width:70px;height:3px;"></div>
+<div class="ah right" style="left:418px;top:177px;"></div>
+<div class="edge" style="left:348px;top:266px;width:70px;height:3px;"></div>
+<div class="ah right" style="left:418px;top:261px;"></div>
+<!-- gate burst root -> signature/capstone (plain) -->
+<div class="edge" style="left:150px;top:262px;width:3px;height:98px;"></div>
+<div class="ah down" style="left:146px;top:360px;"></div>
+<!-- gate FULLY ACTIVE -> BEST GIRL (right-lane spine, mirrors left gate2) -->
+<div class="edge" style="left:587px;top:304px;width:3px;height:58px;"></div>
+<div class="ah down" style="left:584px;top:355px;"></div>
+
+<!-- SPECIAL lane nodes -->
+<div class="node unlocked" style="left:24px;top:48px;width:255px;height:76px;">
+  <div class="nm">AUTO-TURRET</div><div class="d">Deploy auto-targeting turrets</div>
+  <div class="state" style="color:var(--cyan);">ACTIVE</div>
+</div>
+<div class="node maxed" style="left:418px;top:6px;width:340px;height:76px;">
+  <div class="nm">AMMO CACHE</div><div class="d">+2 turret missile capacity</div>
+  <div class="cost">1 SP</div>
+  <div class="pips"><i class="on"></i><i class="on"></i><i class="on"></i></div>
+  <div class="state" style="color:#7be09a;">MAX</div>
+</div>
+<div class="node available" style="left:418px;top:90px;width:340px;height:76px;">
+  <div class="nm">MORE TURRETS</div><div class="d">+2 max turret charges</div>
+  <div class="cost">1 SP</div>
+  <div class="pips"><i></i><i></i><i></i></div>
+</div>
+<!-- BURST lane nodes -->
+<div class="node available" style="left:24px;top:186px;width:255px;height:76px;">
+  <div class="nm">SEVEN DWARVES</div><div class="d">BURST: Freezing storm</div>
+  <div class="cost">1 SP</div>
+</div>
+<div class="node locked" style="left:418px;top:144px;width:340px;height:76px;">
+  <div class="nm">INCENDIARY ROUNDS</div><div class="d">Burns enemies for 34% max HP/s</div>
+  <div class="cost">1 SP</div>
+</div>
+<div class="node locked" style="left:418px;top:228px;width:340px;height:76px;">
+  <div class="nm">FULLY ACTIVE</div><div class="d">Kills during burst refill gauge</div>
+  <div class="cost">1 SP</div>
+</div>
+<!-- SIGNATURE row -->
+<div class="node locked" style="left:24px;top:360px;width:255px;height:76px;">
+  <div class="nm">MASTER MECHANIC</div><div class="d">Greatly increased ammo capacity</div>
+  <div class="cost">2 SP</div>
+</div>
+<div class="node available" style="left:418px;top:360px;width:340px;height:76px;">
+  <div class="nm">BEST GIRL</div><div class="d">Attacks leave burning trails</div>
+  <div class="cost">2 SP</div>
+</div>
+</div>
+<div class="closechip">CLOSE<span>ESC</span></div>
+</section>
+
+<!-- ==================== A3 — Bracket-Keyed Tabs ==================== -->
+<h2>A3 — Bracket-Keyed Tabs (HUD seam)</h2>
+<div class="sub">tabs dock onto the top border with bracket corners; the active tab is bound to the box by a cyan seam + a short rail into the pane</div>
+<section class="stage">
+<style>
+.v-a3{position:absolute;left:0;top:0;width:1280px;height:720px;pointer-events:none;}
+.v-a3 .a3rail{position:absolute;left:396px;top:122px;width:770px;height:52px;pointer-events:none;}
+.v-a3 .a3tab{position:absolute;top:0;height:52px;transform:skewX(-9deg);background:rgba(16,20,26,.62);border:1px solid rgba(151,160,172,.22);box-sizing:border-box;cursor:pointer;pointer-events:auto;transition:background .12s;}
+.v-a3 .a3tab::before,.v-a3 .a3tab::after{content:"";position:absolute;width:13px;height:13px;}
+.v-a3 .a3tab::before{left:3px;top:3px;border-left:2px solid rgba(255,255,255,.5);border-top:2px solid rgba(255,255,255,.5);}
+.v-a3 .a3tab::after{right:3px;bottom:3px;border-right:2px solid rgba(255,255,255,.5);border-bottom:2px solid rgba(255,255,255,.5);}
+.v-a3 .a3tab .in{transform:skewX(9deg);height:100%;display:flex;align-items:center;gap:12px;padding:0 18px;box-sizing:border-box;}
+.v-a3 .a3tab .glyph{font-size:25px;line-height:1;font-style:normal;flex:0 0 auto;color:var(--muted);opacity:.5;}
+.v-a3 .a3tab .meta{display:flex;flex-direction:column;justify-content:center;min-width:0;}
+.v-a3 .a3tab .nm{font-family:"Arial Narrow",Arial,sans-serif;font-weight:900;font-style:italic;font-size:19px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);line-height:1;}
+.v-a3 .a3tab .inv{display:flex;align-items:baseline;gap:5px;margin-top:3px;}
+.v-a3 .a3tab .inv .lbl{font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);font-weight:700;}
+.v-a3 .a3tab .inv .num{font-family:"Arial Narrow",Arial,sans-serif;font-weight:900;font-style:italic;font-size:20px;line-height:.8;color:var(--muted);}
+.v-a3 .a3tab:hover{background:rgba(16,20,26,.82);}
+.v-a3 .a3tab:hover .glyph,.v-a3 .a3tab:hover .nm{opacity:.85;color:#cfd6de;}
+/* idle spec accents: each tab carries its spec color even when inactive (ATTACK cyan, SKILL cyan, BURST red) */
+.v-a3 .a3tab.attack .glyph,.v-a3 .a3tab.skill .glyph{color:var(--cyan);opacity:.85;}
+.v-a3 .a3tab.burst .glyph{color:var(--red);opacity:.85;}
+.v-a3 .a3tab.attack .nm,.v-a3 .a3tab.attack .inv .num,.v-a3 .a3tab.skill .nm,.v-a3 .a3tab.skill .inv .num{color:var(--cyan);}
+.v-a3 .a3tab.burst .nm,.v-a3 .a3tab.burst .inv .num{color:var(--red);}
+/* ACTIVE = SKILL, keyed cyan into the box */
+.v-a3 .a3tab.active{background:rgba(14,17,22,.94);border-color:rgba(53,197,242,.55);z-index:3;}
+.v-a3 .a3tab.active::before{border-left-color:var(--cyan);border-top-color:var(--cyan);}
+.v-a3 .a3tab.active::after{right:3px;bottom:3px;border-right-color:var(--cyan);border-bottom-color:var(--cyan);}
+.v-a3 .a3tab.active .glyph{color:var(--cyan);opacity:1;}
+.v-a3 .a3tab.active .nm,.v-a3 .a3tab.active .inv .num{color:var(--cyan);}
+/* SEAM: solid cyan block bridging active tab bottom into box, erasing the border at the join */
+.v-a3 .a3seam{position:absolute;top:172px;height:5px;background:var(--cyan);box-shadow:0 0 7px rgba(53,197,242,.6);z-index:4;}
+/* RAIL: thin cyan accent dropping into the pane from the seam */
+.v-a3 .a3feedrail{position:absolute;top:177px;width:3px;height:18px;background:var(--cyan);box-shadow:0 0 6px rgba(53,197,242,.55);z-index:4;}
+.v-a3 .a3feedah{position:absolute;top:195px;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--cyan);z-index:4;}
+/* box: drop the top border so tabs read as physically attached to the rim */
+.v-a3-wrap{top:174px;right:54px;border-top:1px solid rgba(255,255,255,.12);}
+.v-a3-wrap .node.unlocked .state{color:var(--cyan);}
+</style>
+<div class="game"><img src="../../assets/backgrounds/forest.jpg"></div>
+<div class="dim"></div>
+<div class="hdr"><div class="t">TALENTS</div><div class="s">NIKKE // SNOW WHITE</div><div class="bar"></div></div>
+<div class="spchip"><div><span class="k">SKILL POINTS</span><span class="n">3</span></div></div>
+<div class="statpanel">
+<div class="cap">FIELD STATUS</div>
+<div class="ophead"><img src="../../assets/characters/snow-white/portrait-sq.png"><div><div class="nm">SNOW WHITE</div><div class="lv">LV 12</div></div></div>
+<div class="srow"><span class="k">ATK</span><span class="v">2.4<em>+15%</em></span></div>
+<div class="srow"><span class="k">HP</span><span class="v">86<em>+10</em></span></div>
+<div class="srow"><span class="k">BURST GEN</span><span class="v">5%</span></div>
+<div class="srow"><span class="k">SPEED</span><span class="v">420</span></div>
+<div class="srow"><span class="k">CRIT RATE</span><span class="v">24%<em>+4%</em></span></div>
+</div>
+<div class="v-a3">
+<div class="a3rail">
+<div class="a3tab attack" style="left:6px;width:248px;">
+<div class="in">
+<div class="glyph">⨯</div>
+<div class="meta"><div class="nm">ATTACK</div><div class="inv"><span class="lbl">INVESTED</span><span class="num">2</span></div></div>
+</div>
+</div>
+<div class="a3tab skill active" style="left:260px;width:250px;">
+<div class="in">
+<div class="glyph">◆</div>
+<div class="meta"><div class="nm">SKILL</div><div class="inv"><span class="lbl">INVESTED</span><span class="num">4</span></div></div>
+</div>
+</div>
+<div class="a3tab burst" style="left:516px;width:248px;">
+<div class="in">
+<div class="glyph">#</div>
+<div class="meta"><div class="nm">BURST</div><div class="inv"><span class="lbl">INVESTED</span><span class="num">0</span></div></div>
+</div>
+</div>
+</div>
+<!-- active SKILL tab keyed into the box: seam bridges the join, rail feeds the pane -->
+<div class="a3seam" style="left:662px;width:96px;"></div>
+<div class="a3feedrail" style="left:708px;"></div>
+<div class="a3feedah" style="left:705px;"></div>
+</div>
+<div class="treewrap v-a3-wrap">
+<!-- SPECIAL lane split (lit): stem -> rail -> stubs into the two mods -->
+<div class="edge lit" style="left:279px;top:85px;width:69px;height:3px;"></div>
+<div class="edge lit" style="left:348px;top:44px;width:3px;height:84px;"></div>
+<div class="edge lit" style="left:348px;top:44px;width:70px;height:3px;"></div>
+<div class="ah right lit" style="left:418px;top:39px;"></div>
+<div class="edge lit" style="left:348px;top:128px;width:70px;height:3px;"></div>
+<div class="ah right lit" style="left:418px;top:123px;"></div>
+<!-- gate special root -> burst root (lit) -->
+<div class="edge lit" style="left:150px;top:124px;width:3px;height:62px;"></div>
+<div class="ah down lit" style="left:146px;top:186px;"></div>
+<!-- BURST lane split (plain) -->
+<div class="edge" style="left:279px;top:223px;width:69px;height:3px;"></div>
+<div class="edge" style="left:348px;top:182px;width:3px;height:84px;"></div>
+<div class="edge" style="left:348px;top:182px;width:70px;height:3px;"></div>
+<div class="ah right" style="left:418px;top:177px;"></div>
+<div class="edge" style="left:348px;top:266px;width:70px;height:3px;"></div>
+<div class="ah right" style="left:418px;top:261px;"></div>
+<!-- gate burst root -> signature/capstone (plain) -->
+<div class="edge" style="left:150px;top:262px;width:3px;height:98px;"></div>
+<div class="ah down" style="left:146px;top:360px;"></div>
+
+<!-- SPECIAL lane nodes -->
+<div class="node unlocked" style="left:24px;top:48px;width:255px;height:76px;">
+  <div class="nm">AUTO-TURRET</div><div class="d">Deploy auto-targeting turrets</div>
+  <div class="state" style="color:var(--cyan);">ACTIVE</div>
+</div>
+<div class="node maxed" style="left:418px;top:6px;width:340px;height:76px;">
+  <div class="nm">AMMO CACHE</div><div class="d">+2 turret missile capacity</div>
+  <div class="cost">1 SP</div>
+  <div class="pips"><i class="on"></i><i class="on"></i><i class="on"></i></div>
+  <div class="state" style="color:#7be09a;">MAX</div>
+</div>
+<div class="node available" style="left:418px;top:90px;width:340px;height:76px;">
+  <div class="nm">MORE TURRETS</div><div class="d">+2 max turret charges</div>
+  <div class="cost">1 SP</div>
+  <div class="pips"><i></i><i></i><i></i></div>
+</div>
+<!-- BURST lane nodes -->
+<div class="node available" style="left:24px;top:186px;width:255px;height:76px;">
+  <div class="nm">SEVEN DWARVES</div><div class="d">BURST: Freezing storm</div>
+  <div class="cost">1 SP</div>
+</div>
+<div class="node locked" style="left:418px;top:144px;width:340px;height:76px;">
+  <div class="nm">INCENDIARY ROUNDS</div><div class="d">Burns enemies for 34% max HP/s</div>
+  <div class="cost">1 SP</div>
+</div>
+<div class="node locked" style="left:418px;top:228px;width:340px;height:76px;">
+  <div class="nm">FULLY ACTIVE</div><div class="d">Kills during burst refill gauge</div>
+  <div class="cost">1 SP</div>
+</div>
+<!-- SIGNATURE row -->
+<div class="node locked" style="left:24px;top:360px;width:255px;height:76px;">
+  <div class="nm">MASTER MECHANIC</div><div class="d">Greatly increased ammo capacity</div>
+  <div class="cost">2 SP</div>
+</div>
+<div class="node available" style="left:418px;top:360px;width:340px;height:76px;">
+  <div class="nm">BEST GIRL</div><div class="d">Attacks leave burning trails</div>
+  <div class="cost">2 SP</div>
+</div>
+</div>
+<div class="closechip">CLOSE<span>ESC</span></div>
+</section>
+
+<!-- ==================== A4 — Flush Skew Rail ==================== -->
+<h2>A4 — Flush Skew Rail (active underline = box edge)</h2>
+<div class="sub">the three skewed tabs butt together into one solid rail on the box edge; the active accent underline becomes a segment of the box top border</div>
+<section class="stage">
+<style>
+.v-flushskew .fsrail{position:absolute;left:396px;top:122px;width:770px;height:52px;display:flex;}
+.v-flushskew .fstab{position:relative;flex:1 1 0;height:52px;transform:skewX(-9deg);background:rgba(16,20,26,.85);border:1px solid rgba(151,160,172,.20);border-bottom:none;box-sizing:border-box;cursor:pointer;overflow:hidden;transition:background .12s;margin-right:-1px;}
+.v-flushskew .fstab:last-child{margin-right:0;}
+.v-flushskew .fstab .in{transform:skewX(9deg);height:100%;display:flex;align-items:center;gap:12px;padding:0 18px;box-sizing:border-box;}
+.v-flushskew .fstab .glyph{font-size:26px;line-height:1;font-style:normal;flex:0 0 auto;color:var(--muted);opacity:.45;filter:grayscale(.6);}
+.v-flushskew .fstab .meta{display:flex;flex-direction:column;justify-content:center;min-width:0;}
+.v-flushskew .fstab .nm{font-family:"Arial Narrow",Arial,sans-serif;font-weight:900;font-style:italic;font-size:19px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);line-height:1;}
+.v-flushskew .fstab .inv{display:flex;align-items:baseline;gap:6px;margin-top:3px;}
+.v-flushskew .fstab .inv .lbl{font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);font-weight:700;}
+.v-flushskew .fstab .inv .num{font-family:"Arial Narrow",Arial,sans-serif;font-weight:900;font-style:italic;font-size:20px;line-height:.8;color:var(--muted);}
+.v-flushskew .fstab:hover{background:rgba(22,28,36,.90);}
+.v-flushskew .fstab:hover .nm,.v-flushskew .fstab:hover .glyph{color:#cfd6de;opacity:.85;}
+/* ACTIVE tab: brighter fill, accent glyph/name/number, raised above neighbours */
+.v-flushskew .fstab.active{background:rgba(14,17,22,.94);z-index:3;}
+.v-flushskew .fstab.active .glyph{opacity:1;filter:none;color:var(--cyan);}
+.v-flushskew .fstab.active .nm,.v-flushskew .fstab.active .inv .num{color:var(--cyan);}
+.v-flushskew .fstab.active.skill{border-color:rgba(53,197,242,.45);}
+/* idle glyph signature tints kept subtle */
+.v-flushskew .fstab.attack .glyph{color:rgba(53,197,242,.5);}
+.v-flushskew .fstab.burst .glyph{color:rgba(232,57,46,.55);}
+/* the box top edge, redrawn in cyan + thickened, ONLY under the active tab = the connection */
+.v-flushskew .fsweld{position:absolute;top:172px;height:4px;background:var(--cyan);box-shadow:0 0 8px rgba(53,197,242,.6);z-index:4;transform:skewX(-9deg);transform-origin:left bottom;}
+/* the box keeps its own top border across the inactive spans: a crisp grey edge, same physical line the weld sits on */
+.v-flushskew .fsedge{position:absolute;top:172px;height:2px;background:rgba(151,160,172,.45);z-index:2;}
+/* treewrap: top border removed so rail + box share the y174 edge seamlessly */
+.v-flushskew~.treewrap{border-top:none;}
+.v-flushskew~.treewrap .node.unlocked .state{color:var(--cyan);}
+</style>
+<div class="game"><img src="../../assets/backgrounds/forest.jpg"></div>
+<div class="dim"></div>
+<div class="hdr"><div class="t">TALENTS</div><div class="s">NIKKE // SNOW WHITE</div><div class="bar"></div></div>
+<div class="spchip"><div><span class="k">SKILL POINTS</span><span class="n">3</span></div></div>
+<div class="statpanel">
+  <div class="cap">FIELD STATUS</div>
+  <div class="ophead"><img src="../../assets/characters/snow-white/portrait-sq.png"><div><div class="nm">SNOW WHITE</div><div class="lv">LV 12</div></div></div>
+  <div class="srow"><span class="k">ATK</span><span class="v">2.4<em>+15%</em></span></div>
+  <div class="srow"><span class="k">HP</span><span class="v">86<em>+10</em></span></div>
+  <div class="srow"><span class="k">BURST GEN</span><span class="v">5%</span></div>
+  <div class="srow"><span class="k">SPEED</span><span class="v">420</span></div>
+  <div class="srow"><span class="k">CRIT RATE</span><span class="v">24%<em>+4%</em></span></div>
+</div>
+<div class="v-flushskew">
+  <!-- inactive box top-edge: crisp grey, same physical line as the cyan weld; flanks the active span -->
+  <div class="fsedge" style="left:396px;width:262px;"></div>
+  <div class="fsedge" style="left:908px;width:258px;"></div>
+  <div class="fsrail">
+    <div class="fstab attack">
+      <div class="in">
+        <div class="glyph">⨯</div>
+        <div class="meta">
+          <div class="nm">ATTACK</div>
+          <div class="inv"><span class="lbl">INVESTED</span><span class="num">2</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="fstab skill active">
+      <div class="in">
+        <div class="glyph">◆</div>
+        <div class="meta">
+          <div class="nm">SKILL</div>
+          <div class="inv"><span class="lbl">INVESTED</span><span class="num">4</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="fstab burst">
+      <div class="in">
+        <div class="glyph">#</div>
+        <div class="meta">
+          <div class="nm">BURST</div>
+          <div class="inv"><span class="lbl">INVESTED</span><span class="num">0</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- cyan weld: the active tab's skewed bottom footprint becomes a 4px segment of the box top border, ends following the 9deg seam -->
+  <div class="fsweld" style="left:648px;width:258px;"></div>
+</div>
+<div class="treewrap" style="top:174px;right:54px;">
+<!-- SPECIAL lane split (lit): stem -> rail -> stubs into the two mods -->
+<div class="edge lit" style="left:279px;top:85px;width:69px;height:3px;"></div>
+<div class="edge lit" style="left:348px;top:44px;width:3px;height:84px;"></div>
+<div class="edge lit" style="left:348px;top:44px;width:70px;height:3px;"></div>
+<div class="ah right lit" style="left:418px;top:39px;"></div>
+<div class="edge lit" style="left:348px;top:128px;width:70px;height:3px;"></div>
+<div class="ah right lit" style="left:418px;top:123px;"></div>
+<!-- gate special root -> burst root (lit) -->
+<div class="edge lit" style="left:150px;top:124px;width:3px;height:62px;"></div>
+<div class="ah down lit" style="left:146px;top:186px;"></div>
+<!-- BURST lane split (plain) -->
+<div class="edge" style="left:279px;top:223px;width:69px;height:3px;"></div>
+<div class="edge" style="left:348px;top:182px;width:3px;height:84px;"></div>
+<div class="edge" style="left:348px;top:182px;width:70px;height:3px;"></div>
+<div class="ah right" style="left:418px;top:177px;"></div>
+<div class="edge" style="left:348px;top:266px;width:70px;height:3px;"></div>
+<div class="ah right" style="left:418px;top:261px;"></div>
+<!-- gate burst root -> signature/capstone (plain) -->
+<div class="edge" style="left:150px;top:262px;width:3px;height:98px;"></div>
+<div class="ah down" style="left:146px;top:360px;"></div>
+
+<!-- SPECIAL lane nodes -->
+<div class="node unlocked" style="left:24px;top:48px;width:255px;height:76px;">
+  <div class="nm">AUTO-TURRET</div><div class="d">Deploy auto-targeting turrets</div>
+  <div class="state" style="color:var(--cyan);">ACTIVE</div>
+</div>
+<div class="node maxed" style="left:418px;top:6px;width:340px;height:76px;">
+  <div class="nm">AMMO CACHE</div><div class="d">+2 turret missile capacity</div>
+  <div class="cost">1 SP</div>
+  <div class="pips"><i class="on"></i><i class="on"></i><i class="on"></i></div>
+  <div class="state" style="color:#7be09a;">MAX</div>
+</div>
+<div class="node available" style="left:418px;top:90px;width:340px;height:76px;">
+  <div class="nm">MORE TURRETS</div><div class="d">+2 max turret charges</div>
+  <div class="cost">1 SP</div>
+  <div class="pips"><i></i><i></i><i></i></div>
+</div>
+<!-- BURST lane nodes -->
+<div class="node available" style="left:24px;top:186px;width:255px;height:76px;">
+  <div class="nm">SEVEN DWARVES</div><div class="d">BURST: Freezing storm</div>
+  <div class="cost">1 SP</div>
+</div>
+<div class="node locked" style="left:418px;top:144px;width:340px;height:76px;">
+  <div class="nm">INCENDIARY ROUNDS</div><div class="d">Burns enemies for 34% max HP/s</div>
+  <div class="cost">1 SP</div>
+</div>
+<div class="node locked" style="left:418px;top:228px;width:340px;height:76px;">
+  <div class="nm">FULLY ACTIVE</div><div class="d">Kills during burst refill gauge</div>
+  <div class="cost">1 SP</div>
+</div>
+<!-- SIGNATURE row -->
+<div class="node locked" style="left:24px;top:360px;width:255px;height:76px;">
+  <div class="nm">MASTER MECHANIC</div><div class="d">Greatly increased ammo capacity</div>
+  <div class="cost">2 SP</div>
+</div>
+<div class="node available" style="left:418px;top:360px;width:340px;height:76px;">
+  <div class="nm">BEST GIRL</div><div class="d">Attacks leave burning trails</div>
+  <div class="cost">2 SP</div>
+</div>
+</div>
+<div class="closechip">CLOSE<span>ESC</span></div>
+</section>
+
+</body>
+</html>

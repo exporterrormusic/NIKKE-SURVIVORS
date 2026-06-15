@@ -15,6 +15,7 @@ static var time_of_day_files: Array[String] = []
 static var map_files: Array[String] = []
 static var background_files: Array[String] = []
 static var character_burst_files: Array[String] = []
+static var voice_audio_files: Array[String] = []
 
 static var _initialized := false
 
@@ -46,7 +47,8 @@ static func _scan_all_resources() -> void:
 	map_files = _scan_directory("res://resources/maps", [".tres"])
 	background_files = _scan_directory("res://assets/backgrounds", [".jpg", ".png", ".webp"])
 	character_burst_files = _scan_character_bursts("res://assets/characters")
-	
+	voice_audio_files = _scan_character_voice_files("res://assets/characters")
+
 	print("[ResourceManifest] Scanned resources:")
 	print("  Battle music: ", battle_music.size())
 	print("  Biomes: ", biome_files.size())
@@ -54,6 +56,7 @@ static func _scan_all_resources() -> void:
 	print("  Maps: ", map_files.size())
 	print("  Backgrounds: ", background_files.size())
 	print("  Character bursts: ", character_burst_files.size())
+	print("  Voice lines: ", voice_audio_files.size())
 
 static func _scan_directory(path: String, extensions: Array, exclude_patterns: Array = []) -> Array[String]:
 	var files: Array[String] = []
@@ -101,6 +104,35 @@ static func _scan_character_bursts(characters_path: String) -> Array[String]:
 	dir.list_dir_end()
 	return bursts
 
+## Scan each character subfolder for voice-line audio (burst*/wish* .wav/.ogg/.mp3).
+## Editor-only DirAccess walk; the result is baked into the manifest for exported builds.
+static func _scan_character_voice_files(characters_path: String) -> Array[String]:
+	var voices: Array[String] = []
+	var dir := DirAccess.open(characters_path)
+	if dir == null:
+		return voices
+
+	dir.list_dir_begin()
+	var entry := dir.get_next()
+	while entry != "":
+		if dir.current_is_dir() and not entry.begins_with("."):
+			var sub_path := "%s/%s" % [characters_path, entry]
+			var sub := DirAccess.open(sub_path)
+			if sub != null:
+				sub.list_dir_begin()
+				var file := sub.get_next()
+				while file != "":
+					if not sub.current_is_dir():
+						var lower := file.to_lower()
+						if not lower.ends_with(".import") and (lower.begins_with("burst") or lower.begins_with("wish")):
+							if lower.ends_with(".wav") or lower.ends_with(".ogg") or lower.ends_with(".mp3"):
+								voices.append("%s/%s" % [sub_path, file])
+					file = sub.get_next()
+				sub.list_dir_end()
+		entry = dir.get_next()
+	dir.list_dir_end()
+	return voices
+
 static func _save_manifest() -> void:
 	var manifest := ResourceManifestData.new()
 	manifest.battle_music = battle_music
@@ -109,7 +141,8 @@ static func _save_manifest() -> void:
 	manifest.map_files = map_files
 	manifest.background_files = background_files
 	manifest.character_burst_files = character_burst_files
-	
+	manifest.voice_audio_files = voice_audio_files
+
 	var error := ResourceSaver.save(manifest, MANIFEST_PATH)
 	if error == OK:
 		print("[ResourceManifest] Saved manifest to %s" % MANIFEST_PATH)
@@ -132,7 +165,8 @@ static func _load_manifest() -> void:
 	map_files = manifest.map_files
 	background_files = manifest.background_files
 	character_burst_files = manifest.character_burst_files
-	
+	voice_audio_files = manifest.voice_audio_files
+
 	print("[ResourceManifest] Loaded manifest with %d battle tracks, %d biomes, %d backgrounds" % [
 		battle_music.size(), biome_files.size(), background_files.size()
 	])

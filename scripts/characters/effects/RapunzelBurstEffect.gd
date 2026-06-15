@@ -22,8 +22,17 @@ var invuln_duration: float = 8.0
 # "6,000? Really?" talent - turret spawning
 var spawn_turrets: bool = false
 var turret_owner_level: int = 1
-const TURRET_COUNT := 20 # 5x4 grid across the map
+const TURRET_COUNT := 10 # 5x2 grid across the map
 const TURRET_AMMO := 4 # 2 shots at 2 rockets each
+
+# Blinding Radiance: when false, bosses are not stunned by the burst.
+var stun_bosses: bool = true
+# Turret upgrades passed to each spawned turret.
+var turret_incendiary_level: int = 0   # "Incendiary Rockets" - It Burns ground
+var turret_extra_ammo: int = 0         # "Extra Stuffed" - bonus rockets per turret
+# "Anti-Queen Bombardment": all turret rockets target this point instead of enemies.
+var use_fixed_target: bool = false
+var fixed_target_position: Vector2 = Vector2.ZERO
 
 var _age: float = 0.0
 var _has_executed: bool = false
@@ -108,11 +117,13 @@ func _execute_burst() -> void:
 			continue
 		
 		var enemy := node as Node2D
-		
-		# Apply stun effect
+
+		# Apply stun effect (Blinding Radiance does not stun bosses).
 		if enemy.has_method("apply_stun"):
-			enemy.apply_stun(stun_duration)
-		
+			var is_boss: bool = enemy.is_in_group("bosses") or enemy.is_in_group("super_boss") or enemy.is_in_group("guardian_bosses") or enemy.is_in_group("gbosses")
+			if stun_bosses or not is_boss:
+				enemy.apply_stun(stun_duration)
+
 		# Register burst hit
 		if owner_node and owner_node.has_method("register_burst_hit"):
 			owner_node.register_burst_hit(enemy, true) # from_burst = true
@@ -199,10 +210,10 @@ func _spawn_edge_turrets() -> void:
 	_zoom_camera_out(camera)
 	
 	# Distribute turrets in a grid-like pattern across the MAP
-	# 20 turrets = 5 columns x 4 rows for good coverage
+	# 10 turrets = 5 columns x 2 rows for good coverage
 	var positions: Array[Vector2] = []
 	var cols := 5
-	var rows := 4
+	var rows := 2
 	
 	for row in range(rows):
 		for col in range(cols):
@@ -214,30 +225,73 @@ func _spawn_edge_turrets() -> void:
 			var y := lerpf(map_min, map_max, ty)
 			positions.append(Vector2(x, y))
 	
-	# Spawn turrets at calculated positions using simplified BurstTurret
-	const BurstTurretScript = preload("res://scripts/characters/effects/BurstTurret.gd")
-	var spawned_turrets: Array = []
-	
+	# Spawn turrets at calculated positions using simplified BurstTurret.
+	# Spawning is staggered 5 per frame: creating all 20 nodes in one frame
+	# caused a visible hitch. (4 frames total — well inside this effect's
+	# 0.65s lifetime, so the coroutine can't outlive the node.)
+	var tree := get_tree()
+
+	# Extra Stuffed: each turret carries bonus rockets.
+	var turret_ammo: int = TURRET_AMMO + turret_extra_ammo
+	var spawned: Array = []
+
 	for i in range(positions.size()):
 		var pos := positions[i]
-		var turret := BurstTurretScript.new()
-		turret.ammo = TURRET_AMMO
-		turret.max_ammo = TURRET_AMMO
+		# Use the standard turret scene so the barrage looks like a real turret and
+		# fires homing, full-visual missiles (was the lightweight BurstTurret).
+		var turret = ProjectileCache.create_turret()
+		turret.ammo = turret_ammo
+		turret.max_ammo = turret_ammo
 		turret.spawner_node = owner_node
 		# Stagger fire times: spread across 1 second (0.05s per turret) for faster deployment
 		turret.fire_delay = float(i) * 0.05
-		
+		# Burst-tree turret upgrades
+		turret.rapunzel_it_burns_level = turret_incendiary_level # Incendiary Rockets
+		if use_fixed_target:
+			turret.use_fixed_target = true
+			turret.fixed_target_position = fixed_target_position
+
 		parent_node.add_child(turret)
 		turret.global_position = pos
-		spawned_turrets.append(turret)
-	
-	# Schedule camera zoom back in after turrets finish firing
-	# Turrets fire their ammo quickly, zoom back in after 4 seconds
-	var zoom_back_timer := get_tree().create_timer(4.0)
-	var camera_ref := camera
-	zoom_back_timer.timeout.connect(func():
-		_zoom_camera_in_static(camera_ref)
-	)
+		spawned.append(turret)
+
+		if (i + 1) % 5 == 0 and i + 1 < positions.size():
+			await tree.process_frame
+			if not is_instance_valid(parent_node):
+				return
+
+	# Keep the camera zoomed out until the whole barrage has finished firing
+	# (turrets despawn when empty). A persistent watcher polls them and zooms back
+	# in, since this effect frees itself after ~0.65s.
+	var watcher := ZoomWatcher.new()
+	watcher.camera = camera
+	watcher.turrets = spawned
+	parent_node.add_child(watcher)
+
+
+## Polls the spawned turrets and zooms the camera back in once they've all fired
+## out (or after a safety timeout). Lives on the level so it outlasts the burst FX.
+class ZoomWatcher extends Node:
+	var turrets: Array = []
+	var camera: Camera2D = null
+	var _poll: float = 0.0
+	var _elapsed: float = 0.0
+	const MAX_WAIT := 30.0
+
+	func _process(delta: float) -> void:
+		_elapsed += delta
+		_poll += delta
+		if _poll < 0.4 and _elapsed < MAX_WAIT:
+			return
+		_poll = 0.0
+		var any_alive := false
+		for t in turrets:
+			if is_instance_valid(t):
+				any_alive = true
+				break
+		if not any_alive or _elapsed >= MAX_WAIT:
+			RapunzelBurstEffect._zoom_camera_in_static(camera)
+			queue_free()
 
 
 func _zoom_camera_out(camera: Camera2D) -> void:

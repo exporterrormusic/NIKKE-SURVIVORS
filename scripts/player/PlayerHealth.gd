@@ -19,8 +19,8 @@ signal death
 # Current character context (for character-specific blocks like Marian's beam absorb)
 var current_character_id: String = ""
 
-var hp: int = 10
-var max_hp: int = 10
+var hp: int = 50
+var max_hp: int = 50
 var invincible: bool = false
 
 # Shield system (Kilo/Cecil Eden upgrade)
@@ -41,6 +41,9 @@ var has_marian_beam_absorb: bool = false
 var _invincibility_timer: float = 0.0
 var _cecil_revive_invincible_timer: float = 0.0
 var _invincibility_duration: float = 0.15 # Brief iframes only
+# Full invincibility (Scarlet Dodge/Evasion): unlike the normal i-frame, this
+# also blocks enemy CONTACT/collision damage (walking into enemies).
+var _full_invincible_timer: float = 0.0
 
 func _process(delta: float) -> void:
 	# Update invincibility timers
@@ -48,11 +51,14 @@ func _process(delta: float) -> void:
 	
 	if _invincibility_timer > 0.0:
 		_invincibility_timer -= delta
-	
+
 	if _cecil_revive_invincible_timer > 0.0:
 		_cecil_revive_invincible_timer -= delta
-	
-	if _invincibility_timer <= 0.0 and _cecil_revive_invincible_timer <= 0.0:
+
+	if _full_invincible_timer > 0.0:
+		_full_invincible_timer -= delta
+
+	if _invincibility_timer <= 0.0 and _cecil_revive_invincible_timer <= 0.0 and _full_invincible_timer <= 0.0:
 		invincible = false
 	else:
 		invincible = true
@@ -67,9 +73,19 @@ func initialize(starting_hp: int, starting_max_hp: int) -> void:
 
 ## Take damage (Enhanced with character logic)
 func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector2.ZERO, is_true_damage: bool = false, source: String = "enemy") -> bool:
-	if invincible and not is_true_damage:
+	# Enemy melee CONTACT damage ("<Name>:Collision") bypasses the global i-frame:
+	# each enemy gates itself with its own DAMAGE_COOLDOWN (~1s), so a crowd stacks
+	# (HoloCure-style) instead of one global i-frame capping the whole mob to one hit.
+	# Projectiles/beams still use the global i-frame for brief mercy.
+	# Full invincibility (Scarlet Dodge/Evasion) blocks ALL incoming damage,
+	# including enemy contact/collision which normally bypasses the i-frame.
+	if _full_invincible_timer > 0.0:
 		return false
-		
+
+	var is_contact := source.ends_with(":Collision")
+	if invincible and not is_true_damage and not is_contact:
+		return false
+
 	# Dev Cheat: Invincibility
 	if CheatManager.is_cheat_active("invincible"):
 		return false
@@ -124,8 +140,9 @@ func take_damage(amount: int, is_crit: bool = false, direction: Vector2 = Vector
 				log_type = parts[1] if parts.size() > 1 else "hit"
 			dl.log_damage(log_source, log_type, actual_damage)
 		
-		# Trigger brief invincibility
-		_trigger_invincibility(_invincibility_duration)
+		# Trigger brief invincibility — skip for contact (gated per-enemy instead)
+		if not is_contact:
+			_trigger_invincibility(_invincibility_duration)
 	
 	# Check for death
 	if hp <= 0:
@@ -151,6 +168,11 @@ func _trigger_invincibility(duration: float) -> void:
 ## Public API to add invincibility
 func add_invincibility(duration: float) -> void:
 	_trigger_invincibility(duration)
+
+## Public API to add FULL invincibility (also blocks enemy contact damage).
+func add_full_invincibility(duration: float) -> void:
+	_full_invincible_timer = maxf(_full_invincible_timer, duration)
+	invincible = true
 
 
 ## Handle death (returns false if revived, true if actually dead)

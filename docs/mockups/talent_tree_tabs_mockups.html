@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SOV Talent Tree — 3-Tab (Attack / Skill / Burst) options</title>
+<style>
+  :root{
+    --cyan:#35C5F2; --cyan-deep:#1F8FE0; --yellow:#FFD23F; --red:#E8392E;
+    --green:#4ADE80; --muted:#97A0AC;
+    --edge:rgba(128,140,155,.45); --edgelit:rgba(53,197,242,.9);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#070a0e; color:#F0F4F8;
+    font-family:"Pretendard","Segoe UI",system-ui,sans-serif; padding:40px;}
+  h1{font-family:"Arial Narrow",sans-serif; font-size:32px; font-style:italic;
+    text-transform:uppercase; margin-bottom:4px;}
+  h2{font-family:"Arial Narrow",sans-serif; font-size:24px; font-style:italic;
+    text-transform:uppercase; margin:46px 0 4px;}
+  .sub{color:var(--muted); text-transform:uppercase; letter-spacing:.25em; font-size:12px;
+    margin-bottom:18px;}
+  .note{color:var(--muted); font-size:13px; line-height:1.6; max-width:1280px; margin-bottom:8px;}
+  .note b{color:#dfe6ee;}
+
+  .stage{position:relative; width:1280px; height:720px; overflow:hidden;
+    background:#0E1116; border:1px solid #2a3340; margin-bottom:10px;}
+  .game{position:absolute; inset:0;}
+  .game img{width:100%; height:100%; object-fit:cover; filter:brightness(.85);}
+  .dim{position:absolute; inset:0; background:rgba(7,10,14,.74);}
+
+  .hdr{position:absolute; left:54px; top:30px;}
+  .hdr .t{font-family:"Arial Narrow",sans-serif; font-weight:800; font-style:italic; font-size:42px;
+    line-height:1; text-shadow:0 2px 12px rgba(0,0,0,.7);}
+  .hdr .s{font-size:11px; letter-spacing:.3em; text-transform:uppercase; opacity:.65; margin-top:5px;}
+  .hdr .bar{width:54px; height:3px; background:var(--cyan); margin-top:9px;}
+  .spchip{position:absolute; right:54px; top:34px; display:flex; align-items:center; gap:12px;
+    padding:9px 20px; background:rgba(255,210,63,.12); border:1px solid var(--yellow);}
+  .spchip .k{font-size:9px; letter-spacing:.26em; font-weight:800; color:var(--yellow); display:block;}
+  .spchip .n{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:26px; color:var(--yellow);}
+  .closechip{position:absolute; right:54px; bottom:30px; padding:10px 26px;
+    background:rgba(20,24,31,.86); border:1px solid rgba(255,255,255,.18); font-weight:800;
+    font-style:italic; font-family:"Arial Narrow"; font-size:17px; cursor:pointer;}
+  .closechip span{opacity:.45; font-family:"Pretendard"; font-style:normal; font-size:10px;
+    letter-spacing:.2em; margin-left:10px;}
+
+  .statpanel{position:absolute; left:54px; top:120px; bottom:84px; width:300px;
+    background:rgba(16,20,26,.86); border:1px solid rgba(255,255,255,.16); padding:18px 20px;}
+  .statpanel .cap{font-size:10px; letter-spacing:.3em; opacity:.55; font-weight:800; margin-bottom:12px;}
+  .statpanel .ophead{display:flex; align-items:center; gap:13px; margin-bottom:14px;}
+  .statpanel .ophead img{width:56px; height:56px; object-fit:cover; object-position:top;
+    border:1px solid rgba(255,255,255,.3);}
+  .statpanel .ophead .nm{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:24px;}
+  .statpanel .ophead .lv{font-size:10px; letter-spacing:.2em; color:var(--yellow); font-weight:800;}
+  .srow{display:flex; align-items:baseline; padding:9px 0; border-bottom:1px solid rgba(128,140,155,.18);}
+  .srow .k{flex:1; font-size:10px; letter-spacing:.22em; font-weight:800; opacity:.6;}
+  .srow .v{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:22px;}
+  .srow .v em{font-style:normal; font-size:12px; color:var(--green); margin-left:6px;}
+
+  .treewrap{position:absolute; left:396px; right:54px; top:120px; bottom:84px;
+    background:rgba(10,13,18,.55); border:1px solid rgba(255,255,255,.12);}
+
+  .edge{position:absolute; background:var(--edge);}
+  .edge.lit{background:var(--edgelit); box-shadow:0 0 6px rgba(53,197,242,.5);}
+  .edge.diag{height:3px; transform-origin:0 50%;}
+  .ah{position:absolute; width:0; height:0; border:6px solid transparent;}
+  .ah.down{border-top:8px solid var(--edge); border-bottom:none;}
+  .ah.down.lit{border-top-color:var(--edgelit);}
+  .ah.right{border-left:8px solid var(--edge); border-right:none;}
+  .ah.right.lit{border-left-color:var(--edgelit);}
+
+  .node{position:absolute; height:84px; cursor:pointer; padding:10px 13px 8px; background:rgba(10,13,18,.78);}
+  .node::before,.node::after{content:""; position:absolute; width:14px; height:14px;}
+  .node::before{left:0; top:0; border-left:2px solid rgba(255,255,255,.5); border-top:2px solid rgba(255,255,255,.5);}
+  .node::after{right:0; bottom:0; border-right:2px solid rgba(255,255,255,.5); border-bottom:2px solid rgba(255,255,255,.5);}
+  .node .nm{font-family:"Arial Narrow"; font-weight:800; font-style:italic; font-size:17px;}
+  .node .d{font-size:10.5px; opacity:.65; margin-top:2px; line-height:1.3;}
+  .node .cost{position:absolute; right:8px; top:8px; font-size:9px; font-weight:800;
+    letter-spacing:.08em; padding:2px 7px; background:rgba(10,13,18,.8);
+    border:1px solid rgba(255,210,63,.5); color:var(--yellow);}
+  .node .pips{position:absolute; left:13px; bottom:7px; display:flex; gap:4px;}
+  .node .pips i{width:14px; height:5px; background:rgba(255,255,255,.18);}
+  .node .pips i.on{background:var(--cyan);}
+  .node .state{position:absolute; right:8px; bottom:6px; font-size:8.5px; font-weight:800; letter-spacing:.18em;}
+  .node.unlocked{background:rgba(31,143,224,.18);}
+  .node.unlocked::before,.node.unlocked::after{border-color:var(--cyan); width:18px; height:18px;}
+  .node.unlocked .nm{color:var(--cyan);}
+  .node.available::before,.node.available::after{border-color:rgba(255,255,255,.85);}
+  .node.available:hover::before,.node.available:hover::after{border-color:var(--yellow); width:20px; height:20px;}
+  .node.locked{opacity:.42;}
+  .node.locked .cost{border-color:rgba(255,255,255,.2); color:#8a9099;}
+  .node.maxed{background:rgba(63,174,94,.15);}
+  .node.maxed::before,.node.maxed::after{border-color:var(--green);}
+  .node.maxed .nm{color:#7be09a;}
+</style>
+</head>
+<body>
+
+<h1>Talent Tree — 3-Tab Options · Attack / Skill / Burst</h1>
+<div class="sub">picking the TAB-SWAP mechanism only · all four show the identical state so only the chrome differs</div>
+<div class="note">
+  Each character is moving from one tree to <b>three trees</b>, each its own tab: <b>ATTACK</b> (normal/left-click),
+  <b>SKILL</b> (right-click special), <b>BURST</b> (ultimate). Skill points are shared and scarce, so players
+  <b>mix &amp; match across all three</b> — WoW-style. Every mockup below shows the <b>same</b> state on purpose
+  (Snow White, the <b>SKILL</b> tab active, the same Auto-Turret tree, 3 SP unspent, ATTACK&nbsp;2 / SKILL&nbsp;4 / BURST&nbsp;0
+  invested) so the only thing changing is <b>how the tabs look and where they sit</b>. Nodes/edges/panels reuse the
+  approved <b>C3a "Ability Lanes"</b> vocabulary. Each tab surfaces its own invested-point count so the build distribution
+  is legible at a glance.
+</div>
+
+<!-- ==================== A — Spec Icon Rail (Top) ==================== -->
+<h2>A — Spec Icon Rail (Top)</h2>
+<div class="sub">three skewed accent-coded spec plates across the top, each baking in its own invested-point readout</div>
+<section class="stage">
+<style>
+.v-specrail .rail{position:absolute;left:396px;top:120px;width:770px;height:62px;display:flex;gap:8px}
+.v-specrail .tab{position:relative;width:248px;height:62px;transform:skewX(-9deg);background:rgba(16,20,26,.62);border:1px solid rgba(151,160,172,.22);box-sizing:border-box;cursor:pointer;overflow:hidden;transition:background .12s}
+.v-specrail .tab .in{transform:skewX(9deg);height:100%;display:flex;align-items:center;gap:13px;padding:0 16px;box-sizing:border-box}
+.v-specrail .tab .glyph{font-size:28px;line-height:1;font-style:normal;flex:0 0 auto;opacity:.4;filter:grayscale(.6)}
+.v-specrail .tab .meta{display:flex;flex-direction:column;justify-content:center;min-width:0}
+.v-specrail .tab .nm{font-family:"Arial Narrow",Arial,sans-serif;font-weight:900;font-style:italic;font-size:20px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);line-height:1}
+.v-specrail .tab .inv{display:flex;align-items:baseline;gap:6px;margin-top:3px}
+.v-specrail .tab .inv .lbl{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.v-specrail .tab .inv .num{font-family:"Arial Narrow",Arial,sans-serif;font-weight:900;font-style:italic;font-size:22px;line-height:.8;color:var(--muted)}
+.v-specrail .tab .topline{position:absolute;left:0;top:0;height:2px;width:100%;background:transparent}
+.v-specrail .tab .underline{position:absolute;left:0;bottom:0;height:4px;width:100%;background:transparent}
+.v-specrail .tab:hover{background:rgba(16,20,26,.78)}
+.v-specrail .tab:hover .glyph,.v-specrail .tab:hover .nm{opacity:.7;filter:grayscale(.3)}
+.v-specrail .tab.active{background:rgba(14,17,22,.92)}
+.v-specrail .tab.active .glyph{opacity:1;filter:none}
+.v-specrail .tab.attack.active{border-color:rgba(53,197,242,.5)}
+.v-specrail .tab.attack.active .glyph,.v-specrail .tab.attack.active .nm,.v-specrail .tab.attack.active .inv .num{color:var(--cyan)}
+.v-specrail .tab.attack.active .topline{background:var(--cyan)}
+.v-specrail .tab.attack.active .underline{background:var(--cyan)}
+.v-specrail .tab.skill.active{border-color:rgba(53,197,242,.5)}
+.v-specrail .tab.skill.active .glyph,.v-specrail .tab.skill.active .nm,.v-specrail .tab.skill.active .inv .num{color:var(--cyan)}
+.v-specrail .tab.skill.active .topline{background:var(--cyan)}
+.v-specrail .tab.skill.active .underline{background:var(--cyan)}
+.v-specrail .tab.burst.active{border-color:rgba(232,57,46,.5)}
+.v-specrail .tab.burst.active .glyph,.v-specrail .tab.burst.active .nm,.v-specrail .tab.burst.active .inv .num{color:var(--red)}
+.v-specrail .tab.burst.active .topline{background:var(--red)}
+.v-specrail .tab.burst.active .underline{background:var(--red)}
+.v-specrail .tab.attack .glyph{color:var(--cyan)}
+.v-specrail .tab.skill .glyph{color:var(--yellow)}
+.v-specrail .tab.burst .glyph{color:var(--red)}
+.v-specrail+.treewrap{top:198px}
+.v-specrail+.treewrap .node.unlocked .state{color:var(--cyan)}
+</style>
+<div class="game"><img src="../../assets/backgrounds/forest.jpg"></div>
+<div class="dim"></div>
+<div class="hdr"><div class="t">TALENTS</div><div class="s">NIKKE // SNOW WHITE</div><div class="bar"></div></div>
+<div class="spchip"><div><span class="k">SKILL POINTS</span><span class="n">3</span></div></div>
+<div class="statpanel">
+<div class="cap">FIELD STATUS</div>
+<div class="ophead"><img src="../../assets/characters/snow-white/portrait-sq.png"><div><div class="nm">SNOW WHITE</div><div class="lv">LV 12</div></div></div>
+<div class="srow"><span class="k">ATK</span><span class="v">2.4<em>+15%</em></span></div>
+<div class="srow"><span class="k">HP</span><span class="v">86<em>+10</em></span></div>
+<div class="srow"><span class="k">BURST GEN</span><span class="v">5%</span></div>
+<div class="srow"><span class="k">SPEED</span><span class="v">420</span></div>
+<div class="srow"><span class="k">CRIT RATE</span><span class="v">24%<em>+4%</em></span></div>
+</div>
+<div class="v-specrail">
+<div class="rail">
+<div class="tab attack">
+<div class="topline"></div>
+<div class="in">
+<div class="glyph">⨯</div>
+<div class="meta">
+<div class="nm">ATTACK</div>
+<div class="inv"><span class="lbl">INVESTED</span><span class="num">2</span></div>
+</div>
+</div>
+<div class="underline"></div>
+</div>
+<div class="tab skill active">
+<div class="topline"></div>
+<div class="in">
+<div class="glyph">◆</div>
+<div class="meta">
+<div class="nm">SKILL</div>
+<div class="inv"><span class="lbl">INVESTED</span><span class="num">4</span></div>
+</div>
+</div>
+<div class="underline"></div>
+</div>
+<div class="tab burst">
+<div class="topline"></div>
+<div class="in">
+<div class="glyph">#</div>
+<div class="meta">
+<div class="nm">BURST</div>
+<div class="inv"><span class="lbl">INVESTED</span><span class="num">0</span></div>
+</div>
+</div>
+<div class="underline"></div>
+</div>
+</div>
+</div>
+<div class="treewrap">
+<div class="node unlocked" style="left:300px;top:8px;width:230px">
+<div class="nm">AUTO-TURRET</div>
+<div class="d">Deploy auto-targeting turrets</div>
+<div class="state" style="color:var(--cyan)">ACTIVE</div>
+</div>
+<div class="edge lit" style="left:300px;top:92px;width:1px;height:22px"></div>
+<div class="edge lit" style="left:175px;top:113px;width:126px;height:1px"></div>
+<div class="edge lit" style="left:175px;top:113px;width:1px;height:25px"></div>
+<div class="edge lit" style="left:530px;top:92px;width:1px;height:22px"></div>
+<div class="edge lit" style="left:530px;top:113px;width:126px;height:1px"></div>
+<div class="edge lit" style="left:655px;top:113px;width:1px;height:25px"></div>
+<div class="ah down lit" style="left:171px;top:135px"></div>
+<div class="ah down lit" style="left:651px;top:135px"></div>
+<div class="node maxed" style="left:60px;top:122px;width:230px">
+<div class="nm">AMMO CACHE</div>
+<div class="d">+2 turret missile capacity</div>
+<div class="pips"><i class="on"></i><i class="on"></i><i class="on"></i></div>
+<div class="state">MAX</div>
+</div>
+<div class="node available" style="left:540px;top:122px;width:230px">
+<div class="nm">MORE TURRETS</div>
+<div class="d">+2 max turret charges</div>
+<div class="pips"><i></i><i></i><i></i></div>
+<div class="cost">1 SP</div>
+</div>
+<div class="edge" style="left:175px;top:206px;width:1px;height:24px"></div>
+<div class="ah down" style="left:171px;top:227px"></div>
+<div class="node locked" style="left:60px;top:236px;width:230px">
+<div class="nm">TARGETING UPLINK</div>
+<div class="d">Turrets prioritize elites</div>
+<div class="cost">1 SP</div>
+</div>
+<div class="edge" style="left:655px;top:206px;width:1px;height:24px"></div>
+<div class="ah down" style="left:651px;top:227px"></div>
+<div class="node locked" style="left:540px;top:236px;width:230px">
+<div class="nm">RAPID DEPLOY</div>
+<div class="d">-3s turret recharge</div>
+<div class="cost">1 SP</div>
+</div>
+<div class="edge" style="left:175px;top:320px;width:1px;height:18px"></div>
+<div class="edge" style="left:175px;top:338px;width:240px;height:1px"></div>
+<div class="edge" style="left:415px;top:338px;width:1px;height:12px"></div>
+<div class="edge" style="left:655px;top:320px;width:1px;height:18px"></div>
+<div class="edge" style="left:415px;top:338px;width:240px;height:1px"></div>
+<div class="ah down" style="left:411px;top:347px"></div>
+<div class="node locked" style="left:300px;top:350px;width:230px">
+<div class="nm">MASTER MECHANIC</div>
+<div class="d">Ammo capacity +100%</div>
+<div class="cost">2 SP</div>
+</div>
+</div>
+<div class="closechip">CLOSE<span>ESC</span></div>
+</section>
+
+<!-- ==================== B — Input Glyph Spine (Left) ==================== -->
+<h2>B — Input Glyph Spine (Left)</h2>
+<div class="sub">a vertical mouse-glyph spine inside the tree's left edge — L / R / burst-star map the tabs to the in-battle ability cluster</div>
+<section class="stage">
+  <div class="game"><img src="../../assets/backgrounds/forest.jpg"></div>
+  <div class="dim"></div>
+
+  <style>
+    /* ===== scoped to .v-mousespine ===== */
+    .v-mousespine{position:absolute; left:396px; top:120px; width:96px; bottom:84px; z-index:5;}
+    .v-mousespine .tile{position:absolute; left:0; width:96px; height:172px;
+      background:rgba(10,13,18,.55); border:1px solid rgba(255,255,255,.12);
+      border-bottom:none; cursor:pointer; overflow:hidden;}
+    .v-mousespine .tile:last-child{border-bottom:1px solid rgba(255,255,255,.12);}
+    .v-mousespine .tile.t0{top:0;}
+    .v-mousespine .tile.t1{top:172px;}
+    .v-mousespine .tile.t2{top:344px;}
+
+    /* skewed inner block (skew only, box stays 90deg) */
+    .v-mousespine .skin{position:absolute; left:0; right:0; top:0; bottom:0;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      transform:skewY(-6deg); transform-origin:50% 50%;}
+    .v-mousespine .glyph{width:34px; height:34px; opacity:.42;
+      display:flex; align-items:center; justify-content:center; transition:opacity .12s;}
+    .v-mousespine .glyph svg{width:30px; height:30px; display:block;}
+    .v-mousespine .lbl{font-family:"Arial Narrow",sans-serif; font-weight:800; font-style:italic;
+      font-size:21px; letter-spacing:.06em; margin-top:8px; color:#F0F4F8; opacity:.42;
+      transition:color .12s, opacity .12s;}
+
+    /* invested fraction sublabel, baked bottom-left */
+    .v-mousespine .frac{position:absolute; left:9px; bottom:9px; z-index:3;
+      font-family:"Pretendard",sans-serif; font-weight:800; font-size:9px; letter-spacing:.14em;
+      text-transform:uppercase; color:rgba(151,160,172,.5);}
+
+    /* vertical pip strip, inner-right edge, fills bottom-up */
+    .v-mousespine .vpips{position:absolute; right:7px; top:18px; bottom:18px; width:4px;
+      display:flex; flex-direction:column-reverse; gap:4px; z-index:3;}
+    .v-mousespine .vpips i{flex:1; width:4px; background:rgba(255,255,255,.16);}
+
+    /* hover idle (yellow reserved for hover + cost/skill-point chips) */
+    .v-mousespine .tile:hover .lbl{color:var(--yellow); opacity:1;}
+    .v-mousespine .tile:hover .glyph{opacity:.7;}
+
+    /* ===== ACTIVE (SKILL tile) :: selection = cyan ===== */
+    .v-mousespine .tile.active{background:rgba(16,20,26,.95);}
+    .v-mousespine .tile.active .lbl{color:var(--cyan); opacity:1;}
+    .v-mousespine .tile.active .glyph{opacity:1;}
+    .v-mousespine .tile.active::before{content:""; position:absolute; left:0; top:0; bottom:0;
+      width:4px; background:var(--cyan); box-shadow:0 0 6px rgba(53,197,242,.7); z-index:4;} /* left accent bar (active=cyan) */
+
+    /* signature tints */
+    .v-mousespine .tile.t0 .frac{color:var(--cyan);}        /* attack 2/3 cyan */
+    .v-mousespine .tile.t1 .frac{color:var(--cyan);}        /* skill active -> cyan */
+    .v-mousespine .tile.t2 .frac{color:rgba(151,160,172,.5);}/* burst 0 muted */
+    .v-mousespine .tile.t0 .vpips i.on{background:var(--cyan);}
+    .v-mousespine .tile.t1 .vpips i.on{background:var(--cyan);}   /* active skill pips -> cyan */
+    .v-mousespine .tile.t2 .vpips i.on{background:var(--yellow);} /* burst pips match burst-yellow story */
+    .v-mousespine .tile.t2 .glyph{color:var(--yellow);}     /* burst star drawn yellow */
+
+    /* cyan hairline bleeding RIGHT from active tile center into treewrap */
+    .v-mousespine .feed{position:absolute; left:96px; top:258px; width:14px; height:1px;
+      background:var(--cyan); box-shadow:0 0 5px rgba(53,197,242,.7); z-index:6;}
+  </style>
+
+  <div class="hdr"><div class="t">TALENTS</div><div class="s">NIKKE // SNOW WHITE</div><div class="bar"></div></div>
+  <div class="spchip"><div><span class="k">SKILL POINTS</span><span class="n">3</span></div></div>
+
+  <div class="statpanel">
+    <div class="cap">FIELD STATUS</div>
+    <div class="ophead"><img src="../../assets/characters/snow-white/portrait-sq.png">
+      <div><div class="nm">SNOW WHITE</div><div class="lv">LV 12</div></div></div>
+    <div class="srow"><span class="k">ATK</span><span class="v">2.4<em>+15%</em></span></div>
+    <div class="srow"><span class="k">HP</span><span class="v">86<em>+10</em></span></div>
+    <div class="srow"><span class="k">BURST GEN</span><span class="v">5%</span></div>
+    <div class="srow"><span class="k">SPEED</span><span class="v">420</span></div>
+    <div class="srow"><span class="k">CRIT RATE</span><span class="v">24%<em>+4%</em></span></div>
+  </div>
+
+  <!-- ===== TAB CHROME: vertical mouse-glyph spine ===== -->
+  <div class="v-mousespine">
+
+    <!-- ATTACK (L-click) :: 2 pts invested, inactive -->
+    <div class="tile t0">
+      <div class="skin">
+        <div class="glyph">
+          <svg viewBox="0 0 30 30" fill="none" stroke="currentColor" stroke-width="1.6">
+            <rect x="7.5" y="2.5" width="15" height="25" rx="7.5"/>
+            <line x1="15" y1="2.5" x2="15" y2="13"/>
+            <path d="M7.5 13 H15" fill="#35C5F2" stroke="none"/>
+            <rect x="7.5" y="2.5" width="7.5" height="10.5" rx="0" fill="#35C5F2" stroke="none" opacity=".9"/>
+          </svg>
+        </div>
+        <div class="lbl">ATK</div>
+      </div>
+      <div class="frac">2/3</div>
+      <div class="vpips"><i class="on"></i><i class="on"></i><i></i></div>
+    </div>
+
+    <!-- SKILL (R-click) :: 4 pts invested, ACTIVE -->
+    <div class="tile t1 active">
+      <div class="skin">
+        <div class="glyph">
+          <svg viewBox="0 0 30 30" fill="none" stroke="currentColor" stroke-width="1.6">
+            <rect x="7.5" y="2.5" width="15" height="25" rx="7.5"/>
+            <line x1="15" y1="2.5" x2="15" y2="13"/>
+            <rect x="15" y="2.5" width="7.5" height="10.5" rx="0" fill="#35C5F2" stroke="none" opacity=".95"/>
+            <path d="M15 13 H22.5" stroke="#35C5F2"/>
+          </svg>
+        </div>
+        <div class="lbl">SKL</div>
+      </div>
+      <div class="frac">4/7</div>
+      <div class="vpips"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></div>
+    </div>
+
+    <!-- BURST (star) :: 0 pts invested, inactive -->
+    <div class="tile t2">
+      <div class="skin">
+        <div class="glyph"><span style="font-size:26px; line-height:1;">&#10022;</span></div>
+        <div class="lbl">BST</div>
+      </div>
+      <div class="frac">0/4</div>
+      <div class="vpips"><i></i><i></i><i></i><i></i></div>
+    </div>
+
+    <!-- cyan hairline feeding the pane from the active SKILL tile center -->
+    <div class="feed"></div>
+  </div>
+
+  <!-- ===== TREEWRAP reflowed right of spine (left:506) ===== -->
+  <div class="treewrap" style="left:506px;">
+    <!-- pane 720x516. centered vertical Auto-Turret tree -->
+
+    <!-- ROOT (220..500, bottom 102) -> TIER1 split rail -->
+    <!-- stem out of root bottom-center (x360) down to rail y129 -->
+    <div class="edge lit" style="left:358px; top:102px; width:3px; height:27px;"></div>
+    <!-- horizontal rail from left lane center (188) to right lane center (532) -->
+    <div class="edge lit" style="left:188px; top:129px; width:344px; height:3px;"></div>
+    <!-- left stub down into AMMO CACHE top (x188, y156) -->
+    <div class="edge lit" style="left:186px; top:129px; width:3px; height:27px;"></div>
+    <div class="ah down lit" style="left:182px; top:150px;"></div>
+    <!-- right stub down into MORE TURRETS top (x532, y156) -->
+    <div class="edge lit" style="left:530px; top:129px; width:3px; height:27px;"></div>
+    <div class="ah down lit" style="left:526px; top:150px;"></div>
+
+    <!-- TIER1 left (AMMO CACHE) bottom 240 -> TIER2 left (TARGETING UPLINK) top 294 -->
+    <div class="edge" style="left:186px; top:240px; width:3px; height:54px;"></div>
+    <div class="ah down" style="left:182px; top:288px;"></div>
+    <!-- TIER1 right (MORE TURRETS) bottom 240 -> TIER2 right (RAPID DEPLOY) top 294 -->
+    <div class="edge" style="left:530px; top:240px; width:3px; height:54px;"></div>
+    <div class="ah down" style="left:526px; top:288px;"></div>
+
+    <!-- TIER2 left bottom 378 -> capstone rail y396 -> stem into capstone top (x360,414) -->
+    <div class="edge" style="left:186px; top:378px; width:3px; height:18px;"></div>
+    <div class="edge" style="left:530px; top:378px; width:3px; height:18px;"></div>
+    <div class="edge" style="left:186px; top:396px; width:347px; height:3px;"></div>
+    <div class="edge" style="left:358px; top:396px; width:3px; height:18px;"></div>
+    <div class="ah down" style="left:354px; top:408px;"></div>
+
+    <!-- ===== NODES ===== -->
+    <!-- TIER 0 root centered -->
+    <div class="node unlocked" style="left:220px; top:18px; width:280px;">
+      <div class="nm">AUTO-TURRET</div><div class="d">Deploy auto-targeting turrets</div>
+      <div class="state" style="color:var(--cyan);">ACTIVE</div>
+    </div>
+
+    <!-- TIER 1 left -->
+    <div class="node maxed" style="left:58px; top:156px; width:260px;">
+      <div class="nm">AMMO CACHE</div><div class="d">+2 turret missile capacity</div>
+      <div class="pips"><i class="on"></i><i class="on"></i><i class="on"></i></div>
+      <div class="state" style="color:#7be09a;">MAX</div>
+    </div>
+    <!-- TIER 1 right -->
+    <div class="node available" style="left:402px; top:156px; width:260px;">
+      <div class="nm">MORE TURRETS</div><div class="d">+2 max turret charges</div>
+      <div class="cost">1 SP</div>
+      <div class="pips"><i></i><i></i><i></i></div>
+    </div>
+
+    <!-- TIER 2 left -->
+    <div class="node locked" style="left:58px; top:294px; width:260px;">
+      <div class="nm">TARGETING UPLINK</div><div class="d">Turrets prioritize elites</div>
+      <div class="cost">1 SP</div>
+    </div>
+    <!-- TIER 2 right -->
+    <div class="node locked" style="left:402px; top:294px; width:260px;">
+      <div class="nm">RAPID DEPLOY</div><div class="d">-3s turret recharge</div>
+      <div class="cost">1 SP</div>
+    </div>
+
+    <!-- TIER 3 capstone centered -->
+    <div class="node locked" style="left:220px; top:414px; width:280px;">
+      <div class="nm">MASTER MECHANIC</div><div class="d">Ammo capacity +100%</div>
+      <div class="cost">2 SP</div>
+    </div>
+  </div>
+
+  <div class="closechip">CLOSE<span>ESC</span></div>
+</section>
+
+<!-- ==================== C — Glyph Bracket Triptych (Compact Cards) ==================== -->
+<h2>C — Glyph Bracket Triptych (Compact Cards)</h2>
+<div class="sub">three node-styled ability cards in the gap above the tree, wired down by a diegetic cyan stem — the tabs look like the nodes they govern</div>
+<section class="stage">
+<style>
+.v-brackettriptych .vbt-cards{position:absolute;left:396px;top:120px;height:96px;}
+.v-brackettriptych .vbt-card{position:absolute;top:0;width:132px;height:96px;background:rgba(10,13,18,.78);cursor:pointer;transform:skew(-10deg);}
+.v-brackettriptych .vbt-card::before,
+.v-brackettriptych .vbt-card::after{content:"";position:absolute;width:14px;height:14px;border-color:rgba(255,255,255,.85);transition:all .12s ease;}
+.v-brackettriptych .vbt-card::before{left:0;top:0;border-left:2px solid;border-top:2px solid;border-color:rgba(255,255,255,.85);}
+.v-brackettriptych .vbt-card::after{right:0;bottom:0;border-right:2px solid;border-bottom:2px solid;border-color:rgba(255,255,255,.85);}
+.v-brackettriptych .vbt-card:hover::before,
+.v-brackettriptych .vbt-card:hover::after{width:18px;height:18px;border-color:var(--yellow);}
+.v-brackettriptych .vbt-card .vbt-glyph{position:absolute;left:0;right:0;top:18px;text-align:center;font-family:"Arial Narrow",sans-serif;font-style:italic;font-weight:900;font-size:30px;line-height:1;color:var(--muted);transition:color .12s ease;transform:skew(10deg);}
+.v-brackettriptych .vbt-card .vbt-nm{position:absolute;left:0;right:0;top:52px;text-align:center;font-family:"Arial Narrow",sans-serif;font-style:italic;font-weight:900;font-size:13px;letter-spacing:.08em;color:var(--muted);transition:color .12s ease;transform:skew(10deg);}
+.v-brackettriptych .vbt-card .vbt-frac{position:absolute;top:7px;right:9px;font-family:Pretendard,sans-serif;font-size:9px;font-weight:700;color:var(--muted);letter-spacing:.05em;transform:skew(10deg);}
+.v-brackettriptych .vbt-card .vbt-pips{position:absolute;left:0;right:0;bottom:11px;display:flex;justify-content:center;gap:4px;transform:skew(10deg);}
+.v-brackettriptych .vbt-card .vbt-pips i{width:14px;height:5px;background:rgba(53,197,242,.22);display:block;}
+.v-brackettriptych .vbt-card .vbt-pips i.on{background:var(--cyan);}
+.v-brackettriptych .vbt-card.active{background:rgba(31,143,224,.18);border-bottom:4px solid var(--cyan);}
+.v-brackettriptych .vbt-card.active::before,
+.v-brackettriptych .vbt-card.active::after{width:18px;height:18px;border-color:var(--cyan);}
+.v-brackettriptych .vbt-card.active .vbt-glyph,
+.v-brackettriptych .vbt-card.active .vbt-nm{color:var(--cyan);}
+.v-brackettriptych .vbt-card.active .vbt-pips i.on{background:var(--cyan);box-shadow:0 0 6px rgba(53,197,242,.7);}
+.v-brackettriptych .vbt-stem{position:absolute;width:3px;background:var(--cyan);box-shadow:0 0 6px rgba(53,197,242,.6);}
+.v-brackettriptych .vbt-stem-ah{position:absolute;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--cyan);}
+</style>
+<div class="game"><img src="../../assets/backgrounds/forest.jpg"></div>
+<div class="dim"></div>
+
+<div class="hdr">
+  <div class="t">TALENTS</div>
+  <div class="s">NIKKE // SNOW WHITE</div>
+  <div class="bar"></div>
+</div>
+
+<div class="spchip"><div><span class="k">SKILL POINTS</span><span class="n">3</span></div></div>
+
+<div class="statpanel">
+  <div class="cap">FIELD STATUS</div>
+  <div class="ophead"><img src="../../assets/characters/snow-white/portrait-sq.png"><div><div class="nm">SNOW WHITE</div><div class="lv">LV 12</div></div></div>
+  <div class="srow"><span class="k">ATK</span><span class="v">2.4<em>+15%</em></span></div>
+  <div class="srow"><span class="k">HP</span><span class="v">86<em>+10</em></span></div>
+  <div class="srow"><span class="k">BURST GEN</span><span class="v">5%</span></div>
+  <div class="srow"><span class="k">SPEED</span><span class="v">420</span></div>
+  <div class="srow"><span class="k">CRIT RATE</span><span class="v">24%<em>+4%</em></span></div>
+</div>
+
+<div class="v-brackettriptych">
+  <div class="vbt-cards">
+    <div class="vbt-card" style="left:0;">
+      <div class="vbt-frac">2/4</div>
+      <div class="vbt-glyph">⌖</div>
+      <div class="vbt-nm">ATTACK</div>
+      <div class="vbt-pips"><i class="on"></i><i class="on"></i><i></i><i></i></div>
+    </div>
+    <div class="vbt-card active" style="left:146px;">
+      <div class="vbt-frac">4/4</div>
+      <div class="vbt-glyph">R</div>
+      <div class="vbt-nm">SKILL</div>
+      <div class="vbt-pips"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
+    </div>
+    <div class="vbt-card" style="left:292px;">
+      <div class="vbt-frac">0/4</div>
+      <div class="vbt-glyph">✦</div>
+      <div class="vbt-nm">BURST</div>
+      <div class="vbt-pips"><i></i><i></i><i></i><i></i></div>
+    </div>
+  </div>
+  <div class="vbt-stem" style="left:608px;top:216px;height:14px;"></div>
+  <div class="vbt-stem-ah" style="left:603px;top:222px;"></div>
+</div>
+
+<div class="treewrap" style="top:230px;">
+  <div class="node unlocked" style="left:300px;top:10px;width:230px;">
+    <div class="nm">AUTO-TURRET</div>
+    <div class="d">Deploy auto-targeting turrets</div>
+    <div class="state">ACTIVE</div>
+  </div>
+
+  <div class="edge lit" style="left:415px;top:94px;width:2px;height:28px;"></div>
+  <div class="edge lit" style="left:160px;top:122px;width:257px;height:2px;"></div>
+  <div class="edge lit" style="left:415px;top:122px;width:257px;height:2px;"></div>
+  <div class="edge lit" style="left:160px;top:122px;width:2px;height:28px;"></div>
+  <div class="edge lit" style="left:670px;top:122px;width:2px;height:28px;"></div>
+  <div class="ah down lit" style="left:154px;top:142px;"></div>
+  <div class="ah down lit" style="left:664px;top:142px;"></div>
+
+  <div class="node maxed" style="left:46px;top:150px;width:230px;">
+    <div class="nm">AMMO CACHE</div>
+    <div class="d">+2 turret missile capacity</div>
+    <div class="pips"><i class="on"></i><i class="on"></i><i class="on"></i></div>
+    <div class="state">MAX</div>
+  </div>
+
+  <div class="node available" style="left:556px;top:150px;width:230px;">
+    <div class="nm">MORE TURRETS</div>
+    <div class="d">+2 max turret charges</div>
+    <div class="pips"><i></i><i></i><i></i></div>
+    <div class="cost">1 SP</div>
+  </div>
+
+  <div class="edge" style="left:160px;top:234px;width:2px;height:28px;"></div>
+  <div class="ah down" style="left:154px;top:262px;"></div>
+  <div class="edge" style="left:670px;top:234px;width:2px;height:28px;"></div>
+  <div class="ah down" style="left:664px;top:262px;"></div>
+
+  <div class="node locked" style="left:46px;top:270px;width:230px;">
+    <div class="nm">TARGETING UPLINK</div>
+    <div class="d">Turrets prioritize elites</div>
+    <div class="cost">1 SP</div>
+  </div>
+
+  <div class="node locked" style="left:556px;top:270px;width:230px;">
+    <div class="nm">RAPID DEPLOY</div>
+    <div class="d">-3s turret recharge</div>
+    <div class="cost">1 SP</div>
+  </div>
+
+  <div class="edge" style="left:276px;top:312px;width:140px;height:2px;"></div>
+  <div class="edge" style="left:415px;top:312px;width:142px;height:2px;"></div>
+  <div class="edge" style="left:415px;top:312px;width:2px;height:10px;"></div>
+  <div class="ah down" style="left:410px;top:314px;"></div>
+
+  <div class="node locked" style="left:300px;top:322px;width:230px;">
+    <div class="nm">MASTER MECHANIC</div>
+    <div class="d">Ammo capacity +100%</div>
+    <div class="cost">2 SP</div>
+  </div>
+</div>
+
+<div class="closechip">CLOSE<span>ESC</span></div>
+</section>
+
+<!-- ==================== D — Title-Rail Tabs + Build Meter (Hybrid) ==================== -->
+<h2>D — Title-Rail Tabs + Build Meter (Hybrid)</h2>
+<div class="sub">spec tabs promoted onto the header rail beside the title, with an always-on tri-color BUILD DISTRIBUTION strip making the spend split the headline</div>
+<section class="stage">
+  <style>
+  .v-headermeter{position:absolute; inset:0; pointer-events:none;}
+  .v-headermeter .hmtab{position:absolute; top:34px; width:196px; height:54px; background:rgba(16,20,26,.78);
+    border:1px solid rgba(255,255,255,.14); transform:skewX(-9deg); cursor:pointer; overflow:hidden;
+    pointer-events:auto;}
+  .v-headermeter .hmtab .in{transform:skewX(9deg); height:100%; display:flex; align-items:center; gap:11px;
+    padding:0 16px;}
+  .v-headermeter .hmtab .dia{width:11px; height:11px; transform:skewX(9deg) rotate(45deg); flex:0 0 11px;
+    background:var(--muted); opacity:.5;}
+  .v-headermeter .hmtab .lb{font-family:"Arial Narrow",sans-serif; font-weight:800; font-style:italic;
+    font-size:21px; letter-spacing:.05em; color:#cfd6de; opacity:.62; flex:1;}
+  .v-headermeter .hmtab .cnt{font-family:"Arial Narrow",sans-serif; font-weight:800; font-style:italic;
+    font-size:18px; min-width:24px; height:24px; line-height:24px; text-align:center; padding:0 6px;
+    background:rgba(10,13,18,.85); border:1px solid rgba(255,255,255,.18); color:var(--muted);
+    transform:skewX(9deg);}
+  .v-headermeter .hmtab .uline{position:absolute; left:0; bottom:0; width:100%; height:4px; background:transparent;}
+  .v-headermeter .hmtab:hover{background:rgba(22,28,36,.88); border-color:rgba(255,255,255,.26);}
+  .v-headermeter .hmtab:hover .lb{opacity:.85;}
+  .v-headermeter .hmtab:hover .dia{opacity:.8;}
+
+  /* ACTIVE = SKILL (yellow accent) */
+  .v-headermeter .hmtab.active{background:rgba(14,17,22,.92); border-color:rgba(255,255,255,.30);}
+  .v-headermeter .hmtab.active .lb{opacity:1; color:var(--yellow);}
+  .v-headermeter .hmtab.active .dia{opacity:1; background:var(--yellow);}
+  .v-headermeter .hmtab.active .cnt{color:var(--yellow); border-color:var(--yellow); background:rgba(255,210,63,.14);}
+  .v-headermeter .hmtab.active .uline{background:var(--yellow); box-shadow:0 0 8px rgba(255,210,63,.6);}
+
+  /* idle count chips are neutral; only the active tab carries the yellow accent */
+  .v-headermeter .hmtab .cnt{color:var(--muted); border-color:rgba(255,255,255,.16);}
+
+  /* BUILD DISTRIBUTION meter */
+  .v-headermeter .bmeter{position:absolute; left:300px; top:96px; width:620px;}
+  .v-headermeter .bmeter .bsub{font-size:9px; letter-spacing:.32em; font-weight:800; color:var(--muted);
+    text-transform:uppercase; margin-bottom:5px; display:flex; justify-content:space-between;}
+  .v-headermeter .bmeter .bsub em{font-style:normal; opacity:.6; letter-spacing:.18em;}
+  .v-headermeter .bmeter .btrack{display:flex; height:18px; width:100%; background:rgba(10,13,18,.85);
+    border:1px solid rgba(255,255,255,.16);}
+  .v-headermeter .bmeter .seg{position:relative; height:100%; display:flex; align-items:center; justify-content:flex-end;
+    padding-right:8px; border-right:1px solid rgba(10,13,18,.9);}
+  .v-headermeter .bmeter .seg:last-child{border-right:none;}
+  .v-headermeter .bmeter .seg .sn{font-family:"Arial Narrow",sans-serif; font-weight:800; font-style:italic;
+    font-size:13px; line-height:1; color:#0E1116;}
+  .v-headermeter .bmeter .seg.sAtk{background:var(--cyan);}
+  .v-headermeter .bmeter .seg.sSki{background:var(--yellow);}
+  .v-headermeter .bmeter .seg.sBur{background:rgba(232,57,46,.55);}
+  /* selected spec (SKILL) segment gets bright accent outline binding it to its tab */
+  .v-headermeter .bmeter .seg.sel{outline:1px solid #FFE98A; outline-offset:-1px; box-shadow:0 0 7px rgba(255,210,63,.55);}
+  .v-headermeter .bmeter .seg.sBur .sn{color:#1a0a08;}
+  </style>
+
+  <div class="game"><img src="../../assets/backgrounds/forest.jpg"></div>
+  <div class="dim"></div>
+
+  <div class="hdr"><div class="t">TALENTS</div><div class="s">NIKKE // SNOW WHITE</div><div class="bar"></div></div>
+  <div class="spchip"><div><span class="k">SKILL POINTS</span><span class="n">3</span></div></div>
+
+  <div class="v-headermeter">
+    <!-- three skewed spec tabs on the header rail: left 300, 196 wide, 6px gap -->
+    <div class="hmtab tAtk" style="left:300px;">
+      <div class="uline"></div>
+      <div class="in"><span class="dia"></span><span class="lb">ATTACK</span><span class="cnt">2</span></div>
+    </div>
+    <div class="hmtab active tSki" style="left:508px;">
+      <div class="uline"></div>
+      <div class="in"><span class="dia"></span><span class="lb">SKILL</span><span class="cnt">4</span></div>
+    </div>
+    <div class="hmtab tBur" style="left:716px;">
+      <div class="uline"></div>
+      <div class="in"><span class="dia"></span><span class="lb">BURST</span><span class="cnt">0</span></div>
+    </div>
+
+    <!-- always-on BUILD DISTRIBUTION meter: spans 300..920 (width 620). true proportions of 6 pts: ATK 2/6=33.3%, SKILL 4/6=66.7%, BURST 0/6=0% (omitted) -->
+    <div class="bmeter">
+      <div class="bsub"><span>BUILD DISTRIBUTION</span><em>6 PTS SPENT</em></div>
+      <div class="btrack">
+        <div class="seg sAtk" style="width:33.3%;"><span class="sn">2</span></div>
+        <div class="seg sSki sel" style="width:66.7%;"><span class="sn">4</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="statpanel" style="top:138px;">
+    <div class="cap">FIELD STATUS</div>
+    <div class="ophead"><img src="../../assets/characters/snow-white/portrait-sq.png">
+      <div><div class="nm">SNOW WHITE</div><div class="lv">LV 12</div></div></div>
+    <div class="srow"><span class="k">ATK</span><span class="v">2.4<em>+15%</em></span></div>
+    <div class="srow"><span class="k">HP</span><span class="v">86<em>+10</em></span></div>
+    <div class="srow"><span class="k">BURST GEN</span><span class="v">5%</span></div>
+    <div class="srow"><span class="k">SPEED</span><span class="v">420</span></div>
+    <div class="srow"><span class="k">CRIT RATE</span><span class="v">24%<em>+4%</em></span></div>
+  </div>
+
+  <div class="treewrap" style="top:138px;">
+    <!-- pane is 830 wide x 498 tall. center x = 415. nodes 260 wide.
+         root: left 285 top 8 (border bottom y=92)
+         tier1 left: left 70 top 130; tier1 right: left 500 top 130 (border top y=130, bottom y=214)
+         tier2 left: left 70 top 270; tier2 right: left 500 top 270 (top y=270, bottom y=354)
+         capstone: left 285 top 406 (top y=406) -->
+
+    <!-- ROOT -> TIER1 (lit, prereq owned). Stem down from root bottom (x415,y92) to rail y111, then split L/R -->
+    <div class="edge lit" style="left:413px; top:92px; width:3px; height:19px;"></div>
+    <div class="edge lit" style="left:200px; top:111px; width:215px; height:3px;"></div>
+    <div class="edge lit" style="left:413px; top:111px; width:217px; height:3px;"></div>
+    <!-- left drop into tier1 left (node center x=200, top y=130) -->
+    <div class="edge lit" style="left:200px; top:111px; width:3px; height:14px;"></div>
+    <div class="ah down lit" style="left:195px; top:124px;"></div>
+    <!-- right drop into tier1 right (node center x=630, top y=130) -->
+    <div class="edge lit" style="left:628px; top:111px; width:3px; height:14px;"></div>
+    <div class="ah down lit" style="left:623px; top:124px;"></div>
+
+    <!-- TIER1 left -> TIER2 left (plain; prereq MORE TURRETS not owned on this branch, but vertical inheritance shown plain) -->
+    <div class="edge" style="left:200px; top:214px; width:3px; height:56px;"></div>
+    <div class="ah down" style="left:195px; top:262px;"></div>
+    <!-- TIER1 right -> TIER2 right (plain) -->
+    <div class="edge" style="left:628px; top:214px; width:3px; height:56px;"></div>
+    <div class="ah down" style="left:623px; top:262px;"></div>
+
+    <!-- TIER2 left + right -> CAPSTONE (plain). down from each tier2 bottom (y354) to rail y382, merge to center, drop to capstone top y406 -->
+    <div class="edge" style="left:200px; top:354px; width:3px; height:28px;"></div>
+    <div class="edge" style="left:628px; top:354px; width:3px; height:28px;"></div>
+    <div class="edge" style="left:200px; top:382px; width:431px; height:3px;"></div>
+    <div class="edge" style="left:413px; top:382px; width:3px; height:20px;"></div>
+    <div class="ah down" style="left:408px; top:398px;"></div>
+
+    <!-- TIER 0 ROOT -->
+    <div class="node unlocked" style="left:285px; top:8px; width:260px;">
+      <div class="nm">AUTO-TURRET</div><div class="d">Deploy auto-targeting turrets</div>
+      <div class="cost">1 SP</div><div class="state" style="color:var(--cyan);">ACTIVE</div>
+    </div>
+
+    <!-- TIER 1 -->
+    <div class="node maxed" style="left:70px; top:130px; width:260px;">
+      <div class="nm">AMMO CACHE</div><div class="d">+2 turret missile capacity</div>
+      <div class="cost">1 SP</div>
+      <div class="pips"><i class="on"></i><i class="on"></i><i class="on"></i></div>
+      <div class="state" style="color:#7be09a;">MAX</div>
+    </div>
+    <div class="node available" style="left:500px; top:130px; width:260px;">
+      <div class="nm">MORE TURRETS</div><div class="d">+2 max turret charges</div>
+      <div class="cost">1 SP</div>
+      <div class="pips"><i></i><i></i><i></i></div>
+    </div>
+
+    <!-- TIER 2 -->
+    <div class="node locked" style="left:70px; top:270px; width:260px;">
+      <div class="nm">TARGETING UPLINK</div><div class="d">Turrets prioritize elites</div>
+      <div class="cost">1 SP</div>
+    </div>
+    <div class="node locked" style="left:500px; top:270px; width:260px;">
+      <div class="nm">RAPID DEPLOY</div><div class="d">-3s turret recharge</div>
+      <div class="cost">1 SP</div>
+    </div>
+
+    <!-- TIER 3 CAPSTONE -->
+    <div class="node locked" style="left:285px; top:406px; width:260px;">
+      <div class="nm">MASTER MECHANIC</div><div class="d">Ammo capacity +100%</div>
+      <div class="cost">2 SP</div>
+    </div>
+  </div>
+
+  <div class="closechip">CLOSE<span>ESC</span></div>
+</section>
+
+</body>
+</html>

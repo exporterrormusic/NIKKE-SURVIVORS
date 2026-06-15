@@ -122,7 +122,11 @@ func _on_body_entered(body: Node) -> void:
 	if body.is_in_group("projectiles") or body.is_in_group("enemy_projectiles") or body is KiloPellet:
 		return
 		
-	if _hit_nodes.has(body): return
+	# Dedup on the owning enemy: this handler runs for both the enemy body and its
+	# HitboxComponent (Area2D) — different nodes — so dedup on the owner or a single
+	# pellet lands twice on the same enemy.
+	var hit_key = body.get_parent() if (body is Area2D and is_instance_valid(body.get_parent())) else body
+	if _hit_nodes.has(hit_key): return
 	if body.is_in_group("charmed_allies"): return
 	
 	# Debug what we are hitting and stopping on
@@ -156,7 +160,7 @@ func _on_body_entered(body: Node) -> void:
 		queue_free()
 		return
 	
-	_hit_nodes.append(body)
+	_hit_nodes.append(hit_key)
 	var hit_dir = velocity.normalized()
 	
 	# 1. SPAWN BLAST (Before damage to ensure execution)
@@ -167,8 +171,8 @@ func _on_body_entered(body: Node) -> void:
 			
 	# 2. DEAL DAMAGE
 	if body.has_method("take_damage"):
-		var is_crit = randf() < 0.15
-		var dmg = base_damage * (2.0 if is_crit else 1.0)
+		var is_crit = randf() < 0.05  # HoloCure clone: 5% base crit
+		var dmg = base_damage * (1.5 if is_crit else 1.0)  # 1.5x on crit
 		# Pass is_burst and "kilo" source
 		body.take_damage(int(dmg), is_crit, hit_dir, is_burst, "kilo")
 	

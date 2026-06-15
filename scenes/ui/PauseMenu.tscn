@@ -67,15 +67,6 @@ content_margin_top = 8.0
 content_margin_right = 24.0
 content_margin_bottom = 8.0
 
-[sub_resource type="Gradient" id="g_fade_h"]
-offsets = PackedFloat32Array(0, 0.55, 1)
-colors = PackedColorArray(0.027, 0.039, 0.055, 0, 0.027, 0.039, 0.055, 0, 0.027, 0.039, 0.055, 0.92)
-
-[sub_resource type="GradientTexture2D" id="gt_fade_h"]
-gradient = SubResource("g_fade_h")
-fill_from = Vector2(0, 0)
-fill_to = Vector2(1, 0)
-
 [sub_resource type="Gradient" id="g_fade_v"]
 offsets = PackedFloat32Array(0, 1)
 colors = PackedColorArray(0.027, 0.039, 0.055, 0.78, 0.027, 0.039, 0.055, 0)
@@ -313,17 +304,6 @@ mouse_filter = 2
 script = ExtResource("5_cover")
 focus_y = 0.2
 chamfer = 0.0
-
-[node name="ArtFadeH" type="TextureRect" parent="Overlay/ResultsLayout/ArtStrip"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-texture = SubResource("gt_fade_h")
-expand_mode = 1
 
 [node name="ArtFadeV" type="TextureRect" parent="Overlay/ResultsLayout/ArtStrip"]
 layout_mode = 1

@@ -18,15 +18,11 @@ signal skill_point_added(total_skill_points: int)
 ## Current experience points
 var xp: int = 0
 
-## XP required for next level (raised 100 -> 120 in the rework balance pass;
-## with geometric scaling this slows leveling ~20% across the board)
-var xp_to_next: int = 120
+## XP required for next level. HoloCure curve (see xp_required_for); 79 to reach level 2.
+var xp_to_next: int = 79
 
 ## Current level
 var level: int = 1
-
-## XP scaling per level (multiplier)
-@export var xp_scaling: float = 1.5
 
 ## Skill points available to spend
 var _skill_points: int = 0
@@ -36,16 +32,29 @@ var xp_multiplier: float = 1.0
 
 
 ## Configure initial progression state
-func configure(initial_level: int = 1, initial_xp: int = 0, initial_xp_to_next: int = 120) -> void:
+func configure(initial_level: int = 1, initial_xp: int = 0, _initial_xp_to_next: int = 0) -> void:
 	level = initial_level
 	xp = initial_xp
-	xp_to_next = initial_xp_to_next
-	
+	xp_to_next = xp_required_for(level)
+
 	# Goddess Fall mode: Start with 3 skill points
 	var game_manager = get_node_or_null("/root/GameManager")
 	if game_manager and game_manager.goddess_fall_mode:
 		_skill_points = 3
 		skill_point_added.emit(_skill_points)
+
+
+## Multiplies the base curve to slow leveling for this game's shallow talent tree.
+## Higher = slower leveling / tree fills later in the run. Tune to taste.
+const XP_CURVE_SCALE := 4.0
+
+## XP required to go from `lvl` to `lvl+1`.
+## Base curve: cumulative EXP to reach level L = round((4L)^2.1), then scaled.
+static func xp_required_for(lvl: int) -> int:
+	if lvl <= 1:
+		return int(79.0 * XP_CURVE_SCALE)
+	var base: float = round(pow(4.0 * float(lvl + 1), 2.1)) - round(pow(4.0 * float(lvl), 2.1))
+	return int(base * XP_CURVE_SCALE)
 
 
 ## Add XP with optional multiplier override
@@ -67,7 +76,7 @@ func add_xp(amount: int, bonus_multiplier: float = 1.0) -> bool:
 		xp -= xp_to_next
 		level += 1
 		levels_gained += 1
-		xp_to_next = int(xp_to_next * xp_scaling)
+		xp_to_next = xp_required_for(level)
 		_skill_points += 1
 		skill_point_added.emit(_skill_points)
 	
@@ -132,12 +141,12 @@ func get_state() -> Dictionary:
 func set_state(state: Dictionary) -> void:
 	level = state.get("level", 1)
 	xp = state.get("xp", 0)
-	xp_to_next = state.get("xp_to_next", 100)
+	xp_to_next = state.get("xp_to_next", xp_required_for(level))
 	_skill_points = state.get("skill_points", 0)
 	xp_multiplier = state.get("xp_multiplier", 1.0)
 
 
-## Calculate damage multiplier based on level
-## Formula: 1.0 at level 1, +25% per level
+## Calculate damage multiplier based on level.
+## HoloCure clone: leveling grants no damage (power comes from talents + shop).
 func get_level_damage_multiplier() -> float:
-	return 1.0 + (level - 1) * 0.25
+	return 1.0

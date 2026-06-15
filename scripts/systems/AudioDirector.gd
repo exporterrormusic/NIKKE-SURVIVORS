@@ -52,20 +52,64 @@ var _ambient_crossfade_step_dt: float = 0.05
 var _ambient_base_db: float = 6.0
 var _music_tween: Tween = null # Track active music fade tween to prevent race conditions
 
+# --- Auto loudness measurement ---
+const TARGET_RMS_DB := -14.0  # Target RMS level in dB (roughly equivalent to -14 LUFS)
+const RMS_SAMPLE_STRIDE := 50  # Analyze every Nth sample for speed
+var _measured_offsets: Dictionary = {}  # file_id -> offset_db (populated at runtime from config + auto-measure)
+var _offsets_config_path: String = "user://music_offsets.cfg"
+
+# --- Voice-line loudness normalization (mirrors the music system) ---
+# Perceived voice loudness = VOICE_BASE_GAIN + offset + per-site relative trim.
+# The offset lifts each file to TARGET_VOICE_RMS_DB (so all characters match); VOICE_BASE_GAIN
+# is the monitor gain that places voice at ~-13 dB RMS — above the music average (~-16.5 dB) so
+# lines are never quieter than the music, while staying at the loud .wav bursts' peak ceiling.
+const VOICE_BASE_GAIN := 6.0          # Base monitor gain for voice
+const TARGET_VOICE_RMS_DB := -19.0    # Target RMS the offsets normalize toward
+const VOICE_OFFSET_MIN := -12.0       # Clamp to avoid over-cut
+const VOICE_OFFSET_MAX := 12.0        # Clamp to avoid over-boosting near-silent files
+const VOICE_OFFSETS_CONFIG_PATH := "user://voice_offsets.cfg"
+# Authoritative per-file offsets, keyed "<folder>/<basename>" (like MUSIC_METADATA's volume_offset_db).
+# Measured offline (ffmpeg RMS) because Godot's in-engine RMS can't decode compressed streams
+# (MP3/Ogg .data and QOA/compressed-WAV .data are NOT linear PCM). offset = TARGET - file_RMS,
+# peak-limited where a full boost would clip (sin/wish, wells/burst-1). Retune by ear here.
+const VOICE_METADATA := {
+	"cecil/wish": 6.9,          # RMS -25.9 (-3 site trim keeps peak safe)
+	"commander/burst-1": 7.7,   # RMS -26.7
+	"commander/burst-2": 7.6,   # RMS -26.6
+	"crown/burst": 0.2,         # RMS -19.2
+	"kilo/burst": 0.3,          # RMS -19.3
+	"marian/burst": -0.1,       # RMS -18.9
+	"nayuta/burst": -3.3,       # RMS -15.7 (loudest — tamed down)
+	"rapunzel/burst": -0.3,     # RMS -18.7
+	"scarlet/burst": 0.1,       # RMS -19.1
+	"sin/burst": 1.8,           # RMS -20.8
+	"sin/wish": 4.0,            # RMS -25.0 (peak-limited from 6.0 to avoid clipping)
+	"snow-white/burst": 1.1,    # RMS -20.1
+	"wells/burst-1": 3.0,       # RMS -22.2 (peak-limited from 3.2)
+	"wells/burst-2": 1.7,       # RMS -20.7
+}
+# STATIC so the AudioDirector autoload AND PlayerCore's private instance share one cache.
+static var _voice_measured_offsets: Dictionary = {}  # "<folder>/<basename>" -> offset_db
+static var _voice_offsets_loaded := false
+static var _voice_scan_done := false
+
 # --- MUSIC PLAYER ADDITIONS ---
-# Name: [Display Name, Unlock Condition (Achievement ID or empty if unlocked)]
+# Name: [Display Name, Unlock Condition (Achievement ID or empty if unlocked), volume_offset_db]
+# volume_offset_db brings track to -14 LUFS target (positive = boost, negative = cut)
 const MUSIC_METADATA := {
-	"battle": {"name": "BATTLE", "unlock_id": ""},
-	"dark": {"name": "DARK", "unlock_id": ""},
-	"nayuta": {"name": "SEEN IT ALL (Nayuta's Theme)", "unlock_id": ""},
-	"racer": {"name": "FAST", "unlock_id": ""},
-	"rapunzel": {"name": "YET STILL I BELIEVE (Rapunzel's Theme)", "unlock_id": ""},
-	"sin": {"name": "TASTE MY SILVER TONGUE (Sin's Theme)", "unlock_id": ""},
-	"snow": {"name": "UNYIELDING (Snow White's Theme)", "unlock_id": ""},
-	"western": {"name": "WESTERN", "unlock_id": ""},
-	"wishes": {"name": "ABANDON YOUR WISHES (Scheherezade's Theme)", "unlock_id": "abandoned_wishes", "event_only": true},
-	"main-menu": {"name": "MAIN MENU", "unlock_id": ""},
-	"timer": {"name": "TIMER", "unlock_id": "she_descends", "event_only": true},
+	"battle": {"name": "BATTLE", "unlock_id": "", "volume_offset_db": 0.3},
+	"breakbeat": {"name": "BREAKBEAT", "unlock_id": "", "volume_offset_db": -1.6},
+	"dark": {"name": "DARK", "unlock_id": "", "volume_offset_db": -0.3},
+	"nayuta": {"name": "SEEN IT ALL (Nayuta's Theme)", "unlock_id": "", "volume_offset_db": 0.5},
+	"racer": {"name": "FAST", "unlock_id": "", "volume_offset_db": 0.9},
+	"rapunzel": {"name": "YET STILL I BELIEVE (Rapunzel's Theme)", "unlock_id": "", "volume_offset_db": 1.1},
+	"sin": {"name": "TASTE MY SILVER TONGUE (Sin's Theme)", "unlock_id": "", "volume_offset_db": -0.3},
+	"snow": {"name": "UNYIELDING (Snow White's Theme)", "unlock_id": "", "volume_offset_db": -1.1},
+	"train": {"name": "TRAIN", "unlock_id": "", "volume_offset_db": -0.3},
+	"western": {"name": "WESTERN", "unlock_id": "", "volume_offset_db": 0.9},
+	"wishes": {"name": "ABANDON YOUR WISHES (Scheherezade's Theme)", "unlock_id": "abandoned_wishes", "event_only": true, "volume_offset_db": 1.2},
+	"main-menu": {"name": "MAIN MENU", "unlock_id": "", "volume_offset_db": 0.0},
+	"timer": {"name": "TIMER", "unlock_id": "she_descends", "event_only": true, "volume_offset_db": -3.0},
 }
 
 signal music_track_changed(track_name: String)
@@ -79,18 +123,22 @@ var _is_paused_by_user: bool = false
 
 func _ready() -> void:
 	initialize()
+	_load_measured_offsets()  # Restore previously auto-measured offsets
 	_update_playlist()
+	_scan_unmeasured_tracks()  # Measure any new tracks without offsets
 	
-	# Defer weapon preloading until after intro screen renders
+	# Defer weapon preloading + voice loudness scan until after intro screen renders
 	# This prevents blocking the main thread during startup
 	if MenuManager.intro_rendered:
 		_async_preload_weapons()
+		_async_scan_voice_tracks()
 	else:
 		MenuManager.intro_ready.connect(_on_intro_ready, CONNECT_ONE_SHOT)
 
 
 func _on_intro_ready() -> void:
 	_async_preload_weapons()
+	_async_scan_voice_tracks()
 
 
 func _exit_tree() -> void:
@@ -180,6 +228,9 @@ func play_music_by_path(path: String, loop: bool = true, fade_time: float = 0.5)
 	print("[AudioDirector] Stream loaded successfully. Preparing to play.")
 	print("[AudioDirector] Preparing to play. _music_player.playing: ", _music_player.playing, " fade_time: ", fade_time)
 	
+	# Look up per-track volume offset for loudness normalization (target: -14 LUFS)
+	var offset_db: float = _get_track_offset(path)
+	
 	var prepared := _ensure_loop_state(stream, loop)
 	
 	# Kill any pending music fade/stop tween
@@ -188,17 +239,17 @@ func play_music_by_path(path: String, loop: bool = true, fade_time: float = 0.5)
 	
 	if fade_time > 0.05 and _music_player.playing:
 		print("[AudioDirector] Branch: CROSSFADE")
-		_start_music_with_fade(prepared, fade_time)
+		_start_music_with_fade(prepared, fade_time, offset_db)
 	else:
 		print("[AudioDirector] Branch: STANDARD START")
 		_music_player.stop()
 		_music_player.stream = prepared
-		_music_player.volume_db = -12.0 if fade_time > 0.05 else 0.0
+		_music_player.volume_db = offset_db - 12.0 if fade_time > 0.05 else offset_db
 		_music_player.play()
 		if fade_time > 0.05:
 			_music_tween = create_tween()
 			_music_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS) # Run even if paused
-			_music_tween.tween_property(_music_player, "volume_db", 0.0, fade_time)
+			_music_tween.tween_property(_music_player, "volume_db", offset_db, fade_time)
 	_current_music_path = path
 	_current_track_path = path # Sync for Music Player UI
 	
@@ -265,7 +316,8 @@ var _current_burst_player: AudioStreamPlayer = null
 ## Play burst voice with dedicated player at scene root
 ## Ensures voice plays to completion regardless of game state
 ## ENFORCED MONOPHONY: Stops any previous burst voice to prevent overlapping lines.
-func play_burst_voice(sound: AudioStream) -> void:
+## Loudness-normalized: volume = VOICE_BASE_GAIN + measured offset + relative_db (per-site trim).
+func play_burst_voice(sound: AudioStream, relative_db: float = 0.0) -> void:
 	if sound == null:
 		return
 	
@@ -281,7 +333,7 @@ func play_burst_voice(sound: AudioStream) -> void:
 	burst_player.bus = SFX_BUS # Use SFX bus for voice lines
 	burst_player.process_mode = Node.PROCESS_MODE_ALWAYS
 	burst_player.stream = sound
-	burst_player.volume_db = 6.0
+	burst_player.volume_db = VOICE_BASE_GAIN + get_voice_offset(sound) + relative_db
 	burst_player.pitch_scale = 1.0
 	
 	get_tree().root.add_child(burst_player)
@@ -523,8 +575,8 @@ func stop_ambient(fade_time: float = 0.3) -> void:
 			ambient_ref.stop()
 	)
 
-func _start_music_with_fade(stream: AudioStream, fade_time: float) -> void:
-	print("[AudioDirector] Starting music crossfade. Time: ", fade_time)
+func _start_music_with_fade(stream: AudioStream, fade_time: float, target_db: float = 0.0) -> void:
+	print("[AudioDirector] Starting music crossfade. Time: ", fade_time, " Target dB: ", target_db)
 	
 	# Kill any active tween
 	if _music_tween and _music_tween.is_valid():
@@ -541,12 +593,12 @@ func _start_music_with_fade(stream: AudioStream, fade_time: float) -> void:
 			return
 		player_ref.stop()
 		player_ref.stream = stream
-		player_ref.volume_db = -30.0
+		player_ref.volume_db = target_db - 30.0
 		player_ref.play()
 		# Start fade in (reuse same tween variable, create new tween)
 		_music_tween = create_tween()
 		_music_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS) # Run even if game is paused
-		_music_tween.tween_property(player_ref, "volume_db", 0.0, max(0.01, fade_time * 0.5))
+		_music_tween.tween_property(player_ref, "volume_db", target_db, max(0.01, fade_time * 0.5))
 	)
 
 func _request_sfx_player() -> AudioStreamPlayer:
@@ -726,6 +778,190 @@ func _ambient_crossfade_tick() -> void:
 		_ambient_crossfade_step_timer.wait_time = _ambient_crossfade_step_dt
 	# Start stepping
 	_ambient_crossfade_step_timer.start()
+
+# --- AUTO LOUDNESS MEASUREMENT ---
+
+func _load_measured_offsets() -> void:
+	## Restore previously auto-measured offsets from disk
+	var config := ConfigFile.new()
+	if config.load(_offsets_config_path) == OK:
+		for key in config.get_section_keys("offsets"):
+			_measured_offsets[key] = config.get_value("offsets", key)
+
+func _save_measured_offsets() -> void:
+	## Persist auto-measured offsets to disk
+	var config := ConfigFile.new()
+	for key in _measured_offsets:
+		config.set_value("offsets", key, _measured_offsets[key])
+	config.save(_offsets_config_path)
+
+func _scan_unmeasured_tracks() -> void:
+	## Measure any battle music tracks that don't have a volume offset yet
+	ResourceManifest.ensure_initialized()
+	var new_count := 0
+	for path in ResourceManifest.battle_music:
+		var file_id := path.get_file().get_basename().to_lower()
+		if MUSIC_METADATA.has(file_id) and MUSIC_METADATA[file_id].has("volume_offset_db"):
+			continue  # Already has a hardcoded offset
+		if _measured_offsets.has(file_id):
+			continue  # Already auto-measured
+		
+		var stream := _load_stream(path)
+		if stream == null:
+			continue
+		
+		var rms_db := _measure_stream_rms(stream)
+		if rms_db > -80.0:  # Valid measurement
+			var offset_db: float = snapped(TARGET_RMS_DB - rms_db, 0.1)
+			_measured_offsets[file_id] = offset_db
+			new_count += 1
+			print("[AudioDirector] Auto-measured %s: RMS %.1f dB → offset %.1f dB" % [file_id, rms_db, offset_db])
+	
+	if new_count > 0:
+		_save_measured_offsets()
+		print("[AudioDirector] Saved %d new loudness measurement(s)" % new_count)
+
+func _get_track_offset(path: String) -> float:
+	## Unified lookup: hardcoded metadata first, then auto-measured cache, then 0.0
+	var file_id := path.get_file().get_basename().to_lower()
+	if MUSIC_METADATA.has(file_id) and MUSIC_METADATA[file_id].has("volume_offset_db"):
+		return MUSIC_METADATA[file_id]["volume_offset_db"]
+	if _measured_offsets.has(file_id):
+		return _measured_offsets[file_id]
+	return 0.0
+
+func _measure_stream_rms(stream: AudioStream) -> float:
+	## Compute RMS level in dB from decoded audio samples (strided for speed)
+	var data := _get_stream_pcm(stream)
+	if data.size() < 4:
+		return -120.0
+	
+	var sum_sq := 0.0
+	var count := 0
+	var step := RMS_SAMPLE_STRIDE * 2  # 2 bytes per 16-bit sample, skip N samples
+	var i := 0
+	while i < data.size() - 1:
+		var lo := data[i] as int
+		var hi := data[i + 1] as int
+		var sample := lo | (hi << 8)
+		if sample >= 0x8000:
+			sample -= 0x10000
+		sum_sq += float(sample * sample)
+		count += 1
+		i += step
+	
+	if count == 0:
+		return -120.0
+	
+	var rms := sqrt(sum_sq / float(count)) / 32768.0
+	if rms < 0.0000001:
+		return -120.0
+	return 20.0 * log(rms) / log(10.0)
+
+func _get_stream_pcm(stream: AudioStream) -> PackedByteArray:
+	## Extract decoded PCM data from any supported audio stream type
+	if stream is AudioStreamMP3:
+		return (stream as AudioStreamMP3).data
+	if stream is AudioStreamOggVorbis:
+		return (stream as AudioStreamOggVorbis).data
+	if stream is AudioStreamWAV:
+		return (stream as AudioStreamWAV).data
+	return PackedByteArray()
+
+# --- VOICE LOUDNESS NORMALIZATION ---
+
+## Hierarchical key "<folder>/<basename>" from a res:// path.
+## Folder+name is collision-free (commander/burst-1 vs wells/burst-1) and stable
+## across the .wav->.ogg extension fallback in CharacterData.get_burst_sound().
+func voice_key_for_path(path: String) -> String:
+	if path == "":
+		return ""
+	var folder := path.get_base_dir().get_file().to_lower()
+	var base := path.get_file().get_basename().to_lower()
+	if folder == "" or base == "":
+		return ""
+	return "%s/%s" % [folder, base]
+
+func voice_key_for_stream(stream: AudioStream) -> String:
+	if stream == null:
+		return ""
+	return voice_key_for_path(stream.resource_path)
+
+## True only for uncompressed 16-bit PCM WAV, the one case where AudioStreamWAV.data
+## is linear PCM the RMS parser can read. MP3/Ogg and QOA/ADPCM/8-bit WAV are not.
+func _voice_stream_measurable(stream: AudioStream) -> bool:
+	if stream is AudioStreamWAV:
+		return (stream as AudioStreamWAV).format == AudioStreamWAV.FORMAT_16_BITS
+	return false
+
+## Restore previously auto-measured voice offsets from disk (once, lazily).
+## Methods are instance-level (called on the AudioDirector autoload) but the cache
+## itself is static, so both the autoload and PlayerCore's instance share one dataset.
+func _ensure_voice_offsets_loaded() -> void:
+	if _voice_offsets_loaded:
+		return
+	_voice_offsets_loaded = true
+	var config := ConfigFile.new()
+	if config.load(VOICE_OFFSETS_CONFIG_PATH) == OK:
+		for key in config.get_section_keys("offsets"):
+			_voice_measured_offsets[key] = config.get_value("offsets", key)
+
+func _save_voice_offsets() -> void:
+	var config := ConfigFile.new()
+	for key in _voice_measured_offsets:
+		config.set_value("offsets", key, _voice_measured_offsets[key])
+	config.save(VOICE_OFFSETS_CONFIG_PATH)
+
+## Unified offset lookup for an AudioStream OR a res:// path string.
+## Precedence: hand-tuned VOICE_METADATA -> auto-measured cache -> 0.0.
+## Call on the AudioDirector autoload (e.g. AudioDirector.get_voice_offset(stream)).
+func get_voice_offset(stream_or_path) -> float:
+	_ensure_voice_offsets_loaded()
+	var key := ""
+	if stream_or_path is String:
+		key = voice_key_for_path(stream_or_path)
+	elif stream_or_path is AudioStream:
+		key = voice_key_for_stream(stream_or_path)
+	if key == "":
+		return 0.0
+	if VOICE_METADATA.has(key):
+		return VOICE_METADATA[key]
+	if _voice_measured_offsets.has(key):
+		return _voice_measured_offsets[key]
+	return 0.0
+
+## Measure any voice lines without a known offset. Deferred to the post-intro async
+## path (like weapon preload) so it never lengthens the startup block. Guarded so only
+## the first AudioDirector to run it measures; results land in the shared static cache.
+func _async_scan_voice_tracks() -> void:
+	if _voice_scan_done:
+		return
+	_voice_scan_done = true
+	_ensure_voice_offsets_loaded()
+	ResourceManifest.ensure_initialized()
+	var new_count := 0
+	for path in ResourceManifest.voice_audio_files:
+		var key := voice_key_for_path(path)
+		if key == "" or VOICE_METADATA.has(key) or _voice_measured_offsets.has(key):
+			continue
+		var stream := _load_stream(path)
+		if stream == null:
+			continue
+		if not _voice_stream_measurable(stream):
+			# Compressed streams (MP3/Ogg/QOA-WAV) don't expose linear PCM via .data,
+			# so RMS would be garbage. Leave unset (offset 0.0) — add to VOICE_METADATA instead.
+			print("[AudioDirector] Voice %s not RMS-measurable (compressed); add a VOICE_METADATA offset." % key)
+			continue
+		var rms_db := _measure_stream_rms(stream)
+		if rms_db > -80.0:  # Valid measurement
+			var offset_db: float = clampf(snapped(TARGET_VOICE_RMS_DB - rms_db, 0.1), VOICE_OFFSET_MIN, VOICE_OFFSET_MAX)
+			_voice_measured_offsets[key] = offset_db
+			new_count += 1
+			print("[AudioDirector] Auto-measured voice %s: RMS %.1f dB → offset %.1f dB" % [key, rms_db, offset_db])
+		await get_tree().process_frame  # Yield between files to keep intro smooth
+	if new_count > 0:
+		_save_voice_offsets()
+		print("[AudioDirector] Saved %d new voice loudness measurement(s)" % new_count)
 
 # --- MUSIC PLAYER API ---
 

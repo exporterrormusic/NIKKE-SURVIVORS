@@ -244,6 +244,7 @@ func _refresh_results() -> void:
 		var registry = CharacterRegistry.get_instance()
 		var char_id: String = registry.get_character_id(GameManager.player_character_index)
 		var burst_path := "res://assets/characters/%s/burst.png" % char_id.replace("_", "-")
+		_result_art.fade_right = 0.25  # rightmost 25% fades 100%→0% alpha into the background
 		if ResourceLoader.exists(burst_path):
 			_result_art.texture = load(burst_path)
 		else:

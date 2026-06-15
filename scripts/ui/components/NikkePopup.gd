@@ -115,6 +115,9 @@ func open(parent: Node) -> void:
 
 
 func close() -> void:
+	# Same close/back SFX the menus use when exiting (covers the close button,
+	# scrim click, and ESC — all route through here).
+	AudioManager.play_ui_back()
 	closed.emit()
 	queue_free()
 

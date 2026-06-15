@@ -20,6 +20,13 @@ var special_burn_level: int = 0 # Searing Beams: burn damage
 var special_size_level: int = 0 # Amplified Blast: size/damage bonus
 var burst_duration_unlocked: bool = false # Extended Assault: 10s duration
 var burst_invuln_unlocked: bool = false # T.A.L.O.S. Shield: invincibility
+var emergency_repairs_unlocked: bool = false # Emergency Repairs: regen while standing still
+
+# Emergency Repairs state
+const EMERGENCY_REPAIRS_DELAY := 2.5 # Seconds standing still before repairs begin
+const EMERGENCY_REPAIRS_RATE := 0.10 # Fraction of max HP restored per second
+var _stand_still_timer: float = 0.0 # Time spent standing still
+var _emergency_heal_timer: float = 0.0 # Counts down to each 1s heal tick
 
 func _on_initialize() -> void:
 	# Ammo already set from CharacterRegistry by base class
@@ -29,6 +36,33 @@ func _on_process(delta: float) -> void:
 	# Handle burst auto-fire
 	if burst_active:
 		_burst_fire_timer -= delta
+
+	_process_emergency_repairs(delta)
+
+## Emergency Repairs: after standing still (no movement input) for 2.5s, restore
+## 10% of max HP each second. Firing does not interrupt it; moving/dashing resets it.
+func _process_emergency_repairs(delta: float) -> void:
+	if not emergency_repairs_unlocked or not is_instance_valid(player):
+		return
+
+	var move_input := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	if move_input.length() > 0.1 or player.dashing:
+		# Moving cancels the repair ramp-up and pending heal tick
+		_stand_still_timer = 0.0
+		_emergency_heal_timer = 0.0
+		return
+
+	_stand_still_timer += delta
+	if _stand_still_timer < EMERGENCY_REPAIRS_DELAY:
+		return
+
+	# Heal tick: first one fires immediately on crossing the delay, then every 1s
+	_emergency_heal_timer -= delta
+	if _emergency_heal_timer <= 0.0:
+		_emergency_heal_timer = 1.0
+		if player.hp < player.max_hp:
+			var heal_amount: int = maxi(1, int(player.max_hp * EMERGENCY_REPAIRS_RATE))
+			player.heal(heal_amount)
 
 func _can_attack() -> bool:
 	# During burst, always can attack (infinite ammo)
@@ -42,14 +76,13 @@ func _perform_attack(direction: Vector2) -> void:
 	_play_sound("shotgun")
 
 func _can_use_special() -> bool:
-	# Need ammo unless in burst mode
-	if burst_active:
-		return special_timer <= 0
-	return special_timer <= 0 and ammo > 0
+	# Skill is gated only by its cooldown - usable while reloading or at zero ammo
+	return special_timer <= 0
 
 func _perform_special(direction: Vector2) -> void:
-	# Consume ammo if not in burst
-	if not burst_active:
+	# Consume ammo only when some is available and not mid-reload/burst,
+	# so the skill still fires during reload without driving ammo negative
+	if not burst_active and not is_reloading and ammo > 0:
 		ammo -= 1
 		ammo_changed.emit(ammo, max_ammo)
 		if ammo <= 0:
@@ -195,6 +228,8 @@ func apply_talent(talent_id: String) -> void:
 			burst_duration_unlocked = true
 		"burst_invuln":
 			burst_invuln_unlocked = true
+		"emergency_repairs":
+			emergency_repairs_unlocked = true
 
 ## Is this weapon automatic? (Hold to fire)
 func get_is_automatic() -> bool:

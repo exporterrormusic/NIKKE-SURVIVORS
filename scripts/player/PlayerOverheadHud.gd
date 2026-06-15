@@ -56,6 +56,11 @@ var _scarlet_special_unlocked: bool = false  # Whether Scarlet's special attack 
 var _glow_time: float = 0.0
 var _initialized: bool = false
 
+# Transient overhead message (talent/ability feedback, e.g. RETURN UNTO ME)
+var _message_text: String = ""
+var _message_timer: float = 0.0
+const MESSAGE_DURATION := 1.8
+
 # Shield bar (Kilo's upgrade or Cecil's shield)
 var _current_shield: int = 0
 var _max_shield: int = 0
@@ -124,7 +129,11 @@ func _process(delta: float) -> void:
 	# Animate level up indicator glow
 	if _skill_points_available:
 		_level_up_glow_time += delta * 3.0
-	
+
+	# Tick down the transient overhead message
+	if _message_timer > 0.0:
+		_message_timer -= delta
+
 	# Animate reload progress for current character
 	if _is_reloading and _reload_time > 0:
 		_reload_progress += delta / _reload_time
@@ -260,6 +269,9 @@ func _draw() -> void:
 	# Draw level up / skill points available indicator (left side of HUD)
 	_draw_level_up_indicator()
 
+	# Draw transient overhead message (above everything)
+	_draw_message()
+
 func _draw_level_up_indicator() -> void:
 	## Draws a golden level-up indicator matching the special ability indicator style
 	## Shows when skill points are available
@@ -292,6 +304,30 @@ func _draw_level_up_indicator() -> void:
 	
 	# Draw arrow-up icon in center
 	Draw.draw_level_up_arrow_icon(self, center)
+
+func _draw_message() -> void:
+	## Draws the transient overhead message, floating up and fading out
+	if _message_timer <= 0.0 or _message_text == "":
+		return
+
+	var t := _message_timer / MESSAGE_DURATION  # 1.0 -> 0.0 over the message lifetime
+	var alpha := clampf(t * 1.6, 0.0, 1.0)  # hold near full, fade in the final stretch
+	var rise := (1.0 - t) * 18.0  # float upward as it fades
+
+	var font := ThemeDB.fallback_font
+	var fs := 13
+	var ts := font.get_string_size(_message_text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
+	# Centered, sitting above the topmost bar
+	var pos := Vector2(-ts.x * 0.5, TOP_OFFSET_Y - 26.0 - rise)
+
+	# Outline for readability
+	var shadow := Color(0, 0, 0, 0.85 * alpha)
+	for o in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1)]:
+		draw_string(font, pos + o, _message_text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, shadow)
+
+	# Golden text to match the level-up / burst theme
+	var text_color := Color(1.0, 0.9, 0.4, alpha)
+	draw_string(font, pos, _message_text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, text_color)
 
 func _draw_special_indicator() -> void:
 	# Only show if special is unlocked for this character
@@ -535,4 +571,10 @@ func update_skill_points_available(available: bool) -> void:
 	_skill_points_available = available
 	if not available:
 		_level_up_glow_time = 0.0
+	queue_redraw()
+
+func show_message(text: String) -> void:
+	## Show a transient message above the HUD (ability/talent feedback)
+	_message_text = text
+	_message_timer = MESSAGE_DURATION
 	queue_redraw()

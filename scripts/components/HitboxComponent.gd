@@ -53,10 +53,14 @@ func take_damage(amount: int, is_crit: bool = false, _direction: Vector2 = Vecto
 		is_crit = true # Force crit visual for satisfaction
 	
 	if parent:
-		# Vulnerability (Scarlet Talent)
+		# Vulnerability (Scarlet Burst / Snow White Weak Point)
 		if parent.has_meta("damage_vulnerability"):
 			final_damage = int(final_damage * float(parent.get_meta("damage_vulnerability")))
-			
+
+		# Armor-Piercing Ammo (Snow White turret) - stacks on top of Weak Point
+		if parent.has_meta("armor_pierce_vulnerability"):
+			final_damage = int(final_damage * float(parent.get_meta("armor_pierce_vulnerability")))
+
 		# Super Boss Reduction (Goddess Fall)
 		if parent.has_meta("super_boss_damage_reduction"):
 			var reduction = float(parent.get_meta("super_boss_damage_reduction"))

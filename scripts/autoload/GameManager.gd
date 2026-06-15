@@ -264,13 +264,21 @@ func record_run_result(character_id: String = "") -> void:
 	
 	_total_score_all_time += current_score
 	_total_runs_all_time += 1
-	
-	_leaderboard_entries.append(new_entry)
+
+	# This leaderboard shows the BEST run per operator, so keep one entry per
+	# character (replaced only when beaten) rather than a global top-N list that
+	# would evict a character's best when another character outscored it.
+	var existing_index := -1
+	for i in range(_leaderboard_entries.size()):
+		if String(_leaderboard_entries[i].get("character_id", "")) == character_id:
+			existing_index = i
+			break
+	if existing_index == -1:
+		_leaderboard_entries.append(new_entry)
+	elif current_score > int(_leaderboard_entries[existing_index].get("score", 0)):
+		_leaderboard_entries[existing_index] = new_entry
 	_leaderboard_entries.sort_custom(func(a, b): return a["score"] > b["score"])
-	
-	if _leaderboard_entries.size() > MAX_LEADERBOARD_ENTRIES:
-		_leaderboard_entries.resize(MAX_LEADERBOARD_ENTRIES)
-	
+
 	save_game()
 	print("[GameManager] Run recorded: %d points, wave %d" % [current_score, current_wave])
 
@@ -393,9 +401,18 @@ func _load_data() -> void:
 func _load_leaderboard(data: Dictionary) -> void:
 	_leaderboard_entries.clear()
 	var entries = data.get("entries", [])
-	
+
 	if entries is Array:
-		_leaderboard_entries = entries
+		# Collapse legacy saves (which kept multiple runs per character) down to the
+		# best run per character so the per-operator board reads correctly.
+		var best_by_char: Dictionary = {}
+		for entry in entries:
+			if typeof(entry) != TYPE_DICTIONARY:
+				continue
+			var cid := String(entry.get("character_id", ""))
+			if not best_by_char.has(cid) or int(entry.get("score", 0)) > int(best_by_char[cid].get("score", 0)):
+				best_by_char[cid] = entry
+		_leaderboard_entries = best_by_char.values()
 		_leaderboard_entries.sort_custom(func(a, b): return a["score"] > b["score"])
 
 

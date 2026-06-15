@@ -55,6 +55,9 @@ class SimpleBullet:
 		visual_rid = RenderingServer.canvas_item_create()
 		RenderingServer.canvas_item_set_parent(visual_rid, canvas_parent)
 		RenderingServer.canvas_item_set_visible(visual_rid, false)
+		# Pixel-art bullet texture upscales 4x; keep pixels crisp
+		RenderingServer.canvas_item_set_default_texture_filter(
+			visual_rid, RenderingServer.CANVAS_ITEM_TEXTURE_FILTER_NEAREST)
 
 	func _notification(what: int) -> void:
 		if what == NOTIFICATION_PREDELETE:
@@ -83,7 +86,9 @@ func _ready() -> void:
 	_smg_texture = SMG_BULLET_TEXTURE
 	if _smg_texture:
 		_smg_texture_rid = _smg_texture.get_rid()
-		_smg_texture_size = _smg_texture.get_size()
+		# Texture is 4x-downscaled pixel art; draw at the original 256px quad
+		# size so the glow shader and on-screen bullet size are unchanged
+		_smg_texture_size = _smg_texture.get_size() * 4.0
 	
 	# Get shared material
 	if ShaderCache.get_bullet_glow_material():
@@ -373,12 +378,12 @@ func _handle_collision(b: SimpleBullet, collider: Object) -> bool:
 		return false # Pass through non-blocking
 		
 	# Apply damage
-	var crit_chance = 0.15 # Base
+	var crit_chance = 0.05 # HoloCure clone: 5% base crit
 	if _cached_player and _cached_player.has_method("get_crit_chance"):
 		crit_chance += _cached_player.get_crit_chance()
-	
+
 	var is_crit = randf() < crit_chance
-	var final_damage = b.damage * 2 if is_crit else b.damage
+	var final_damage = int(b.damage * 1.5) if is_crit else b.damage
 	
 	var hit_dir = b.velocity.normalized()
 

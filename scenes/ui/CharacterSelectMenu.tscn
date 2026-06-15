@@ -1,13 +1,13 @@
-[gd_scene load_steps=7 format=3 uid="uid://ccharselect_menu"]
+[gd_scene format=3 uid="uid://cg7lfteagdyb5"]
 
-[ext_resource type="Script" path="res://scripts/ui/CharacterSelectMenu.gd" id="1_script"]
-[ext_resource type="Script" path="res://scripts/ui/components/DiagonalArtStrip.gd" id="2_strip"]
-[ext_resource type="Script" path="res://scripts/ui/components/CharacterDetailPanel.gd" id="3_detail"]
-[ext_resource type="Script" path="res://scripts/ui/components/NikkeCardButton.gd" id="4_card"]
-[ext_resource type="Script" path="res://scripts/ui/components/OperatorChip.gd" id="5_opchip"]
-[ext_resource type="Script" path="res://scripts/ui/components/NikkeGreebles.gd" id="6_greebles"]
+[ext_resource type="Script" uid="uid://dqxn642rnatcw" path="res://scripts/ui/CharacterSelectMenu.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://cfwf2nqjumvjm" path="res://scripts/ui/components/DiagonalArtStrip.gd" id="2_strip"]
+[ext_resource type="Script" uid="uid://duo7bsawgvs1i" path="res://scripts/ui/components/CharacterDetailPanel.gd" id="3_detail"]
+[ext_resource type="Script" uid="uid://dww1con5qea2d" path="res://scripts/ui/components/NikkeCardButton.gd" id="4_card"]
+[ext_resource type="Script" uid="uid://bj2fa0ecnc7rx" path="res://scripts/ui/components/OperatorChip.gd" id="5_opchip"]
+[ext_resource type="Script" uid="uid://b6kbhd0bdsbi2" path="res://scripts/ui/components/NikkeGreebles.gd" id="6_greebles"]
 
-[node name="CharacterSelectMenu" type="Control"]
+[node name="CharacterSelectMenu" type="Control" unique_id=1923833100]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -16,7 +16,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_script")
 
-[node name="PageBg" type="ColorRect" parent="."]
+[node name="PageBg" type="ColorRect" parent="." unique_id=1862380249]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -26,7 +26,7 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(0.929, 0.937, 0.949, 1)
 
-[node name="TintOverlay" type="ColorRect" parent="."]
+[node name="TintOverlay" type="ColorRect" parent="." unique_id=1763129959]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -37,7 +37,7 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(0, 0, 0, 0)
 
-[node name="CharContainer" type="Control" parent="."]
+[node name="CharContainer" type="Control" parent="." unique_id=1544794929]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -47,9 +47,9 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="ArtStrip" type="Control" parent="CharContainer"]
+[node name="ArtStrip" type="Control" parent="CharContainer" unique_id=408056176]
 unique_name_in_owner = true
-layout_mode = 0
+anchors_preset = 0
 offset_left = 690.0
 offset_top = -15.0
 offset_right = 1380.0
@@ -57,27 +57,25 @@ offset_bottom = 1095.0
 mouse_filter = 2
 script = ExtResource("2_strip")
 
-[node name="HeaderTitle" type="Label" parent="CharContainer"]
+[node name="HeaderTitle" type="Label" parent="CharContainer" unique_id=503374054]
 unique_name_in_owner = true
 layout_mode = 0
 offset_left = 66.0
 offset_top = 30.0
 offset_right = 700.0
 offset_bottom = 100.0
-mouse_filter = 2
 text = "CHARACTERS"
 
-[node name="HeaderSub" type="Label" parent="CharContainer"]
+[node name="HeaderSub" type="Label" parent="CharContainer" unique_id=1890021771]
 unique_name_in_owner = true
 layout_mode = 0
 offset_left = 68.0
 offset_top = 102.0
 offset_right = 700.0
 offset_bottom = 128.0
-mouse_filter = 2
 text = "SELECT YOUR NIKKE // SQUAD FILE"
 
-[node name="HeaderBar" type="ColorRect" parent="CharContainer"]
+[node name="HeaderBar" type="ColorRect" parent="CharContainer" unique_id=590936803]
 layout_mode = 0
 offset_left = 68.0
 offset_top = 138.0
@@ -86,8 +84,8 @@ offset_bottom = 142.0
 mouse_filter = 2
 color = Color(0.208, 0.773, 0.949, 1)
 
-[node name="Greebles" type="Control" parent="CharContainer"]
-layout_mode = 0
+[node name="Greebles" type="Control" parent="CharContainer" unique_id=1426364429]
+anchors_preset = 0
 offset_left = 68.0
 offset_top = 1042.0
 offset_right = 520.0
@@ -96,18 +94,18 @@ script = ExtResource("6_greebles")
 serial_text = "SQUAD ROSTER // ARK SYS V2.4"
 tint = Color(0.165, 0.18, 0.208, 0.3)
 
-[node name="CardGrid" type="GridContainer" parent="CharContainer"]
+[node name="CardGrid" type="GridContainer" parent="CharContainer" unique_id=51481285]
 unique_name_in_owner = true
 layout_mode = 0
 offset_left = 66.0
 offset_top = 177.0
 offset_right = 786.0
 offset_bottom = 987.0
-columns = 4
 theme_override_constants/h_separation = 18
 theme_override_constants/v_separation = 18
+columns = 4
 
-[node name="DetailPanel" type="Panel" parent="CharContainer"]
+[node name="DetailPanel" type="Panel" parent="CharContainer" unique_id=1214049515]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = -1
@@ -122,7 +120,7 @@ grow_horizontal = 0
 grow_vertical = 2
 script = ExtResource("3_detail")
 
-[node name="TopRightStrip" type="HBoxContainer" parent="CharContainer"]
+[node name="TopRightStrip" type="HBoxContainer" parent="CharContainer" unique_id=2037140374]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 1
@@ -133,17 +131,17 @@ offset_top = 33.0
 offset_right = -36.0
 offset_bottom = 90.0
 grow_horizontal = 0
-alignment = 2
 theme_override_constants/separation = 18
+alignment = 2
 
-[node name="OperatorChip" type="PanelContainer" parent="CharContainer/TopRightStrip"]
+[node name="OperatorChip" type="PanelContainer" parent="CharContainer/TopRightStrip" unique_id=621436652]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 57)
 layout_mode = 2
 script = ExtResource("5_opchip")
 light_register = true
 
-[node name="BackButton" type="Button" parent="CharContainer/TopRightStrip"]
+[node name="BackButton" type="Button" parent="CharContainer/TopRightStrip" unique_id=2009858449]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(190, 57)
 layout_mode = 2
@@ -152,13 +150,13 @@ card_style = "white_blue"
 title_text = "← BACK"
 title_size = 21
 
-[node name="StageContainer" type="Control" parent="."]
+[node name="StageContainer" type="Control" parent="." unique_id=1870945092]
 unique_name_in_owner = true
+visible = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-visible = false
 mouse_filter = 2

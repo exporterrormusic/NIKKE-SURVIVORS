@@ -51,11 +51,23 @@ var _skill_points: int = 0: set = set_skill_points
 var _talent_buttons: Array = []
 var _lines_control: Control = null
 
+# Three trees per character, tab-swapped. Opens on the Default (attack) tree.
+const TREE_TABS := [["attack", "ATTACK"], ["skill", "SKILL"], ["burst", "BURST"]]
+var _active_tree: String = "attack"
+var _tab_buttons: Dictionary = {}
+
 # Open/close fade
 var _anim_state := 0 # 0=hidden, 1=animating in, 2=showing, 3=animating out
 var _anim_progress := 0.0
 const ANIM_DURATION := 0.3
 var _pending_unpause := false
+
+# Preview mode: opened from the character-select screen as a read-only,
+# centered modal. No pause, no HUD hiding, no skill-point spending — it just
+# renders the unit's tree for browsing. Set via configure_preview() BEFORE the
+# node enters the scene tree.
+var _preview_mode := false
+var _preview_char := -1
 
 # ============================================================================
 # Node geometry (mockup 1280x720 values x1.5 for the 1920x1080 viewport)
@@ -65,15 +77,20 @@ const ROOT_W := 420.0
 const MOD_X := 663.0
 const MOD_W := 525.0
 const NODE_H := 126.0
-const SPECIAL_ROOT_Y := 93.0
-const SPECIAL_MOD_YS := [24.0, 162.0]
-const BURST_ROOT_Y := 393.0
-const BURST_MOD_YS := [324.0, 462.0]
-const SIG_Y := 624.0
+# Vertical layout compressed to fit the tree box below the tab band (box is
+# 720px tall: y234..954). Content spans y9..711 with balanced 9px padding.
+const SPECIAL_ROOT_Y := 78.0
+const SPECIAL_MOD_YS := [9.0, 147.0]
+const BURST_ROOT_Y := 366.0
+const BURST_MOD_YS := [297.0, 435.0]
+const SIG_Y := 585.0
 
 
 func _ready() -> void:
-	instance = self
+	# A preview must not clobber the run's live tree instance (gameplay queries
+	# read the static `instance`).
+	if not _preview_mode:
+		instance = self
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	# Ensure TalentTree is rendered above all other UI
@@ -81,8 +98,25 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS # Process during pause
 
 	_load_character_data()
-	_build_ui()
+	if _preview_mode and _preview_char >= 0:
+		_run_character = _preview_char
+	_apply_start_unlocked()
+	if _preview_mode:
+		_build_preview_ui()
+	else:
+		_build_ui()
 	visible = false
+
+
+## Pre-unlock talents flagged "start_unlocked" (e.g. a character's basic attack,
+## which is always available and acts as the root prerequisite for its tree).
+func _apply_start_unlocked() -> void:
+	for char_id in TALENT_DATA:
+		for talent in TALENT_DATA[char_id]:
+			if talent.get("start_unlocked", false):
+				if not _unlocked_talents.has(char_id):
+					_unlocked_talents[char_id] = {}
+				_unlocked_talents[char_id][talent["id"]] = 1
 
 
 func _exit_tree() -> void:
@@ -192,7 +226,7 @@ func _build_ui() -> void:
 	treewrap.add_theme_stylebox_override("panel", wrap_style)
 	treewrap.set_anchors_preset(Control.PRESET_FULL_RECT)
 	treewrap.offset_left = 594
-	treewrap.offset_top = 180
+	treewrap.offset_top = 234
 	treewrap.offset_right = -81
 	treewrap.offset_bottom = -126
 	add_child(treewrap)
@@ -201,6 +235,9 @@ func _build_ui() -> void:
 	_tree_panel.name = "TreeHolder"
 	treewrap.add_child(_tree_panel)
 	_build_tree_view(_run_character)
+
+	# Tab bar (ATTACK / SKILL / BURST) seated on the tree box's top edge
+	_build_tab_bar()
 
 	# Close chip (bottom-right, plain rect - no chamfer on close buttons)
 	var close_btn := Button.new()
@@ -248,6 +285,162 @@ func _build_ui() -> void:
 	close_hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	close_hint.size_flags_vertical = Control.SIZE_FILL
 	close_row.add_child(close_hint)
+
+
+# ============================================================================
+# PREVIEW WINDOW (character-select read-only modal)
+# ============================================================================
+
+## Compact, centered modal: dark scrim + a single window card holding the
+## header, the ATTACK/SKILL/BURST tab band, and the tree box. No stats panel
+## and no skill-point chrome — purely a browse view of the unit's tree, styled
+## to match the in-run overlay (dark register, cyan-accented tabs).
+func _build_preview_ui() -> void:
+	const BOX_W := 1245.0
+	const BOX_H := 720.0
+	const TAB_H := 54.0
+
+	# This overlay is added to the menu at runtime, where full-rect anchors can
+	# resolve to a zero-size rect for a frame (collapsing the scrim and
+	# mis-centering the window). Pin it to the viewport explicitly.
+	set_anchors_preset(Control.PRESET_FULL_RECT)
+	size = get_viewport_rect().size
+	position = Vector2.ZERO
+
+	# Dim scrim — click anywhere outside the card to dismiss.
+	var scrim := ColorRect.new()
+	scrim.color = Color(0.012, 0.02, 0.031, 0.78)
+	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scrim.mouse_filter = Control.MOUSE_FILTER_STOP
+	scrim.gui_input.connect(func(e: InputEvent):
+		if e is InputEventMouseButton and e.pressed:
+			_on_close()
+	)
+	add_child(scrim)
+
+	# Center the window card on screen (robust to runtime resize timing).
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(center)
+
+	var card := PanelContainer.new()
+	var card_style := StyleBoxFlat.new()
+	card_style.bg_color = Color(0.043, 0.055, 0.075, 0.99)
+	card_style.border_color = Color(1, 1, 1, 0.16)
+	card_style.set_border_width_all(1)
+	card_style.set_corner_radius_all(0)
+	card_style.content_margin_left = 36
+	card_style.content_margin_right = 36
+	card_style.content_margin_top = 30
+	card_style.content_margin_bottom = 30
+	card_style.shadow_color = Color(0, 0, 0, 0.55)
+	card_style.shadow_size = 28
+	card.add_theme_stylebox_override("panel", card_style)
+	center.add_child(card)
+
+	var outer := VBoxContainer.new()
+	outer.add_theme_constant_override("separation", 18)
+	card.add_child(outer)
+
+	# --- Header: title block (left) + close (right) ---
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 18)
+	outer.add_child(header)
+
+	var titlecol := VBoxContainer.new()
+	titlecol.add_theme_constant_override("separation", 2)
+	titlecol.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(titlecol)
+
+	var title := Label.new()
+	title.text = "TALENTS"
+	title.add_theme_font_override("font", UI.FONT_TITLE_OBLIQUE)
+	title.add_theme_font_size_override("font_size", 44)
+	title.add_theme_color_override("font_color", UI.TEXT_PRIMARY)
+	titlecol.add_child(title)
+
+	var char_name: String = CHARACTER_NAMES[_run_character] if _run_character >= 0 and _run_character < CHARACTER_NAMES.size() else "OPERATIVE"
+	_header_sub = Label.new()
+	_header_sub.text = "NIKKE // %s" % char_name.to_upper()
+	UI.style_subtitle_label(_header_sub, 15, Color(1, 1, 1, 0.65))
+	titlecol.add_child(_header_sub)
+
+	var close_btn := Button.new()
+	close_btn.text = "✕  CLOSE"
+	close_btn.custom_minimum_size = Vector2(160, 52)
+	close_btn.focus_mode = Control.FOCUS_ALL
+	close_btn.add_theme_font_override("font", UI.FONT_TITLE_OBLIQUE)
+	close_btn.add_theme_font_size_override("font_size", 22)
+	var c_normal := StyleBoxFlat.new()
+	c_normal.bg_color = Color(0.078, 0.094, 0.122, 0.86)
+	c_normal.border_color = Color(1, 1, 1, 0.18)
+	c_normal.set_border_width_all(1)
+	c_normal.set_corner_radius_all(0)
+	var c_hover := c_normal.duplicate()
+	c_hover.border_color = UI.ACCENT_CYAN
+	close_btn.add_theme_stylebox_override("normal", c_normal)
+	close_btn.add_theme_stylebox_override("hover", c_hover)
+	close_btn.add_theme_stylebox_override("pressed", c_hover)
+	close_btn.add_theme_stylebox_override("focus", UI.create_button_style_focus())
+	for st in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		close_btn.add_theme_color_override(st, UI.TEXT_PRIMARY)
+	close_btn.pressed.connect(_on_close.bind(false))
+	header.add_child(close_btn)
+
+	# --- Tabs + tree, flush together (mirrors the in-run overlay) ---
+	var stack := VBoxContainer.new()
+	stack.add_theme_constant_override("separation", 0)
+	outer.add_child(stack)
+
+	var bar := HBoxContainer.new()
+	bar.name = "TabBar"
+	bar.custom_minimum_size = Vector2(BOX_W, TAB_H)
+	bar.add_theme_constant_override("separation", 0)
+	stack.add_child(bar)
+
+	var group := ButtonGroup.new()
+	_tab_buttons.clear()
+	for tab in TREE_TABS:
+		var key: String = tab[0]
+		var btn := Button.new()
+		btn.text = tab[1]
+		btn.toggle_mode = true
+		btn.button_group = group
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.size_flags_vertical = Control.SIZE_FILL
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		btn.add_theme_font_override("font", UI.FONT_TITLE_OBLIQUE)
+		btn.add_theme_font_size_override("font_size", 28)
+		_style_tab_button(btn)
+		btn.pressed.connect(_on_tab_selected.bind(key))
+		bar.add_child(btn)
+		_tab_buttons[key] = btn
+	_update_tab_visuals()
+
+	# Tree box (fixed size; nodes are absolutely positioned inside _tree_panel).
+	var box := Control.new()
+	box.custom_minimum_size = Vector2(BOX_W, BOX_H)
+	box.clip_contents = true
+	stack.add_child(box)
+
+	var box_bg := Panel.new()
+	box_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	box_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var box_style := StyleBoxFlat.new()
+	box_style.bg_color = Color(0.039, 0.051, 0.071, 0.55)
+	box_style.border_color = Color(1, 1, 1, 0.12)
+	box_style.set_border_width_all(1)
+	box_style.set_corner_radius_all(0)
+	box_bg.add_theme_stylebox_override("panel", box_style)
+	box.add_child(box_bg)
+
+	_tree_panel = Control.new()
+	_tree_panel.name = "TreeHolder"
+	_tree_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	box.add_child(_tree_panel)
+	_build_tree_view(_run_character)
 
 
 # ============================================================================
@@ -514,12 +707,96 @@ func _build_tree_view(char_id: int) -> void:
 
 	var talents: Array = TALENT_DATA[char_id]
 	for talent in talents:
+		if String(talent.get("tree", "skill")) != _active_tree:
+			continue
 		var node := _create_talent_button(talent, char_id)
 		var rect := _slot_rect(talent)
 		node.position = rect.position
 		node.size = rect.size
 		_tree_panel.add_child(node)
 		_talent_buttons.append(node)
+
+
+# ============================================================================
+# TAB BAR (ATTACK / SKILL / BURST)
+# ============================================================================
+
+func _build_tab_bar() -> void:
+	var bar := HBoxContainer.new()
+	bar.name = "TabBar"
+	bar.anchor_left = 0.0
+	bar.anchor_top = 0.0
+	bar.anchor_right = 1.0
+	bar.anchor_bottom = 0.0
+	bar.offset_left = 594
+	bar.offset_top = 180
+	bar.offset_right = -81
+	bar.offset_bottom = 234
+	bar.add_theme_constant_override("separation", 0)
+	add_child(bar)
+
+	var group := ButtonGroup.new()
+	_tab_buttons.clear()
+	for tab in TREE_TABS:
+		var key: String = tab[0]
+		var btn := Button.new()
+		btn.text = tab[1]
+		btn.toggle_mode = true
+		btn.button_group = group
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.size_flags_vertical = Control.SIZE_FILL
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		btn.add_theme_font_override("font", UI.FONT_TITLE_OBLIQUE)
+		btn.add_theme_font_size_override("font_size", 28)
+		_style_tab_button(btn)
+		btn.pressed.connect(_on_tab_selected.bind(key))
+		bar.add_child(btn)
+		_tab_buttons[key] = btn
+	_update_tab_visuals()
+
+
+func _style_tab_button(btn: Button) -> void:
+	var idle := StyleBoxFlat.new()
+	idle.bg_color = Color(0.078, 0.098, 0.129, 0.92)
+	idle.set_corner_radius_all(0)
+	idle.set_content_margin_all(10)
+	idle.border_color = Color(1, 1, 1, 0.13)
+	idle.border_width_right = 1
+	var hover := idle.duplicate()
+	hover.bg_color = Color(0.110, 0.137, 0.180, 0.95)
+	var active := StyleBoxFlat.new()
+	active.bg_color = Color(0.031, 0.043, 0.059, 0.95)
+	active.set_corner_radius_all(0)
+	active.set_content_margin_all(10)
+	active.border_color = UI.ACCENT_CYAN
+	active.border_width_bottom = 4
+	btn.add_theme_stylebox_override("normal", idle)
+	btn.add_theme_stylebox_override("hover", hover)
+	btn.add_theme_stylebox_override("pressed", active)
+	btn.add_theme_stylebox_override("hover_pressed", active)
+	btn.add_theme_stylebox_override("focus", idle)
+	btn.add_theme_color_override("font_color", Color(0.592, 0.627, 0.675, 1.0))
+	btn.add_theme_color_override("font_hover_color", UI.TEXT_PRIMARY)
+	btn.add_theme_color_override("font_pressed_color", UI.ACCENT_CYAN)
+	btn.add_theme_color_override("font_hover_pressed_color", UI.ACCENT_CYAN)
+
+
+func _on_tab_selected(tree_key: String) -> void:
+	if tree_key == _active_tree:
+		_update_tab_visuals()
+		return
+	_active_tree = tree_key
+	UISounds.play_confirm()
+	_update_tab_visuals()
+	_build_tree_view(_run_character)
+	_refresh_tree()
+
+
+func _update_tab_visuals() -> void:
+	for key in _tab_buttons:
+		var btn: Button = _tab_buttons[key]
+		btn.set_pressed_no_signal(String(key) == _active_tree)
 
 
 func _create_talent_button(talent: Dictionary, char_id: int) -> Button:
@@ -551,6 +828,10 @@ func _draw_talent_button(btn: Button) -> void:
 	var is_unlocked := current_level > 0
 	var is_maxed := current_level >= max_level
 	var can_unlock := _can_unlock_talent_quiet(char_id, talent)
+	# Preview is a catalog: render every node at full readability (light "available"
+	# style) rather than dimming unaffordable ones, since nothing is purchasable.
+	if _preview_mode:
+		can_unlock = not is_maxed
 	var is_locked := not is_unlocked and not can_unlock
 
 	# State palette (user spec): available = light grey, unavailable = dark
@@ -633,6 +914,10 @@ func _draw_talent_button(btn: Button) -> void:
 	elif is_unlocked and max_level == 1:
 		btn.draw_string(UI.FONT_BOLD, Vector2(w - 84, h - 11), "ACTIVE",
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 13, UI.ACCENT_CYAN)
+	elif _is_pinnacle(talent) and not _pinnacle_ready(char_id, talent):
+		# Pinnacle locked: tell the player they must finish the rest of the tree.
+		btn.draw_string(UI.FONT_BOLD, Vector2(w - 232, h - 11), "MAX ALL OTHER SKILLS TO UNLOCK",
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 12, UI.ACCENT_SECONDARY)
 
 
 # ============================================================================
@@ -648,6 +933,29 @@ func _can_unlock_talent_quiet(char_id: int, talent: Dictionary) -> bool:
 	for req_id in talent.get("requires", []):
 		if _unlocked_talents.get(char_id, {}).get(req_id, 0) <= 0:
 			return false
+	# Pinnacle (the bottom-right node of each tree): only unlockable once every
+	# OTHER talent in the same tree is fully maxed.
+	if _is_pinnacle(talent) and not _pinnacle_ready(char_id, talent):
+		return false
+	return true
+
+
+## The bottom-right node in each tree (col 0, row 2 = the SIG slot) is its "pinnacle".
+func _is_pinnacle(talent: Dictionary) -> bool:
+	return int(talent.get("col", -1)) == 0 and int(talent.get("row", -1)) == 2
+
+
+## True when every non-pinnacle talent in the pinnacle's tree is at its max level.
+func _pinnacle_ready(char_id: int, pinnacle: Dictionary) -> bool:
+	var tree: String = String(pinnacle.get("tree", ""))
+	var levels: Dictionary = _unlocked_talents.get(char_id, {})
+	for t in TALENT_DATA.get(char_id, []):
+		if String(t.get("tree", "")) != tree:
+			continue
+		if t["id"] == pinnacle["id"]:
+			continue
+		if int(levels.get(t["id"], 0)) < int(t["max"]):
+			return false
 	return true
 
 
@@ -656,6 +964,8 @@ func _can_unlock_talent(char_id: int, talent: Dictionary) -> bool:
 
 
 func _on_talent_clicked(btn: Button) -> void:
+	if _preview_mode:
+		return  # Read-only browse view — nothing is purchasable.
 	var talent: Dictionary = btn.get_meta("talent")
 	var char_id: int = btn.get_meta("char_id")
 
@@ -729,10 +1039,11 @@ func _finish_close() -> void:
 	_anim_state = 0
 	visible = false
 	modulate.a = 1.0
-	_restore_game_hud()
-	# Always unpause on close to resume gameplay
-	_pending_unpause = false
-	get_tree().paused = false
+	if not _preview_mode:
+		_restore_game_hud()
+		# Always unpause on close to resume gameplay
+		_pending_unpause = false
+		get_tree().paused = false
 	emit_signal("tree_closed")
 
 
@@ -790,6 +1101,25 @@ func _input(event: InputEvent) -> void:
 # ============================================================================
 # PUBLIC API
 # ============================================================================
+
+## Configure this tree as a read-only preview for the given registry index.
+## MUST be called BEFORE the node enters the scene tree (before add_child) so
+## _ready() skips the run-only wiring and renders the right character.
+func configure_preview(char_index: int) -> void:
+	_preview_mode = true
+	_preview_char = char_index
+
+
+## Show as a read-only preview (character-select screen): fade in only — no
+## pause, no HUD hiding, no skill-point spending.
+func show_preview() -> void:
+	visible = true
+	modulate.a = 0.0
+	_anim_state = 1
+	_anim_progress = 0.0
+	_refresh_tree()
+	_update_stats_panel()
+
 
 func show_tree(player: Node = null) -> void:
 	if player != null:

@@ -457,17 +457,8 @@ func _on_wave_reward_earned(count: int) -> void:
 	if not OrbScript:
 		return
 	
-	# Kilo's "Core-version Overdrive" - +50% extra cores
-	var extra_cores := 0
-	if _has_kilo_core_boost():
-		for i in range(count):
-			if randf() < 0.5:
-				extra_cores += 1
-		if extra_cores > 0:
-			print("[Level] Kilo Core-version Overdrive: +%d extra cores!" % extra_cores)
-	
-	var total_count := count + extra_cores
-	
+	var total_count := count
+
 	# Spawn orbs
 	for i in range(total_count):
 		# Create orb instance from script
@@ -649,32 +640,6 @@ func _spawn_pristine_core_orb_at_boss() -> void:
 	# Use call_deferred to safely add child during signal callback
 	_enemy_container.call_deferred("add_child", orb)
 	print("[Level] Spawned Pristine Core orb for boss kill")
-	
-	# Kilo's "Core-version Overdrive" - 50% chance for extra core on boss kill
-	if _has_kilo_core_boost():
-		if randf() < 0.5:
-			var extra_orb := Area2D.new()
-			extra_orb.set_script(orb_script)
-			extra_orb.cores_value = 1
-			# Offset slightly so they don't overlap
-			extra_orb.global_position = spawn_pos + Vector2(randf_range(-50, 50), randf_range(-50, 50))
-			_enemy_container.call_deferred("add_child", extra_orb)
-			print("[Level] Kilo Core-version Overdrive: Extra core dropped!")
-
-## Check if Kilo's "Core-version Overdrive" upgrade is active
-func _has_kilo_core_boost() -> bool:
-	if not player:
-		return false
-	# Check if playing Kilo
-	if player.has_method("is_playing_character"):
-		if not player.is_playing_character("kilo"):
-			return false
-	else:
-		return false
-	# Check if upgrade is purchased
-	if ShopMenuScript and ShopMenuScript.has_character_upgrade("kilo", "core_drop"):
-		return true
-	return false
 
 func _on_run_complete(survived: bool, final_time: float) -> void:
 	@warning_ignore("integer_division")
